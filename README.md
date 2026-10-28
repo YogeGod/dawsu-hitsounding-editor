@@ -1,4 +1,4 @@
-# osu!daw hitsounding editor
+# dawsu! hitsounding editor
 
 A Windows editor for osu! hitsounds, with sample lanes, MIDI import/export, a song waveform and a volume controller. Its interface and workflow are heavily inspired by Cubase’s MIDI Drum Editor.
 
