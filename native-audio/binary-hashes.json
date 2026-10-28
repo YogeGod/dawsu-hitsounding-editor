@@ -1,0 +1,11 @@
+{
+  "AudioHost.exe": "8f9abe8e5d997316a8789c77b82dbb8b291163d2f6c9b3af553688478b1a02c6",
+  "Microsoft.Win32.Registry.dll": "619737e2af8fb713085726631dd2e522fe130cac1d388a59c38907a47d7aadea",
+  "NAudio.Asio.dll": "ca03780217139b37f7f5b6921d59defb8d24988315b16b167a77fa88caa7d00f",
+  "NAudio.Core.dll": "fcf493fc47a2f478a65303886b975fbdbf714cbb1f2d79f7fce97e4bb16b01a8",
+  "NAudio.Wasapi.dll": "618ef0e49d64e7a66dfe64bbf6ae81705b9d9683d8a9f321e5c3024d666bdf82",
+  "NAudio.WinForms.dll": "cf92f2f143c22806b88c82f7ec1556f0d814bbd81aca998814709b0da7437f12",
+  "NAudio.WinMM.dll": "749a01ebbb5edd8b1a03c5263b04de6acadecf52e4cc84d7412bc6e93f180958",
+  "System.Security.AccessControl.dll": "aced52254a8c3cb6ad30f99f8b745296926c49373cab00824c2c4c10ad325b10",
+  "System.Security.Principal.Windows.dll": "c3ae599b5218516915f6542779ef577d5ad5de3d84a116e671c09e15e4591285"
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "package": "NAudio.Core",
+    "version": "2.2.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/naudio.core/2.2.1/naudio.core.2.2.1.nupkg",
+    "sha256": "794645dbfd30e4880663d52d9d9224d55c301fa54228ff623c95d572c7887347"
+  },
+  {
+    "package": "NAudio.Asio",
+    "version": "2.2.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/naudio.asio/2.2.1/naudio.asio.2.2.1.nupkg",
+    "sha256": "aae0c06c2559fbf56bd4b4f4a5cb9aeef158e35c7b536699e4e6b8012a683577"
+  },
+  {
+    "package": "NAudio.Wasapi",
+    "version": "2.2.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/naudio.wasapi/2.2.1/naudio.wasapi.2.2.1.nupkg",
+    "sha256": "c8396b8dbab86a2619edfd9158beaf18c21cb86677099b5594950fd8651b9d1a"
+  },
+  {
+    "package": "NAudio.WinMM",
+    "version": "2.2.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/naudio.winmm/2.2.1/naudio.winmm.2.2.1.nupkg",
+    "sha256": "48da978d715f219489c050ee8c32c64f80ff73718eba237ebcbc636ba5902be3"
+  },
+  {
+    "package": "Microsoft.Win32.Registry",
+    "version": "4.7.0",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.win32.registry/4.7.0/microsoft.win32.registry.4.7.0.nupkg",
+    "sha256": "fa3582c11a94fc9fe32dd40a0c59bddd67c80eb0cc5cc27df3851ebda40ca22f"
+  },
+  {
+    "package": "System.Security.AccessControl",
+    "version": "4.7.0",
+    "url": "https://api.nuget.org/v3-flatcontainer/system.security.accesscontrol/4.7.0/system.security.accesscontrol.4.7.0.nupkg",
+    "sha256": "ffd6423c81cb761ceaece5b850aa93b11d0ef778e31dde81446d524708071358"
+  },
+  {
+    "package": "System.Security.Principal.Windows",
+    "version": "4.7.0",
+    "url": "https://api.nuget.org/v3-flatcontainer/system.security.principal.windows/4.7.0/system.security.principal.windows.4.7.0.nupkg",
+    "sha256": "ad604cd94f0aab7ac475a6b530f65260e3a46ed306816c81f223eba48aa6a6a8"
+  },
+  {
+    "package": "NAudio.WinForms",
+    "version": "2.2.1",
+    "url": "https://api.nuget.org/v3-flatcontainer/naudio.winforms/2.2.1/naudio.winforms.2.2.1.nupkg",
+    "sha256": "54ebc435672272ca29dc86689a12e39c3fde7446d3ee5282d7d73f39493f98c0"
+  }
+]

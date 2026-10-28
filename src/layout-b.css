@@ -1,0 +1,144 @@
+/* B layout only: retain original B colours, icon glyphs, fonts and button skins. */
+#toolbar{gap:10px;padding-inline:12px;align-items:center;flex-shrink:0}
+#toolbar>.group{flex-shrink:0;margin:0;padding-right:10px;align-items:center}
+#toolbar .tools{padding:0;margin:0 2px 0 0}
+#toolbar .bUndo{gap:3px}
+#toolbar .bSnap{gap:5px;padding-right:10px}
+#toolbar .bSnap select{min-width:0}#toolbar #snapMode{width:100px}#toolbar #divisor{width:58px}
+.bViewControls{display:flex;align-items:center;gap:5px;flex-shrink:0}
+#toolbar .bViewControls label{display:flex;align-items:center;gap:5px}
+#toolbar #colour{width:98px}
+.bSelectionCommands{display:flex;flex-direction:column;gap:6px}
+.bSelectionCommands button{width:100%;text-align:left}
+#bTransportOptions{display:flex;align-items:center;flex-shrink:0;min-height:33px;gap:12px;padding:3px 12px}
+#bTransportOptions .bOptionGroup{display:flex;align-items:center;gap:7px}
+#bTransportOptions button,#bTransportOptions select{height:25px;padding:3px 7px;font-size:10px}
+#bTransportOptions label{font-size:10px;white-space:nowrap}
+#bTransportOptions #loopDuration{font-size:9px;white-space:nowrap}
+#bTransportOptions #startMode{max-width:155px}
+footer{height:58px;min-height:58px;gap:9px;padding:5px 12px;align-items:center}
+footer .bTransportModule{display:flex;align-items:center;gap:5px;flex-shrink:0;padding-right:9px;border-right:1px solid var(--line)}
+footer #cycleBar{display:flex;flex-direction:column;justify-content:center;gap:3px;min-height:43px;padding:0 9px 0 0;border-top:0;border-bottom:0;border-left:0;overflow:visible}
+footer #cycleBar>div{display:flex;align-items:center;gap:4px}
+footer #cycleBar button{height:20px;min-width:31px;width:31px;padding:1px 3px}
+footer #cycleBar input[type=number]{height:20px;width:96px;padding:1px 5px}
+footer .bPlayback{gap:3px}
+footer .bPlayback button{padding-inline:8px}
+footer .bPosition{flex-direction:column;align-items:stretch;gap:2px}
+footer .bCaption{font-size:9px;line-height:10px}
+footer #clock{min-width:132px;padding:3px 8px}
+footer .bTempo{align-items:flex-end;gap:5px}
+footer .bTempo label,footer .bSpeed label{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin:0}
+footer #tempo{width:56px;height:28px}
+footer #timeSignature{height:28px;padding:4px 7px}
+footer #playbackSpeed{width:66px;height:28px}
+footer #status{flex:1;min-width:0;padding:0}
+footer .bOutput{padding:0;border:0}
+footer .masterVolumeControl{display:grid;grid-template-columns:80px 30px;gap:2px 5px;margin:0;align-items:center}
+footer .masterVolumeControl>span{grid-column:1/-1;font-size:9px}
+footer #masterVolume{width:80px;margin:0}
+footer #masterVolumeValue{width:30px;font-size:9px}
+@media(max-width:1250px){#toolbar{gap:7px;padding-inline:9px}#toolbar>.group{padding-right:7px}#toolbar .tools{padding:0}.bViewControls{gap:4px}footer{gap:6px;padding-inline:9px}footer .bTransportModule{padding-right:7px}footer #cycleBar{padding-right:7px}footer #clock{min-width:122px}#bTransportOptions{padding-inline:9px;gap:9px}}
+
+/* Keep B's native blue sliders, docked beside the scroll controls. */
+[hidden]{display:none!important}
+#laneTop,#waveRow,#objectRow,#controllerHead,#controllerBody{padding-right:20px}
+#bTimelineRail{width:20px;min-width:20px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:3px;border-left:1px solid var(--line)}
+#vertical{position:static;transform:none;opacity:1;writing-mode:vertical-lr;direction:ltr;width:13px;height:0;min-height:20px;flex:1;margin:0 0 3px;padding:0}
+.bEdgeZoom{display:flex;align-items:center;flex-shrink:0;gap:2px}
+#editor .bEdgeZoom button{width:17px;min-width:17px;height:17px;min-height:17px;padding:0;font-size:11px;line-height:15px}
+#editor .bEdgeZoom input[type=range]{padding:0;margin:0;border:0}
+#verticalZoom{flex-direction:column;width:19px;padding:0 1px 2px;gap:3px}
+#editor #rowHeight{writing-mode:vertical-lr;direction:ltr;width:13px;height:54px;min-height:54px}
+#scroll{height:20px;min-height:20px;flex-shrink:0;align-items:center;gap:2px;padding-right:0}
+#scroll>button{height:17px;min-width:15px;padding:0 4px}
+#horizontal{min-width:0;height:13px;margin:0 2px}
+#horizontalZoom{width:118px;height:19px;margin-left:5px;padding-left:4px;border-left:1px solid var(--line)}
+#editor #zoom{width:72px;min-width:0;height:13px;flex:1}
+.bScrollCorner{width:20px;height:19px;flex-shrink:0;border-left:1px solid var(--line)}
+
+/* Shared caption and control baselines across the transport. */
+footer .bTransportModule{height:44px;min-height:44px;box-sizing:border-box}
+footer .bPosition{display:grid;grid-template-rows:12px 28px;row-gap:3px;align-content:start;align-items:stretch}
+footer .bCaption{display:block;height:12px;line-height:12px;margin:0}
+footer #clock{height:28px;line-height:20px;padding:3px 8px;box-sizing:border-box}
+footer .bTempo{display:grid;grid-template-columns:56px auto;grid-template-rows:12px 28px;gap:3px 5px;align-content:start;align-items:stretch}
+footer .bTempo label{display:contents}
+footer .bTempo .bCaption{grid-column:1/-1;grid-row:1}
+footer #tempo{grid-column:1;grid-row:2;margin:0}
+footer #timeSignature{grid-column:2;grid-row:2;margin:0;align-self:stretch}
+footer .bSpeed{display:block}
+footer .bSpeed label{display:grid;grid-template-rows:12px 28px;gap:3px;height:43px;margin:0}
+footer .bPlayback{align-items:flex-end;padding-bottom:1px}
+footer .bPlayback button{height:28px;min-height:28px;margin:0}
+footer .bOutput{align-items:flex-start}
+footer .masterVolumeControl{grid-template-rows:12px 28px;row-gap:3px;height:43px;align-items:center}
+footer .masterVolumeControl>span{height:12px;line-height:12px}
+footer #masterVolume{height:20px;align-self:center}
+footer #masterVolumeValue{line-height:28px;align-self:center}
+footer #status{align-self:center;margin-top:15px}
+#inspector .field{width:100%;min-height:27px;gap:8px;align-items:center}
+#inspector .field input{width:76px;flex:0 0 76px}
+#inspector .rowFields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+#inspector .rowFields label{align-items:stretch;gap:5px;margin:0}
+#inspector .rowFields input{width:100%}
+#sampleFilename{overflow-wrap:anywhere}
+#bTransportOptions input[type=checkbox]{margin:0 1px 0 0}
+#bTransportOptions label{align-items:center;min-height:25px}
+
+#waveRow{height:64px}
+
+#waveRow{height:96px}
+
+#vertical{min-height:10px}
+#verticalZoom{height:90px;min-height:72px;flex:0 1 90px}
+#editor #rowHeight{height:0;min-height:22px;flex:1}
+@media(max-height:800px){#controllerBody{height:120px;min-height:80px}}
+
+/* In-flow splitters keep canvases aligned while lane heights change. */
+.bLaneResize{height:6px;min-height:6px;flex-shrink:0;position:relative;cursor:ns-resize;touch-action:none;background:#282830;border-block:1px solid #1b1b22;outline-offset:-1px}
+.bLaneResize::after{content:'';position:absolute;left:calc(50% - 15px);top:1px;width:30px;height:2px;border-radius:1px;background:#737381}
+.bLaneResize:hover,.bLaneResize:focus-visible{background:#384b66;outline:1px solid #0a84ff}
+body.bResizingLane,body.bResizingLane *{cursor:ns-resize!important}
+#controllerBody{height:clamp(64px,calc(100vh - 610px),155px);min-height:64px}
+#waveRow{min-height:40px}#objectRow{min-height:24px}
+
+#waveRow>div{display:flex;align-items:center;justify-content:space-between;gap:6px}
+#songMute{width:18px;min-width:18px;height:17px;padding:0;font-size:9px;line-height:14px;border-radius:4px;background:#3a3a48;border-color:#55556a;color:#bebed5}
+#songMute.muted{background:#c99a3a;border-color:#dfb45d;color:#252015}
+#editor.lanesCollapsed #waveRow>div{justify-content:center}
+
+/* Sampleset folders and numbered sample families. */
+:root{--left:300px}
+#rows .sampleGroup{display:flex;align-items:center;gap:5px;background:#383841;color:#dddde8;border-bottom:1px solid #1c1c24;box-sizing:border-box;cursor:pointer;font-size:10px;font-weight:600;user-select:none}
+.sampleGroup .groupName{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.sampleGroup .groupCount{color:#9696aa;font-size:9px;padding-right:9px;font-weight:400}
+#rows .sampleGroup .groupDisclosure,#rows .familyDisclosure{width:15px;min-width:15px;height:18px;padding:0;border:0;border-radius:2px;background:transparent;box-shadow:none;color:#aaaac2;font-size:11px}
+#rows .familyDisclosure:disabled{opacity:.3}
+#rows .sampleRow .num{width:16px;min-width:16px;font-size:9px;color:#9090a6}
+#rows .sampleRow .sampleName{font-size:10px;min-width:0}
+#rows .sampleRow .rowHandle{min-width:12px;width:12px;font-size:12px;padding:0}
+#rows .sampleRow .addLayer{width:16px;min-width:16px;height:16px;padding:0;font-size:12px;border-radius:3px;color:#bed8ff;background:#324761;border-color:#526b8d}
+.layerCount{font-size:8px;color:#9aaecb;white-space:nowrap}
+#editor.lanesCollapsed .groupName,#editor.lanesCollapsed .groupCount,#editor.lanesCollapsed .addLayer,#editor.lanesCollapsed .familyDisclosure,#editor.lanesCollapsed .layerCount{display:none}
+#editor.lanesCollapsed .sampleGroup{padding-left:8px!important}
+@media(max-width:1250px){:root{--left:280px}}
+
+#rows.grouped .sampleRow{gap:3px}
+#rows.grouped .sampleRow .num{display:none}
+
+#rows .sampleGroup{overflow:hidden}
+#rows .sampleGroup .groupDisclosure{height:100%;min-height:0;line-height:1}
+
+/* Original addition pictograms sit between the sample label and + / M / S. */
+#rows .sampleRow .laneKindIcon{display:block;flex:0 0 24px;width:24px;height:24px;max-height:calc(100% - 4px);object-fit:contain;opacity:.84;user-select:none;pointer-events:none;margin:0 4px}
+#rows .sampleRow[data-sample-kind=whistle] .laneKindIcon{filter:sepia(.35)}
+#editor.lanesCollapsed .laneKindIcon{display:none}
+
+/* The hitnormal row visually anchors the addition lanes without another folder. */
+#rows.grouped .sampleRow{position:relative}
+#rows.grouped .sampleRow.parentLane:not(.lastInSet)::before,#rows.grouped .sampleRow.setChild::before{content:"";position:absolute;left:21px;width:1px;top:0;bottom:0;background:#747b8a77;pointer-events:none}
+#rows.grouped .sampleRow.parentLane:not(.lastInSet)::before{top:60%}
+#rows.grouped .sampleRow.setChild.lastInSet::before{bottom:50%}
+#rows.grouped .sampleRow.additionLane::after{content:"";position:absolute;left:21px;top:50%;width:10px;height:1px;background:#747b8a77;pointer-events:none}
+#editor.lanesCollapsed .sampleRow::before,#editor.lanesCollapsed .sampleRow::after{display:none}

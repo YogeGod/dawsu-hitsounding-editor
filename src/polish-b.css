@@ -1,0 +1,90 @@
+/* Spacing and surface refinement only. Existing palette and sample tints are inherited. */
+button,input:not([type=range]):not([type=checkbox]),select,summary{border-radius:7px}
+button,summary{transition:box-shadow .12s ease,border-color .12s ease,background-color .12s ease}
+header{height:48px;min-height:48px;padding-inline:16px;gap:5px}
+header strong{font-size:14px;letter-spacing:-.2px;margin-right:12px}
+header button,header .editMenu>summary{padding:6px 8px}
+#toolbar{min-height:48px;padding-block:8px;gap:12px}
+#toolbar>.bUndo,#toolbar>.bSnap{border:1px solid var(--line);border-radius:9px;padding:4px;gap:4px;box-shadow:0 1px 3px #0002}
+#toolbar .tools{border-radius:9px}
+#toolbar .tools button{border-radius:0}
+#toolbar .bViewControls{gap:7px}
+#info{height:64px;padding:6px 8px;gap:5px;align-items:stretch}
+#info>div,#info>label{flex:0 1 128px;min-width:78px;padding:3px 8px;border:1px solid var(--line);border-radius:7px;gap:4px}
+#info>div:first-child{flex-basis:100px}
+#info input,#info select{width:100%;min-width:0;border-radius:5px;height:25px}
+#info>button{margin:0 3px;padding:6px 9px;flex-shrink:0}
+main{padding:8px;gap:8px;min-height:0}
+#inspector{width:224px;min-width:224px;padding:0 8px 10px;gap:10px;border:1px solid var(--line);border-radius:10px;box-shadow:0 2px 7px #0002;scrollbar-gutter:stable}
+#inspector .paneTitle{position:sticky;top:0;z-index:2;flex-shrink:0;margin:0 -8px;padding:8px 10px;border-radius:9px 9px 0 0}
+#inspector .inspectorCard{display:flex;flex-direction:column;flex:0 0 auto;gap:8px;padding:10px;border:1px solid var(--line);border-radius:9px;box-shadow:0 2px 5px #0002;min-width:0}
+#inspector .inspectorCard .sectionTitle{margin:0 0 2px;padding:0;font-size:9px;line-height:14px;letter-spacing:.65px}
+#inspector .inspectorCard button{min-height:27px;padding:5px 8px;border-radius:6px}
+#inspector .inspectorCard input:not([type=range]):not([type=checkbox]){min-height:27px;padding:4px 6px;border-radius:6px}
+#inspector .inspectorCard .field{gap:6px}
+#inspector .inspectorCard .rowFields{gap:8px}
+#inspector .inspectorCard .check{align-items:flex-start;line-height:1.5}
+#inspector .inspectorCard .check input{margin-top:3px;flex-shrink:0}
+#inspector .bSelectionCommands{gap:6px}
+#inspector .rowMove{gap:6px}
+#inspector .hint{line-height:1.55}
+#inspector .inspectorFootnote{padding:0 3px 4px}
+#inspector.collapsed{width:36px;min-width:36px;padding:0;scrollbar-gutter:auto}
+#inspector.collapsed .paneTitle{margin:0;padding:5px 4px;border-radius:9px}
+#inspector.collapsed>.inspectorCard,#inspector.collapsed>.inspectorFootnote{display:none}
+#editor{border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 2px 7px #0002}
+#sampleTitle{padding-inline:9px}
+#sampleTitle #filter{height:20px;min-height:20px;border-radius:5px;padding-inline:6px}
+#controllerHead select{border-radius:5px}
+#bTransportOptions{margin:0 8px 5px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;gap:12px;min-height:35px}
+footer{padding-inline:16px}
+footer button,footer select,footer input{border-radius:7px}
+dialog{border-radius:12px;overflow:hidden}
+.dialogTitle{padding:13px 16px}
+#dialogBody{padding:14px 16px}
+.dialogButtons{padding:10px 16px;gap:8px}
+@media(max-width:1250px){header{padding-inline:10px}header strong{font-size:13px;margin-right:6px}header button,header .editMenu>summary{padding-inline:6px}#toolbar{gap:7px;padding-inline:9px}#inspector{width:212px;min-width:212px;padding-inline:7px}#inspector .paneTitle{margin-inline:-7px}#inspector .inspectorCard{padding:8px}#info{gap:4px;padding-inline:6px}#info>div,#info>label{padding-inline:6px;min-width:72px}#info>button{padding-inline:6px;margin-inline:1px}footer{padding-inline:9px}main{padding:6px;gap:6px}#bTransportOptions{margin-inline:6px}}
+@media(max-height:800px){header{height:44px;min-height:44px}#toolbar{min-height:44px;padding-block:5px}#info{height:58px;padding-block:4px}#inspector{gap:8px}#inspector .inspectorCard{padding-block:8px;gap:6px}}
+
+/* Selection info: 65% of the previous height, with a persistent toolbar toggle. */
+#info{height:41.6px;padding-block:2px}
+#info>div,#info>label{padding:2px 7px;gap:1px;border-radius:6px;justify-content:center}
+#info small{font-size:8px;line-height:9px}
+#info input,#info select{height:19px;min-height:0;padding:1px 5px;font-size:10px;line-height:15px;border-radius:4px}
+#info b{font-size:10px;line-height:15px}
+#info>button{height:24px;padding:3px 8px;font-size:10px;line-height:16px}
+#toolbar #toggleInfo{font-size:10px;white-space:nowrap;padding-inline:8px}
+@media(max-height:800px){#info{height:37.7px;padding-block:1px}#info>div,#info>label{padding-block:1px}#info input,#info select{height:18px}}
+
+/* Collapsible, reorderable inspector cards; controls retain their existing colours. */
+#inspector .inspectorCard{padding:0;gap:0}
+#inspector .inspectorCardHeader{display:flex;align-items:center;gap:3px;padding:5px 6px;min-height:30px;flex-shrink:0}
+#inspector .inspectorCardHeader button{min-height:22px;height:22px;min-width:0;border:0;background:transparent;box-shadow:none;padding:2px 3px;border-radius:5px}
+#inspector .inspectorPanelToggle{display:flex;align-items:center;gap:5px;flex:1;text-align:left}
+#inspector .inspectorPanelToggle .sectionTitle{margin:0;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#inspector .panelChevron{font-size:10px;width:10px;flex:0 0 10px}
+#inspector .inspectorCardHeader .inspectorPanelGrip{width:20px;min-width:20px;cursor:grab;font-size:16px;line-height:16px;touch-action:none}
+#inspector .inspectorCardBody{display:flex;flex-direction:column;gap:8px;padding:0 10px 10px;min-width:0}
+#inspector .inspectorCard.panelCollapsed{box-shadow:0 1px 3px #0002}
+#inspector .inspectorCard.panelDragging{opacity:.5}
+#inspector .inspectorCard.panelDropBefore{box-shadow:0 -2px 0 var(--accent)}
+#inspector .inspectorCard.panelDropAfter{box-shadow:0 2px 0 var(--accent)}
+@media(max-width:1250px){#inspector .inspectorCardBody{padding-inline:8px}}
+@media(max-height:800px){#inspector .inspectorCardBody{gap:6px;padding-bottom:8px}}
+
+/* Searchable keybind reference; use the existing dialog palette. */
+dialog:has(.shortcutOverview){width:850px;max-width:94vw}
+.shortcutOverview>input{width:100%;padding:7px 9px}
+.shortcutSection{margin-top:15px}
+.shortcutSection h3{font-size:12px;margin:0;padding:0 0 6px;border-bottom:1px solid var(--line)}
+.shortcutRow{display:grid;grid-template-columns:minmax(175px,38%) minmax(0,1fr);gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:11px;align-items:start}
+.shortcutRow kbd{font:10px "Cascadia Mono",Consolas,monospace;line-height:1.6;overflow-wrap:anywhere}
+.shortcutGuide{margin-top:14px}
+.shortcutGuide summary{padding:7px 9px;cursor:pointer}
+.shortcutGuide li{margin-bottom:6px}
+@media(max-width:650px){.shortcutRow{grid-template-columns:minmax(100px,40%) minmax(0,1fr);gap:8px}}
+
+#bookmarkList{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.bookmarkItem{display:flex;align-items:center;gap:3px;min-width:0}
+#inspector .bookmarkItem .bookmarkJump{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
+#inspector .bookmarkItem .bookmarkEdit,#inspector .bookmarkItem .bookmarkRemove{flex:0 0 20px;width:20px;padding:2px}

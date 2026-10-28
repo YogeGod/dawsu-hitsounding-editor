@@ -4,3 +4,9 @@ dist/
 __pycache__/
 *.log
 *.pyc
+
+# Packaged downloads belong in GitHub Releases.
+*.zip
+*.7z
+*.tar.xz
+package-validation-*.json
