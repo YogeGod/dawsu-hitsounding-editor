@@ -1,2 +1,4 @@
 # osu-daw-hitsound-editor
+LOUD VOLUME WARNING, LOWER GLOBAL VOLUME SLIDER BEFORE STARTING AUDIO PLAYBACK
+
 Description coming soon tm
