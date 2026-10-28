@@ -9,7 +9,7 @@ function generate(p,options={}){
  if(events.some(e=>e.timeMs<0||e.timeMs>86400000))throw Error('Generate objects requires sound times between 0 and 86400000 ms.');
  const q=H.clone(p);let map=q.beatmaps[0];
  if(!map){
-  const signatures=H.signatureMap(p);if(signatures.some(s=>s.denominator!==4))throw Error('osu! beatmaps require time signatures with a beat unit of 4.');
+  const signatures=H.signatureMap(p);if(signatures.some(s=>s.denominator!==4))throw Error('dawsu! beatmaps require time signatures with a beat unit of 4.');
   const offsets=[...new Set([...p.tempos.map(t=>t.timeMs),...signatures.map(s=>s.timeMs)])].sort((a,b)=>a-b);
   const points=offsets.map(time=>{const tempo=H.segments(p.tempos).filter(t=>t.timeMs<=time).at(-1)||H.segments(p.tempos)[0],sig=signatures.filter(s=>s.timeMs<=time).at(-1)||signatures[0];return [time,60000/tempo.bpm,sig.numerator,1,1,100,1,0].join(',');});
   const title=String(p.name||'Hitsounds').replace(/[\r\n]/g,' '),text=['osu file format v14','','[General]','AudioFilename: '+audioFilename(p),'AudioLeadIn: 0','PreviewTime: -1','Countdown: 0','SampleSet: Normal','Mode: 0','StackLeniency: 0.7','','[Editor]','DistanceSpacing: 1','BeatDivisor: 4','GridSize: 4','TimelineZoom: 1','','[Metadata]','Title:'+title,'TitleUnicode:'+title,'Artist:Unknown','ArtistUnicode:Unknown','Creator:Hitsound Editor','Version:Generated hitsounds','Source:','Tags:hitsounds','BeatmapID:0','BeatmapSetID:-1','','[Difficulty]','HPDrainRate:5','CircleSize:4','OverallDifficulty:5','ApproachRate:5','SliderMultiplier:1.4','SliderTickRate:1','','[Events]','','[TimingPoints]',...points,'','[Colours]','Combo1 : 237,118,170','','[HitObjects]',''].join('\r\n');

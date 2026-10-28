@@ -5,7 +5,7 @@ function audioSettings(value={}){const a={...audioDefaults,...value};if(!["brows
 function load(file){try{const value=JSON.parse(fs.readFileSync(file,"utf8"));const result={songsFolder:typeof value.songsFolder==="string"?value.songsFolder:""};if(value.audio)try{result.audio=audioSettings(value.audio);}catch{}return result;}catch{return {songsFolder:""};}}
 function save(file,value){
  if(!value||typeof value.songsFolder!=="string"||value.songsFolder.length>32767)throw Error("Invalid Songs folder.");
- let songsFolder=value.songsFolder.trim();if(songsFolder){if(!path.isAbsolute(songsFolder)||!fs.statSync(songsFolder).isDirectory())throw Error("Choose an existing osu! Songs folder.");songsFolder=fs.realpathSync(songsFolder);}
+ let songsFolder=value.songsFolder.trim();if(songsFolder){if(!path.isAbsolute(songsFolder)||!fs.statSync(songsFolder).isDirectory())throw Error("Choose an existing dawsu! Songs folder.");songsFolder=fs.realpathSync(songsFolder);}
  const result={songsFolder};if(value.audio!==undefined)result.audio=audioSettings(value.audio);fs.mkdirSync(path.dirname(file),{recursive:true});const temporary=file+".tmp";fs.writeFileSync(temporary,JSON.stringify(result,null,2),"utf8");fs.renameSync(temporary,file);return result;
 }
 module.exports={load,save,audioSettings,audioDefaults};

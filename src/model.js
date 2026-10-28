@@ -26,7 +26,7 @@ function signatureMap(p){
 function setSignatures(p,points){const out=clone(p);out.timeSignatures=signatureMap({...out,timeSignatures:points});return out;}
 function signatureSegments(p){
  const signatures=signatureMap(p);let anchors=signatures;
- // Signature data may omit unchanged meters, but every osu! red point is a new bar origin.
+ // Signature data may omit unchanged meters, but every dawsu! red point is a new bar origin.
  // Derive these display anchors without rewriting saved signatures or source timing data.
  if(p.beatmaps?.length){const points=new Map();for(const t of segments(p.tempos)){const current=signatures.filter(s=>s.timeMs<=t.timeMs+1e-8).at(-1)||signatures[0];points.set(t.timeMs,{...current,timeMs:t.timeMs});}for(const s of signatures)points.set(s.timeMs,s);anchors=[...points.values()].sort((a,b)=>a.timeMs-b.timeMs);}
  const list=anchors.map(s=>({...s,beat:timeToBeat(s.timeMs,p.tempos),bar:1}));
@@ -45,7 +45,7 @@ function sliderSpans(p){
  return out;
 }
 
-// osu! red points restart beat phase; MIDI tempo events retain continuous beats.
+// dawsu! red points restart beat phase; MIDI tempo events retain continuous beats.
 function gridSegments(p){const list=segments(p.tempos);return list.map((t,i)=>({...t,phase:p.beatmaps?.length?t.beat:0,startBeat:i?t.beat:-Infinity,endBeat:list[i+1]?.beat??Infinity}));}
 function gridBeats(p,from,to,step=1/4){
  if(!(step>0))throw Error("Invalid grid division");const out=[];
@@ -253,7 +253,7 @@ function validateTimingPoints(points){
  if(!reds.size)throw Error("Keep at least one red tempo point.");if(!sorted[0].red)throw Error("The first timing point must be a red tempo point.");return sorted;
 }
 function setTimingPoints(p,points){
- const sorted=validateTimingPoints(points);if(p.beatmaps.length)throw Error("Beatmap timing must be applied through the beatmap adapter.");if(sorted.some(t=>!t.red))throw Error("Inherited points require an imported osu! beatmap.");
+ const sorted=validateTimingPoints(points);if(p.beatmaps.length)throw Error("Beatmap timing must be applied through the beatmap adapter.");if(sorted.some(t=>!t.red))throw Error("Inherited points require an imported dawsu! beatmap.");
  const out=clone(p);out.tempos=sorted.map(t=>({timeMs:t.timeMs,bpm:t.value,meter:t.meter}));out.timeSignatures=clone(signatureMap(p));for(const t of sorted){const current=signatureMap(out).filter(s=>s.timeMs<=t.timeMs).at(-1)||signatureMap(out)[0];if(current.numerator!==t.meter)out.timeSignatures=signatureMap({...out,timeSignatures:[...out.timeSignatures,{timeMs:t.timeMs,numerator:t.meter,denominator:current.denominator}]});}return out;
 }
 // Default assets are preview-only: never replace the row's custom asset or export name.

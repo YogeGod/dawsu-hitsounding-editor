@@ -1,11 +1,11 @@
-# osu!daw hitsounding editor — source
+# dawsu!daw hitsounding editor — source
 
-Source version: **1.0.35** (V6.35).
+Source version: **1.0.36** (V6.36).
 
 ## Contents
 
 - Electron main process, preload bridge, renderer and HTML/CSS.
-- MIDI/osu! import and export, sample grouping, bookmarks, shortcuts and audio code.
+- MIDI/dawsu! import and export, sample grouping, bookmarks, shortcuts and audio code.
 - Tests, example projects, build scripts, icons and bundled samples.
 - Native Windows audio helper C# source, build script and its pinned dependencies.
 - Existing third-party licence and sample attribution files.
@@ -50,13 +50,13 @@ Copy-Item node_modules/electron/dist/electron.exe node_modules/electron/dist/'Hi
 Copy-Item node_modules/electron/dist/LICENSE node_modules/electron/dist/LICENSE.electron.txt
 $runtimePath = (Resolve-Path node_modules/electron/dist).Path
 $asarPath = (Resolve-Path node_modules/@electron/asar).Path
-python scripts/package-windows.py --runtime "$runtimePath" --node node --asar-module "$asarPath" --output-dir ./releases
+python scripts/package-windows.py --runtime "$runtimePath" --node node --asar-module "$asarPath" --output-dir ./releases --executable-name "dawsu!.exe" --release-name "dawsu! V6.36"
 ```
 
 The script embeds the application icon, packages production dependencies into ASAR, copies the native audio helper and produces a portable ZIP. See `scripts/README.md` for packaging details.
 
 ## Package verification
 
-The app entry points and renderer sources were compared against the packaged 1.0.35 application before this source ZIP was created. `SOURCE-MANIFEST.json` records SHA-256 hashes of every included source/asset file.
+The app entry points and renderer sources were compared against the packaged 1.0.36 application before this source ZIP was created. `SOURCE-MANIFEST.json` records SHA-256 hashes of every included source/asset file.
 
 This is the source package, not an installer. Extract it before working with the files.

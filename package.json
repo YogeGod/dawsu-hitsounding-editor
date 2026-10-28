@@ -1,9 +1,9 @@
 {
   "name": "yoge-hs-editor-b",
-  "version": "1.0.35",
+  "version": "1.0.36",
   "private": true,
   "main": "main.cjs",
-  "description": "Timeline-based osu! hitsound editor with MIDI import and waveform display",
+  "description": "Timeline-based dawsu! hitsound editor with MIDI import and waveform display",
   "scripts": {
     "test": "node --test test/*.test.cjs"
   },
@@ -11,5 +11,5 @@
     "midi-file": "1.2.4",
     "jszip": "3.10.1"
   },
-  "productName": "osu!daw hitsounding editor"
+  "productName": "dawsu!daw hitsounding editor"
 }

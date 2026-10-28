@@ -41,11 +41,11 @@ let passed=0;const check=(name,fn)=>{fn();passed++;console.log("PASS "+name);};
 const F=require(root+'src/formats.cjs'),fixture=fs.readFileSync(root+'test/fixtures/sliders-and-meter.osu','utf8');
 function setup(){reset();read('scale=.12;view=0;scrollY=0;cursor=0;');}
 (async()=>{
- setup();let picked='E:/osu!/Songs',calls=0;sandbox.desktop.pickSongsFolder=async()=>{calls++;return picked;};
- const before=read('JSON.stringify(p())'),pref=read('preferencesBody({songsFolder:"F:/osu!/Songs"})'),panel=pref.element.children[1];
- check('Preferences General tab displays the current folder without changing the project',()=>{assert.equal(pref.element.children[0].children[0].getAttribute('role'),'tab');assert.equal(pref.value().songsFolder,'F:/osu!/Songs');assert.equal(read('JSON.stringify(p())'),before);});
- await panel.children[1].onclick();check('Choose folder updates the preference draft through the desktop picker',()=>{assert.equal(calls,1);assert.equal(pref.value().songsFolder,'E:/osu!/Songs');assert.equal(read('JSON.stringify(p())'),before);});
- picked=null;await panel.children[1].onclick();check('cancelling folder selection preserves the draft folder',()=>assert.equal(pref.value().songsFolder,'E:/osu!/Songs'));
+ setup();let picked='E:/dawsu!/Songs',calls=0;sandbox.desktop.pickSongsFolder=async()=>{calls++;return picked;};
+ const before=read('JSON.stringify(p())'),pref=read('preferencesBody({songsFolder:"F:/dawsu!/Songs"})'),panel=pref.element.children[1];
+ check('Preferences General tab displays the current folder without changing the project',()=>{assert.equal(pref.element.children[0].children[0].getAttribute('role'),'tab');assert.equal(pref.value().songsFolder,'F:/dawsu!/Songs');assert.equal(read('JSON.stringify(p())'),before);});
+ await panel.children[1].onclick();check('Choose folder updates the preference draft through the desktop picker',()=>{assert.equal(calls,1);assert.equal(pref.value().songsFolder,'E:/dawsu!/Songs');assert.equal(read('JSON.stringify(p())'),before);});
+ picked=null;await panel.children[1].onclick();check('cancelling folder selection preserves the draft folder',()=>assert.equal(pref.value().songsFolder,'E:/dawsu!/Songs'));
  panel.children[2].click();check('Clear resets the folder draft',()=>assert.equal(pref.value().songsFolder,''));
  setup();read('history.project=H.setSignatures(p(),[{timeMs:0,numerator:3,denominator:4},{timeMs:1500,numerator:6,denominator:8}]);cursor=2000;update();');
  const editor=read('signatureEditor()');

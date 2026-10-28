@@ -1,5 +1,5 @@
 {
-  "version": "1.0.35",
+  "version": "1.0.36",
   "packagedSourceCompared": true,
   "lineEndings": "LF",
   "files": [
@@ -25,13 +25,13 @@
     },
     {
       "path": "index.html",
-      "bytes": 20743,
-      "sha256": "e91614f5cbace93f9435aed62fabe73fd7bddeda668f9155acb787225180ac27"
+      "bytes": 20747,
+      "sha256": "9ed1a32c8898cce4121271fe4fc46fa0fcaf2d1c598ae213a01789a2322cf928"
     },
     {
       "path": "main.cjs",
-      "bytes": 52934,
-      "sha256": "de138fbf4c00bf92831371b0dd8c6c775162e2e47b973e92eb47e5063406250c"
+      "bytes": 52942,
+      "sha256": "281cbed4dd5c22b154049f6aa756f96620fcfe9a5214e7db3169f03c6ad88918"
     },
     {
       "path": "native-audio/AudioHost.cs",
@@ -125,8 +125,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 373,
-      "sha256": "1db5b6973db638304f366a19a4aa02b757068184278f1ec7212a0be87fdf785d"
+      "bytes": 377,
+      "sha256": "a5053487a494763d387d60c439feebd994e8b9028b231735054f2cfa30c07c4c"
     },
     {
       "path": "preload.cjs",
@@ -135,8 +135,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 2309,
-      "sha256": "321f122a52d8550a3b20624ab2dda5266c718d90ef9d9cfd4249533080b3227a"
+      "bytes": 2313,
+      "sha256": "e9a6297c956231089a1f48340708c5d9e1cb9e87172d7eed3458e9e8c4550377"
     },
     {
       "path": "samples/default-skin/drum-hitclap.wav",
@@ -190,8 +190,8 @@
     },
     {
       "path": "samples/default-skin/README.md",
-      "bytes": 349,
-      "sha256": "5a9e3554454a7fcbe6c34df0a1c9601aa88a3df118b2345b9a54487359b7ad47"
+      "bytes": 390,
+      "sha256": "f901f288df20e43a71cafc0449e0a3030e60908677821ba9602194d1b3def9ca"
     },
     {
       "path": "samples/default-skin/soft-hitclap.wav",
@@ -250,8 +250,8 @@
     },
     {
       "path": "scripts/package-windows.py",
-      "bytes": 4769,
-      "sha256": "8bd2019373e6f177d4bc3764bf5153c27a18c2664cacfccdb7a42ea4a8cf9cdf"
+      "bytes": 5497,
+      "sha256": "5804ee6c51693cb4c2822215a6b5f9bdd9d84dbdac88f701bbd6e78024267ab8"
     },
     {
       "path": "scripts/README.md",
@@ -260,8 +260,8 @@
     },
     {
       "path": "SOURCE-README.md",
-      "bytes": 2455,
-      "sha256": "d9c528f3f993bed5d0d08e5e71e2395a8aab4141e8eefd81338e5697002d3642"
+      "bytes": 2520,
+      "sha256": "cf8b6c7b8457ec2f19de3f1038502b24f5619eff538b7a8746f165c1aa31aabb"
     },
     {
       "path": "src/app.ico",
@@ -270,8 +270,8 @@
     },
     {
       "path": "src/app.js",
-      "bytes": 111612,
-      "sha256": "db576f99aaf637ab85b2e321a6c48d19a7fdce7d868eac703ef6df8bdd81f0c2"
+      "bytes": 111630,
+      "sha256": "c90eee178c673a1069cb61a381855dc1b9e6f6224809eac866429614849c9794"
     },
     {
       "path": "src/audio-bridge.js",
@@ -310,13 +310,13 @@
     },
     {
       "path": "src/generate-objects.cjs",
-      "bytes": 8316,
-      "sha256": "0bdfd1fc56253eec7113188deb5d58fe6548953e1ef4c128db5165f9b7ecc0b9"
+      "bytes": 8318,
+      "sha256": "a068d0b1a0ca253c4b89263c11e2adaca02e16c5ffc26a76adc52473c40a2d76"
     },
     {
       "path": "src/help.js",
-      "bytes": 15180,
-      "sha256": "76a79b196c29a38bb3bc47fd02b4704f140fa50f3567c9c71c333b8bd86a92be"
+      "bytes": 15182,
+      "sha256": "63fb6c5619ada8f96b41a15b91da4b458ed414ff5e54bf7121472c14c87faea8"
     },
     {
       "path": "src/icons/hitclap.svg",
@@ -370,8 +370,8 @@
     },
     {
       "path": "src/model.js",
-      "bytes": 27038,
-      "sha256": "fa88cd9f1cdc90bb774aaecaf36c9a5a6a9aaa4d73b2064145522f9977aae332"
+      "bytes": 27044,
+      "sha256": "7780390ea6b4b315cf7a01a929cc563b111f8284869a265e44c426c5594acb38"
     },
     {
       "path": "src/native-audio.cjs",
@@ -385,8 +385,8 @@
     },
     {
       "path": "src/preferences.cjs",
-      "bytes": 1845,
-      "sha256": "171e02aaa86f6d56578704e611bc9924d03bbec195fb71d5c84de0e22bc2aba8"
+      "bytes": 1847,
+      "sha256": "f815527ee8c44b14afdb44b9cf2678dccbca778503403daa3b563dfd99c370c1"
     },
     {
       "path": "src/project-assets.cjs",
@@ -420,8 +420,8 @@
     },
     {
       "path": "src/style.css",
-      "bytes": 20295,
-      "sha256": "1b80a8f9231a11838c158b8a88923299227835eba3628c905f2c8f1af2376bc2"
+      "bytes": 20297,
+      "sha256": "7498746e815c4c436935be619762f12f925581e4b4c9c9d1904faddccc73af07"
     },
     {
       "path": "src/waveform.js",
@@ -570,8 +570,8 @@
     },
     {
       "path": "test/renderer-preferences-timing-check.cjs",
-      "bytes": 14056,
-      "sha256": "7487830e9c9ac2718e7a206129d7f0e676c09264dedf67a35555a3ce54f86c77"
+      "bytes": 14066,
+      "sha256": "1212598cf4bd10eb1d20208ac54d5122594fcad91e41a895a3a1366f00b66e0f"
     },
     {
       "path": "test/renderer-return-stop-check.cjs",

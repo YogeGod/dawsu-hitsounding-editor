@@ -1,10 +1,10 @@
 # dawsu! hitsounding editor
 
-A Windows editor for osu! hitsounds, with sample lanes, MIDI import/export, a song waveform and a volume controller. Its interface and workflow are heavily inspired by Cubase’s MIDI Drum Editor.
+A Windows editor for dawsu! hitsounds, with sample lanes, MIDI import/export, a song waveform and a volume controller. Its interface and workflow are heavily inspired by Cubase’s MIDI Drum Editor.
 
 ## Download
 
-Download the Windows application from [Releases](https://github.com/YogeGod/osu-daw-hitsound-editor/releases), extract the complete ZIP, and run the editor executable. Keep the extracted files together.
+Download the Windows application from [Releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases), extract the complete ZIP, and run the editor executable. Keep the extracted files together.
 
 ## Source code
 
@@ -38,7 +38,7 @@ See [SOURCE-README.md](SOURCE-README.md) for tests, native-audio compilation and
 | Folder / file | Purpose |
 | --- | --- |
 | `main.cjs`, `preload.cjs` | Electron application and desktop bridge |
-| `index.html`, `src/` | Editor interface, audio, MIDI and osu! logic |
+| `index.html`, `src/` | Editor interface, audio, MIDI and dawsu! logic |
 | `samples/` | Bundled samples and their attribution/licence files |
 | `native-audio/` | C# audio helper, dependencies and build instructions |
 | `test/` | Automated checks |

@@ -4,7 +4,7 @@ const labels={
  songMute:["Mute song audio","Silence the backing track without changing its volume or exported audio. Soloing a sample lane also silences the song; clearing solo restores it unless this mute is enabled."],
  toggleInspector:["Inspector sidebar","Collapse the inspector to a narrow rail; click again to restore it."],
  toggleLanes:["Sample lane names","Collapse sample names to a compact row strip. Row selection and reordering remain available; Ctrl+F reopens the filter."],
- preferences:["Preferences","Choose your osu! Songs folder and configure Audio output, devices, sample rate, buffering and ASIO driver settings."],
+ preferences:["Preferences","Choose your dawsu! Songs folder and configure Audio output, devices, sample rate, buffering and ASIO driver settings."],
  timeSignature:["Time signatures","Edit beats per bar, beat unit and changes at specific times. Bar lines and MIDI export use this map."],
  toggleController:["Show or hide controller lane","Collapse the lower volume/velocity panel to give the sample grid more space. Click again to restore it; selection and values stay unchanged."],
  rowHeight:["Vertical zoom","Adjust sample row height from 18 to 96 pixels. Ctrl+Shift+wheel zooms vertically around the pointer without moving sounds.","Ctrl+Shift+mouse wheel"],
