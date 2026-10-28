@@ -1,4 +1,4 @@
-# osu-daw-hitsound-editor
+# osu!daw-hitsounding-editor
 WIP
 
 **DISCLAIMER: I AM NOT A PROGRAMMER, THIS WAS ENTIRELY VIBECODED. FEEDBACK IS MUCH APPRECIATED.
