@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OsuHitsound.Format/OsuHitsound.Format.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OsuHitsound.Format.Tests/OsuHitsound.Format.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/RoundTrip/RoundTrip.csproj" />
+  </Folder>
+</Solution>
