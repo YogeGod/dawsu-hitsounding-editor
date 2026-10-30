@@ -77,8 +77,6 @@ public sealed class OsuFile
         return ms.ToArray();
     }
 
-    public void Write(string path) => File.WriteAllBytes(path, ToBytes());
-
     private const string BookmarksKey = "Bookmarks:";
 
     /// <summary>osu!'s editor bookmarks ([Editor] Bookmarks: comma-separated ms), in file order; empty when there are none.</summary>

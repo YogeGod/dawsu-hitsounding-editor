@@ -268,7 +268,7 @@ public partial class MainWindow : Window
         switch (id)
         {
             case "open": _ = PickMap(); break;
-            case "save": Save(); break;
+            case "save": _ = Save(); break;
             case "preferences": _ = ShowPreferences(); break;
             case "help": ShowHelp(); break;
             case "inspector": ToggleInspector(); break;
@@ -510,7 +510,7 @@ public partial class MainWindow : Window
     /// Saves the edits: compiles a fresh copy of the map as opened, refuses if the file changed on disk since, keeps a
     /// timestamped backup in the editor's app-data folder (never in the mapset), writes the .osu and reloads it.
     /// </summary>
-    private void Save()
+    private async Task Save()
     {
         if (session is null || mapPath is null || originalBytes is null || folder is null) return;
         try
@@ -526,7 +526,7 @@ public partial class MainWindow : Window
             {
                 // Reload so the editor starts again from what is now on disk (and its undo history starts fresh).
                 double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom;
-                Open(mapPath);
+                await Open(mapPath); // awaited: the reload would otherwise clear this message and the view when it finishes
                 (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
                 flash = string.Join(' ', [
                     $"Saved. {result.TimingPointsAdded} green line{(result.TimingPointsAdded == 1 ? "" : "s")} added, {result.TimingPointsChanged} changed."
@@ -876,7 +876,7 @@ public partial class MainWindow : Window
         {
             return DefaultSkin.FindLazerResources(preferred) is { } dll ? DefaultSkin.LoadSamples(dll) : new Dictionary<string, byte[]>();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException or ArgumentException or OverflowException)
         {
             return new Dictionary<string, byte[]>();
         }
