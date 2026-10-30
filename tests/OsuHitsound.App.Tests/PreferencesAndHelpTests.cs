@@ -16,7 +16,7 @@ public class PreferencesAndHelpTests : IDisposable
         prefs.Save(path);
 
         var loaded = Preferences.Load(path);
-        Assert.Equal(prefs, loaded with { RecentMaps = prefs.RecentMaps });
+        Assert.Equal(prefs, loaded with { RecentMaps = prefs.RecentMaps, KeyOverrides = prefs.KeyOverrides });
         Assert.Equal(prefs.RecentMaps, loaded.RecentMaps);
     }
 
@@ -61,10 +61,10 @@ public class PreferencesAndHelpTests : IDisposable
     [Fact]
     public void Every_command_has_a_unique_id_and_unique_keys()
     {
-        Assert.Equal(EditorCommands.All.Count, EditorCommands.All.Select(c => c.Id).Distinct().Count());
-        var keys = EditorCommands.All.SelectMany(c => c.Keys).Select(k => k.ToString()).ToList();
+        Assert.Equal(EditorCommands.Defaults.Count, EditorCommands.Defaults.Select(c => c.Id).Distinct().Count());
+        var keys = EditorCommands.Defaults.SelectMany(c => c.Keys).Select(k => k.ToString()).ToList();
         Assert.Equal(keys.Count, keys.Distinct().Count());
-        Assert.All(EditorCommands.All, c => Assert.NotEmpty(c.Keys));
+        Assert.All(EditorCommands.Defaults, c => Assert.NotEmpty(c.Keys));
     }
 
     [Fact]

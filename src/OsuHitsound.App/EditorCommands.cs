@@ -15,6 +15,12 @@ internal sealed record EditorCommand(string Id, string Group, string Description
             >= Key.D0 and <= Key.D9 => ((int)(gesture.Key - Key.D0)).ToString(),
             >= Key.NumPad0 and <= Key.NumPad9 => $"Numpad {(int)(gesture.Key - Key.NumPad0)}",
             Key.Divide => "Numpad /",
+            Key.Multiply => "Numpad *",
+            Key.Subtract => "Numpad -",
+            Key.Add => "Numpad +",
+            Key.Decimal => "Numpad .",
+            Key.OemPeriod => ".",
+            Key.OemMinus => "-",
             Key.Oem2 => "/",
             Key.OemComma => ",",
             Key.OemOpenBrackets => "[",
@@ -42,7 +48,8 @@ internal static class EditorCommands
 
     private const KeyModifiers Ctrl = KeyModifiers.Control, Shift = KeyModifiers.Shift, Alt = KeyModifiers.Alt;
 
-    public static readonly IReadOnlyList<EditorCommand> All =
+    /// <summary>The built-in keys, before any preset or user change.</summary>
+    public static readonly IReadOnlyList<EditorCommand> Defaults =
     [
         new("open", "Files and help", "Open a .osu", [K(Key.O, Ctrl)]),
         new("save", "Files and help", "Save the .osu (a backup is kept outside the mapset)", [K(Key.S, Ctrl)]),
@@ -123,6 +130,12 @@ internal static class EditorCommands
         ("Mouse: volume lane", "Alt+drag", "Paint volumes"),
         ("Mouse: volume lane", "Shift+drag, or the Ramp tool", "Draw a ramp"),
     ];
+
+    /// <summary>The commands with the keys in force (see <see cref="Keymap"/>); the built-in keys until <see cref="Use"/>.</summary>
+    public static IReadOnlyList<EditorCommand> All { get; private set; } = Defaults;
+
+    public static void Use(IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> keys) =>
+        All = [.. Defaults.Select(c => c with { Keys = keys.GetValueOrDefault(c.Id, []) })];
 
     public static EditorCommand Get(string id) => All.First(c => c.Id == id);
 

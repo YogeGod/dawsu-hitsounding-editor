@@ -84,6 +84,24 @@ public partial class MainWindow
             }).ToList();
     }
 
+    /// <summary>Puts the preferences' keys in force (snapshots and tests keep the built-in ones) and shows them in the menus.</summary>
+    private void ApplyKeys()
+    {
+        if (usePreferences)
+        {
+            var (keys, problem) = Keymap.For(prefs);
+            EditorCommands.Use(keys);
+            if (problem is not null)
+            {
+                flash = problem;
+                UpdateStatus();
+            }
+        }
+
+        foreach (var (item, id) in menuCommands) item.InputGesture = EditorCommands.Get(id).Keys.FirstOrDefault();
+        help?.Close();
+    }
+
     internal void ShowHelpForSnapshot() => ShowHelp();
 
     private void ShowHelp()
@@ -108,6 +126,7 @@ public partial class MainWindow
         bool skinChanged = edited.LazerResources != prefs.LazerResources;
         prefs = edited;
         SavePrefs();
+        ApplyKeys();
         if (skinChanged) skin = NewSkin();
         if (audioChanged || skinChanged) RestartAudio();
     }

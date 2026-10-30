@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private string? audioError;
     private Preferences prefs = new();
     private readonly bool usePreferences;
+    private (MenuItem Item, string Id)[] menuCommands = [];
     private Lazy<IReadOnlyDictionary<string, byte[]>> skin;
     private readonly DispatcherTimer frameTimer;
     private ArrangeModel? model;
@@ -115,17 +116,14 @@ public partial class MainWindow : Window
         VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
         SaveButton.Click += (_, _) => Save();
-        foreach (var (item, id) in new[]
-        {
+        menuCommands =
+        [
             (OpenItem, "open"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
             (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
-        })
-        {
-            // The menu shows the same key the keyboard handling uses.
-            item.InputGesture = EditorCommands.Get(id).Keys[0];
-            item.Click += (_, _) => Run(id);
-        }
+        ];
+        foreach (var (item, id) in menuCommands) item.Click += (_, _) => Run(id);
+        ApplyKeys();
 
         GenerateFileItem.Click += async (_, _) => await Generate();
         RecentItem.SubmenuOpened += (_, _) => FillRecent();

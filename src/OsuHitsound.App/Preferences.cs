@@ -28,6 +28,15 @@ internal sealed record Preferences
     /// <summary>Most recent first.</summary>
     public List<string> RecentMaps { get; init; } = [];
 
+    /// <summary>The key set to start from; Cubase falls back to the built-in keys when its file can't be found.</summary>
+    public KeyPreset KeyPreset { get; init; } = KeyPreset.Cubase;
+
+    /// <summary>Cubase's Key Commands.xml; null finds the newest Cubase's file.</summary>
+    public string? CubaseKeyFile { get; init; }
+
+    /// <summary>Preset name → command id → the user's keys for it (see <see cref="Keymap.Format"/>), kept apart per preset.</summary>
+    public Dictionary<string, Dictionary<string, List<string>>> KeyOverrides { get; init; } = [];
+
     public double? WindowX { get; init; }
 
     public double? WindowY { get; init; }

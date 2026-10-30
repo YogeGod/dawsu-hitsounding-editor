@@ -44,44 +44,52 @@ internal static class Dialogs
     public static async Task<Preferences?> EditPreferences(Window owner, Preferences prefs, IReadOnlyList<(int Device, string Name)> devices) =>
         await Show<Preferences>(owner, "Preferences", (body, close) =>
         {
-            TextBox PathRow(string label, string? value, string note, bool folder)
+            var general = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
+            TextBox PathRow(StackPanel page, string label, string? value, string note, string? filePattern)
             {
                 var box = new TextBox { Text = value ?? "", Width = 380, Watermark = note };
                 var browse = new Button { Content = "Browse…" };
                 browse.Click += async (_, _) =>
                 {
                     var storage = TopLevel.GetTopLevel(body)!.StorageProvider;
-                    var picked = folder
+                    var picked = filePattern is null
                         ? (await storage.OpenFolderPickerAsync(new() { Title = label })).FirstOrDefault()?.TryGetLocalPath()
-                        : (await storage.OpenFilePickerAsync(new() { Title = label, FileTypeFilter = [new("osu.Game.Resources.dll") { Patterns = ["osu.Game.Resources.dll"] }] }))
+                        : (await storage.OpenFilePickerAsync(new() { Title = label, FileTypeFilter = [new(filePattern) { Patterns = [filePattern] }] }))
                             .FirstOrDefault()?.TryGetLocalPath();
                     if (picked is not null) box.Text = picked;
                 };
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
                 row.Children.AddRange([box, browse]);
-                body.Children.Add(new TextBlock { Text = label, FontWeight = FontWeight.SemiBold });
-                body.Children.Add(row);
+                page.Children.Add(new TextBlock { Text = label, FontWeight = FontWeight.SemiBold });
+                page.Children.Add(row);
                 return box;
             }
 
-            var songs = PathRow("osu! Songs folder (Open starts here)", prefs.SongsFolder, "Not found yet", folder: true);
-            var lazer = PathRow("Default sounds: lazer's osu.Game.Resources.dll", prefs.LazerResources, "Blank: the usual lazer install", folder: false);
+            var songs = PathRow(general, "osu! Songs folder (Open starts here)", prefs.SongsFolder, "Not found yet", filePattern: null);
+            var lazer = PathRow(general, "Default sounds: lazer's osu.Game.Resources.dll", prefs.LazerResources, "Blank: the usual lazer install", "osu.Game.Resources.dll");
 
-            body.Children.Add(new TextBlock { Text = "Audio output", FontWeight = FontWeight.SemiBold });
+            general.Children.Add(new TextBlock { Text = "Audio output", FontWeight = FontWeight.SemiBold });
             var device = new ComboBox { ItemsSource = devices.Select(d => d.Name).ToList(), Width = 380 };
             device.SelectedIndex = Math.Max(0, devices.ToList().FindIndex(d => d.Device == prefs.AudioDevice));
-            body.Children.Add(device);
+            general.Children.Add(device);
 
-            var bufferText = new TextBlock();
+            var bufferText = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 460 };
             var buffer = new Slider { Minimum = 20, Maximum = 500, Value = prefs.BufferMs, Width = 380, TickFrequency = 10, IsSnapToTickEnabled = true };
             void ShowBuffer() => bufferText.Text = $"Buffer: {buffer.Value:0} ms. Hitsounds lag the music by about this much, so keep it small; raise it only if playback crackles.";
             buffer.ValueChanged += (_, _) => ShowBuffer();
             ShowBuffer();
-            body.Children.Add(bufferText);
-            body.Children.Add(buffer);
+            general.Children.Add(bufferText);
+            general.Children.Add(buffer);
 
-            static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-            return (() => close(prefs with
+            var keys = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
+            var editedKeys = KeysPage(keys, prefs, body, PathRow);
+
+            body.Children.Add(new TabControl
+            {
+                ItemsSource = new[] { new TabItem { Header = "General", Content = general }, new TabItem { Header = "Keys", Content = keys } },
+            });
+
+            return (() => close(editedKeys() with
             {
                 SongsFolder = Blank(songs.Text),
                 LazerResources = Blank(lazer.Text),
@@ -89,6 +97,207 @@ internal static class Dialogs
                 BufferMs = (int)buffer.Value,
             }), "OK");
         });
+
+    private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    /// <summary>
+    /// The Keys tab, after Cubase's Key Commands window: the preset and Cubase file on top, the commands in folders with
+    /// their keys on the left, and on the right the picked command's keys, where a pressed key is shown with its current
+    /// owner before Assign adds it. Returns a function giving the preferences with the key settings as edited.
+    /// </summary>
+    private static Func<Preferences> KeysPage(StackPanel page, Preferences prefs, Control body,
+        Func<StackPanel, string, string?, string, string?, TextBox> pathRow)
+    {
+        var edited = prefs;
+        var presets = new[] { (Preset: KeyPreset.Cubase, Name: "Cubase (your Key Commands file)"), (Preset: KeyPreset.Osu, Name: "osu! editor (built-in keys with osu!'s tool and play keys)") };
+        page.Children.Add(new TextBlock { Text = "Key preset", FontWeight = FontWeight.SemiBold });
+        var preset = new ComboBox { ItemsSource = presets.Select(p => p.Name).ToList(), Width = 380 };
+        preset.SelectedIndex = Array.FindIndex(presets, p => p.Preset == prefs.KeyPreset);
+        page.Children.Add(preset);
+
+        var cubaseRows = new StackPanel { Spacing = 8 };
+        var file = pathRow(cubaseRows, "Cubase Key Commands file", prefs.CubaseKeyFile ?? CubaseKeyFile.FindNewest(),
+            "Not found: it's in %AppData%\\Steinberg\\Cubase …", "Key Commands.xml");
+        var reload = new Button { Content = "Reload" };
+        ((StackPanel)cubaseRows.Children[^1]).Children.Add(reload);
+        var status = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 700, Opacity = 0.8 };
+        page.Children.AddRange([cubaseRows, status]);
+
+        // Left: search and the command tree. Right: the picked command.
+        var search = new TextBox { Watermark = "Search commands or keys…", Width = 420 };
+        var tree = new TreeView { Height = 360, Width = 420 };
+        var left = new StackPanel { Spacing = 6 };
+        left.Children.AddRange([search, tree]);
+
+        var name = new TextBlock { FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 260, Text = "Pick a command" };
+        var description = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 260, Opacity = 0.8 };
+        var keyList = new ListBox { Height = 90, Width = 260 };
+        var remove = new Button { Content = "Remove" };
+        var clear = new Button { Content = "Clear command" };
+        var resetCommand = new Button { Content = "Reset command" };
+        var keyButtons = new WrapPanel { MaxWidth = 260 };
+        foreach (var b in new[] { remove, clear, resetCommand }) { b.Margin = new Thickness(0, 0, 6, 6); keyButtons.Children.Add(b); }
+        var capture = new TextBox { IsReadOnly = true, Width = 260, Watermark = "Click here, then press a key" };
+        var assignedTo = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 260 };
+        var assign = new Button { Content = "Assign", IsEnabled = false };
+        var right = new StackPanel { Spacing = 6, Width = 260 };
+        right.Children.AddRange([name, description, new TextBlock { Text = "Keys", FontWeight = FontWeight.SemiBold }, keyList, keyButtons,
+            new TextBlock { Text = "Type in key", FontWeight = FontWeight.SemiBold }, capture, assignedTo, assign]);
+
+        var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+        columns.Children.AddRange([left, right]);
+        var resetPreset = new Button { Content = "Reset preset…" };
+        page.Children.AddRange([columns, resetPreset]);
+
+        Dictionary<string, List<string>> Overrides() => edited.KeyOverrides.GetValueOrDefault(edited.KeyPreset.ToString()) ?? [];
+        Dictionary<string, IReadOnlyList<KeyGesture>> current = [];
+        string? selectedId = null;
+        KeyGesture? pending = null;
+        string KeysOf(string id) => current.GetValueOrDefault(id, []) is { Count: > 0 } k ? string.Join(", ", k.Select(EditorCommand.Name)) : "Unassigned";
+
+        void ShowCommand()
+        {
+            pending = null;
+            capture.Text = "";
+            assignedTo.Text = "";
+            assign.IsEnabled = false;
+            bool any = selectedId is not null;
+            foreach (var c in new Control[] { keyList, remove, clear, resetCommand, capture }) c.IsEnabled = any;
+            if (selectedId is not { } id)
+            {
+                (name.Text, description.Text, keyList.ItemsSource) = ("Pick a command", "", null);
+                return;
+            }
+
+            var command = EditorCommands.Get(id);
+            name.Text = command.Description;
+            description.Text = $"{command.Group}{(Overrides().ContainsKey(id) ? " · changed by you" : "")}";
+            keyList.ItemsSource = current.GetValueOrDefault(id, []).Select(EditorCommand.Name).ToList();
+            resetCommand.IsEnabled = Overrides().ContainsKey(id);
+        }
+
+        void FillTree()
+        {
+            string term = search.Text?.Trim() ?? "";
+            TreeViewItem? reselect = null;
+            tree.ItemsSource = EditorCommands.Defaults
+                .Where(c => term.Length == 0 || $"{c.Group} {c.Description} {KeysOf(c.Id)}".Contains(term, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(c => c.Group)
+                .Select(g => new TreeViewItem
+                {
+                    Header = g.Key,
+                    IsExpanded = true,
+                    ItemsSource = g.Select(c =>
+                    {
+                        var row = new Grid { ColumnDefinitions = new("230,*") };
+                        var keys = new TextBlock { Text = KeysOf(c.Id), Opacity = current.ContainsKey(c.Id) && current[c.Id].Count > 0 ? 1 : 0.5 };
+                        Grid.SetColumn(keys, 1);
+                        row.Children.AddRange([new TextBlock { Text = c.Description, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 8, 0) }, keys]);
+                        ToolTip.SetTip(row, c.Description);
+                        var item = new TreeViewItem { Header = row, Tag = c.Id };
+                        if (c.Id == selectedId) reselect = item;
+                        return item;
+                    }).ToList(),
+                }).ToList();
+            if (reselect is not null) tree.SelectedItem = reselect;
+        }
+
+        void Refresh(string? message = null)
+        {
+            cubaseRows.IsVisible = edited.KeyPreset == KeyPreset.Cubase;
+            edited = edited with { CubaseKeyFile = Blank(file.Text) };
+            (current, var problem) = Keymap.For(edited);
+            status.Text = problem ?? message ?? (edited.KeyPreset == KeyPreset.Cubase
+                ? "Commands with a Cubase match take its keys; the rest keep the editor's own keys where they're free."
+                : "");
+            FillTree();
+            ShowCommand();
+        }
+
+        void SetOverrides(Dictionary<string, List<string>> overrides) =>
+            edited = edited with { KeyOverrides = new(edited.KeyOverrides) { [edited.KeyPreset.ToString()] = overrides } };
+
+        tree.SelectionChanged += (_, _) =>
+        {
+            if (tree.SelectedItem is TreeViewItem { Tag: string id })
+            {
+                selectedId = id;
+                ShowCommand();
+            }
+        };
+        search.TextChanged += (_, _) => FillTree();
+        preset.SelectionChanged += (_, _) =>
+        {
+            edited = edited with { KeyPreset = presets[Math.Max(0, preset.SelectedIndex)].Preset };
+            Refresh();
+        };
+        file.TextChanged += (_, _) => Refresh();
+        reload.Click += (_, _) => Refresh("Reloaded.");
+
+        remove.Click += (_, _) =>
+        {
+            if (selectedId is not { } id || keyList.SelectedIndex < 0) return;
+            var gone = current[id][keyList.SelectedIndex];
+            SetOverrides(new(Overrides()) { [id] = [.. current[id].Where(g => g != gone).Select(Keymap.Format)] });
+            Refresh();
+        };
+        clear.Click += (_, _) =>
+        {
+            if (selectedId is not { } id) return;
+            SetOverrides(new(Overrides()) { [id] = [] });
+            Refresh();
+        };
+        resetCommand.Click += (_, _) =>
+        {
+            if (selectedId is not { } id) return;
+            var overrides = new Dictionary<string, List<string>>(Overrides());
+            overrides.Remove(id);
+            SetOverrides(overrides);
+            Refresh();
+        };
+        resetPreset.Click += async (_, _) =>
+        {
+            if (Overrides().Count == 0) return;
+            if (!await Confirm((Window)TopLevel.GetTopLevel(body)!, "Reset preset",
+                $"Undo all {Overrides().Count} of your key changes to the {presets.First(p => p.Preset == edited.KeyPreset).Name.Split(' ')[0]} preset?", "Reset"))
+                return;
+            SetOverrides([]);
+            Refresh("Your changes to this preset are undone.");
+        };
+
+        // Keys are caught only while this box has focus, before the dialog sees them, so Enter, Tab or Esc can be assigned too.
+        capture.AddHandler(InputElement.KeyDownEvent, (_, e) =>
+        {
+            e.Handled = true;
+            if (selectedId is not { } id || e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
+                return;
+            pending = new KeyGesture(e.Key, e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt));
+            capture.Text = EditorCommand.Name(pending);
+            if (current.GetValueOrDefault(id, []).Contains(pending))
+                (assignedTo.Text, assign.IsEnabled) = ("Already a key of this command.", false);
+            else
+            {
+                assignedTo.Text = Keymap.Owner(current, pending, id) is { } owner
+                    ? $"Assigned to: {EditorCommands.Get(owner).Group} → {EditorCommands.Get(owner).Description}"
+                    : "Unassigned";
+                assign.IsEnabled = true;
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
+        assign.Click += async (_, _) =>
+        {
+            if (selectedId is not { } id || pending is not { } gesture) return;
+            if (Keymap.Owner(current, gesture, id) is { } owner
+                && !await Confirm((Window)TopLevel.GetTopLevel(body)!, "Key in use",
+                    $"Move {EditorCommand.Name(gesture)} from \"{EditorCommands.Get(owner).Description}\" to \"{EditorCommands.Get(id).Description}\"?", "Move"))
+                return;
+            SetOverrides(Keymap.AddKey(Overrides(), current, id, gesture));
+            Refresh();
+        };
+
+        Refresh();
+        return () => edited with { CubaseKeyFile = Blank(file.Text) };
+    }
 
     private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build)
     {
