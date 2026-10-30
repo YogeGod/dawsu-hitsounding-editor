@@ -14,7 +14,7 @@ public enum HitObjectKind
 public sealed class HitObject(OsuLine line) : FieldLine(line)
 {
     // Field positions of the parts this editor reads or writes.
-    private const int TypeField = 3, HitSoundField = 4, SpinnerEndField = 5, SlidesField = 6, LengthField = 7, EdgeSoundsField = 8, EdgeSetsField = 9;
+    private const int TypeField = 3, HitSoundField = 4, SpinnerEndField = 5, CurveField = 5, SlidesField = 6, LengthField = 7, EdgeSoundsField = 8, EdgeSetsField = 9;
 
     public double X => Double(0);
 
@@ -86,6 +86,60 @@ public sealed class HitObject(OsuLine line) : FieldLine(line)
         }
     }
 
+    /// <summary>Head, repeats and tail: Slides + 1, with Slides clamped to 1–9001 as osu! does.</summary>
+    public int NodeCount => Math.Clamp(Slides, 1, 9001) + 1;
+
+    /// <summary>
+    /// The hitSound osu! uses at each node: the edgeSounds entry, or the slider's own hitSound where the list is short
+    /// or missing. Always <see cref="NodeCount"/> long.
+    /// </summary>
+    public HitSound[] NodeSounds
+    {
+        get
+        {
+            var edges = EdgeSounds;
+            var own = HitSound;
+            return [.. Enumerable.Range(0, NodeCount).Select(i => i < edges.Length ? edges[i] : own)];
+        }
+    }
+
+    /// <summary>
+    /// The sets osu! uses at each node: the edgeSets entry, or the slider's own hitSample sets where the list is short or
+    /// missing, or the entry is empty (lazer's parser returns early on ""; a "0:0" entry instead means "inherit").
+    /// Always <see cref="NodeCount"/> long.
+    /// </summary>
+    public (SampleSet Normal, SampleSet Addition)[] NodeSets
+    {
+        get
+        {
+            Require(HitObjectKind.Slider);
+            var own = HitSample ?? default;
+            var entries = Field(EdgeSetsField) is { Length: > 0 } s ? s.Split('|') : [];
+            return [.. Enumerable.Range(0, NodeCount).Select(i =>
+                i < entries.Length && entries[i].Length > 0 && Format.HitSample.Parse(entries[i]) is var h
+                    ? (h.NormalSet, h.AdditionSet)
+                    : (own.NormalSet, own.AdditionSet))];
+        }
+    }
+
+    /// <summary>The slider's control points after the start position, from the curve field (e.g. "B|200:100|300:192").</summary>
+    public (double X, double Y)[] CurvePoints
+    {
+        get
+        {
+            Require(HitObjectKind.Slider);
+            var points = new List<(double, double)>();
+            foreach (var part in (Field(CurveField) ?? "").Split('|').Skip(1))
+            {
+                var xy = part.Split(':');
+                if (xy.Length == 2 && OsuNumber.TryParseDouble(xy[0], out double x) && OsuNumber.TryParseDouble(xy[1], out double y))
+                    points.Add((x, y));
+            }
+
+            return [.. points];
+        }
+    }
+
     private int? HitSampleField => Kind switch
     {
         HitObjectKind.Circle => 5,
@@ -97,8 +151,8 @@ public sealed class HitObject(OsuLine line) : FieldLine(line)
     // Only slider edge fields can be missing before hitSample; they need one entry per node (head, repeats, tail).
     protected override string DefaultField(int index) => (Kind, index) switch
     {
-        (HitObjectKind.Slider, EdgeSoundsField) => string.Join('|', Enumerable.Repeat("0", Slides + 1)),
-        (HitObjectKind.Slider, EdgeSetsField) => string.Join('|', Enumerable.Repeat("0:0", Slides + 1)),
+        (HitObjectKind.Slider, EdgeSoundsField) => string.Join('|', Enumerable.Repeat("0", NodeCount)),
+        (HitObjectKind.Slider, EdgeSetsField) => string.Join('|', Enumerable.Repeat("0:0", NodeCount)),
         _ => throw new InvalidOperationException($"Hit object field {index} has no default: {Line.Text}"),
     };
 

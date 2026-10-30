@@ -3,7 +3,7 @@ using System.Globalization;
 namespace OsuHitsound.Format;
 
 /// <summary>How osu! reads numbers in .osu fields. Every parse failure is a <see cref="FormatException"/>.</summary>
-internal static class OsuNumber
+public static class OsuNumber
 {
     // osu! writes some integer fields as decimals ("1234.5" times, "100.0" volumes); lazer truncates them the same way.
     public static int ParseInt(string s)
@@ -16,4 +16,15 @@ internal static class OsuNumber
 
     public static double ParseDouble(string s) =>
         double.Parse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
+
+    public static bool TryParseInt(string s, out int value)
+    {
+        value = 0;
+        if (!TryParseDouble(s, out double d) || double.IsNaN(d) || d < int.MinValue || d > int.MaxValue) return false;
+        value = (int)d;
+        return true;
+    }
+
+    public static bool TryParseDouble(string s, out double value) =>
+        double.TryParse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 }

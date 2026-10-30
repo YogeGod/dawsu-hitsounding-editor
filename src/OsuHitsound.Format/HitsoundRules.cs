@@ -8,17 +8,23 @@ public static class HitsoundRules
     /// <summary>Objects read the timing point in effect this many ms after their time (lazer CONTROL_POINT_LENIENCY).</summary>
     public const double ControlPointLeniency = 5;
 
+    /// <summary>osu!stable never plays a hitsound below 8 % (lazer: 5 %).</summary>
+    public const int StableMinimumVolume = 8;
+
     /// <summary>
     /// The timing point whose sample settings apply to a hitsound at <paramref name="time"/>: the latest one at or
-    /// before time + 5 ms. Among points at the same time, the one later in the file wins. Null before the first point.
+    /// before time + 5 ms. Among points at the same time, the one later in the file wins. Before the first point, the
+    /// first point. Unreadable points are skipped. Builds a <see cref="TimingPointIndex"/> per call: for many lookups,
+    /// build one index and query it instead.
     /// </summary>
-    public static TimingPoint? SamplePointAt(IEnumerable<TimingPoint> pointsInFileOrder, double time)
+    public static TimingPoint? SamplePointAt(IEnumerable<TimingPoint> pointsInFileOrder, double time) =>
+        new TimingPointIndex(pointsInFileOrder).SamplePointAt(time);
+
+    /// <summary>The sample name without index or extension, e.g. "soft-hitclap"; also the skin's file name.</summary>
+    public static string SampleName(SampleSet set, string sound)
     {
-        TimingPoint? best = null;
-        foreach (var p in pointsInFileOrder)
-            if (p.Time <= time + ControlPointLeniency && (best is null || p.Time >= best.Time))
-                best = p;
-        return best;
+        if (set is SampleSet.None) throw new ArgumentException("Resolve SampleSet.None to a real set first.", nameof(set));
+        return $"{set.ToString().ToLowerInvariant()}-{sound}";
     }
 
     /// <summary>
@@ -28,8 +34,7 @@ public static class HitsoundRules
     public static string? BeatmapSampleName(SampleSet set, string sound, int index)
     {
         if (index <= 0) return null;
-        if (set is SampleSet.None) throw new ArgumentException("Resolve SampleSet.None to a real set first.", nameof(set));
-        var name = $"{set.ToString().ToLowerInvariant()}-{sound}";
+        var name = SampleName(set, sound);
         return index == 1 ? name : name + index;
     }
 

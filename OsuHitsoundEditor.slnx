@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/OsuHitsound.Format/OsuHitsound.Format.csproj" />
+    <Project Path="src/OsuHitsound.Lanes/OsuHitsound.Lanes.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OsuHitsound.Format.Tests/OsuHitsound.Format.Tests.csproj" />
+    <Project Path="tests/OsuHitsound.Lanes.Tests/OsuHitsound.Lanes.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/RoundTrip/RoundTrip.csproj" />

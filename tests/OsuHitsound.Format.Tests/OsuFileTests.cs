@@ -90,6 +90,28 @@ public class OsuFileTests
         Assert.Equal([HitSound.Whistle, HitSound.None, HitSound.Clap], ho.EdgeSounds);
         Assert.Equal([(SampleSet.Normal, SampleSet.Soft), (SampleSet.None, SampleSet.None), (SampleSet.Drum, SampleSet.None)], ho.EdgeSets);
         Assert.Equal(new HitSample(), ho.HitSample);
+        Assert.Equal([(200.0, 100.0), (300.0, 192.0)], ho.CurvePoints);
+    }
+
+    [Fact]
+    public void Slider_nodes_fall_back_to_the_sliders_own_sounds_and_sets()
+    {
+        // Two edgeSounds for four nodes; the second edgeSets entry is empty, the fourth missing.
+        var ho = OsuFile.Parse(Bytes("[HitObjects]\r\n64,192,1000,6,8,B|200:100,3,100,2|0,1:2||0:0,3:1:0:0:\r\n")).HitObjects.Single();
+
+        Assert.Equal(4, ho.NodeCount);
+        Assert.Equal([HitSound.Whistle, HitSound.None, HitSound.Clap, HitSound.Clap], ho.NodeSounds);
+        Assert.Equal(
+            [(SampleSet.Normal, SampleSet.Soft), (SampleSet.Drum, SampleSet.Normal), (SampleSet.None, SampleSet.None), (SampleSet.Drum, SampleSet.Normal)],
+            ho.NodeSets);
+    }
+
+    [Fact]
+    public void Slider_node_count_is_clamped_like_osu()
+    {
+        var ho = OsuFile.Parse(Bytes("[HitObjects]\r\n64,192,1000,2,0,L|200:100,0,100\r\n")).HitObjects.Single();
+        Assert.Equal(2, ho.NodeCount);
+        Assert.Equal([HitSound.None, HitSound.None], ho.NodeSounds);
     }
 
     [Fact]

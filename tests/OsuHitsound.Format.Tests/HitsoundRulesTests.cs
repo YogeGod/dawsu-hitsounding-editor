@@ -26,9 +26,10 @@ public class HitsoundRulesTests
     }
 
     [Fact]
-    public void No_timing_point_before_the_first_one()
+    public void Before_the_first_timing_point_the_first_one_applies()
     {
-        Assert.Null(HitsoundRules.SamplePointAt(Points("1000,500,4,2,1,100,1,0"), 500));
+        Assert.Equal(1000, HitsoundRules.SamplePointAt(Points("1000,500,4,2,1,100,1,0", "2000,-100,4,2,2,100,0,0"), 500)!.Time);
+        Assert.Null(HitsoundRules.SamplePointAt(Points(), 500));
     }
 
     [Theory]

@@ -295,7 +295,7 @@ for each "hit event" e of O:
         index/vol/filename: lazer -> from TP only (slider-level hitSample ignored, §2); stable UNVERIFIED
    slider body: q = O.time+6; sounds = sliderslide (always) + sliderwhistle (if O.hitSound&2)
         ticks: slidertick at each tick time, using the body's resolved bank/index/vol (lazer)
-  P = active TP at q (rightmost time<=q; on ties a green line wins; before the first point use the first point)
+  P = active TP at q (rightmost time<=q; on ties the later line in the file wins, as HitsoundRules does (lazer instead prefers the green line, §above); before the first point use the first point)
   normalSet = e.normalSet!=0 ? e.normalSet : (P.sampleSet!=0 ? P.sampleSet : Normal   # lazer; wiki says [General] default — OPEN)
   addSet    = e.addSet!=0 ? e.addSet : normalSet
   index     = e.index>0 ? e.index : P.sampleIndex
