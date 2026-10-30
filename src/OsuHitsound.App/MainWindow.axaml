@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:OsuHitsound.App"
+        x:Class="OsuHitsound.App.MainWindow"
+        Title="osu! Hitsound Editor"
+        Width="1600" Height="900" MinWidth="900" MinHeight="500"
+        Background="#262628">
+  <Window.Styles>
+    <!-- Variation G: light grey chrome around the dark arrange area. -->
+    <Style Selector="Border.chrome">
+      <Setter Property="Background" Value="{DynamicResource ChromeBg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    </Style>
+    <Style Selector="Border.chrome TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    </Style>
+    <Style Selector="Border.chrome Button, Border.chrome ToggleButton">
+      <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="FontSize" Value="{DynamicResource ButtonFontSize}" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Border.chrome ToggleButton:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
+      <Setter Property="Foreground" Value="#ffffff" />
+    </Style>
+    <Style Selector="Button.transport">
+      <Setter Property="Width" Value="34" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.lcd">
+      <Setter Property="Foreground" Value="{DynamicResource LcdText}" />
+      <Setter Property="FontFamily" Value="Consolas, Cascadia Mono, monospace" />
+      <Setter Property="FontSize" Value="{DynamicResource LcdFontSize}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="RadioButton.tab">
+      <Setter Property="Foreground" Value="#e4e4e6" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Name="Root" RowDefinitions="24,46,34,30,*,150,26">
+    <!-- 1. File title -->
+    <Border Grid.Row="0" Name="TitleBar" Classes="chrome" BorderThickness="0,0,0,1">
+      <TextBlock Name="FileTitle" Text="No map open — Hitsounds" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
+
+    <!-- 2. Control bar -->
+    <Border Grid.Row="1" Name="ControlBar" Classes="chrome" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto,*" Margin="8,0">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Name="OpenButton" Content="Open .osu…" ToolTip.Tip="Open a map (Ctrl+O)" />
+          <ToggleButton Name="LaneDetailsToggle" Content="Lane details" IsChecked="True" ToolTip.Tip="Show each lane's file index" />
+          <ToggleButton Name="VolumeToggle" Content="Volume lane" IsChecked="True" ToolTip.Tip="Show the bottom panel" />
+          <ToggleButton Content="Sample browser" IsEnabled="False" ToolTip.Tip="Comes later" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Name="StartButton" Classes="transport" Content="⏮" ToolTip.Tip="Go to start (Home)" />
+          <Button Name="StopButton" Classes="transport" Content="⏹" ToolTip.Tip="Stop; press again to go to the start" />
+          <Button Name="PlayButton" Classes="transport" Content="▶" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop (Space)" />
+          <ToggleButton Name="LoopButton" Classes="transport" Content="🔁" Width="34" ToolTip.Tip="Loop the visible range (/)" />
+          <Border Name="Lcd" Background="{DynamicResource LcdBg}" CornerRadius="6" Padding="14,2" Margin="10,0,0,0" Height="40">
+            <StackPanel Orientation="Horizontal" Spacing="22" VerticalAlignment="Center">
+              <StackPanel><TextBlock Name="LcdBar" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="bar beat tick" /></StackPanel>
+              <StackPanel><TextBlock Name="LcdTime" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="time" /></StackPanel>
+              <StackPanel><TextBlock Name="LcdBpm" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="BPM" /></StackPanel>
+              <StackPanel><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="signature · snap" /></StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <Button Grid.Column="2" Name="SaveButton" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Save .osu" IsEnabled="False"
+                ToolTip.Tip="Saving comes with the compiler (next milestone)." />
+      </Grid>
+    </Border>
+
+    <!-- 3. Edit bar -->
+    <Border Grid.Row="2" Name="EditBar" Classes="chrome" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="6,0">
+        <Menu Grid.Column="0" VerticalAlignment="Center" Foreground="#1d1d1f">
+          <MenuItem Header="Edit"><MenuItem Header="Editing comes later" IsEnabled="False" /></MenuItem>
+          <MenuItem Header="Functions"><MenuItem Header="Comes later" IsEnabled="False" /></MenuItem>
+          <MenuItem Header="View">
+            <MenuItem Name="ZoomInItem" Header="Zoom in (H)" />
+            <MenuItem Name="ZoomOutItem" Header="Zoom out (G)" />
+            <MenuItem Name="CollapseAllItem" Header="Collapse all groups" />
+            <MenuItem Name="InspectorItem" Header="UI inspector (Ctrl+Shift+I)" />
+          </MenuItem>
+        </Menu>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="16,0" VerticalAlignment="Center">
+          <ToggleButton Content="Select" IsChecked="True" IsHitTestVisible="False" />
+          <ToggleButton Content="Draw" IsEnabled="False" ToolTip.Tip="Editing comes later" />
+          <ToggleButton Content="Erase" IsEnabled="False" ToolTip.Tip="Editing comes later" />
+        </StackPanel>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="Snap" VerticalAlignment="Center" />
+          <ComboBox Name="SnapBox" SelectedIndex="2" Width="74" Focusable="False">
+            <ComboBoxItem Content="1/1" /><ComboBoxItem Content="1/2" /><ComboBoxItem Content="1/4" />
+            <ComboBoxItem Content="1/8" /><ComboBoxItem Content="1/16" /><ComboBoxItem Content="1/3" /><ComboBoxItem Content="1/6" />
+          </ComboBox>
+          <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Slider Name="ZoomSlider" Width="160" Minimum="0" Maximum="1" Value="0.5" Focusable="False" VerticalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 4. Overview strip -->
+    <app:OverviewStrip Grid.Row="3" Name="Overview" />
+
+    <!-- 5. Arrange area -->
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+      <app:ArrangeView Name="Lanes" />
+      <ScrollBar Grid.Column="1" Name="VScroll" Orientation="Vertical" />
+      <ScrollBar Grid.Row="1" Name="HScroll" Orientation="Horizontal" Margin="328,0,0,0" />
+    </Grid>
+
+    <!-- Bottom panel: Volume | What gets saved -->
+    <Border Grid.Row="5" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="#1c1c1e" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="2" Margin="6,2">
+          <RadioButton Name="VolumeTab" Classes="tab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="False" />
+          <RadioButton Name="SavedTab" Classes="tab" Content="What gets saved" GroupName="bottom" Focusable="False" />
+        </StackPanel>
+        <Panel>
+          <app:VolumeLane Name="Volume" />
+          <TextBlock Name="SavedText" IsVisible="False" Margin="14,8" Foreground="#a4a4a9" TextWrapping="Wrap"
+                     Text="This tab will show the hitSound and hitSample fields (and any green lines) the selected moment saves as. It arrives with the compiler." />
+        </Panel>
+      </DockPanel>
+    </Border>
+
+    <!-- 6. Status bar -->
+    <Border Grid.Row="6" Name="StatusBar" Classes="chrome" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto" Margin="10,0">
+        <TextBlock Name="StatusLeft" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1" Name="StatusRight" VerticalAlignment="Center" FontSize="12" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

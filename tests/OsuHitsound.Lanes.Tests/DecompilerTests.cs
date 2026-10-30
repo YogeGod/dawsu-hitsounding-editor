@@ -248,7 +248,7 @@ public class DecompilerTests
         var osb = "[Variables]\r\n$fx = sfx/boom\r\n\r\n[Events]\r\nSample,2000,0,\"$fx.wav\",70\r\n";
         var text = "osu file format v14\r\n\r\n[Events]\r\nSample,1000,3,\"Crash.ogg\"\r\n5,1500,0,\"..\\outside.wav\",50\r\n";
         var map = Decompiler.Decompile(OsuFile.Parse(Encoding.UTF8.GetBytes(text)),
-            new MapFolder(["crash.ogg", "sfx/boom.wav", "map.osb"], _ => osb));
+            new MapFolder(["crash.ogg", "sfx/boom.wav", "map.osb"], _ => Encoding.UTF8.GetBytes(osb)));
 
         var samples = map.Passive.Where(p => p.Kind == PassiveKind.StoryboardSample).ToList();
         Assert.Equal([(1000.0, "crash.ogg", false, 100), (1500.0, "../outside.wav", true, 50), (2000.0, "sfx/boom.wav", false, 70)],

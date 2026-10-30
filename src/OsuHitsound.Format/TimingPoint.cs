@@ -10,6 +10,12 @@ public sealed class TimingPoint(OsuLine line) : FieldLine(line)
 
     public double BeatLength => Double(1);
 
+    /// <summary>Beats per bar (red lines). Absent or not positive means 4.</summary>
+    public int Meter => OptionalInt(2) is > 0 and var m ? m : 4;
+
+    /// <summary>Kiai time is on from this point (effects bit 1).</summary>
+    public bool Kiai => ((OptionalInt(7) ?? 0) & 1) != 0;
+
     /// <summary>Red line. Absent means uninherited.</summary>
     public bool Uninherited => OptionalInt(6) is null or 1;
 

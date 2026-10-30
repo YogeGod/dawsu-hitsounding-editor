@@ -62,7 +62,7 @@ public static class Decompiler
             {
                 try
                 {
-                    AddStoryboard(Storyboard.Parse(folder.ReadText(osb)));
+                    AddStoryboard(OsuFile.Parse(folder.ReadBytes(osb)));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

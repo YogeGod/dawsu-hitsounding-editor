@@ -39,8 +39,6 @@ internal static class Storyboard
         }
     }
 
-    public static OsuFile Parse(string text) => OsuFile.Parse(Encoding.UTF8.GetBytes(text));
-
     /// <summary>lazer's LegacyDecoder.CleanFilename: no quotes, "\\" → "\", one separator style.</summary>
     private static string CleanPath(string path) => path.Trim('"').Replace(@"\\", @"\").Replace('\\', '/');
 

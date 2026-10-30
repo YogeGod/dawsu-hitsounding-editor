@@ -9,14 +9,14 @@ public sealed class MapFolder
 {
     // Relative path with '/' separators → the name as it is on disk.
     private readonly Dictionary<string, string> files;
-    private readonly Func<string, string>? readText;
+    private readonly Func<string, byte[]>? readBytes;
 
-    public MapFolder(IEnumerable<string> relativePaths, Func<string, string>? readText = null)
+    public MapFolder(IEnumerable<string> relativePaths, Func<string, byte[]>? readBytes = null)
     {
         files = new(StringComparer.OrdinalIgnoreCase);
         foreach (var path in relativePaths)
             files.TryAdd(Normalize(path), path.Replace('\\', '/'));
-        this.readText = readText;
+        this.readBytes = readBytes;
     }
 
     public static MapFolder FromDirectory(string directory)
@@ -25,7 +25,7 @@ public sealed class MapFolder
         // Junctions and symlinks are skipped: they could lead outside the folder past the string checks.
         var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true };
         var names = Directory.EnumerateFiles(root, "*", options).Select(f => Path.GetRelativePath(root, f));
-        return new MapFolder(names, rel => File.ReadAllText(Path.Combine(root, rel)));
+        return new MapFolder(names, rel => File.ReadAllBytes(Path.Combine(root, rel)));
     }
 
     /// <summary>The on-disk name of a file in the folder, or null when it's missing or the name points outside the folder.</summary>
@@ -39,8 +39,9 @@ public sealed class MapFolder
     public IEnumerable<string> FilesWithExtension(string extension) =>
         files.Values.Where(f => !f.Contains('/') && f.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
 
-    public string ReadText(string relativePath) =>
-        readText?.Invoke(Find(relativePath) ?? throw new FileNotFoundException(relativePath)) ?? throw new InvalidOperationException("This folder has no file contents.");
+    /// <summary>The contents of a file found by <see cref="Find"/>; throws for names outside the folder or missing.</summary>
+    public byte[] ReadBytes(string relativePath) =>
+        readBytes?.Invoke(Find(relativePath) ?? throw new FileNotFoundException(relativePath)) ?? throw new InvalidOperationException("This folder has no file contents.");
 
     /// <summary>True when the path stays inside the folder: relative, no drive, no UNC, and ".." never climbs above the root.</summary>
     public static bool IsInside(string relativePath)

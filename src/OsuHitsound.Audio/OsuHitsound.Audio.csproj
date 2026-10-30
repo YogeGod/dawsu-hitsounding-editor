@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The BASS bindings and native libraries osu!lazer ships with. BASS is free for non-commercial use. -->
+    <PackageReference Include="ppy.ManagedBass" Version="2022.1216.0" />
+    <PackageReference Include="ppy.osu.Framework.NativeLibs" Version="2025.806.0-nativelibs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OsuHitsound.Lanes\OsuHitsound.Lanes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OsuHitsound.Audio.Tests" />
+  </ItemGroup>
+
+</Project>

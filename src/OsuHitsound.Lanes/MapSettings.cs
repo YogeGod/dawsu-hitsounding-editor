@@ -4,7 +4,8 @@ using OsuHitsound.Format;
 namespace OsuHitsound.Lanes;
 
 /// <summary>The header values the decompiler needs, with osu!'s defaults and lazer's clamps.</summary>
-public sealed record MapSettings(int FormatVersion, int Mode, SampleSet DefaultSampleSet, double SliderMultiplier, double SliderTickRate)
+public sealed record MapSettings(int FormatVersion, int Mode, SampleSet DefaultSampleSet, double SliderMultiplier, double SliderTickRate,
+    string AudioFilename = "")
 {
     /// <summary>v3/v4 files play 24 ms later than written. Used for display only; written numbers never change.</summary>
     public double TimeOffset => FormatVersion < 5 ? 24 : 0;
@@ -14,6 +15,7 @@ public sealed record MapSettings(int FormatVersion, int Mode, SampleSet DefaultS
         int version = 14, mode = 0;
         var sampleSet = SampleSet.Normal;
         double multiplier = 1.4, tickRate = 1;
+        string audio = "";
 
         foreach (var line in file.Lines)
         {
@@ -28,6 +30,9 @@ public sealed record MapSettings(int FormatVersion, int Mode, SampleSet DefaultS
 
             switch (line.Section, key)
             {
+                case ("General", "AudioFilename"):
+                    audio = value;
+                    break;
                 case ("General", "Mode"):
                     mode = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int m) ? m : 0;
                     break;
@@ -44,7 +49,7 @@ public sealed record MapSettings(int FormatVersion, int Mode, SampleSet DefaultS
             }
         }
 
-        return new MapSettings(version, mode, sampleSet, Math.Clamp(multiplier, 0.4, 3.6), Math.Clamp(tickRate, 0.5, 8));
+        return new MapSettings(version, mode, sampleSet, Math.Clamp(multiplier, 0.4, 3.6), Math.Clamp(tickRate, 0.5, 8), audio);
     }
 
     private static double Number(string s, double fallback) =>
