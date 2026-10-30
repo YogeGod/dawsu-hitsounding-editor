@@ -16,8 +16,14 @@ internal sealed record LaneRow(LaneGroup Group, Lane Lane, int Number, int Shade
     public Color Color => ArrangeModel.ShadeOf(Group, Shade);
 }
 
-/// <summary>A note drawn in a lane: a moment's hit, a slider tick or a storyboard sample, or a slider body span.</summary>
-internal readonly record struct Note(double Time, double EndTime, Lane Lane, int Volume, bool Passive, int MomentIndex);
+/// <summary>
+/// A note drawn in a lane: an editable hit (<see cref="Hit"/>), or a read-only slider tick, storyboard sample or slider
+/// body span.
+/// </summary>
+internal readonly record struct Note(double Time, double EndTime, Lane Lane, EditHit? Hit)
+{
+    public bool Passive => Hit is null;
+}
 
 /// <summary>A beat or bar line on the timeline.</summary>
 internal readonly record struct GridLine(double Time, bool IsBar, int Bar, int Beat, double BeatLength);
@@ -26,9 +32,9 @@ internal readonly record struct GridLine(double Time, bool IsBar, int Bar, int B
 internal readonly record struct Section(double Start, double End, string Name);
 
 /// <summary>
-/// What the arrange area shows for one decompiled map: lanes in their groups with colours (docs/ui-design.md), the
-/// notes per lane, beat and bar lines from the red lines, and kiai sections. Mute, solo and collapsed groups live here
-/// too, so the view and the audio engine read the same state.
+/// What the arrange area shows for one map being edited: lanes in their groups with colours (docs/ui-design.md), the
+/// notes per lane from the edit session, beat, bar and snap lines from the red lines, and kiai sections. Mute, solo and
+/// collapsed groups live here too, so the view and the audio engine read the same state.
 /// </summary>
 internal sealed partial class ArrangeModel
 {
@@ -39,47 +45,108 @@ internal sealed partial class ArrangeModel
     private readonly HashSet<LaneGroup> collapsed = [];
     private readonly List<LaneRow> laneRows = [];
 
-    public ArrangeModel(DecompiledMap map, OsuFile file, IReadOnlySet<Lane> silent)
+    public ArrangeModel(EditSession session, OsuFile file, IReadOnlySet<Lane> silent)
     {
-        Map = map;
+        Session = session;
+        Map = session.Map;
         Silent = silent;
 
+        // Lanes the map uses come first in each group; the other drawable lanes (unused files, skin sounds) follow.
+        var used = Map.Lanes.ToHashSet();
         int number = 1;
-        foreach (var group in map.Lanes.GroupBy(l => l.Group).OrderBy(g => g.Key))
+        foreach (var group in session.Lanes.GroupBy(l => l.Group).OrderBy(g => g.Key))
         {
             int i = 0;
-            foreach (var lane in group)
+            foreach (var lane in group.OrderBy(l => used.Contains(l) ? 0 : 1))
                 laneRows.Add(new LaneRow(group.Key, lane, number++, i++, IndexOf(lane)));
         }
 
-        var notes = new Dictionary<Lane, List<Note>>();
-        for (int m = 0; m < map.Moments.Count; m++)
-            foreach (var hit in map.Moments[m].Hits)
-                Add(new Note(map.Moments[m].Time, map.Moments[m].Time, hit.Lane, map.Moments[m].Volume, false, m));
-        foreach (var p in map.Passive)
-            Add(new Note(p.Time, p.EndTime, p.Lane, p.Volume, true, -1));
-        foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
-        Notes = notes;
-
-        double offset = map.Settings.TimeOffset;
+        double offset = Map.Settings.TimeOffset;
         segments = BuildSegments(file, offset);
         Sections = KiaiSections(file, offset);
-        LastTime = Math.Max(map.Moments.Count > 0 ? map.Moments[^1].Time : 0, map.Passive.Count > 0 ? map.Passive.Max(p => p.EndTime) : 0);
+        LastTime = Math.Max(Map.Moments.Count > 0 ? Map.Moments[^1].Time : 0, Map.Passive.Count > 0 ? Map.Passive.Max(p => p.EndTime) : 0);
         Rows = BuildRows();
         GroupCount = laneRows.Select(r => r.Group).Distinct().Count();
-
-        void Add(Note n)
-        {
-            if (!notes.TryGetValue(n.Lane, out var list)) notes[n.Lane] = list = [];
-            list.Add(n);
-        }
+        passive = Map.Passive.GroupBy(p => p.Lane).ToDictionary(g => g.Key, g => g.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList());
+        RebuildNotes();
     }
+
+    // The map's read-only sounds never change, so their notes are built once.
+    private readonly Dictionary<Lane, List<Note>> passive;
+
+    public EditSession Session { get; }
 
     public DecompiledMap Map { get; }
 
     public IReadOnlySet<Lane> Silent { get; }
 
-    public IReadOnlyDictionary<Lane, List<Note>> Notes { get; }
+    public IReadOnlyDictionary<Lane, List<Note>> Notes { get; private set; } = new Dictionary<Lane, List<Note>>();
+
+    /// <summary>Moments that won't save as wanted, from the last background compile.</summary>
+    public IReadOnlySet<MomentKey> Conflicted { get; private set; } = new HashSet<MomentKey>();
+
+    /// <summary>The group of each moment's first hit (its colour in the volume lane), for moments that have hits.</summary>
+    public IReadOnlyDictionary<MomentKey, LaneGroup> MomentGroups { get; private set; } = new Dictionary<MomentKey, LaneGroup>();
+
+    /// <summary>Times of everything that won't be saved (conflicts and hits with no object), sorted, for the red stripes.</summary>
+    public IReadOnlyList<double> ProblemTimes { get; private set; } = [];
+
+    /// <summary>A hit that won't be saved: no object to play on, or its moment is a conflict.</summary>
+    public bool IsProblem(EditHit hit) => hit.Anchor is not { } key || Conflicted.Contains(key);
+
+    /// <summary>Rebuilds the notes from the session's hits after an edit.</summary>
+    public void RebuildNotes()
+    {
+        var notes = passive.ToDictionary(kv => kv.Key, kv => new List<Note>(kv.Value));
+        var groups = new Dictionary<MomentKey, LaneGroup>();
+        foreach (var hit in Session.State.Hits)
+        {
+            if (!notes.TryGetValue(hit.Lane, out var list)) notes[hit.Lane] = list = [];
+            list.Add(new Note(hit.Time, hit.Time, hit.Lane, hit));
+            if (hit.Anchor is { } key) groups.TryAdd(key, hit.Lane.Group);
+        }
+
+        foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
+        (Notes, MomentGroups) = (notes, groups);
+        UpdateProblemTimes();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Takes the conflicts of a finished background compile; no rebuild needed, drawing reads them.</summary>
+    public void SetConflicts(IReadOnlySet<MomentKey> conflicted)
+    {
+        Conflicted = conflicted;
+        UpdateProblemTimes();
+        Changed?.Invoke();
+    }
+
+    private void UpdateProblemTimes() => ProblemTimes =
+    [
+        .. Conflicted.Where(Session.MomentByKey.ContainsKey).Select(k => Session.MomentByKey[k].Time)
+            .Concat(Session.Unanchored.Select(h => h.Time)).Distinct().Order(),
+    ];
+
+    /// <summary>The nearest snap position: the beat divided by <paramref name="divisor"/>, from the red line in force.</summary>
+    public double Snap(double time, int divisor)
+    {
+        if (SegmentAt(time) is not { } s) return time;
+        double step = s.BeatLength / divisor;
+        return s.Start + Math.Round((time - s.Start) / step) * step;
+    }
+
+    /// <summary>Snap lines between beats (beat / divisor), for drawing when zoomed in enough.</summary>
+    public IEnumerable<double> SubLines(double from, double to, int divisor)
+    {
+        if (divisor <= 1) yield break;
+        // From one beat earlier, so a beat that starts before the view still gets its subdivisions.
+        double back = SegmentAt(from)?.BeatLength ?? 0;
+        foreach (var line in GridLines(from - back, to))
+            for (int k = 1; k < divisor; k++)
+            {
+                double t = line.Time + k * line.BeatLength / divisor;
+                if (t >= from && t <= to) yield return t;
+            }
+    }
 
     private readonly Segment[] segments;
 
@@ -92,6 +159,7 @@ internal sealed partial class ArrangeModel
     public IReadOnlyList<LaneRow> LaneRows => laneRows;
 
     public int GroupCount { get; }
+
 
     /// <summary>A group's colour list in the theme: the group colour first, then the lane shades it steps through.</summary>
     private static Color[] ColorsOf(LaneGroup group) => UiTheme.Current.Colors(group switch

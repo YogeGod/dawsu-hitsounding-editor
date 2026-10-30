@@ -15,21 +15,26 @@ public sealed class HitScheduler
     private readonly Cue[] cues;
 
     public HitScheduler(DecompiledMap map)
+        : this(map.Moments.SelectMany(m => m.Hits.Select(h => HitCue(m.Time, h.Lane, m.Volume))).Concat(PassiveCues(map)))
     {
-        var all = new List<Cue>();
-        foreach (var m in map.Moments)
-            foreach (var hit in m.Hits)
-                all.Add(new Cue(m.Time, hit.Lane, m.PlayedVolume / 100f));
+    }
 
+    public HitScheduler(IEnumerable<Cue> cues) => this.cues = [.. cues.OrderBy(c => c.Time)];
+
+    /// <summary>A hitsound as osu!stable plays it: never below 8 %.</summary>
+    public static Cue HitCue(double time, Lane lane, int volume) =>
+        new(time, lane, Math.Clamp(Math.Max(volume, HitsoundRules.StableMinimumVolume), 0, 100) / 100f);
+
+    /// <summary>The map's read-only sounds that play: slider ticks and storyboard samples.</summary>
+    public static IEnumerable<Cue> PassiveCues(DecompiledMap map)
+    {
         foreach (var p in map.Passive)
         {
             if (p.Kind is PassiveKind.SliderTick)
-                all.Add(new Cue(p.Time, p.Lane, Math.Max(p.Volume, HitsoundRules.StableMinimumVolume) / 100f));
+                yield return HitCue(p.Time, p.Lane, p.Volume);
             else if (p.Kind is PassiveKind.StoryboardSample)
-                all.Add(new Cue(p.Time, p.Lane, Math.Clamp(p.Volume, 0, 100) / 100f));
+                yield return new Cue(p.Time, p.Lane, Math.Clamp(p.Volume, 0, 100) / 100f);
         }
-
-        cues = [.. all.OrderBy(c => c.Time)];
     }
 
     public IReadOnlyList<Cue> Cues => cues;

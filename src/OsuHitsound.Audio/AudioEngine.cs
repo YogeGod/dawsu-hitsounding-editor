@@ -16,7 +16,7 @@ public sealed class AudioEngine : IDisposable
     private readonly HashSet<Lane> silent = [];
     private readonly object gate = new();
     private int song;
-    private HitScheduler? scheduler;
+    private volatile HitScheduler? scheduler; // swapped whole by SetCues while playing; the thread reads it each loop
     private Thread? thread;
     private volatile bool playing;
 
@@ -144,6 +144,13 @@ public sealed class AudioEngine : IDisposable
         Pause();
         lock (gate) startPosition = Math.Clamp(time, 0, Math.Max(Length, 0));
         if (wasPlaying) Play();
+    }
+
+    /// <summary>Replaces what plays (after an edit), keeping the song and samples. Safe while playing.</summary>
+    public void SetCues(IEnumerable<Cue> cues)
+    {
+        if (scheduler is null) return; // nothing loaded
+        scheduler = new HitScheduler(cues);
     }
 
     /// <summary>Plays one lane's sample now, e.g. when its name is clicked.</summary>

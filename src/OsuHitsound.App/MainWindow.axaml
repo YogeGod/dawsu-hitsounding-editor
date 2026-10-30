@@ -23,6 +23,9 @@
       <Setter Property="Focusable" Value="False" />
       <Setter Property="CornerRadius" Value="4" />
     </Style>
+    <Style Selector="Border.chrome Menu MenuItem">
+      <Setter Property="Foreground" Value="#1d1d1f" />
+    </Style>
     <Style Selector="Border.chrome ToggleButton:checked /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
       <Setter Property="Foreground" Value="#ffffff" />
@@ -79,8 +82,8 @@
           </Border>
         </StackPanel>
 
-        <Button Grid.Column="2" Name="SaveButton" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Save .osu" IsEnabled="False"
-                ToolTip.Tip="Saving comes with the compiler (next milestone)." />
+        <Button Grid.Column="2" Name="SaveButton" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Save .osu"
+                ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
       </Grid>
     </Border>
 
@@ -88,7 +91,18 @@
     <Border Grid.Row="2" Name="EditBar" Classes="chrome" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="6,0">
         <Menu Grid.Column="0" VerticalAlignment="Center" Foreground="#1d1d1f">
-          <MenuItem Header="Edit"><MenuItem Header="Editing comes later" IsEnabled="False" /></MenuItem>
+          <MenuItem Header="Edit">
+            <MenuItem Name="UndoItem" Header="Undo" InputGesture="Ctrl+Z" />
+            <MenuItem Name="RedoItem" Header="Redo" InputGesture="Ctrl+Y" />
+            <Separator />
+            <MenuItem Name="CutItem" Header="Cut" InputGesture="Ctrl+X" />
+            <MenuItem Name="CopyItem" Header="Copy" InputGesture="Ctrl+C" />
+            <MenuItem Name="PasteItem" Header="Paste at playhead" InputGesture="Ctrl+V" />
+            <MenuItem Name="DuplicateItem" Header="Duplicate" InputGesture="Ctrl+D" />
+            <MenuItem Name="DeleteItem" Header="Delete" InputGesture="Delete" />
+            <Separator />
+            <MenuItem Name="SelectAllItem" Header="Select all" InputGesture="Ctrl+A" />
+          </MenuItem>
           <MenuItem Header="Functions"><MenuItem Header="Comes later" IsEnabled="False" /></MenuItem>
           <MenuItem Header="View">
             <MenuItem Name="ZoomInItem" Header="Zoom in (H)" />
@@ -98,9 +112,9 @@
           </MenuItem>
         </Menu>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="16,0" VerticalAlignment="Center">
-          <ToggleButton Content="Select" IsChecked="True" IsHitTestVisible="False" />
-          <ToggleButton Content="Draw" IsEnabled="False" ToolTip.Tip="Editing comes later" />
-          <ToggleButton Content="Erase" IsEnabled="False" ToolTip.Tip="Editing comes later" />
+          <ToggleButton Name="SelectTool" Content="Select" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." />
+          <ToggleButton Name="DrawTool" Content="Draw" ToolTip.Tip="Draw (3, or hold Alt). Click or drag along a lane; starting on a hit erases instead." />
+          <ToggleButton Name="EraseTool" Content="Erase" ToolTip.Tip="Erase (4). Drag across hits to remove them." />
         </StackPanel>
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <TextBlock Text="Snap" VerticalAlignment="Center" />

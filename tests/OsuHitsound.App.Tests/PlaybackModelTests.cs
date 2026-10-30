@@ -17,6 +17,8 @@ public class PlaybackModelTests
         return (Decompiler.Decompile(file, new MapFolder(files ?? [])), file);
     }
 
+    private static EditSession Session(DecompiledMap map, OsuFile file) => new(file, new MapFolder([]), map);
+
     [Fact]
     public void Scheduler_starts_each_hit_once_when_the_playhead_passes_it()
     {
@@ -46,19 +48,20 @@ public class PlaybackModelTests
     {
         var (map, file) = Load("0,500,4,3,2,100,1,0", "256,192,1000,1,8,0:0:0:0:\n256,192,1500,1,8,0:0:3:0:",
             ["drum-hitnormal2.wav", "drum-hitclap2.wav", "drum-hitclap3.ogg"]);
-        var model = new ArrangeModel(map, file, new HashSet<Lane>());
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
 
         Assert.Equal([LaneGroup.DrumSet, LaneGroup.Skin], model.Rows.OfType<GroupRow>().Select(g => g.Group));
         Assert.Equal(Enumerable.Range(1, model.LaneRows.Count), model.LaneRows.Select(r => r.Number));
         Assert.Equal(3, model.LaneRows.Single(r => r.Lane.Name == "drum-hitclap3.ogg").Index);
-        Assert.Equal(0, model.LaneRows.Single(r => r.Lane.Source == LaneSource.Skin).Index);
+        Assert.All(model.LaneRows.Where(r => r.Lane.Source == LaneSource.Skin), r => Assert.Equal(0, r.Index));
+        Assert.Equal(12, model.LaneRows.Count(r => r.Lane.Source == LaneSource.Skin)); // every skin sound can be drawn
     }
 
     [Fact]
     public void Collapsing_a_group_hides_its_lanes_but_keeps_its_row()
     {
         var (map, file) = Load("0,500,4,2,0,100,1,0", "256,192,1000,1,14,0:0:0:0:");
-        var model = new ArrangeModel(map, file, new HashSet<Lane>());
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
         int before = model.Rows.Count;
 
         model.ToggleCollapsed(LaneGroup.Skin);
@@ -71,7 +74,7 @@ public class PlaybackModelTests
     public void Solo_silences_every_other_lane_and_mute_wins_over_solo()
     {
         var (map, file) = Load("0,500,4,2,0,100,1,0", "256,192,1000,1,8,0:0:0:0:");
-        var model = new ArrangeModel(map, file, new HashSet<Lane>());
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
         var (normal, clap) = (model.LaneRows[0].Lane, model.LaneRows[1].Lane);
 
         model.ToggleSolo(clap);
@@ -92,7 +95,7 @@ public class PlaybackModelTests
     public void Lcd_shows_bar_beat_and_tick(double time, int bar, int beat, int tick)
     {
         var (map, file) = Load("1000,500,4,2,0,100,1,0\n2000,500,3,2,0,100,1,0", "256,192,1000,1,0,0:0:0:0:");
-        var model = new ArrangeModel(map, file, new HashSet<Lane>());
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
         Assert.Equal((bar, beat, tick), model.BarBeatTick(time));
     }
 
@@ -100,7 +103,7 @@ public class PlaybackModelTests
     public void Bars_restart_at_every_red_line_with_its_meter()
     {
         var (map, file) = Load("1000,500,4,2,0,100,1,0\n2000,500,3,2,0,100,1,0", "256,192,1000,1,0,0:0:0:0:");
-        var model = new ArrangeModel(map, file, new HashSet<Lane>());
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
         var bars = model.GridLines(0, 4000).Where(l => l.IsBar).Select(l => (l.Time, l.Bar)).ToList();
 
         Assert.Equal([(-1000.0 + 2000, 2), (2000.0, 3), (3500.0, 4)], bars.Where(b => b.Time >= 1000));
@@ -121,7 +124,7 @@ public class PlaybackModelTests
     public void A_tiny_beat_length_is_clamped_so_the_grid_stays_small()
     {
         var (map, file) = Load("0,0.0001,4,2,0,100,1,0", "256,192,1000,1,0,0:0:0:0:");
-        var model = new ArrangeModel(map, file, new HashSet<Lane>());
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
 
         // 6 ms beats (lazer's minimum): about 1667 lines in 10 s, not 100 million.
         Assert.InRange(model.GridLines(0, 10000).Count(), 1600, 1700);
