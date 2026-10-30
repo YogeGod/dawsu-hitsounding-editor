@@ -27,4 +27,8 @@
     <InternalsVisibleTo Include="Snapshot" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="ui-theme.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

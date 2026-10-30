@@ -34,9 +34,9 @@ internal sealed class UiTheme
             C("title.bg", "Background", "#d6d6da"), C("title.text", "Text", "#1d1d1f"),
             N("title.height", "Height", 24, 16, 60), N("title.fontSize", "Font size", 11, 8, 24)]),
         new("controlbar", "Bars", "Control bar", [
-            C("control.bg", "Background", "#d6d6da"), N("control.height", "Height", 46, 30, 90)]),
+            C("control.bg", "Background", "#d6d6da"), N("control.height", "Height", 64, 58, 90)]),
         new("editbar", "Bars", "Edit bar", [
-            C("edit.bg", "Background", "#d6d6da"), N("edit.height", "Height", 34, 24, 70)]),
+            C("edit.bg", "Background", "#d6d6da"), N("edit.height", "Height", 76, 76, 110)]),
         new("statusbar", "Bars", "Status bar", [
             C("status.bg", "Background", "#d6d6da"), C("status.text", "Text", "#1d1d1f"),
             N("status.height", "Height", 26, 18, 60), N("status.fontSize", "Font size", 12, 8, 22)]),

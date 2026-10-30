@@ -10,7 +10,7 @@ using OsuHitsound.Lanes;
 namespace OsuHitsound.App;
 
 /// <summary>
-/// The main screen (docs/ui-design.md, variation G): opens a .osu, shows its lanes, plays it and edits its hitsounds.
+/// The main screen: opens a .osu, shows its lanes, plays it and edits its hitsounds.
 /// Edits are checked by compiling in the background; Save (Ctrl+S) compiles the original file again, keeps a backup
 /// outside the mapset and writes only the .osu.
 /// </summary>
@@ -47,7 +47,7 @@ public partial class MainWindow : Window
     }
 
     /// <param name="usePreferences">False for headless snapshots and tests: defaults, and nothing is saved.</param>
-    public MainWindow(string? path, bool startAudio = true, bool showInspector = true, bool usePreferences = true)
+    public MainWindow(string? path, bool startAudio = true, bool showInspector = false, bool usePreferences = true)
     {
         InitializeComponent();
 
@@ -75,7 +75,13 @@ public partial class MainWindow : Window
         Lanes.LocatorsChanged += UpdateLoop;
         LaneDetailsToggle.IsCheckedChanged += (_, _) => { Lanes.ShowIndexes = LaneDetailsToggle.IsChecked == true; Lanes.InvalidateVisual(); };
         VolumeToggle.IsCheckedChanged += (_, _) => ApplyTheme();
-        VolumeTab.IsCheckedChanged += (_, _) => { Volume.IsVisible = VolumeTab.IsChecked == true; SavedText.IsVisible = !Volume.IsVisible; };
+        VolumeTab.IsCheckedChanged += (_, _) =>
+        {
+            Volume.IsVisible = VolumeTab.IsChecked == true;
+            VolumeControlScroller.IsVisible = Volume.IsVisible;
+            SavedText.IsVisible = !Volume.IsVisible;
+        };
+        SizeChanged += (_, _) => UpdateVolumePanelHeight();
         SnapBox.ItemsSource = Divisors.Select(d => $"1/{d}").ToList();
         SnapBox.SelectedIndex = Array.IndexOf(Divisors, 4);
         SnapBox.SelectionChanged += (_, _) =>
@@ -611,6 +617,7 @@ public partial class MainWindow : Window
 
         Resources["ChromeBg"] = B("control.bg");
         Resources["ChromeBorder"] = B("chrome.border");
+        Resources["ControlHover"] = Paint.Brush(Paint.Brighten(t.Color("button.bg"), 0.12));
         Resources["ButtonBg"] = B("button.bg");
         Resources["ButtonText"] = B("button.text");
         Resources["ButtonActive"] = B("button.active");
@@ -638,20 +645,33 @@ public partial class MainWindow : Window
 
         var rows = Root.RowDefinitions;
         rows[0].Height = new GridLength(t.Number("title.height"));
-        rows[1].Height = new GridLength(t.Number("control.height"));
-        rows[2].Height = new GridLength(t.Number("edit.height"));
+        // These rows contain fixed-height controls; inspector edits must not clip them.
+        rows[1].Height = new GridLength(Math.Max(58, t.Number("control.height")));
+        rows[2].Height = new GridLength(Math.Max(76, t.Number("edit.height")));
         rows[3].Height = new GridLength(t.Number("overview.height"));
         bool showVolume = VolumeToggle.IsChecked == true;
         BottomPanel.IsVisible = showVolume;
-        rows[5].Height = new GridLength(showVolume ? t.Number("volume.height") : 0);
         rows[6].Height = new GridLength(t.Number("status.height"));
         HScroll.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
+        VolumeControlScroller.Width = ArrangeView.GridLeft;
+        UpdateVolumePanelHeight();
 
         Lanes.ScrollY = Lanes.ScrollY;
         Lanes.InvalidateVisual();
         Overview.InvalidateVisual();
         Volume.InvalidateVisual();
         SyncScrollBars();
+    }
+
+    private void UpdateVolumePanelHeight()
+    {
+        var rows = Root.RowDefinitions;
+        double chrome = rows[0].Height.Value + rows[1].Height.Value + rows[2].Height.Value
+                        + rows[3].Height.Value + rows[6].Height.Value;
+        // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
+        double available = Math.Max(100, Bounds.Height - chrome - Lanes.HeaderHeight - 80);
+        rows[5].Height = new GridLength(VolumeToggle.IsChecked == true
+            ? Math.Min(UiTheme.Current.Number("volume.height"), available) : 0);
     }
 
     // Where the current playback began, for "Return on stop".

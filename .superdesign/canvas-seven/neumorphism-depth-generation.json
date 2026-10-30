@@ -1,0 +1,5 @@
+{
+  "error": "Team has insufficient credits",
+  "code": "insufficient_credits",
+  "upgrade_url": "https://superdesign.dev/teams/53ddb98b-3b30-473d-9ccd-65c03ce8a4a3/billing?gate=api_credits"
+}

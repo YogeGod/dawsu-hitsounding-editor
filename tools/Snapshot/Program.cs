@@ -8,12 +8,13 @@ using OsuHitsound.App;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("usage: snapshot <map.osu> <outDir>");
+    Console.Error.WriteLine("usage: snapshot <map.osu> <outDir> [width height]");
     return 1;
 }
 
 string outDir = args[1];
 Directory.CreateDirectory(outDir);
+UiTheme.Current = UiTheme.Load(UiTheme.DefaultPath());
 
 AppBuilder.Configure<App>()
     .UseSkia()
@@ -21,7 +22,11 @@ AppBuilder.Configure<App>()
     .WithInterFont()
     .SetupWithoutStarting();
 
-var window = new MainWindow(args[0], startAudio: false, showInspector: false, usePreferences: false) { Width = 1920, Height = 1080 };
+var window = new MainWindow(args[0], startAudio: false, showInspector: false, usePreferences: false)
+{
+    Width = args.Length > 2 ? int.Parse(args[2]) : 1920,
+    Height = args.Length > 3 ? int.Parse(args[3]) : 1080,
+};
 window.Show();
 while (!window.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
 Pump();
