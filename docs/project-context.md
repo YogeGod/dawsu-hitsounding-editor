@@ -87,7 +87,7 @@ The user played the test maps in stable. Details are in `docs/osu-hitsound-rules
 
 Repo: `E:\Claude\osu-hitsound-editor`, branch `main`. It is pushed to the **`csharp-rewrite` branch** of the remote `dawsu` (https://github.com/YogeGod/dawsu-hitsounding-editor). That remote's `main` is a different project (the Electron dawsu! app, releases up to V6.39) with no shared history, so **never push to its `main`**: use `git push dawsu main:refs/heads/csharp-rewrite`. `/security-review` looks for `origin/HEAD` and fails here, so the security pass is done by hand.
 
-**Milestones:** M1–M4 and M6 are done. M5 (lane grid UI) is built and the audio check passes; its one open item is **importing the user's Cubase Key Commands XML**. Some keybind code exists in `ArrangeModel.cs`/`ArrangeView.cs`, but how far it goes hasn't been checked.
+**Milestones:** M1–M4 and M6 are done. M5 (lane grid UI) is built and the audio check passes; the Cubase Key Commands import is done (`KeyBindings.cs`, commit cfe95c5). Next is wave 1 of the V6.39 port: `docs/spec-wave1.md`.
 
 | Path | What |
 |---|---|
