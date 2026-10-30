@@ -49,10 +49,100 @@ public sealed class AudioEngine : IDisposable
     public bool IsPlaying => playing;
 
     /// <summary>Song length in ms, or a second past the last cue when there's no song.</summary>
-    public double Length { get; private set; }
+    public double Length => songLength > 0 ? Math.Max(songLength + Math.Max(songOffset, 0), cueLength) : cueLength;
+
+    private double songLength, cueLength;
 
     /// <summary>When set, playback jumps back to Start on reaching End.</summary>
     public (double Start, double End)? Loop { get; set; }
+
+    // Song settings. Timeline time = song time + offset; the clock runs at `speed` (tempo change without pitch change).
+    private double speed = 1, songOffset;
+    private float songVolume = 1;
+    private bool songMuted, songStarted;
+
+    /// <summary>Playback speed, 0.25–2 (1 = normal). Song and hitsounds stay in step; the song keeps its pitch.</summary>
+    public double Speed
+    {
+        get => speed;
+        set
+        {
+            lock (gate)
+            {
+                // Re-anchor the clock so the playhead doesn't jump when the rate changes.
+                if (playing)
+                {
+                    startPosition = ClockNow();
+                    sinceStart.Restart();
+                }
+
+                speed = Math.Clamp(value, 0.25, 2);
+                if (song != 0) Bass.ChannelSetAttribute(song, ChannelAttribute.Tempo, (speed - 1) * 100);
+            }
+        }
+    }
+
+    /// <summary>Song offset in ms: positive plays the song later against the hitsounds. Applied from the next play or seek.</summary>
+    public double SongOffset
+    {
+        get => songOffset;
+        set
+        {
+            lock (gate)
+            {
+                songOffset = Math.Clamp(value, -10000, 10000);
+                if (playing) StartSongAt(ClockNow()); // re-place the song against the hitsounds now
+            }
+        }
+    }
+
+    /// <summary>Song volume 0–1; hitsound volumes are unchanged.</summary>
+    public float SongVolume
+    {
+        get => songVolume;
+        set
+        {
+            songVolume = Math.Clamp(value, 0, 1);
+            ApplySongVolume();
+        }
+    }
+
+    /// <summary>Silences the song without changing its volume (also used while lanes are soloed).</summary>
+    public bool SongMuted
+    {
+        get => songMuted;
+        set
+        {
+            if (songMuted == value) return;
+            songMuted = value;
+            ApplySongVolume();
+        }
+    }
+
+    private void ApplySongVolume()
+    {
+        if (song != 0) Bass.ChannelSetAttribute(song, ChannelAttribute.Volume, songMuted ? 0 : songVolume);
+    }
+
+    // Must be called holding the gate.
+    private double ClockNow() => startPosition + sinceStart.Elapsed.TotalMilliseconds * speed;
+
+    /// <summary>Puts the song where the timeline is: playing from the right place, or waiting for its offset to come round.</summary>
+    private void StartSongAt(double timeline)
+    {
+        if (song == 0) return;
+        double songTime = timeline - songOffset;
+        songStarted = songTime >= 0;
+        if (songStarted)
+        {
+            Bass.ChannelSetPosition(song, Bass.ChannelSeconds2Bytes(song, songTime / 1000));
+            Bass.ChannelPlay(song);
+        }
+        else
+        {
+            Bass.ChannelPause(song);
+        }
+    }
 
     /// <summary>Loads a map's song and samples, replacing what was loaded. Stops playback.</summary>
     public void Load(DecompiledMap map, MapFolder folder, IReadOnlyDictionary<string, byte[]> skin)
@@ -62,8 +152,13 @@ public sealed class AudioEngine : IDisposable
 
         if (map.Settings.AudioFilename is { Length: > 0 } audio && folder.Find(audio) is { } songFile)
         {
+            // A decoding stream wrapped in a tempo stream (BASS_FX), so playback speed changes keep the pitch.
             var bytes = folder.ReadBytes(songFile);
-            song = Bass.CreateStream(bytes, 0, bytes.Length, BassFlags.Prescan);
+            int decoder = Bass.CreateStream(bytes, 0, bytes.Length, BassFlags.Prescan | BassFlags.Decode);
+            song = decoder == 0 ? 0 : ManagedBass.Fx.BassFx.TempoCreate(decoder, BassFlags.FxFreeSource);
+            if (song == 0 && decoder != 0) Bass.StreamFree(decoder);
+            if (song != 0) Bass.ChannelSetAttribute(song, ChannelAttribute.Tempo, (speed - 1) * 100);
+            ApplySongVolume();
         }
 
         foreach (var lane in map.Lanes)
@@ -81,7 +176,8 @@ public sealed class AudioEngine : IDisposable
 
         scheduler = new HitScheduler(map);
         double afterLastCue = scheduler.Cues.Count > 0 ? scheduler.Cues[^1].Time + 1000 : 0;
-        Length = song != 0 ? Bass.ChannelBytes2Seconds(song, Bass.ChannelGetLength(song)) * 1000 : afterLastCue;
+        songLength = song != 0 ? Bass.ChannelBytes2Seconds(song, Bass.ChannelGetLength(song)) * 1000 : 0;
+        cueLength = afterLastCue;
         lock (gate) startPosition = 0;
     }
 
@@ -91,7 +187,7 @@ public sealed class AudioEngine : IDisposable
         get
         {
             lock (gate)
-                return playing ? startPosition + sinceStart.Elapsed.TotalMilliseconds : startPosition;
+                return playing ? ClockNow() : startPosition;
         }
     }
 
@@ -101,12 +197,7 @@ public sealed class AudioEngine : IDisposable
         lock (gate)
         {
             if (startPosition >= Length) startPosition = 0;
-            if (song != 0)
-            {
-                Bass.ChannelSetPosition(song, Bass.ChannelSeconds2Bytes(song, startPosition / 1000));
-                Bass.ChannelPlay(song);
-            }
-
+            StartSongAt(startPosition);
             sinceStart.Restart();
             playing = true;
         }
@@ -166,10 +257,10 @@ public sealed class AudioEngine : IDisposable
             while (playing)
             {
                 double now = SyncedPosition();
-                if (Loop is { } loop && loop.End > loop.Start && now >= loop.End)
+                if (Loop is { } loop && LoopJump(loop, now) is { } target)
                 {
-                    Jump(loop.Start);
-                    last = loop.Start - 0.001;
+                    Jump(target);
+                    last = target - 0.001;
                     continue;
                 }
 
@@ -199,16 +290,32 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// Where playback jumps to at <paramref name="now"/>, or null to carry on. Start before End repeats the range;
+    /// End before Start skips the stretch between them (a reversed cycle, as in dawsu).
+    /// </summary>
+    public static double? LoopJump((double Start, double End) loop, double now) =>
+        loop.End > loop.Start && now >= loop.End ? loop.Start
+        : loop.Start > loop.End && now >= loop.End && now < loop.Start ? loop.Start
+        : null;
+
     /// <summary>Re-anchors the clock to the song's reported position when they drift apart by more than 15 ms.</summary>
     private double SyncedPosition()
     {
         lock (gate)
         {
-            double clock = startPosition + sinceStart.Elapsed.TotalMilliseconds;
+            double clock = ClockNow();
             if (song == 0) return clock;
+            if (!songStarted)
+            {
+                // A positive offset: the song comes in once the timeline reaches it.
+                if (clock >= songOffset) StartSongAt(clock);
+                return clock;
+            }
 
-            double reported = Bass.ChannelBytes2Seconds(song, Bass.ChannelGetPosition(song)) * 1000;
-            if (Math.Abs(reported - clock) <= 15) return clock;
+            // A tempo stream reports its position in the source, i.e. song time.
+            double reported = Bass.ChannelBytes2Seconds(song, Bass.ChannelGetPosition(song)) * 1000 + songOffset;
+            if (Math.Abs(reported - clock) <= 15 * speed) return clock;
 
             startPosition = reported;
             sinceStart.Restart();
@@ -220,7 +327,7 @@ public sealed class AudioEngine : IDisposable
     {
         lock (gate)
         {
-            if (song != 0) Bass.ChannelSetPosition(song, Bass.ChannelSeconds2Bytes(song, Math.Max(time, 0) / 1000));
+            StartSongAt(time);
             startPosition = time;
             sinceStart.Restart();
         }
@@ -243,7 +350,7 @@ public sealed class AudioEngine : IDisposable
         if (song != 0) Bass.StreamFree(song);
         song = 0;
         scheduler = null;
-        Length = 0;
+        songLength = cueLength = 0;
     }
 
     public void Dispose()

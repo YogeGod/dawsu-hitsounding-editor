@@ -33,6 +33,7 @@ internal static class Paint
     public static IBrush Selection => B("note.selected");
     public static IBrush White => B("playhead.color");
     public static IBrush MissingText => B("lane.missing");
+    public static IBrush MutedFill => B("colors.muted");
 
     public static IPen BeatPen => P("line.beat", 1);
     public static IPen BarPen => P("line.bar", 1);

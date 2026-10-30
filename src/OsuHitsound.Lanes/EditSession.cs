@@ -109,6 +109,12 @@ public sealed class EditSession
         return s with { Volumes = s.Volumes.SetItems(keys.Select(k => new KeyValuePair<MomentKey, int>(k, v))) };
     });
 
+    /// <summary>Sets several moments' volumes at once (ramps, paint strokes, relative edits); values are kept within 0–100.</summary>
+    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes) => Change(s => volumes.Count == 0 ? s : s with
+    {
+        Volumes = s.Volumes.SetItems(volumes.Select(kv => new KeyValuePair<MomentKey, int>(kv.Key, Math.Clamp(kv.Value, 0, 100)))),
+    });
+
     /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step.</summary>
     public void BeginGesture() => gestureStart ??= State;
 

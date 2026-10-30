@@ -65,13 +65,17 @@
           <ToggleButton Name="LaneDetailsToggle" Content="Lane details" IsChecked="True" ToolTip.Tip="Show each lane's file index" />
           <ToggleButton Name="VolumeToggle" Content="Volume lane" IsChecked="True" ToolTip.Tip="Show the bottom panel" />
           <ToggleButton Content="Sample browser" IsEnabled="False" ToolTip.Tip="Comes later" />
+          <TextBlock Text="Song" VerticalAlignment="Center" Margin="10,0,0,0" />
+          <Slider Name="SongVolumeSlider" Width="80" Minimum="0" Maximum="100" Value="100" Focusable="False" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
+          <ToggleButton Name="SongMuteButton" Content="Mute" ToolTip.Tip="Mute the song. Soloing a lane also silences it." />
+          <TextBox Name="SongOffsetBox" Width="56" Text="0" VerticalAlignment="Center" ToolTip.Tip="Song offset in ms: positive plays the song later. Enter applies. Not saved into the map." />
         </StackPanel>
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Name="StartButton" Classes="transport" Content="⏮" ToolTip.Tip="Go to start (Home)" />
           <Button Name="StopButton" Classes="transport" Content="⏹" ToolTip.Tip="Stop; press again to go to the start" />
           <Button Name="PlayButton" Classes="transport" Content="▶" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop (Space)" />
-          <ToggleButton Name="LoopButton" Classes="transport" Content="🔁" Width="34" ToolTip.Tip="Loop the visible range (/)" />
+          <ToggleButton Name="LoopButton" Classes="transport" Content="🔁" Width="34" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R, drag in the upper ruler draws a range." />
           <Border Name="Lcd" Background="{DynamicResource LcdBg}" CornerRadius="6" Padding="14,2" Margin="10,0,0,0" Height="40">
             <StackPanel Orientation="Horizontal" Spacing="22" VerticalAlignment="Center">
               <StackPanel><TextBlock Name="LcdBar" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="bar beat tick" /></StackPanel>
@@ -103,7 +107,23 @@
             <Separator />
             <MenuItem Name="SelectAllItem" Header="Select all" InputGesture="Ctrl+A" />
           </MenuItem>
-          <MenuItem Header="Functions"><MenuItem Header="Comes later" IsEnabled="False" /></MenuItem>
+          <MenuItem Header="Playback">
+            <MenuItem Header="Start from">
+              <MenuItem Name="StartCursorItem" Header="Cursor" ToggleType="Radio" GroupName="start" IsChecked="True" />
+              <MenuItem Name="StartLeftItem" Header="Left locator" ToggleType="Radio" GroupName="start" />
+              <MenuItem Name="StartSelectionItem" Header="Selection" ToggleType="Radio" GroupName="start" />
+              <MenuItem Name="StartSelectionOrLeftItem" Header="Selection, else left locator" ToggleType="Radio" GroupName="start" />
+            </MenuItem>
+            <MenuItem Name="ReturnOnStopItem" Header="Return on stop" ToggleType="CheckBox" />
+            <MenuItem Name="FollowItem" Header="Follow playback" ToggleType="CheckBox" IsChecked="True" />
+            <MenuItem Header="Speed">
+              <MenuItem Name="Speed50Item" Header="50 %" ToggleType="Radio" GroupName="speed" />
+              <MenuItem Name="Speed75Item" Header="75 %" ToggleType="Radio" GroupName="speed" />
+              <MenuItem Name="Speed100Item" Header="100 %" ToggleType="Radio" GroupName="speed" IsChecked="True" />
+              <MenuItem Name="Speed125Item" Header="125 %" ToggleType="Radio" GroupName="speed" />
+              <MenuItem Name="Speed150Item" Header="150 %" ToggleType="Radio" GroupName="speed" />
+            </MenuItem>
+          </MenuItem>
           <MenuItem Header="View">
             <MenuItem Name="ZoomInItem" Header="Zoom in (H)" />
             <MenuItem Name="ZoomOutItem" Header="Zoom out (G)" />
@@ -115,6 +135,8 @@
           <ToggleButton Name="SelectTool" Content="Select" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." />
           <ToggleButton Name="DrawTool" Content="Draw" ToolTip.Tip="Draw (3, or hold Alt). Click or drag along a lane; starting on a hit erases instead." />
           <ToggleButton Name="EraseTool" Content="Erase" ToolTip.Tip="Erase (4). Drag across hits to remove them." />
+          <ToggleButton Name="MuteTool" Content="Mute" ToolTip.Tip="Mute (5). Click a hit to silence it while listening. Preview only: osu! cannot store a muted sound, so this is never saved." />
+          <ToggleButton Name="RampTool" Content="Ramp" ToolTip.Tip="Ramp (6). Drag in the volume lane to draw a volume ramp." />
         </StackPanel>
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <TextBlock Text="Snap" VerticalAlignment="Center" />
@@ -144,6 +166,25 @@
         </StackPanel>
         <Panel>
           <app:VolumeLane Name="Volume" />
+          <StackPanel Name="VolumeControls" HorizontalAlignment="Left" Width="320" Margin="10,6" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Volume" FontWeight="Bold" Foreground="#e4e4e6" VerticalAlignment="Center" />
+              <TextBlock Text="Ramp" Foreground="#a4a4a9" VerticalAlignment="Center" Margin="12,0,0,0" />
+              <ComboBox Name="RampShapeBox" Width="110" Focusable="False" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBox Name="VolumeValueBox" Width="56" Watermark="0-100" ToolTip.Tip="A value for the selected moments" />
+              <ComboBox Name="VolumeModeBox" Width="96" Focusable="False" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
+              <Button Name="VolumeApplyButton" Content="Apply" Focusable="False" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Select" Foreground="#a4a4a9" VerticalAlignment="Center" />
+              <TextBox Name="VolumeMinBox" Width="46" Watermark="min" />
+              <TextBlock Text="to" Foreground="#a4a4a9" VerticalAlignment="Center" />
+              <TextBox Name="VolumeMaxBox" Width="46" Watermark="max" />
+              <Button Name="VolumeSelectButton" Content="Select" Focusable="False" ToolTip.Tip="Select every hit whose moment volume is in this range" />
+            </StackPanel>
+          </StackPanel>
           <TextBlock Name="SavedText" IsVisible="False" Margin="14,8" Foreground="#a4a4a9" TextWrapping="Wrap"
                      Text="This tab will show the hitSound and hitSample fields (and any green lines) the selected moment saves as. It arrives with the compiler." />
         </Panel>

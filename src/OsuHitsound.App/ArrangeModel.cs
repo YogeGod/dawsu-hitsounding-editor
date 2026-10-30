@@ -91,6 +91,21 @@ internal sealed partial class ArrangeModel
     /// <summary>Times of everything that won't be saved (conflicts and hits with no object), sorted, for the red stripes.</summary>
     public IReadOnlyList<double> ProblemTimes { get; private set; } = [];
 
+    private readonly HashSet<EditHit> previewMuted = [];
+
+    /// <summary>Hits silenced while listening (the Mute tool). Never saved: osu! can't store a muted sound.</summary>
+    public bool IsPreviewMuted(EditHit hit) => previewMuted.Contains(hit);
+
+    public void TogglePreviewMute(EditHit hit)
+    {
+        if (!previewMuted.Remove(hit)) previewMuted.Add(hit);
+        Changed?.Invoke();
+        PreviewMutesChanged?.Invoke();
+    }
+
+    /// <summary>The Mute tool changed what should sound, so playback must be rebuilt.</summary>
+    public event Action? PreviewMutesChanged;
+
     /// <summary>A hit that won't be saved: no object to play on, or its moment is a conflict.</summary>
     public bool IsProblem(EditHit hit) => hit.Anchor is not { } key || Conflicted.Contains(key);
 
@@ -107,6 +122,7 @@ internal sealed partial class ArrangeModel
         }
 
         foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
+        previewMuted.IntersectWith(Session.State.Hits); // forget mutes of hits that were moved or removed
         (Notes, MomentGroups) = (notes, groups);
         UpdateProblemTimes();
         Changed?.Invoke();
@@ -197,6 +213,8 @@ internal sealed partial class ArrangeModel
     public bool IsSoloed(Lane lane) => soloed.Contains(lane);
 
     public bool IsGroupMuted(LaneGroup group) => LanesIn(group).All(muted.Contains);
+
+    public bool AnySoloed => soloed.Count > 0;
 
     public bool IsGroupSoloed(LaneGroup group) => LanesIn(group).All(soloed.Contains);
 

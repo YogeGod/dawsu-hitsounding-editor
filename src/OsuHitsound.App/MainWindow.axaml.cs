@@ -70,7 +70,8 @@ public partial class MainWindow : Window
         PlayButton.Click += (_, _) => TogglePlay();
         StopButton.Click += (_, _) => StopPressed();
         StartButton.Click += (_, _) => Seek(0);
-        LoopButton.IsCheckedChanged += (_, _) => UpdateLoop();
+        LoopButton.Click += (_, _) => ToggleCycle();
+        Lanes.LocatorsChanged += UpdateLoop;
         LaneDetailsToggle.IsCheckedChanged += (_, _) => { Lanes.ShowIndexes = LaneDetailsToggle.IsChecked == true; Lanes.InvalidateVisual(); };
         VolumeToggle.IsCheckedChanged += (_, _) => ApplyTheme();
         VolumeTab.IsCheckedChanged += (_, _) => { Volume.IsVisible = VolumeTab.IsChecked == true; SavedText.IsVisible = !Volume.IsVisible; };
@@ -86,6 +87,25 @@ public partial class MainWindow : Window
         SelectTool.Click += (_, _) => SetTool(Tool.Select);
         DrawTool.Click += (_, _) => SetTool(Tool.Draw);
         EraseTool.Click += (_, _) => SetTool(Tool.Erase);
+        MuteTool.Click += (_, _) => SetTool(Tool.Mute);
+        RampTool.Click += (_, _) => SetTool(Tool.Ramp);
+
+        // Playback options.
+        foreach (var (item, speed) in new[] { (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) })
+            item.Click += (_, _) => { if (audio is not null) audio.Speed = speed; UpdateStatus(); };
+        SongVolumeSlider.ValueChanged += (_, e) => { if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100); };
+        SongMuteButton.IsCheckedChanged += (_, _) => UpdateSongMute();
+        SongOffsetBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) { ApplySongOffset(); Lanes.Focus(); e.Handled = true; } };
+        SongOffsetBox.LostFocus += (_, _) => ApplySongOffset();
+
+        // Volume panel.
+        RampShapeBox.ItemsSource = new[] { "Linear", "Ease in", "Ease out", "S-curve" };
+        RampShapeBox.SelectedIndex = 0;
+        RampShapeBox.SelectionChanged += (_, _) => Volume.Shape = (RampShape)Math.Max(0, RampShapeBox.SelectedIndex);
+        VolumeModeBox.ItemsSource = new[] { "Relative", "Set all" };
+        VolumeModeBox.SelectedIndex = 1;
+        VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
+        VolumeSelectButton.Click += (_, _) => SelectByVolume();
         SaveButton.Click += (_, _) => Save();
         UndoItem.Click += (_, _) => session?.Undo();
         RedoItem.Click += (_, _) => session?.Redo();
@@ -157,6 +177,8 @@ public partial class MainWindow : Window
             model = new ArrangeModel(editing, file, audio?.SilentLanes ?? new HashSet<Lane>());
             if (audio is not null) audio.IsAudible = model.IsAudible;
             editing.Changed += OnEdited;
+            model.PreviewMutesChanged += UpdateCues;
+            model.Changed += UpdateSongMute; // soloing a lane silences the song
 
             Lanes.SetModel(model);
             Lanes.Axis.End = Math.Max(audio?.Length ?? 0, model.LastTime);
@@ -193,12 +215,27 @@ public partial class MainWindow : Window
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        // Typing in a text box (volume value, offset…) must not trigger editor shortcuts like 5 (Mute) or Backspace (delete hits).
+        if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
         bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control), shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift), alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
         switch (e.Key)
         {
             case Key.Space: TogglePlay(); break;
             case Key.Home: Seek(0); break;
-            case Key.Divide or Key.Oem2: LoopButton.IsChecked = LoopButton.IsChecked != true; break;
+            // Cycle and locators (dawsu / Cubase keys).
+            case Key.Divide or Key.Oem2 or Key.L when !ctrl && !shift: ToggleCycle(); break;
+            case Key.P when alt: PlayLocatorRange(); break;
+            case Key.P when !ctrl: LocatorsToSelection(); break;
+            case Key.NumPad1 when ctrl: Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
+            case Key.NumPad2 when ctrl: Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
+            case Key.NumPad1: if (Lanes.LocatorLeft is { } l) Seek(l); break;
+            case Key.NumPad2: if (Lanes.LocatorRight is { } r) Seek(r); break;
+            case Key.NumPad0: StopPressed(); break;
             case Key.H when !ctrl: Lanes.Axis.ZoomAt(1.25, Lanes.Axis.X(Lanes.Playhead)); break;
             case Key.G when !ctrl: Lanes.Axis.ZoomAt(0.8, Lanes.Axis.X(Lanes.Playhead)); break;
             case Key.O when ctrl: _ = PickMap(); break;
@@ -206,9 +243,11 @@ public partial class MainWindow : Window
             case Key.I when ctrl && shift: ToggleInspector(); break;
 
             // Tools (dawsu numbering) and snapping.
-            case Key.D1 or Key.NumPad1 when !ctrl: SetTool(Tool.Select); break;
-            case Key.D3 or Key.NumPad3 when !ctrl: SetTool(Tool.Draw); break;
-            case Key.D4 or Key.NumPad4 when !ctrl: SetTool(Tool.Erase); break;
+            case Key.D1 when !ctrl: SetTool(Tool.Select); break;
+            case Key.D3 when !ctrl: SetTool(Tool.Draw); break;
+            case Key.D4 when !ctrl: SetTool(Tool.Erase); break;
+            case Key.D5 when !ctrl: SetTool(Tool.Mute); break;
+            case Key.D6 when !ctrl: SetTool(Tool.Ramp); break;
             case Key.J when !ctrl:
                 Lanes.SnapOn = !Lanes.SnapOn;
                 Lanes.InvalidateVisual();
@@ -243,7 +282,87 @@ public partial class MainWindow : Window
         SelectTool.IsChecked = tool == Tool.Select;
         DrawTool.IsChecked = tool == Tool.Draw;
         EraseTool.IsChecked = tool == Tool.Erase;
+        MuteTool.IsChecked = tool == Tool.Mute;
+        RampTool.IsChecked = tool == Tool.Ramp;
+        Volume.RampTool = tool == Tool.Ramp;
         UpdateStatus();
+    }
+
+    /// <summary>What playback plays: every hit (less those muted for preview) and the map's ticks and storyboard samples.</summary>
+    private void UpdateCues()
+    {
+        if (model is null || session is null || audio is null) return;
+        audio.SetCues(session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h => HitScheduler.HitCue(h.Time, h.Lane, session.VolumeOf(h)))
+            .Concat(HitScheduler.PassiveCues(session.Map)));
+    }
+
+    private void UpdateSongMute()
+    {
+        if (audio is not null) audio.SongMuted = SongMuteButton.IsChecked == true || (model?.AnySoloed ?? false);
+    }
+
+    private void ApplySongOffset()
+    {
+        if (audio is null) return;
+        if (!OsuNumber.TryParseDouble(SongOffsetBox.Text ?? "", out double offset))
+        {
+            SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+
+        audio.SongOffset = offset;
+        SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The value box: Relative moves every selected moment's volume by the value; Set all gives them the value.</summary>
+    private void ApplyVolumeValue()
+    {
+        if (session is null || !int.TryParse(VolumeValueBox.Text, out int value)) return;
+        var keys = Lanes.SelectedMoments;
+        if (keys.Count == 0)
+        {
+            flash = "Select some hits first: the value applies to their moments.";
+            UpdateStatus();
+            return;
+        }
+
+        if (VolumeModeBox.SelectedIndex == 0) session.SetVolumes(VolumeRamp.Shift(session.State.Volumes, keys, value));
+        else session.SetVolume(keys, Math.Clamp(value, 1, 100));
+    }
+
+    private void SelectByVolume()
+    {
+        if (session is null) return;
+        int min = int.TryParse(VolumeMinBox.Text, out int a) ? a : 0, max = int.TryParse(VolumeMaxBox.Text, out int b) ? b : 100;
+        var state = session.State;
+        Lanes.SelectWhere(h => h.Anchor is { } k && state.Volumes[k] >= min && state.Volumes[k] <= max);
+    }
+
+    /// <summary>P: the locators span the selection (its first to last hit), or the visible range when nothing is selected.</summary>
+    private void LocatorsToSelection()
+    {
+        if (Lanes.Selection.Count > 0)
+            Lanes.SetLocators(Lanes.Selection.Min(h => h.Time), Lanes.Selection.Max(h => h.Time));
+        else
+            Lanes.SetLocators(Lanes.Axis.Left, Lanes.Axis.Left + Lanes.Axis.VisibleDuration);
+    }
+
+    private void ToggleCycle()
+    {
+        if (Lanes.LocatorLeft is null) LocatorsToSelection();
+        Lanes.Cycle = !Lanes.Cycle;
+    }
+
+    /// <summary>Alt+P: locators to the selection, cycle on, and play from the left locator (ignoring "Start from").</summary>
+    private void PlayLocatorRange()
+    {
+        LocatorsToSelection();
+        if (audio is null || Lanes.LocatorLeft is not { } start) return;
+        Lanes.Cycle = true;
+        audio.Seek(start);
+        playStartedAt = start;
+        if (!audio.IsPlaying) audio.Play();
+        PlayButton.Content = "⏸";
     }
 
     /// <summary>After any edit: redraw from the session, play what's wanted now, and check it in the background.</summary>
@@ -252,8 +371,7 @@ public partial class MainWindow : Window
         if (model is null || session is null) return;
         Lanes.PruneSelection();
         model.RebuildNotes();
-        audio?.SetCues(session.State.Hits.Select(h => HitScheduler.HitCue(h.Time, h.Lane, session.VolumeOf(h)))
-            .Concat(HitScheduler.PassiveCues(session.Map)));
+        UpdateCues();
         Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
         closeConfirmed = false;
         flash = null;
@@ -432,19 +550,41 @@ public partial class MainWindow : Window
         SyncScrollBars();
     }
 
+    // Where the current playback began, for "Return on stop".
+    private double playStartedAt;
+
     private void TogglePlay()
     {
         if (audio is null || model is null) return;
-        if (audio.IsPlaying) audio.Pause();
-        else audio.Play();
+        if (audio.IsPlaying) StopPlaying();
+        else
+        {
+            // "Start from": the cursor, the left locator, the selection, or the selection falling back to the locator.
+            double? selectionStart = Lanes.Selection.Count > 0 ? Lanes.Selection.Min(h => h.Time) : null;
+            double? start = StartLeftItem.IsChecked ? Lanes.LocatorLeft
+                : StartSelectionItem.IsChecked ? selectionStart
+                : StartSelectionOrLeftItem.IsChecked ? selectionStart ?? Lanes.LocatorLeft
+                : null;
+            if (start is { } s) audio.Seek(s);
+            playStartedAt = audio.Position;
+            audio.Play();
+        }
+
         PlayButton.Content = audio.IsPlaying ? "⏸" : "▶";
+    }
+
+    private void StopPlaying()
+    {
+        if (audio is null) return;
+        audio.Pause();
+        if (ReturnOnStopItem.IsChecked) audio.Seek(playStartedAt);
     }
 
     /// <summary>Cubase's Stop: stops; pressed again while stopped, goes to the start.</summary>
     private void StopPressed()
     {
         if (audio is null) return;
-        if (audio.IsPlaying) audio.Pause();
+        if (audio.IsPlaying) StopPlaying();
         else audio.Seek(0);
         PlayButton.Content = "▶";
     }
@@ -458,8 +598,9 @@ public partial class MainWindow : Window
 
     private void UpdateLoop()
     {
+        LoopButton.IsChecked = Lanes.Cycle;
         if (audio is null) return;
-        audio.Loop = LoopButton.IsChecked == true ? (Lanes.Axis.Left, Lanes.Axis.Left + Lanes.Axis.VisibleDuration) : null;
+        audio.Loop = Lanes.Cycle && Lanes.LocatorLeft is { } l && Lanes.LocatorRight is { } r ? (l, r) : null;
     }
 
     private void CollapseAll()
@@ -478,7 +619,7 @@ public partial class MainWindow : Window
             if (!audio.IsPlaying && PlayButton.Content as string == "⏸") PlayButton.Content = "▶";
 
             // Page when the playhead reaches the right edge (or is off screen to the left), as Cubase does.
-            if (audio.IsPlaying && LoopButton.IsChecked != true)
+            if (audio.IsPlaying && FollowItem.IsChecked)
             {
                 var axis = Lanes.Axis;
                 if (Lanes.Playhead > axis.Left + axis.VisibleDuration * 0.98 || Lanes.Playhead < axis.Left)

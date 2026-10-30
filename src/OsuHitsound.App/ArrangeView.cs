@@ -6,12 +6,14 @@ using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
 
-/// <summary>The editing tools (dawsu numbering: 1 Select, 3 Draw, 4 Erase).</summary>
+/// <summary>The editing tools (dawsu numbering: 1 Select, 3 Draw, 4 Erase, 5 Mute, 6 Ramp in the volume lane).</summary>
 internal enum Tool
 {
     Select,
     Draw,
     Erase,
+    Mute,
+    Ramp,
 }
 
 /// <summary>
@@ -51,6 +53,7 @@ internal sealed class ArrangeView : Control
         Move,
         Paint,
         Wipe,
+        Cycle,
     }
 
     private Drag drag;
@@ -112,6 +115,35 @@ internal sealed class ArrangeView : Control
     public event Action<Lane>? PreviewRequested;
 
     public event Action<double>? SeekRequested;
+
+    /// <summary>The L and R cycle locators changed, or cycling was switched on or off from the ruler.</summary>
+    public event Action? LocatorsChanged;
+
+    public double? LocatorLeft { get; private set; }
+
+    public double? LocatorRight { get; private set; }
+
+    /// <summary>Cycle playback between the locators (R before L skips that stretch instead).</summary>
+    public bool Cycle
+    {
+        get => cycle;
+        set
+        {
+            if (cycle == value) return;
+            cycle = value;
+            LocatorsChanged?.Invoke();
+            InvalidateVisual();
+        }
+    }
+
+    private bool cycle;
+
+    public void SetLocators(double left, double right)
+    {
+        (LocatorLeft, LocatorRight) = (left, right);
+        LocatorsChanged?.Invoke();
+        InvalidateVisual();
+    }
 
     public event Action? SelectionChanged;
 
@@ -266,11 +298,31 @@ internal sealed class ArrangeView : Control
                 lastLabel = x;
             }
 
+            DrawLocators(ctx, width);
+
             double px = GridLeft + Axis.X(Playhead);
             ctx.FillRectangle(Paint.White, new Rect(px - 2, rulerTop, 4, RulerHeight));
         }
 
         ctx.DrawLine(Paint.DividerPen, new Point(0, HeaderHeight - 0.5), new Point(width, HeaderHeight - 0.5));
+    }
+
+    private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
+        SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
+
+    /// <summary>The cycle band in the upper ruler between the L and R flags: blue when cycling, red when it skips (R before L).</summary>
+    private void DrawLocators(DrawingContext ctx, double width)
+    {
+        if (LocatorLeft is not { } l || LocatorRight is not { } r) return;
+        double xl = GridLeft + Axis.X(l), xr = GridLeft + Axis.X(r);
+        var band = new Rect(Math.Min(xl, xr), 1, Math.Abs(xr - xl), SectionsHeight - 2);
+        ctx.FillRectangle(!Cycle ? CycleOff : r < l ? SkipOn : CycleOn, band);
+        foreach (var (x, label) in new[] { (xl, "L"), (xr, "R") })
+        {
+            ctx.FillRectangle(Paint.White, new Rect(x - 0.5, 0, 1, HeaderHeight));
+            ctx.FillRectangle(Paint.White, new Rect(x, 0, 12, 12));
+            Paint.DrawText(ctx, label, new Point(x + 2, -1), 10, Paint.Divider, 0, Paint.UiBold);
+        }
     }
 
     private void DrawRow(DrawingContext ctx, ArrangeModel model, Row row, int index, double y, double gridWidth)
@@ -349,6 +401,8 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, Paint.SelectedRingPen);
             else if (model.IsProblem(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, ConflictRing);
+            else if (model.IsPreviewMuted(n.Hit!))
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.MutedFill, Paint.NoteRingPen);
             else
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, fill, Paint.NoteRingPen);
         }
@@ -476,7 +530,18 @@ internal sealed class ArrangeView : Control
 
         if (p.Y < HeaderHeight)
         {
-            if (p.X >= GridLeft && point.Properties.IsLeftButtonPressed) SeekRequested?.Invoke(Math.Max(0, Axis.Time(p.X - GridLeft)));
+            if (p.X < GridLeft || !point.Properties.IsLeftButtonPressed) return;
+            double t = Math.Max(0, Axis.Time(p.X - GridLeft));
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) SetLocators(SnapTime(t), LocatorRight ?? SnapTime(t));
+            else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) SetLocators(LocatorLeft ?? SnapTime(t), SnapTime(t));
+            else if (p.Y < SectionsHeight)
+            {
+                // The upper ruler: drag to draw a cycle range; a click inside the band toggles cycling.
+                drag = Drag.Cycle;
+                dragStart = dragNow = p;
+                e.Pointer.Capture(this);
+            }
+            else SeekRequested?.Invoke(t);
             return;
         }
 
@@ -544,7 +609,14 @@ internal sealed class ArrangeView : Control
                 if (under is not null) EraseHit(under);
                 break;
 
-            case Tool.Select when under is not null:
+            case Tool.Mute:
+                // Preview-only: osu! can't store a muted sound, so this only silences it while listening.
+                if (under is not null) model.TogglePreviewMute(under);
+                drag = Drag.None;
+                break;
+
+            // The Ramp tool works in the volume lane; in the grid it selects like Select.
+            case Tool.Select or Tool.Ramp when under is not null:
                 if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
                 {
                     if (!selection.Remove(under)) selection.Add(under);
@@ -567,7 +639,7 @@ internal sealed class ArrangeView : Control
                 SelectionChanged?.Invoke();
                 break;
 
-            case Tool.Select:
+            case Tool.Select or Tool.Ramp:
                 drag = Drag.Marquee;
                 marqueeBase = additive ? [.. selection] : [];
                 if (marqueeBase.Count == 0 && selection.Count > 0)
@@ -620,6 +692,14 @@ internal sealed class ArrangeView : Control
                 selection.UnionWith(HitsIn(new Rect(dragStart, p).Normalize()));
                 break;
             }
+
+            case Drag.Cycle when Math.Abs(p.X - dragStart.X) >= 3:
+            {
+                double a = SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))), b = SnapTime(Math.Max(0, Axis.Time(gridX)));
+                Cycle = true;
+                SetLocators(Math.Min(a, b), Math.Max(a, b));
+                break;
+            }
         }
 
         InvalidateVisual();
@@ -628,6 +708,16 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (drag == Drag.None) return;
+        if (drag == Drag.Cycle && Math.Abs(dragNow.X - dragStart.X) < 3 && LocatorLeft is { } l && LocatorRight is { } r)
+        {
+            // A click (no drag) inside the band toggles cycling.
+            double t = Axis.Time(dragStart.X - GridLeft);
+            if (t >= Math.Min(l, r) && t <= Math.Max(l, r))
+            {
+                Cycle = !Cycle; // raises LocatorsChanged
+            }
+        }
+
         Session?.EndGesture();
         drag = Drag.None;
         dragAnchor = null;
@@ -701,6 +791,11 @@ internal sealed class ArrangeView : Control
     }
 
     public void ClearSelection() => SetSelection([]);
+
+    public void SelectWhere(Func<EditHit, bool> predicate)
+    {
+        if (Session is not null) SetSelection(Session.State.Hits.Where(predicate));
+    }
 
     public void DeleteSelection()
     {
