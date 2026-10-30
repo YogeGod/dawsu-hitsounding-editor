@@ -31,6 +31,9 @@ internal readonly record struct GridLine(double Time, bool IsBar, int Bar, int B
 /// <summary>A labelled stretch of the song for the sections row: osu! has no song sections, so kiai time is shown.</summary>
 internal readonly record struct Section(double Start, double End, string Name);
 
+/// <summary>A gameplay object for the object strip: its time span and its hit positions (circle, slider nodes, spinner end).</summary>
+internal sealed record ObjectSpan(double Start, double End, HitObjectKind Kind, IReadOnlyList<(double Time, MomentKey Key, HitPosition Position)> Nodes);
+
 /// <summary>
 /// What the arrange area shows for one map being edited: lanes in their groups with colours (docs/ui-design.md), the
 /// notes per lane from the edit session, beat, bar and snap lines from the red lines, and kiai sections. Mute, solo and
@@ -69,6 +72,7 @@ internal sealed partial class ArrangeModel
         GroupCount = laneRows.Select(r => r.Group).Distinct().Count();
         passive = Map.Passive.GroupBy(p => p.Lane).ToDictionary(g => g.Key, g => g.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList());
         RebuildNotes();
+        Objects = BuildObjects(session, Map.Settings.TimeOffset);
     }
 
     // The map's read-only sounds never change, so their notes are built once.
@@ -170,6 +174,37 @@ internal sealed partial class ArrangeModel
 
     public double LastTime { get; }
 
+
+    /// <summary>Every gameplay object, in time order, for the object strip.</summary>
+    public IReadOnlyList<ObjectSpan> Objects { get; }
+
+    private static List<ObjectSpan> BuildObjects(EditSession session, double offset) =>
+    [
+        .. session.Moments.GroupBy(x => x.Key.ObjectIndex).Select(g =>
+        {
+            var nodes = g.Select(x => (x.Moment.Time, x.Key, x.Moment.Position)).OrderBy(n => n.Time).ToList();
+            var obj = g.First().Moment.Object;
+            // A spinner's only moment is its end; it starts at the object's own time.
+            double start = obj.Kind == HitObjectKind.Spinner ? obj.Time + offset : nodes[0].Time;
+            return new ObjectSpan(start, nodes[^1].Time, obj.Kind, nodes);
+        }).OrderBy(o => o.Start),
+    ];
+
+    /// <summary>The object at a time: a span containing it, or a circle within <paramref name="tolerance"/> ms.</summary>
+    public ObjectSpan? ObjectAt(double time, double tolerance)
+    {
+        int i = Sorted.LowerBound(Objects, time - tolerance - 60000, o => o.Start);
+        ObjectSpan? best = null;
+        double bestDistance = tolerance;
+        for (; i < Objects.Count && Objects[i].Start <= time + tolerance; i++)
+        {
+            var o = Objects[i];
+            double d = time < o.Start ? o.Start - time : time > o.End ? time - o.End : 0;
+            if (d <= bestDistance) (best, bestDistance) = (o, d);
+        }
+
+        return best;
+    }
     public IReadOnlyList<Row> Rows { get; private set; }
 
     public IReadOnlyList<LaneRow> LaneRows => laneRows;

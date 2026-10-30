@@ -62,6 +62,10 @@ public partial class MainWindow : Window
         Lanes.Axis.Changed += OnAxisChanged;
         Lanes.PreviewRequested += lane => audio?.Preview(lane);
         Lanes.SeekRequested += Seek;
+        Lanes.HitsPreviewRequested += hits =>
+        {
+            foreach (var hit in hits) audio?.Preview(hit.Lane, (session?.VolumeOf(hit) ?? 100) / 100f);
+        };
         Lanes.SelectionChanged += UpdateStatus;
         Lanes.SizeChanged += (_, _) => SyncScrollBars();
         Lanes.ScrollChanged += () => { if (!syncingScroll) SyncScrollBars(); };
@@ -177,6 +181,7 @@ public partial class MainWindow : Window
             model = new ArrangeModel(editing, file, audio?.SilentLanes ?? new HashSet<Lane>());
             if (audio is not null) audio.IsAudible = model.IsAudible;
             editing.Changed += OnEdited;
+            LoadWaveform();
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateSongMute; // soloing a lane silences the song
 
@@ -231,6 +236,12 @@ public partial class MainWindow : Window
             case Key.Divide or Key.Oem2 or Key.L when !ctrl && !shift: ToggleCycle(); break;
             case Key.P when alt: PlayLocatorRange(); break;
             case Key.P when !ctrl: LocatorsToSelection(); break;
+
+            // Bookmarks (saved in the .osu as osu!'s editor bookmarks).
+            case Key.B when ctrl && shift: session?.RemoveBookmarkNear(Lanes.Playhead, 8 / Lanes.Axis.Zoom); break;
+            case Key.B when ctrl: session?.AddBookmark(Lanes.Playhead); break;
+            case Key.OemOpenBrackets: JumpToBookmark(-1); break;
+            case Key.OemCloseBrackets: JumpToBookmark(1); break;
             case Key.NumPad1 when ctrl: Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
             case Key.NumPad2 when ctrl: Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
             case Key.NumPad1: if (Lanes.LocatorLeft is { } l) Seek(l); break;
@@ -311,6 +322,8 @@ public partial class MainWindow : Window
         }
 
         audio.SongOffset = offset;
+        Lanes.SongOffset = audio.SongOffset;
+        Lanes.InvalidateVisual();
         SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
@@ -345,6 +358,35 @@ public partial class MainWindow : Window
             Lanes.SetLocators(Lanes.Selection.Min(h => h.Time), Lanes.Selection.Max(h => h.Time));
         else
             Lanes.SetLocators(Lanes.Axis.Left, Lanes.Axis.Left + Lanes.Axis.VisibleDuration);
+    }
+
+
+    private CancellationTokenSource? waveCancel;
+
+    /// <summary>Decodes the song's waveform in the background; the lane fills in when it's ready.</summary>
+    private void LoadWaveform()
+    {
+        waveCancel?.Cancel();
+        Lanes.Wave = null;
+        Lanes.SongOffset = audio?.SongOffset ?? 0;
+        if (audio?.SongBytes is not { } song) return;
+        var cancel = waveCancel = new CancellationTokenSource();
+        _ = Task.Run(() =>
+        {
+            var wave = Waveform.Decode(song, cancel: cancel.Token);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (cancel.IsCancellationRequested) return;
+                Lanes.Wave = wave;
+                Lanes.InvalidateVisual();
+            });
+        }, cancel.Token);
+    }
+
+    /// <summary>[ and ]: the previous or next bookmark from the playhead.</summary>
+    private void JumpToBookmark(int direction)
+    {
+        if (session?.AdjacentBookmark(Lanes.Playhead, direction) is { } t) Seek(t);
     }
 
     private void ToggleCycle()
@@ -412,7 +454,7 @@ public partial class MainWindow : Window
         try
         {
             int unanchored = session.Unanchored.Count();
-            var saved = MapSaver.Save(mapPath, originalBytes, folder, session.Wanted(), MapSaver.DefaultBackupRoot());
+            var saved = MapSaver.Save(mapPath, originalBytes, folder, session.Wanted(), MapSaver.DefaultBackupRoot(), session.State.Bookmarks);
             var result = saved.Compile;
             if (!saved.Written)
             {
@@ -430,7 +472,7 @@ public partial class MainWindow : Window
                     .. result.Notes, $"Backup: {saved.Backup}"]);
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             flash = $"Not saved: {ex.Message}";
         }

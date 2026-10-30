@@ -113,4 +113,18 @@ public class EditSessionTests
         s.Undo();
         Assert.Contains(s.State.Hits, h => h.Lane.Name == "soft-hitclap" && h.Time == 1000);
     }
+
+    [Fact]
+    public void Bookmarks_are_edits_with_undo()
+    {
+        var (s, _, _) = Load("256,192,1000,1,0,0:0:0:0:");
+        s.AddBookmark(1500.4);
+        s.AddBookmark(500);
+        Assert.Equal([500, 1500], s.State.Bookmarks);
+
+        s.RemoveBookmarkNear(1503, 5);
+        Assert.Equal([500], s.State.Bookmarks);
+        s.Undo();
+        Assert.Equal([500, 1500], s.State.Bookmarks);
+    }
 }

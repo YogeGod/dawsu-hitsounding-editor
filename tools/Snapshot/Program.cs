@@ -55,6 +55,7 @@ for (int i = 0; i < 20; i++)
 
 view.SetLocators(first.Moment.Time + 200, first.Moment.Time + 1400);
 view.Cycle = true;
+session.AddBookmark(first.Moment.Time + 800);
 Pump();
 Save("04-edited.png");
 Console.WriteLine("status: " + window.FindControl<Avalonia.Controls.TextBlock>("StatusLeft")!.Text);

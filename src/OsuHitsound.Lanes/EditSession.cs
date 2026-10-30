@@ -10,8 +10,11 @@ namespace OsuHitsound.Lanes;
 /// </summary>
 public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor);
 
-/// <summary>The editable state: every placed hit, and the volume of each moment (one per object or node in osu!).</summary>
-public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes);
+/// <summary>
+/// The editable state: every placed hit, the volume of each moment (one per object or node in osu!), and the editor
+/// bookmarks (ms as written in the .osu, sorted).
+/// </summary>
+public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks);
 
 /// <summary>
 /// Hitsound editing on top of a decompiled map: the hits you want, with undo and redo. Moments are fixed (Apply mode):
@@ -26,6 +29,7 @@ public sealed class EditSession
     private readonly List<EditState> undo = [];
     private readonly List<EditState> redo = [];
     private EditState? gestureStart;
+    private readonly double timeOffset; // v3/v4 maps show 24 ms later than written; bookmarks are stored as written
 
     public EditSession(OsuFile file, MapFolder folder, DecompiledMap map)
     {
@@ -35,7 +39,9 @@ public sealed class EditSession
         MomentByKey = Moments.ToDictionary(x => x.Key, x => x.Moment);
         State = new EditState(
             [.. Moments.SelectMany(x => x.Moment.Hits.Select(h => new EditHit(h.Lane, x.Moment.Time, x.Key)))],
-            Moments.ToImmutableDictionary(x => x.Key, x => x.Moment.Volume));
+            Moments.ToImmutableDictionary(x => x.Key, x => x.Moment.Volume),
+            [.. file.Bookmarks.Order()]);
+        timeOffset = map.Settings.TimeOffset;
         Lanes = AllLanes(map, folder);
     }
 
@@ -167,6 +173,29 @@ public sealed class EditSession
         return Moments.ToDictionary(x => x.Key, x => new WantedSound([.. lanes[x.Key]], state.Volumes[x.Key]));
     }
 
+
+    /// <summary>Bookmarks on the timeline (shown times), sorted.</summary>
+    public IEnumerable<double> BookmarkTimes => State.Bookmarks.Select(b => b + timeOffset);
+
+    /// <summary>Adds a bookmark at a timeline time (whole ms, as osu! writes them). One undo step.</summary>
+    public void AddBookmark(double time) => Change(s =>
+    {
+        int ms = (int)Math.Round(time - timeOffset);
+        return s.Bookmarks.Contains(ms) ? s : s with { Bookmarks = [.. s.Bookmarks.Add(ms).Order()] };
+    });
+
+    /// <summary>The bookmark (timeline time) nearest <paramref name="time"/> within <paramref name="tolerance"/> ms, or null.</summary>
+    public double? NearestBookmark(double time, double tolerance) =>
+        Sorted.Nearest(State.Bookmarks, time - timeOffset, tolerance, b => b) is >= 0 and var i ? State.Bookmarks[i] + timeOffset : null;
+
+    /// <summary>The first bookmark before (direction -1) or after (+1) <paramref name="time"/>, more than 1 ms away, or null.</summary>
+    public double? AdjacentBookmark(double time, int direction) => direction < 0
+        ? BookmarkTimes.Where(b => b < time - 1).Cast<double?>().LastOrDefault()
+        : BookmarkTimes.Where(b => b > time + 1).Cast<double?>().FirstOrDefault();
+
+    /// <summary>Removes the bookmark nearest <paramref name="time"/> within <paramref name="tolerance"/> ms, if any.</summary>
+    public void RemoveBookmarkNear(double time, double tolerance) => Change(s =>
+        NearestBookmark(time, tolerance) is { } b ? s with { Bookmarks = s.Bookmarks.Remove((int)Math.Round(b - timeOffset)) } : s);
     /// <summary>Hits that have no object to play on.</summary>
     public IEnumerable<EditHit> Unanchored => State.Hits.Where(h => h.Anchor is null);
 

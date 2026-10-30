@@ -16,13 +16,17 @@ public static class MapSaver
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OsuHitsoundEditor", "backups");
 
     /// <exception cref="IOException">The file changed on disk since it was opened, or couldn't be written.</exception>
-    public static SaveResult Save(string osuPath, byte[] opened, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, string backupRoot)
+    public static SaveResult Save(string osuPath, byte[] opened, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, string backupRoot,
+        IReadOnlyList<int>? bookmarks = null)
     {
         if (!File.ReadAllBytes(osuPath).AsSpan().SequenceEqual(opened))
             throw new IOException("The .osu changed on disk since it was opened (another program?). Reopen it to edit the new version.");
 
         var copy = OsuFile.Parse(opened);
         var result = Compiler.Apply(copy, folder, wanted);
+
+        // Bookmarks: only when the set changed, so a map with bookmarks out of order is left as it is.
+        if (bookmarks is not null && !copy.Bookmarks.Order().SequenceEqual(bookmarks.Order())) copy.SetBookmarks([.. bookmarks.Order()]);
         if (!copy.IsEdited) return new SaveResult(result, null, false);
 
         var invalid = Path.GetInvalidFileNameChars();

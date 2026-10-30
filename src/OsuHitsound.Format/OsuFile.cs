@@ -79,6 +79,68 @@ public sealed class OsuFile
 
     public void Write(string path) => File.WriteAllBytes(path, ToBytes());
 
+    private const string BookmarksKey = "Bookmarks:";
+
+    /// <summary>osu!'s editor bookmarks ([Editor] Bookmarks: comma-separated ms), in file order; empty when there are none.</summary>
+    public IReadOnlyList<int> Bookmarks
+    {
+        get
+        {
+            var line = BookmarksLine();
+            if (line is null) return [];
+            var list = new List<int>();
+            foreach (var part in line.Text.Trim()[BookmarksKey.Length..].Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (OsuNumber.TryParseInt(part, out int t)) list.Add(t);
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// Writes the bookmarks: changes the existing Bookmarks line, or adds one under [Editor], or adds an [Editor]
+    /// section before [Metadata] when the map has none. Nothing changes when the times are the same.
+    /// </summary>
+    public void SetBookmarks(IReadOnlyList<int> times)
+    {
+        if (Bookmarks.SequenceEqual(times)) return;
+        string text = BookmarksKey + " " + string.Join(',', times.Select(t => t.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (BookmarksLine() is { } existing)
+        {
+            existing.Text = text;
+            return;
+        }
+
+        int editor = lines.FindIndex(l => l.Section == "Editor" && l.Text.Trim() == "[Editor]");
+        if (editor >= 0)
+        {
+            InsertLine(editor + 1, text, "Editor", lines[editor].Terminator);
+            return;
+        }
+
+        // No [Editor] section: add one before [Metadata] (osu!'s order), or at the end.
+        int metadata = lines.FindIndex(l => l.Text.Trim() == "[Metadata]");
+        var newline = lines.FirstOrDefault(l => l.Terminator.Length > 0)?.Terminator ?? "\r\n"u8.ToArray();
+        if (metadata < 0)
+        {
+            if (lines.Count > 0 && lines[^1].Terminator.Length == 0) throw new InvalidOperationException("The file ends without a newline; nothing can be added after it.");
+            metadata = lines.Count;
+        }
+
+        InsertLine(metadata, "[Editor]", "Editor", newline);
+        InsertLine(metadata + 1, text, "Editor", newline);
+        InsertLine(metadata + 2, "", "Editor", newline);
+    }
+
+    private OsuLine? BookmarksLine() =>
+        lines.FirstOrDefault(l => l.Section == "Editor" && l.Text.TrimStart().StartsWith(BookmarksKey, StringComparison.Ordinal));
+
+    private OsuLine InsertLine(int index, string text, string section, byte[] terminator)
+    {
+        var line = new OsuLine(Encoding.UTF8.GetBytes(text), text, terminator, section);
+        line.MarkInserted();
+        lines.Insert(index, line);
+        return line;
+    }
+
     /// <summary>
     /// Inserts a timing point line after the last one (in file order) at or before its time, so it wins over points at
     /// the same time (the later line wins). Its line ending copies the neighbouring line's.
@@ -104,10 +166,7 @@ public sealed class OsuFile
         if (after >= 0 && neighbour.Terminator.Length == 0)
             throw new InvalidOperationException("The last timing point ends the file without a newline; nothing can follow it.");
         var terminator = neighbour.Terminator.Length > 0 ? neighbour.Terminator : "\r\n"u8.ToArray();
-        var line = new OsuLine(Encoding.UTF8.GetBytes(text), text, terminator, "TimingPoints");
-        line.MarkInserted();
-        int lineIndex = lines.IndexOf(neighbour) + (after >= 0 ? 1 : 0);
-        lines.Insert(lineIndex, line);
+        var line = InsertLine(lines.IndexOf(neighbour) + (after >= 0 ? 1 : 0), text, "TimingPoints", terminator);
         var point = new TimingPoint(line);
         timingPoints.Insert(after + 1, point);
         return point;

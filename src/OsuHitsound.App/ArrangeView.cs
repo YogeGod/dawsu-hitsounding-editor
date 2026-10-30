@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using OsuHitsound.Format;
 using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
@@ -32,7 +33,15 @@ internal sealed class ArrangeView : Control
     public static double GridLeft => NumberWidth + ListWidth;
     public static double SectionsHeight => Theme_.Number("header.sections");
     public const double RulerHeight = 24;
-    public static double HeaderHeight => SectionsHeight + RulerHeight;
+    public static double HeaderHeight => RulerBottom + WaveHeight + ObjectsHeight;
+
+    /// <summary>Bottom of the ruler: the waveform lane and the object strip sit between it and the lanes.</summary>
+    public static double RulerBottom => SectionsHeight + RulerHeight;
+
+    /// <summary>Height of the waveform lane; drag the line under it to resize, double-click to reset.</summary>
+    public static double WaveHeight { get; set; } = DefaultWaveHeight;
+
+    public const double DefaultWaveHeight = 44, ObjectsHeight = 26;
     public const double MinRowHeight = 16, MaxRowHeight = 64;
 
     private static readonly IBrush StripeA = Paint.Brush("#3a1517"), StripeB = Paint.Brush("#6b1f24");
@@ -54,6 +63,7 @@ internal sealed class ArrangeView : Control
         Paint,
         Wipe,
         Cycle,
+        ResizeWave,
     }
 
     private Drag drag;
@@ -61,6 +71,7 @@ internal sealed class ArrangeView : Control
     private EditHit? dragAnchor;
     private List<EditHit> dragHits = [];
     private LaneRow? paintRow;
+    private double waveHeightAtStart;
     private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
     private HashSet<EditHit> marqueeBase = [];
 
@@ -290,7 +301,7 @@ internal sealed class ArrangeView : Control
             foreach (var line in lines)
             {
                 double x = GridLeft + Axis.X(line.Time);
-                ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, rulerTop + (line.IsBar ? 4 : 14)), new Point(x, HeaderHeight));
+                ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, rulerTop + (line.IsBar ? 4 : 14)), new Point(x, RulerBottom));
                 string label = line.IsBar ? line.Bar.ToString() : $"{line.Bar}.{line.Beat}";
                 double labelWidth = line.IsBar ? 24 : 30;
                 if (x - lastLabel < labelWidth + 6 || (!line.IsBar && Axis.Zoom * line.BeatLength < 48)) continue;
@@ -299,6 +310,9 @@ internal sealed class ArrangeView : Control
             }
 
             DrawLocators(ctx, width);
+            DrawBookmarks(ctx);
+            DrawWaveform(ctx, width);
+            DrawObjects(ctx, model, width);
 
             double px = GridLeft + Axis.X(Playhead);
             ctx.FillRectangle(Paint.White, new Rect(px - 2, rulerTop, 4, RulerHeight));
@@ -309,6 +323,122 @@ internal sealed class ArrangeView : Control
 
     private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
         SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
+
+    private static readonly IBrush WaveFill = Paint.Brush(Color.Parse("#8fb7e8"), 0.75), StripBg = Paint.Brush("#1f1f21"),
+        ObjectFill = Paint.Brush(Color.Parse("#c9c9cf"), 0.85), SliderBody = Paint.Brush(Color.Parse("#c9c9cf"), 0.35),
+        SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.45), BookmarkFill = Paint.Brush("#4cc3d1");
+    private static readonly IPen ObjectConflictPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
+
+    /// <summary>The song's waveform (set when decoding finishes) and its offset, so it lines up with the song as heard.</summary>
+    public Audio.Waveform? Wave { get; set; }
+
+    private StreamGeometry? waveGeometry;
+    private (double, double, double, double, double, double, Audio.Waveform?) waveKey;
+
+    public double SongOffset { get; set; }
+
+    /// <summary>The waveform lane: one vertical line per pixel, the loudest peak in that pixel's time slice.</summary>
+    private void DrawWaveform(DrawingContext ctx, double width)
+    {
+        double top = RulerBottom, h = WaveHeight;
+        ctx.FillRectangle(StripBg, new Rect(GridLeft, top, width - GridLeft, h));
+        ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, top + h - 0.5), new Point(width, top + h - 0.5));
+        if (Wave is not { } wave || h < 6) return;
+
+        // The shape only changes on scroll, zoom, resize or offset: during playback the cached geometry is reused.
+        var key = (Axis.Left, Axis.Zoom, width, h, SongOffset, GridLeft, wave);
+        if (waveGeometry is null || !waveKey.Equals(key))
+        {
+            double mid = top + h / 2, half = h / 2 - 2, msPerPixel = 1 / Axis.Zoom;
+            var geometry = new StreamGeometry();
+            using (var g = geometry.Open())
+            {
+                for (double x = GridLeft; x < width; x++)
+                {
+                    double t = Axis.Time(x - GridLeft) - SongOffset;
+                    float peak = wave.Max(t, t + msPerPixel);
+                    if (peak <= 0.002f) continue;
+                    double a = Math.Max(0.5, peak * half);
+                    g.BeginFigure(new Point(x, mid - a), true);
+                    g.LineTo(new Point(x + 1, mid - a));
+                    g.LineTo(new Point(x + 1, mid + a));
+                    g.LineTo(new Point(x, mid + a));
+                    g.EndFigure(true);
+                }
+            }
+
+            (waveGeometry, waveKey) = (geometry, key);
+        }
+
+        ctx.DrawGeometry(WaveFill, null, waveGeometry);
+    }
+
+    /// <summary>
+    /// The object strip: circles as dots, sliders as a body with H at the head, chevrons at repeats and E at the end,
+    /// spinners as a bar. Objects with a conflict get a red outline.
+    /// </summary>
+    private void DrawObjects(DrawingContext ctx, ArrangeModel model, double width)
+    {
+        double top = RulerBottom + WaveHeight, h = ObjectsHeight, cy = top + h / 2;
+        ctx.FillRectangle(Paint.Chrome2, new Rect(GridLeft, top, width - GridLeft, h));
+        double from = Axis.Time(0) - 50, to = Axis.Time(width - GridLeft) + 50;
+        var objects = model.Objects;
+        for (int i = Sorted.LowerBound(objects, from - ObjectLookBack, o => o.Start); i < objects.Count && objects[i].Start <= to; i++)
+        {
+            var o = objects[i];
+            if (o.End < from) continue;
+            double x0 = GridLeft + Axis.X(o.Start), x1 = GridLeft + Axis.X(o.End);
+            bool conflict = o.Nodes.Any(n => model.Conflicted.Contains(n.Key));
+            var outline = conflict ? ObjectConflictPen : null;
+            switch (o.Kind)
+            {
+                case HitObjectKind.Slider:
+                    ctx.DrawRectangle(SliderBody, outline, new Rect(x0, cy - 6, Math.Max(2, x1 - x0), 12), 6, 6);
+                    // Node letters only when there is room for them; otherwise dots.
+                    bool labels = o.Nodes.Count < 2 || (x1 - x0) / (o.Nodes.Count - 1) >= 16;
+                    foreach (var (time, _, position) in o.Nodes)
+                    {
+                        double x = GridLeft + Axis.X(time);
+                        string mark = position switch { HitPosition.SliderHead => "H", HitPosition.SliderTail => "E", _ => "›" };
+                        ctx.DrawEllipse(ObjectFill, null, new Point(x, cy), 5, 5);
+                        if (labels) Paint.DrawText(ctx, mark, new Point(x - 3, cy - 7), 9, Paint.Divider, 0, Paint.UiBold);
+                    }
+
+                    break;
+
+                case HitObjectKind.Spinner:
+                    ctx.DrawRectangle(SpinnerFill, outline, new Rect(x0, cy - 5, Math.Max(2, x1 - x0), 10), 2, 2);
+                    break;
+
+                default:
+                    ctx.DrawEllipse(ObjectFill, outline, new Point(x0, cy), 5, 5);
+                    break;
+            }
+        }
+
+        ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, top + h - 0.5), new Point(width, top + h - 0.5));
+    }
+
+    /// <summary>Bookmark flags on the ruler (osu!'s editor bookmarks, saved in the .osu).</summary>
+    private void DrawBookmarks(DrawingContext ctx)
+    {
+        if (Session is null) return;
+        foreach (double t in Session.BookmarkTimes)
+        {
+            double x = GridLeft + Axis.X(t);
+            var flag = new StreamGeometry();
+            using (var g = flag.Open())
+            {
+                g.BeginFigure(new Point(x, SectionsHeight), true);
+                g.LineTo(new Point(x + 7, SectionsHeight + 4));
+                g.LineTo(new Point(x, SectionsHeight + 8));
+                g.EndFigure(true);
+            }
+
+            ctx.DrawGeometry(BookmarkFill, null, flag);
+            ctx.FillRectangle(BookmarkFill, new Rect(x, SectionsHeight, 1, RulerHeight));
+        }
+    }
 
     /// <summary>The cycle band in the upper ruler between the L and R flags: blue when cycling, red when it skips (R before L).</summary>
     private void DrawLocators(DrawingContext ctx, double width)
@@ -456,6 +586,9 @@ internal sealed class ArrangeView : Control
     // ---------------------------------------------------------------- hit-testing
 
     // Where the lane list's buttons sit, from the number column's right edge. Drawing and hit-testing both use these.
+    // How far back to look for objects that started before the view (long sliders and spinners).
+    private const double ObjectLookBack = 60000;
+
     private const double ToggleWidth = 22, GroupMuteX = 22, GroupSoloX = 48, LaneMuteX = 34, LaneSoloX = 58;
 
     private enum ListTarget
@@ -532,7 +665,25 @@ internal sealed class ArrangeView : Control
         {
             if (p.X < GridLeft || !point.Properties.IsLeftButtonPressed) return;
             double t = Math.Max(0, Axis.Time(p.X - GridLeft));
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) SetLocators(SnapTime(t), LocatorRight ?? SnapTime(t));
+            double waveBottom = RulerBottom + WaveHeight;
+            if (p.Y >= RulerBottom && Math.Abs(p.Y - waveBottom) <= 4)
+            {
+                // The line under the waveform: drag to resize it, double-click to reset.
+                if (e.ClickCount == 2) WaveHeight = DefaultWaveHeight;
+                else
+                {
+                    drag = Drag.ResizeWave;
+                    waveHeightAtStart = WaveHeight;
+                    dragStart = dragNow = p;
+                    e.Pointer.Capture(this);
+                }
+
+                ScrollY = scrollY;
+                ScrollChanged?.Invoke();
+            }
+            else if (p.Y >= waveBottom)
+                ObjectPressed(model, session, t, e.ClickCount == 2);
+            else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) SetLocators(SnapTime(t), LocatorRight ?? SnapTime(t));
             else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) SetLocators(LocatorLeft ?? SnapTime(t), SnapTime(t));
             else if (p.Y < SectionsHeight)
             {
@@ -541,7 +692,15 @@ internal sealed class ArrangeView : Control
                 dragStart = dragNow = p;
                 e.Pointer.Capture(this);
             }
-            else SeekRequested?.Invoke(t);
+            else
+            {
+                // The ruler and the waveform move the playhead; a click near a bookmark flag lands exactly on it.
+                double near = 5 / Axis.Zoom;
+                var bookmark = session.NearestBookmark(t, near);
+                SeekRequested?.Invoke(p.Y < RulerBottom && bookmark is { } b ? b : t);
+            }
+
+            InvalidateVisual();
             return;
         }
 
@@ -693,6 +852,12 @@ internal sealed class ArrangeView : Control
                 break;
             }
 
+            case Drag.ResizeWave:
+                WaveHeight = Math.Clamp(waveHeightAtStart + p.Y - dragStart.Y, 0, 200);
+                ScrollY = scrollY;
+                ScrollChanged?.Invoke();
+                break;
+
             case Drag.Cycle when Math.Abs(p.X - dragStart.X) >= 3:
             {
                 double a = SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))), b = SnapTime(Math.Max(0, Axis.Time(gridX)));
@@ -756,6 +921,25 @@ internal sealed class ArrangeView : Control
         return at < 0 ? lane : lanes[Math.Clamp(at + shift, 0, lanes.Count - 1)];
     }
 
+
+    /// <summary>Double-clicking an object asks to hear its hits (at their moments' volumes).</summary>
+    public event Action<IReadOnlyList<EditHit>>? HitsPreviewRequested;
+
+    /// <summary>
+    /// A click in the object strip: moves the playhead to the object (or the slider node clicked) and selects its hits;
+    /// a click on a slider's body selects the hits of all its nodes. A double-click also plays them.
+    /// </summary>
+    private void ObjectPressed(ArrangeModel model, EditSession session, double time, bool doubleClick)
+    {
+        if (model.ObjectAt(time, 6 / Axis.Zoom) is not { } o) return;
+        var node = o.Nodes.MinBy(n => Math.Abs(n.Time - time));
+        bool onNode = Math.Abs(node.Time - time) <= 7 / Axis.Zoom;
+        var keys = onNode ? [node.Key] : o.Nodes.Select(n => n.Key).ToHashSet();
+        var hits = session.State.Hits.Where(h => h.Anchor is { } k && keys.Contains(k)).ToList();
+        SetSelection(hits);
+        SeekRequested?.Invoke(onNode ? node.Time : o.Start);
+        if (doubleClick) HitsPreviewRequested?.Invoke(hits);
+    }
     // ---------------------------------------------------------------- editing commands (keyboard and menus)
 
     private void SetSelection(IEnumerable<EditHit> hits)

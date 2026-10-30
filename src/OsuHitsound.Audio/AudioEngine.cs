@@ -46,6 +46,9 @@ public sealed class AudioEngine : IDisposable
 
     public bool HasSong => song != 0;
 
+    /// <summary>The loaded song file, for drawing its waveform; null without a song.</summary>
+    public byte[]? SongBytes { get; private set; }
+
     public bool IsPlaying => playing;
 
     /// <summary>Song length in ms, or a second past the last cue when there's no song.</summary>
@@ -154,6 +157,7 @@ public sealed class AudioEngine : IDisposable
         {
             // A decoding stream wrapped in a tempo stream (BASS_FX), so playback speed changes keep the pitch.
             var bytes = folder.ReadBytes(songFile);
+            SongBytes = bytes;
             int decoder = Bass.CreateStream(bytes, 0, bytes.Length, BassFlags.Prescan | BassFlags.Decode);
             song = decoder == 0 ? 0 : ManagedBass.Fx.BassFx.TempoCreate(decoder, BassFlags.FxFreeSource);
             if (song == 0 && decoder != 0) Bass.StreamFree(decoder);
@@ -349,6 +353,7 @@ public sealed class AudioEngine : IDisposable
         silent.Clear();
         if (song != 0) Bass.StreamFree(song);
         song = 0;
+        SongBytes = null;
         scheduler = null;
         songLength = cueLength = 0;
     }

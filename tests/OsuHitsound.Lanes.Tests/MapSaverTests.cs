@@ -58,4 +58,16 @@ public class MapSaverTests : IDisposable
         Assert.Throws<IOException>(() => MapSaver.Save(path, bytes, folder, session.Wanted(), Path.Combine(dir, "backups")));
         Assert.EndsWith("// edited elsewhere\r\n", File.ReadAllText(path));
     }
+
+    [Fact]
+    public void Bookmarks_are_saved_into_the_osu()
+    {
+        var (path, bytes, folder, session) = Setup();
+        session.AddBookmark(1000);
+
+        var saved = MapSaver.Save(path, bytes, folder, session.Wanted(), Path.Combine(dir, "backups"), session.State.Bookmarks);
+
+        Assert.True(saved.Written);
+        Assert.Equal([1000], OsuFile.Read(path).Bookmarks);
+    }
 }
