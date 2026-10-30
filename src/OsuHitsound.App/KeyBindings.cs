@@ -69,10 +69,22 @@ internal static partial class CubaseKeyFile
     /// <summary>"Category|Command" → its keys, for every command with at least one key Avalonia understands.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> Read(string path)
     {
+        // The Keys tab rebuilds the keymap on every edit; parse the ~340 KB file again only when it changes on disk.
+        var stamp = (Path.GetFullPath(path), File.GetLastWriteTimeUtc(path));
+        if (cache is { } c && c.Stamp == stamp) return c.Keys;
+        if (!File.Exists(path)) throw new FileNotFoundException($"{path} doesn't exist.");
+
         var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
         using var reader = XmlReader.Create(path, settings);
-        return Parse(XDocument.Load(reader));
+        var keys = Parse(XDocument.Load(reader));
+        cache = (stamp, keys);
+        return keys;
     }
+
+    private static ((string Path, DateTime Written) Stamp, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> Keys)? cache;
+
+    /// <summary>Makes the next <see cref="Read"/> parse the file again, even if its write time is unchanged.</summary>
+    public static void Forget() => cache = null;
 
     public static IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> Parse(XDocument doc)
     {
@@ -89,7 +101,7 @@ internal static partial class CubaseKeyFile
                 // One key is a <string name="Key">, several are a <list name="Key"> of <item value>.
                 var texts = command.Elements("string").Where(s => (string?)s.Attribute("name") == "Key").Select(s => (string?)s.Attribute("value"))
                     .Concat(command.Elements("list").Where(l => (string?)l.Attribute("name") == "Key").Elements("item").Select(i => (string?)i.Attribute("value")));
-                var keys = texts.Select(t => t is null ? null : ParseKey(t)).OfType<KeyGesture>().DistinctBy(k => k.ToString()).ToList();
+                var keys = texts.Select(t => t is null ? null : ParseKey(t)).OfType<KeyGesture>().Distinct().ToList();
                 if (keys.Count > 0) result[$"{Named(category, "Name")}|{Named(command, "Name")}"] = keys;
             }
         }
@@ -147,7 +159,7 @@ internal static partial class CubaseKeyFile
         return key is { } k ? new KeyGesture(k, mods) : null;
     }
 
-    [GeneratedRegex(@"^Cubase ([0-9.]+)_64$")]
+    [GeneratedRegex(@"^Cubase (?:.* )?([0-9.]+)_64$")]
     private static partial Regex CubaseFolder();
 }
 
@@ -170,32 +182,28 @@ internal static class Keymap
         KeyPreset preset, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>>? cubase, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> overrides)
     {
         var keys = new Dictionary<string, IReadOnlyList<KeyGesture>>();
-        var used = new HashSet<string>();
+        var used = new HashSet<KeyGesture>();
         void Take(string id, IEnumerable<KeyGesture> gestures)
         {
-            var free = gestures.Where(g => used.Add(g.ToString())).ToList();
+            var free = gestures.Where(g => used.Add(g)).ToList();
             if (free.Count > 0) keys[id] = free;
         }
 
-        if (preset == KeyPreset.Osu || cubase is null)
-        {
-            foreach (var (id, gestures) in OsuKeys.Where(_ => preset == KeyPreset.Osu)) Take(id, gestures);
-        }
-        else
-        {
+        if (preset == KeyPreset.Osu)
+            foreach (var (id, gestures) in OsuKeys) Take(id, gestures);
+        else if (cubase is not null)
             // Only Cubase commands this editor has claim keys; the rest of the file's keys stay free for built-in ones.
             foreach (var (id, cubaseCommand) in CubaseKeyFile.CommandMap)
                 if (cubase.TryGetValue(cubaseCommand, out var gestures)) Take(id, gestures);
-        }
 
         foreach (var command in EditorCommands.Defaults.Where(c => !keys.ContainsKey(c.Id)))
             Take(command.Id, command.Keys);
 
         foreach (var (id, gestures) in overrides)
         {
-            var taken = gestures.Select(g => g.ToString()).ToHashSet();
+            var taken = gestures.ToHashSet();
             foreach (var other in keys.Keys.ToList())
-                keys[other] = [.. keys[other].Where(g => !taken.Contains(g.ToString()))];
+                keys[other] = [.. keys[other].Where(g => !taken.Contains(g))];
             keys[id] = gestures;
         }
 
@@ -204,7 +212,7 @@ internal static class Keymap
 
     /// <summary>The command other than <paramref name="id"/> that has this key, if any.</summary>
     public static string? Owner(IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> keys, KeyGesture gesture, string id) =>
-        keys.FirstOrDefault(k => k.Key != id && k.Value.Any(g => g.ToString() == gesture.ToString())).Key;
+        keys.FirstOrDefault(k => k.Key != id && k.Value.Contains(gesture)).Key;
 
     /// <summary>The overrides after adding a key to a command; the key is taken away from whichever command had it.</summary>
     public static Dictionary<string, List<string>> AddKey(
@@ -212,8 +220,8 @@ internal static class Keymap
     {
         var result = overrides.ToDictionary(o => o.Key, o => o.Value.ToList());
         if (Owner(keys, gesture, id) is { } owner)
-            result[owner] = [.. keys[owner].Where(g => g.ToString() != gesture.ToString()).Select(Format)];
-        result[id] = [.. keys.GetValueOrDefault(id, []).Append(gesture).DistinctBy(g => g.ToString()).Select(Format)];
+            result[owner] = [.. keys[owner].Where(g => g != gesture).Select(Format)];
+        result[id] = [.. keys.GetValueOrDefault(id, []).Append(gesture).Distinct().Select(Format)];
         return result;
     }
 
@@ -231,6 +239,9 @@ internal static class Keymap
     public static IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> ParseOverrides(IReadOnlyDictionary<string, List<string>>? stored) =>
         (stored ?? new Dictionary<string, List<string>>()).ToDictionary(o => o.Key, o => (IReadOnlyList<KeyGesture>)[.. o.Value.Select(ParseStored).OfType<KeyGesture>()]);
 
+    /// <summary>The problem <see cref="For"/> reports when no file was chosen and none was found: normal without Cubase.</summary>
+    public const string NoCubaseFile = "No Cubase key file found; using the built-in keys.";
+
     /// <summary>The keys for these preferences, with a note when the Cubase file couldn't be read (the built-in keys are used then).</summary>
     public static (Dictionary<string, IReadOnlyList<KeyGesture>> Keys, string? Problem) For(Preferences prefs)
     {
@@ -239,14 +250,14 @@ internal static class Keymap
         if (prefs.KeyPreset == KeyPreset.Cubase)
         {
             var path = prefs.CubaseKeyFile ?? CubaseKeyFile.FindNewest();
-            if (path is null) problem = "No Cubase key file found; using the built-in keys.";
+            if (path is null) problem = NoCubaseFile;
             else
             {
                 try
                 {
                     cubase = CubaseKeyFile.Read(path);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException or ArgumentException or NotSupportedException)
                 {
                     problem = $"Couldn't read the Cubase key file: {ex.Message}";
                 }

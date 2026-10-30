@@ -153,7 +153,8 @@ internal static class Dialogs
         Dictionary<string, IReadOnlyList<KeyGesture>> current = [];
         string? selectedId = null;
         KeyGesture? pending = null;
-        string KeysOf(string id) => current.GetValueOrDefault(id, []) is { Count: > 0 } k ? string.Join(", ", k.Select(EditorCommand.Name)) : "Unassigned";
+        bool HasKeys(string id) => current.GetValueOrDefault(id, []).Count > 0;
+        string KeysOf(string id) => HasKeys(id) ? EditorCommand.Text(current[id]) : "Unassigned";
 
         void ShowCommand()
         {
@@ -162,18 +163,20 @@ internal static class Dialogs
             assignedTo.Text = "";
             assign.IsEnabled = false;
             bool any = selectedId is not null;
-            foreach (var c in new Control[] { keyList, remove, clear, resetCommand, capture }) c.IsEnabled = any;
+            foreach (var c in new Control[] { keyList, remove, clear, capture }) c.IsEnabled = any;
             if (selectedId is not { } id)
             {
+                resetCommand.IsEnabled = false;
                 (name.Text, description.Text, keyList.ItemsSource) = ("Pick a command", "", null);
                 return;
             }
 
             var command = EditorCommands.Get(id);
+            bool changed = Overrides().ContainsKey(id);
             name.Text = command.Description;
-            description.Text = $"{command.Group}{(Overrides().ContainsKey(id) ? " · changed by you" : "")}";
+            description.Text = $"{command.Group}{(changed ? " · changed by you" : "")}";
             keyList.ItemsSource = current.GetValueOrDefault(id, []).Select(EditorCommand.Name).ToList();
-            resetCommand.IsEnabled = Overrides().ContainsKey(id);
+            resetCommand.IsEnabled = changed;
         }
 
         void FillTree()
@@ -190,7 +193,7 @@ internal static class Dialogs
                     ItemsSource = g.Select(c =>
                     {
                         var row = new Grid { ColumnDefinitions = new("230,*") };
-                        var keys = new TextBlock { Text = KeysOf(c.Id), Opacity = current.ContainsKey(c.Id) && current[c.Id].Count > 0 ? 1 : 0.5 };
+                        var keys = new TextBlock { Text = KeysOf(c.Id), Opacity = HasKeys(c.Id) ? 1 : 0.5 };
                         Grid.SetColumn(keys, 1);
                         row.Children.AddRange([new TextBlock { Text = c.Description, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 8, 0) }, keys]);
                         ToolTip.SetTip(row, c.Description);
@@ -200,6 +203,12 @@ internal static class Dialogs
                     }).ToList(),
                 }).ToList();
             if (reselect is not null) tree.SelectedItem = reselect;
+            else if (selectedId is not null)
+            {
+                // The picked command is filtered out: let go of it, so the panel never edits a hidden command.
+                selectedId = null;
+                ShowCommand();
+            }
         }
 
         void Refresh(string? message = null)
@@ -231,8 +240,12 @@ internal static class Dialogs
             edited = edited with { KeyPreset = presets[Math.Max(0, preset.SelectedIndex)].Preset };
             Refresh();
         };
-        file.TextChanged += (_, _) => Refresh();
-        reload.Click += (_, _) => Refresh("Reloaded.");
+        file.TextChanged += (_, _) => Refresh(); // CubaseKeyFile.Read re-parses only a changed file; the tree is still rebuilt
+        reload.Click += (_, _) =>
+        {
+            CubaseKeyFile.Forget();
+            Refresh("Reloaded.");
+        };
 
         remove.Click += (_, _) =>
         {
@@ -265,9 +278,11 @@ internal static class Dialogs
             Refresh("Your changes to this preset are undone.");
         };
 
-        // Keys are caught only while this box has focus, before the dialog sees them, so Enter, Tab or Esc can be assigned too.
+        // Keys are caught only while this box has focus, before the dialog sees them, so Enter, Esc or Ctrl+Tab can be assigned too.
         capture.AddHandler(InputElement.KeyDownEvent, (_, e) =>
         {
+            // Tab and Shift+Tab still move focus, so the box can be left without the mouse.
+            if (e.Key == Key.Tab && (e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None) return;
             e.Handled = true;
             if (selectedId is not { } id || e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
                 return;

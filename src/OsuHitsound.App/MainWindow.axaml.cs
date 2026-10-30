@@ -615,6 +615,7 @@ public partial class MainWindow : Window
         Resources["ButtonBg"] = B("button.bg");
         Resources["ButtonText"] = B("button.text");
         Resources["ButtonActive"] = B("button.active");
+        Resources["PanelActive"] = Paint.Brush(Paint.Brighten(t.Color("button.bg"), 0.08));
         Resources["ButtonFontSize"] = t.Number("button.fontSize");
         Resources["LcdBg"] = B("lcd.bg");
         Resources["LcdText"] = B("lcd.text");
@@ -639,9 +640,9 @@ public partial class MainWindow : Window
 
         var rows = Root.RowDefinitions;
         rows[0].Height = new GridLength(t.Number("title.height"));
-        // These rows contain fixed-height controls; inspector edits must not clip them.
-        rows[1].Height = new GridLength(Math.Max(58, t.Number("control.height")));
-        rows[2].Height = new GridLength(Math.Max(76, t.Number("edit.height")));
+        // These rows contain fixed-height controls; their theme minimums (UiTheme) keep inspector edits from clipping them.
+        rows[1].Height = new GridLength(t.Number("control.height"));
+        rows[2].Height = new GridLength(t.Number("edit.height"));
         rows[3].Height = new GridLength(t.Number("overview.height"));
         bool showVolume = VolumeToggle.IsChecked == true;
         BottomPanel.IsVisible = showVolume;
@@ -809,7 +810,8 @@ public partial class MainWindow : Window
     {
         if (model is null)
         {
-            StatusLeft.Text = flash ?? (audioError is null ? "Open a .osu file (Ctrl+O)." : $"No sound: {audioError}");
+            var open = EditorCommands.Get("open");
+            StatusLeft.Text = flash ?? (audioError is null ? $"Open a .osu file ({(open.Keys.Count > 0 ? open.KeysText : "File menu")})." : $"No sound: {audioError}");
             StatusRight.Text = "";
             return;
         }

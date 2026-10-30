@@ -5,7 +5,9 @@ namespace OsuHitsound.App;
 /// <summary>A keyboard command: its id (what the window runs), where it shows in help, and its keys.</summary>
 internal sealed record EditorCommand(string Id, string Group, string Description, IReadOnlyList<KeyGesture> Keys)
 {
-    public string KeysText => string.Join(", ", Keys.Select(Name));
+    public string KeysText => Text(Keys);
+
+    public static string Text(IEnumerable<KeyGesture> keys) => string.Join(", ", keys.Select(Name));
 
     /// <summary>A key as printed on the keyboard: "1" not "D1", "," not "OemComma".</summary>
     public static string Name(KeyGesture gesture)

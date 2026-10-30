@@ -42,7 +42,7 @@ internal static class Paint
     /// Snap line colour by beat fraction, osu!'s convention: 1/2 red, 1/4 blue, 1/8 yellow, 1/3 and 1/6 purple, finer
     /// ones grey; 1/5, 1/7 and 1/9 (not in osu!) teal. Dimmed so the lanes stay readable.
     /// </summary>
-    public static IPen SnapPen(int fraction) => SnapPens.TryGetValue(SnapColour(fraction), out var pen) ? pen : SnapPens[SnapColour(fraction)] = new ImmutablePen(Brush(Color.Parse(SnapColour(fraction)), 0.5), 1);
+    public static IPen SnapPen(int fraction) => SnapPens.TryGetValue(SnapColour(fraction), out var pen) ? pen : SnapPens[SnapColour(fraction)] = new ImmutablePen(Brush(Color.Parse(SnapColour(fraction)), 0.22), 1);
 
     public static string SnapColour(int fraction) => fraction switch
     {
