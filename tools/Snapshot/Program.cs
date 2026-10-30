@@ -21,7 +21,7 @@ AppBuilder.Configure<App>()
     .WithInterFont()
     .SetupWithoutStarting();
 
-var window = new MainWindow(args[0], startAudio: false, showInspector: false) { Width = 1920, Height = 1080 };
+var window = new MainWindow(args[0], startAudio: false, showInspector: false, usePreferences: false) { Width = 1920, Height = 1080 };
 window.Show();
 Pump();
 Save("01-open.png");
@@ -68,6 +68,12 @@ Pump();
 Save("05-theme-edited.png");
 var inspector = window.OwnedWindows.OfType<Avalonia.Controls.Window>().FirstOrDefault();
 inspector?.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "06-inspector.png"));
+
+// F1 help, then the same filtered by a search.
+window.ShowHelpForSnapshot();
+Pump();
+var helpWindow = window.OwnedWindows.OfType<HelpWindow>().First();
+helpWindow.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "07-help.png"));
 
 window.Close();
 return 0;

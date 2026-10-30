@@ -19,9 +19,11 @@ public partial class MainWindow : Window
     // Beat snap divisors, as in osu!'s editor plus 1/5, 1/7 and 1/9.
     private static readonly int[] Divisors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16];
 
-    private readonly AudioEngine? audio;
-    private readonly string? audioError;
-    private readonly Lazy<IReadOnlyDictionary<string, byte[]>> skin = new(LoadSkin);
+    private AudioEngine? audio;
+    private string? audioError;
+    private Preferences prefs = new();
+    private readonly bool usePreferences;
+    private Lazy<IReadOnlyDictionary<string, byte[]>> skin;
     private readonly DispatcherTimer frameTimer;
     private ArrangeModel? model;
     private bool syncingScroll;
@@ -43,21 +45,15 @@ public partial class MainWindow : Window
     {
     }
 
-    public MainWindow(string? path, bool startAudio = true, bool showInspector = true)
+    /// <param name="usePreferences">False for headless snapshots and tests: defaults, and nothing is saved.</param>
+    public MainWindow(string? path, bool startAudio = true, bool showInspector = true, bool usePreferences = true)
     {
         InitializeComponent();
 
-        if (startAudio)
-        {
-            try
-            {
-                audio = AudioEngine.Create();
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException or BadImageFormatException)
-            {
-                audioError = ex.Message;
-            }
-        }
+        (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
+        skin = NewSkin();
+        if (startAudio) StartAudio();
+        ApplyWindowPlacement();
 
         Lanes.Axis.Changed += OnAxisChanged;
         Lanes.PreviewRequested += lane => audio?.Preview(lane);
@@ -111,17 +107,21 @@ public partial class MainWindow : Window
         VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
         SaveButton.Click += (_, _) => Save();
-        UndoItem.Click += (_, _) => session?.Undo();
-        RedoItem.Click += (_, _) => session?.Redo();
-        CutItem.Click += (_, _) => Lanes.Cut();
-        CopyItem.Click += (_, _) => Lanes.Copy();
-        PasteItem.Click += (_, _) => Lanes.Paste(Lanes.Playhead);
-        DuplicateItem.Click += (_, _) => Lanes.Duplicate();
-        DeleteItem.Click += (_, _) => Lanes.DeleteSelection();
-        SelectAllItem.Click += (_, _) => Lanes.SelectAll();
+        foreach (var (item, id) in new[]
+        {
+            (OpenItem, "open"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
+            (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
+            (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
+        })
+        {
+            // The menu shows the same key the keyboard handling uses.
+            item.InputGesture = EditorCommands.Get(id).Keys[0];
+            item.Click += (_, _) => Run(id);
+        }
+
+        GenerateFileItem.Click += async (_, _) => await Generate();
+        RecentItem.SubmenuOpened += (_, _) => FillRecent();
         ZoomSlider.ValueChanged += (_, e) => { if (!syncingScroll) Lanes.Axis.Zoom = ZoomFromSlider(e.NewValue); };
-        ZoomInItem.Click += (_, _) => Lanes.Axis.ZoomAt(1.25, 0);
-        ZoomOutItem.Click += (_, _) => Lanes.Axis.ZoomAt(0.8, 0);
         CollapseAllItem.Click += (_, _) => CollapseAll();
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
@@ -155,7 +155,6 @@ public partial class MainWindow : Window
         WireMapFeatures();
         ApplyTheme();
         if (showInspector) Opened += (_, _) => ToggleInspector();
-        InspectorItem.Click += (_, _) => ToggleInspector();
 
         UpdateStatus();
         if (path is not null) Open(path);
@@ -184,6 +183,7 @@ public partial class MainWindow : Window
             model = new ArrangeModel(editing, file, audio?.SilentLanes ?? new HashSet<Lane>());
             if (audio is not null) audio.IsAudible = model.IsAudible;
             editing.Changed += OnEdited;
+            Remember(full);
             LoadWaveform();
             RestoreProject();
             model.PreviewMutesChanged += UpdateCues;
@@ -218,6 +218,7 @@ public partial class MainWindow : Window
         {
             Title = "Open a map",
             AllowMultiple = false,
+            SuggestedStartLocation = prefs.SongsFolder is { } songs ? await StorageProvider.TryGetFolderFromPathAsync(songs) : null,
             FileTypeFilter = [new FilePickerFileType("osu! map") { Patterns = ["*.osu"] }],
         });
         if (files.Count > 0 && files[0].TryGetLocalPath() is { } local) Open(local);
@@ -232,65 +233,72 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control), shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift), alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
-        switch (e.Key)
+        if (EditorCommands.Match(e) is not { } command)
         {
-            case Key.Space: TogglePlay(); break;
-            case Key.Home: Seek(0); break;
-            // Cycle and locators (dawsu / Cubase keys).
-            case Key.Divide or Key.Oem2 or Key.L when !ctrl && !shift: ToggleCycle(); break;
-            case Key.P when alt: PlayLocatorRange(); break;
-            case Key.P when !ctrl: LocatorsToSelection(); break;
+            base.OnKeyDown(e);
+            return;
+        }
 
-            // Bookmarks (saved in the .osu as osu!'s editor bookmarks).
-            case Key.B when ctrl && shift: session?.RemoveBookmarkNear(Lanes.Playhead, 8 / Lanes.Axis.Zoom); break;
-            case Key.B when ctrl: session?.AddBookmark(Lanes.Playhead); break;
-            case Key.OemOpenBrackets: JumpToBookmark(-1); break;
-            case Key.OemCloseBrackets: JumpToBookmark(1); break;
-            case Key.NumPad1 when ctrl: Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
-            case Key.NumPad2 when ctrl: Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
-            case Key.NumPad1: if (Lanes.LocatorLeft is { } l) Seek(l); break;
-            case Key.NumPad2: if (Lanes.LocatorRight is { } r) Seek(r); break;
-            case Key.NumPad0: StopPressed(); break;
-            case Key.H when !ctrl: Lanes.Axis.ZoomAt(1.25, Lanes.Axis.X(Lanes.Playhead)); break;
-            case Key.G when !ctrl: Lanes.Axis.ZoomAt(0.8, Lanes.Axis.X(Lanes.Playhead)); break;
-            case Key.O when ctrl: _ = PickMap(); break;
-            case Key.S when ctrl: Save(); break;
-            case Key.F when ctrl: ShowFilter(); break;
-            case Key.I when ctrl && shift: ToggleInspector(); break;
+        Run(command.Id);
+        e.Handled = true;
+    }
 
-            // Tools (dawsu numbering) and snapping.
-            case Key.D1 when !ctrl: SetTool(Tool.Select); break;
-            case Key.D3 when !ctrl: SetTool(Tool.Draw); break;
-            case Key.D4 when !ctrl: SetTool(Tool.Erase); break;
-            case Key.D5 when !ctrl: SetTool(Tool.Mute); break;
-            case Key.D6 when !ctrl: SetTool(Tool.Ramp); break;
-            case Key.J when !ctrl:
+    /// <summary>Runs a command from <see cref="EditorCommands"/>, from a key press or a menu item.</summary>
+    private void Run(string id)
+    {
+        switch (id)
+        {
+            case "open": _ = PickMap(); break;
+            case "save": Save(); break;
+            case "preferences": _ = ShowPreferences(); break;
+            case "help": ShowHelp(); break;
+            case "inspector": ToggleInspector(); break;
+            case "play": TogglePlay(); break;
+            case "start": Seek(0); break;
+            case "stop": StopPressed(); break;
+            case "cycle": ToggleCycle(); break;
+            case "locatorsToSelection": LocatorsToSelection(); break;
+            case "playLocatorRange": PlayLocatorRange(); break;
+            case "jumpLeft": if (Lanes.LocatorLeft is { } l) Seek(l); break;
+            case "jumpRight": if (Lanes.LocatorRight is { } r) Seek(r); break;
+            case "setLeft": Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
+            case "setRight": Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
+            case "toolSelect": SetTool(Tool.Select); break;
+            case "toolDraw": SetTool(Tool.Draw); break;
+            case "toolErase": SetTool(Tool.Erase); break;
+            case "toolMute": SetTool(Tool.Mute); break;
+            case "toolRamp": SetTool(Tool.Ramp); break;
+            case "snap":
                 Lanes.SnapOn = !Lanes.SnapOn;
                 Lanes.InvalidateVisual();
                 UpdateStatus();
                 break;
-
-            // Editing.
-            case Key.Z when ctrl && shift: session?.Redo(); break;
-            case Key.Z when ctrl: session?.Undo(); break;
-            case Key.Y when ctrl: session?.Redo(); break;
-            case Key.C when ctrl: Lanes.Copy(); break;
-            case Key.X when ctrl: Lanes.Cut(); break;
-            case Key.V when ctrl: Lanes.Paste(Lanes.Playhead); break;
-            case Key.D when ctrl: Lanes.Duplicate(); break;
-            case Key.A when ctrl && shift: Lanes.ClearSelection(); break;
-            case Key.A when ctrl: Lanes.SelectAll(); break;
-            case Key.Delete or Key.Back: Lanes.DeleteSelection(); break;
-            case Key.Escape: Lanes.ClearSelection(); break;
-            case Key.Left: Lanes.Nudge(-1, fine: alt, toGrid: ctrl); break;
-            case Key.Right: Lanes.Nudge(1, fine: alt, toGrid: ctrl); break;
-            case Key.Up when ctrl: Lanes.ShiftSelectedLanes(-1); break;
-            case Key.Down when ctrl: Lanes.ShiftSelectedLanes(1); break;
-            default: base.OnKeyDown(e); return;
+            case "undo": session?.Undo(); break;
+            case "redo": session?.Redo(); break;
+            case "copy": Lanes.Copy(); break;
+            case "cut": Lanes.Cut(); break;
+            case "paste": Lanes.Paste(Lanes.Playhead); break;
+            case "duplicate": Lanes.Duplicate(); break;
+            case "selectAll": Lanes.SelectAll(); break;
+            case "deselect": Lanes.ClearSelection(); break;
+            case "delete": Lanes.DeleteSelection(); break;
+            case "nudgeLeft": Lanes.Nudge(-1, fine: false, toGrid: false); break;
+            case "nudgeRight": Lanes.Nudge(1, fine: false, toGrid: false); break;
+            case "nudgeLeftFine": Lanes.Nudge(-1, fine: true, toGrid: false); break;
+            case "nudgeRightFine": Lanes.Nudge(1, fine: true, toGrid: false); break;
+            case "gridLeft": Lanes.Nudge(-1, fine: false, toGrid: true); break;
+            case "gridRight": Lanes.Nudge(1, fine: false, toGrid: true); break;
+            case "laneUp": Lanes.ShiftSelectedLanes(-1); break;
+            case "laneDown": Lanes.ShiftSelectedLanes(1); break;
+            case "zoomIn": Lanes.Axis.ZoomAt(1.25, Lanes.Axis.X(Lanes.Playhead)); break;
+            case "zoomOut": Lanes.Axis.ZoomAt(0.8, Lanes.Axis.X(Lanes.Playhead)); break;
+            case "filter": ShowFilter(); break;
+            case "addBookmark": session?.AddBookmark(Lanes.Playhead); break;
+            case "removeBookmark": session?.RemoveBookmarkNear(Lanes.Playhead, 8 / Lanes.Axis.Zoom); break;
+            case "previousBookmark": JumpToBookmark(-1); break;
+            case "nextBookmark": JumpToBookmark(1); break;
+            default: throw new ArgumentException($"Unknown command {id}", nameof(id));
         }
-
-        e.Handled = true;
     }
 
     private void SetTool(Tool tool)
@@ -817,11 +825,11 @@ public partial class MainWindow : Window
         return $"{where} at {FormatTime(m.Time)}";
     }
 
-    private static IReadOnlyDictionary<string, byte[]> LoadSkin()
+    private static IReadOnlyDictionary<string, byte[]> LoadSkin(string? preferred)
     {
         try
         {
-            return DefaultSkin.FindLazerResources() is { } dll ? DefaultSkin.LoadSamples(dll) : new Dictionary<string, byte[]>();
+            return DefaultSkin.FindLazerResources(preferred) is { } dll ? DefaultSkin.LoadSamples(dll) : new Dictionary<string, byte[]>();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
         {

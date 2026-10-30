@@ -12,8 +12,9 @@ public static class DefaultSkin
     private const string Prefix = "osu.Game.Resources.Skins.Legacy.";
 
     /// <summary>Where osu!lazer keeps its resources on Windows, or null when lazer isn't installed.</summary>
-    public static string? FindLazerResources()
+    public static string? FindLazerResources(string? preferred = null)
     {
+        if (preferred is { Length: > 0 } && File.Exists(preferred)) return preferred;
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "osulazer", "current", "osu.Game.Resources.dll");
         return File.Exists(path) ? path : null;
     }

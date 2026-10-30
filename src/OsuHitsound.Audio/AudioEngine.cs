@@ -29,13 +29,26 @@ public sealed class AudioEngine : IDisposable
     }
 
     /// <summary>Opens the default output device. Throws when BASS can't start.</summary>
-    public static AudioEngine Create()
+    /// <summary>
+    /// Opens an output device (-1: the system default) with a playback buffer of <paramref name="bufferMs"/> ms (smaller
+    /// reacts faster, larger is safer against crackles). Throws when BASS can't start.
+    /// </summary>
+    public static AudioEngine Create(int device = -1, int bufferMs = 100)
     {
         Bass.Configure(Configuration.UpdatePeriod, 5);
-        Bass.Configure(Configuration.PlaybackBufferLength, 100);
-        if (!Bass.Init(-1, 44100, DeviceInitFlags.Default, IntPtr.Zero) && Bass.LastError != Errors.Already)
+        Bass.Configure(Configuration.PlaybackBufferLength, Math.Clamp(bufferMs, 20, 500));
+        if (!Bass.Init(device, 44100, DeviceInitFlags.Default, IntPtr.Zero) && Bass.LastError != Errors.Already)
             throw new InvalidOperationException($"Couldn't start audio output (BASS error {Bass.LastError}).");
         return new AudioEngine();
+    }
+
+    /// <summary>The output devices BASS can use: (number, name), the system default first.</summary>
+    public static IReadOnlyList<(int Device, string Name)> Devices()
+    {
+        var devices = new List<(int, string)> { (-1, "System default") };
+        for (int i = 1; Bass.GetDeviceInfo(i, out var info); i++)
+            if (info.IsEnabled) devices.Add((i, info.Name));
+        return devices;
     }
 
     /// <summary>Mute and solo: return false for a lane that shouldn't sound. Called on the scheduler thread.</summary>

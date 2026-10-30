@@ -16,7 +16,6 @@ public partial class MainWindow
     {
         Lanes.LaneMenuRequested += ShowLaneMenu;
         AddLaneItem.Click += async (_, _) => await AddLaneDialog();
-        FilterLanesItem.Click += (_, _) => ShowFilter();
         GenerateItem.Click += async (_, _) => await Generate();
         LaneFilterBox.TextChanged += (_, _) =>
         {

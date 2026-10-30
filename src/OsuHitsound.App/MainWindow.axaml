@@ -95,17 +95,26 @@
     <Border Grid.Row="2" Name="EditBar" Classes="chrome" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="6,0">
         <Menu Grid.Column="0" VerticalAlignment="Center" Foreground="#1d1d1f">
+          <MenuItem Header="File">
+            <MenuItem Name="OpenItem" Header="Open…" />
+            <MenuItem Name="RecentItem" Header="Recent maps" />
+            <MenuItem Name="SaveItem" Header="Save" />
+            <Separator />
+            <MenuItem Name="GenerateFileItem" Header="Generate hitsound diff…" />
+            <Separator />
+            <MenuItem Name="PreferencesItem" Header="Preferences…" />
+          </MenuItem>
           <MenuItem Header="Edit">
-            <MenuItem Name="UndoItem" Header="Undo" InputGesture="Ctrl+Z" />
-            <MenuItem Name="RedoItem" Header="Redo" InputGesture="Ctrl+Y" />
+            <MenuItem Name="UndoItem" Header="Undo" />
+            <MenuItem Name="RedoItem" Header="Redo" />
             <Separator />
-            <MenuItem Name="CutItem" Header="Cut" InputGesture="Ctrl+X" />
-            <MenuItem Name="CopyItem" Header="Copy" InputGesture="Ctrl+C" />
-            <MenuItem Name="PasteItem" Header="Paste at playhead" InputGesture="Ctrl+V" />
-            <MenuItem Name="DuplicateItem" Header="Duplicate" InputGesture="Ctrl+D" />
-            <MenuItem Name="DeleteItem" Header="Delete" InputGesture="Delete" />
+            <MenuItem Name="CutItem" Header="Cut" />
+            <MenuItem Name="CopyItem" Header="Copy" />
+            <MenuItem Name="PasteItem" Header="Paste at playhead" />
+            <MenuItem Name="DuplicateItem" Header="Duplicate" />
+            <MenuItem Name="DeleteItem" Header="Delete" />
             <Separator />
-            <MenuItem Name="SelectAllItem" Header="Select all" InputGesture="Ctrl+A" />
+            <MenuItem Name="SelectAllItem" Header="Select all" />
           </MenuItem>
           <MenuItem Header="Playback">
             <MenuItem Header="Start from">
@@ -126,15 +135,16 @@
           </MenuItem>
           <MenuItem Header="Map">
             <MenuItem Name="AddLaneItem" Header="Add lane…" />
-            <MenuItem Name="FilterLanesItem" Header="Filter lanes" InputGesture="Ctrl+F" />
+            <MenuItem Name="FilterLanesItem" Header="Filter lanes" />
             <Separator />
             <MenuItem Name="GenerateItem" Header="Generate hitsound diff…" />
           </MenuItem>
           <MenuItem Header="View">
-            <MenuItem Name="ZoomInItem" Header="Zoom in (H)" />
-            <MenuItem Name="ZoomOutItem" Header="Zoom out (G)" />
+            <MenuItem Name="ZoomInItem" Header="Zoom in" />
+            <MenuItem Name="ZoomOutItem" Header="Zoom out" />
             <MenuItem Name="CollapseAllItem" Header="Collapse all groups" />
-            <MenuItem Name="InspectorItem" Header="UI inspector (Ctrl+Shift+I)" />
+            <MenuItem Name="InspectorItem" Header="UI inspector" />
+            <MenuItem Name="HelpItem" Header="Shortcuts and help" />
           </MenuItem>
         </Menu>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="16,0" VerticalAlignment="Center">
