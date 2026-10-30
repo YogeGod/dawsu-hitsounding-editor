@@ -131,7 +131,7 @@ public static partial class Compiler
             var notes = new List<string>();
             int bodyChanges = PassiveChanges(original, result);
             if (bodyChanges > 0)
-                notes.Add($"{bodyChanges} slider body or tick sound{(bodyChanges == 1 ? "" : "s")} changed with the new green lines (osu! reads them from the same timing point).");
+                notes.Add($"{bodyChanges} slider body or tick sound{(bodyChanges == 1 ? "" : "s")} changed with the new green lines (osu! reads them from the timing points too).");
 
             return new CompileResult([.. conflicts.OrderBy(c => c.Time)], notes, added, changed);
         }

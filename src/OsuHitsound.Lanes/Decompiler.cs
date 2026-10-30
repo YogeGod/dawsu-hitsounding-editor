@@ -159,16 +159,20 @@ public static class Decompiler
                     new HitSample(sets[node].Normal, sets[node].Addition, 0, 0, null), objectLevel: false);
             }
 
-            // The body (slide, whistle, ticks) is evaluated once, at start + 6 ms, with the slider's own banks.
+            // Slide and whistle are evaluated once, at start + 6 ms, with the slider's own banks. Ticks read the timing
+            // point in force at each tick, so a green line inside the slider changes the ticks after it (stable, heard
+            // in the test maps 2026-10-30).
             double end = start + spans * timingResult.SpanDuration;
             var body = Settle(start + 1, sample, objectLevel: false);
             AddPassive(PassiveKind.SliderSlide, start, end, Resolve(body.Normal, "sliderslide", body.Index), body.Volume, slider);
             if (slider.HitSound.HasFlag(HitSound.Whistle))
                 AddPassive(PassiveKind.SliderWhistle, start, end, Resolve(body.Addition, "sliderwhistle", body.Index), body.Volume, slider);
 
-            var tick = Resolve(body.Normal, "slidertick", body.Index);
             foreach (double t in timingResult.TickTimes)
-                AddPassive(PassiveKind.SliderTick, t, t, tick, body.Volume, slider);
+            {
+                var at = Settle(t, sample, objectLevel: false);
+                AddPassive(PassiveKind.SliderTick, t, t, Resolve(at.Normal, "slidertick", at.Index), at.Volume, slider);
+            }
         }
 
         private void AddMoment(HitObject obj, int node, HitPosition position, double time, HitSound sound, HitSample sample, bool objectLevel)

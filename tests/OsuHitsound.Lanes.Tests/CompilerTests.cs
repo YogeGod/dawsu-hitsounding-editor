@@ -76,6 +76,18 @@ public class CompilerTests
     }
 
     [Fact]
+    public void A_green_line_at_a_repeat_that_changes_the_ticks_after_it_is_reported()
+    {
+        // Repeat at 2000; tick rate 1 puts ticks at 1500 and 2500.
+        var file = Map(Red, "100,100,1000,2,0,L|380:100,2,280");
+        var (result, after, _) = Apply(file, new MapFolder([]), (1, [Skin("soft-hitnormal")], 50));
+
+        Assert.Empty(result.Conflicts);
+        Assert.Equal(50, after.Moments[1].Volume);
+        Assert.Contains(result.Notes, n => n.Contains("tick sound"));
+    }
+
+    [Fact]
     public void Circles_take_a_custom_index_and_volume_on_themselves()
     {
         var folder = new MapFolder(["soft-hitnormal2.wav", "soft-hitclap2.wav"]);

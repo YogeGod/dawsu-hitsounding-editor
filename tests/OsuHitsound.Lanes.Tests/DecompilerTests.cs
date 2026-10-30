@@ -211,6 +211,15 @@ public class DecompilerTests
     }
 
     [Fact]
+    public void A_green_line_inside_a_slider_changes_the_ticks_after_it()
+    {
+        var map = Decompile("0,500,4,2,0,100,1,0\n1400,-100,4,2,2,30,0,0", "100,100,1000,2,0,L|380:100,1,280",
+            files: ["soft-slidertick2.wav"], tickRate: 2);
+        var ticks = map.Passive.Where(p => p.Kind == PassiveKind.SliderTick).Select(p => (p.Lane.Name, p.Volume));
+        Assert.Equal([("soft-slidertick", 100), ("soft-slidertick2.wav", 30), ("soft-slidertick2.wav", 30)], ticks);
+    }
+
+    [Fact]
     public void Repeat_spans_have_ticks_mirrored_and_nan_green_lines_turn_ticks_off()
     {
         var map = Decompile("0,500,4,2,0,100,1,0", "100,100,1000,2,0,L|380:100,2,280", tickRate: 2);
