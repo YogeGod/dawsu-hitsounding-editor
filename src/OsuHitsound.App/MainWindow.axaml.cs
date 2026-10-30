@@ -31,11 +31,12 @@ public partial class MainWindow : Window
     private double lastDrawnPlayhead = double.NaN;
     private double lastRowHeight = UiTheme.Current.Number("row.height");
 
-    // The open map: its path, its bytes as opened (Save compiles a fresh copy of these), and its folder.
-    private string? mapPath;
-    private byte[]? originalBytes;
-    private MapFolder? folder;
-    private EditSession? session;
+    // The open map (path, bytes as opened, folder, decompiled map, edit session); the shortcuts read from it.
+    private MapDocument? doc;
+    private string? mapPath => doc?.Path;
+    private byte[]? originalBytes => doc?.Opened;
+    private MapFolder? folder => doc?.Folder;
+    private EditSession? session => doc?.Session;
     private CancellationTokenSource? compileCancel;
     private (CompileResult Result, OsuFile File)? lastCompile;
     private bool closeConfirmed;
@@ -186,21 +187,17 @@ public partial class MainWindow : Window
         var skinSounds = skin;
         try
         {
-            var full = Path.GetFullPath(path);
-            var (bytes, file, mapFolder, map, editing) = await Task.Run(() =>
+            var opened = await Task.Run(() =>
             {
-                var bytes = File.ReadAllBytes(full);
-                var file = OsuFile.Parse(bytes);
-                var mapFolder = MapFolder.FromDirectory(Path.GetDirectoryName(full)!);
-                var map = Decompiler.Decompile(file, mapFolder);
                 _ = skinSounds.Value; // read the default sounds here too, the first time
-                return (bytes, file, mapFolder, map, new EditSession(file, mapFolder, map));
+                return MapDocument.Load(path);
             });
             if (number != loadNumber) return;
+            var (full, file, mapFolder, map, editing) = (opened.Path, opened.File, opened.Folder, opened.Map, opened.Session);
 
             compileCancel?.Cancel();
             if (session is not null) session.Changed -= OnEdited;
-            (mapPath, originalBytes, folder, session, lastCompile, closeConfirmed, flash) = (full, bytes, mapFolder, editing, null, false, null);
+            (doc, lastCompile, closeConfirmed, flash) = (opened, null, false, null);
 
             // Load every drawable lane's sample, not only the ones the map uses, so new hits sound at once.
             audio?.Load(map with { Lanes = editing.Lanes }, mapFolder, skin.Value);
@@ -496,12 +493,11 @@ public partial class MainWindow : Window
         compileCancel?.Cancel();
         var cancel = compileCancel = new CancellationTokenSource();
         var state = session.State; // immutable: the wish list is built off the UI thread
-        var (bytes, mapFolder, editing) = (originalBytes, folder, session);
+        var (document, editing) = (doc!, session);
         _ = Task.Run(async () =>
         {
             await Task.Delay(150, cancel.Token);
-            var copy = OsuFile.Parse(bytes);
-            var result = Compiler.Apply(copy, mapFolder, editing.Wanted(state));
+            var (result, copy) = document.Compile(state);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (cancel.IsCancellationRequested || !ReferenceEquals(editing, session) || model is null) return;
@@ -522,7 +518,7 @@ public partial class MainWindow : Window
         try
         {
             int unanchored = session.Unanchored.Count();
-            var saved = MapSaver.Save(mapPath, originalBytes, folder, session.Wanted(), MapSaver.DefaultBackupRoot(), session.State.Bookmarks);
+            var saved = doc!.Save(MapSaver.DefaultBackupRoot());
             var result = saved.Compile;
             if (!saved.Written)
             {

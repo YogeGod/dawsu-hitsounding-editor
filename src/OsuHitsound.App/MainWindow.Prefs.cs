@@ -119,10 +119,9 @@ public partial class MainWindow
         if (audio is { IsPlaying: true }) StopPlaying();
         audio?.Dispose();
         StartAudio();
-        if (audio is not null && model is not null && session is not null && folder is not null && originalBytes is not null)
+        if (audio is not null && model is not null && doc is { } document && session is not null && folder is not null)
         {
-            var map = Decompiler.Decompile(OsuFile.Parse(originalBytes), folder);
-            audio.Load(map with { Lanes = session.Lanes }, folder, skin.Value);
+            audio.Load(document.Map with { Lanes = session.Lanes }, folder, skin.Value);
             foreach (var lane in model.LaneRows.Select(r => r.Lane).Where(l => l.Source == LaneSource.BeatmapFile && !session.Lanes.Contains(l)))
                 if (folder.Find(lane.Name) is { } f) audio.LoadLane(lane, folder.ReadBytes(f));
             audio.IsAudible = model.IsAudible;

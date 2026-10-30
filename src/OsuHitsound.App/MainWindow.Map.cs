@@ -198,7 +198,7 @@ public partial class MainWindow
     /// </summary>
     private async Task Generate()
     {
-        if (session is null || mapPath is null || originalBytes is null) return;
+        if (doc is not { } document || session is null || mapPath is null) return;
         if (session.State.Hits.Count == 0)
         {
             flash = "Nothing to generate: there are no hits.";
@@ -207,20 +207,14 @@ public partial class MainWindow
         }
 
         // Plan from a fresh look at the mapset (another difficulty may have changed since the map was opened), off the UI thread.
-        var (opened, path, editing) = (originalBytes, mapPath, session);
+        var path = mapPath;
         GeneratePlan plan;
         MapFolder fresh;
         try
         {
             flash = "Planning the hitsound diff…";
             UpdateStatus();
-            (plan, fresh) = await Task.Run(() =>
-            {
-                var current = MapFolder.FromDirectory(Path.GetDirectoryName(path)!);
-                var source = OsuFile.Parse(opened);
-                var previous = GenerateManifest.Load(GenerateManifest.DefaultRoot(), Path.Combine(Path.GetDirectoryName(path)!, HitsoundDiff.FileNameFor(source, path)));
-                return (HitsoundDiff.Plan(source, path, current, editing, previous), current);
-            });
+            (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot()));
         }
         catch (IOException ex)
         {
