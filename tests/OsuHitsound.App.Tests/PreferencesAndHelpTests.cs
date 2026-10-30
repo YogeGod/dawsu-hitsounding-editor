@@ -64,7 +64,9 @@ public class PreferencesAndHelpTests : IDisposable
         Assert.Equal(EditorCommands.Defaults.Count, EditorCommands.Defaults.Select(c => c.Id).Distinct().Count());
         var keys = EditorCommands.Defaults.SelectMany(c => c.Keys).Select(k => k.ToString()).ToList();
         Assert.Equal(keys.Count, keys.Distinct().Count());
-        Assert.All(EditorCommands.Defaults, c => Assert.NotEmpty(c.Keys));
+        // The dialogs from the Edit menu have no built-in key (docs/spec-wave1.md); every other command has one.
+        string[] menuOnly = ["editRange", "scaleByVolume"];
+        Assert.All(EditorCommands.Defaults.Where(c => !menuOnly.Contains(c.Id)), c => Assert.NotEmpty(c.Keys));
     }
 
     [Fact]

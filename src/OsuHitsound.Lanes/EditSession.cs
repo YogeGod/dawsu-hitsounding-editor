@@ -16,6 +16,14 @@ public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor);
 /// </summary>
 public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks);
 
+/// <summary>What a range edit does with the hits in a time range.</summary>
+public enum RangeOperation
+{
+    Copy,
+    Move,
+    Delete,
+}
+
 /// <summary>
 /// Hitsound editing on top of a decompiled map: the hits you want, with undo and redo. Moments are fixed (Apply mode):
 /// a hit placed within <see cref="AnchorTolerance"/> of a moment plays on it; elsewhere it is a hit with no object.
@@ -108,6 +116,49 @@ public sealed class EditSession
             return s with { Hits = kept.AddRange(moved.Where(present.Add)) };
         });
         return moved.Distinct().ToList();
+    }
+
+    /// <summary>The hits in a time range (its end excluded; the ends may come in either order) and in the given lanes.</summary>
+    public IReadOnlyList<EditHit> InRange(double start, double end, IReadOnlySet<Lane> lanes)
+    {
+        (start, end) = (Math.Min(start, end), Math.Max(start, end));
+        return [.. State.Hits.Where(h => h.Time >= start && h.Time < end && lanes.Contains(h.Lane))];
+    }
+
+    /// <summary>
+    /// Copies, moves or deletes a range's hits, as one undo step. Copies and moved hits keep their lanes and land on the
+    /// moment at their new time, or have no object there. Objects never move. Returns the new hits, to select them.
+    /// </summary>
+    public IReadOnlyList<EditHit> EditRange(double start, double end, IReadOnlySet<Lane> lanes, RangeOperation operation, double offset)
+    {
+        var hits = InRange(start, end, lanes);
+        if (hits.Count == 0) return [];
+        switch (operation)
+        {
+            case RangeOperation.Move:
+                return Move(hits, offset, h => h.Lane);
+            case RangeOperation.Copy:
+                return Copy(hits, offset);
+            default:
+                Remove(hits);
+                return [];
+        }
+    }
+
+    /// <summary>
+    /// The moments whose volume is within <paramref name="from"/>–<paramref name="to"/> % (inclusive) and that at least
+    /// one of <paramref name="scope"/>'s hits plays on. Hits with no object have no volume yet and are skipped.
+    /// </summary>
+    public IReadOnlyList<MomentKey> MomentsWithVolume(IEnumerable<EditHit> scope, int from, int to) =>
+        [.. scope.Where(h => h.Anchor is not null).Select(h => h.Anchor!.Value).Distinct()
+            .Where(k => State.Volumes[k] is var v && v >= from && v <= to)];
+
+    /// <summary>Copies hits by a time offset, in their lanes (one undo step); each lands on the moment there, if any. Returns the copies.</summary>
+    public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset)
+    {
+        var copies = hits.Select(h => HitAt(h.Lane, h.Time + offset)).Distinct().ToList();
+        Add(copies);
+        return copies;
     }
 
     public void SetVolume(IEnumerable<MomentKey> keys, int volume)

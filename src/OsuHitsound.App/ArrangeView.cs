@@ -7,10 +7,11 @@ using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
 
-/// <summary>The editing tools (dawsu numbering: 1 Select, 3 Draw, 4 Erase, 5 Mute, 6 Ramp in the volume lane).</summary>
+/// <summary>The editing tools (dawsu numbering: 1 Select, 2 Range, 3 Draw, 4 Erase, 5 Mute, 6 Ramp in the volume lane).</summary>
 internal enum Tool
 {
     Select,
+    Range,
     Draw,
     Erase,
     Mute,
@@ -48,6 +49,8 @@ internal sealed class ArrangeView : Control
     private static readonly IPen ConflictRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
     private static readonly IPen MarqueePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#2f6fd0"), 1);
     private static readonly IBrush MarqueeFill = Paint.Brush(Color.Parse("#2f6fd0"), 0.15);
+    private static readonly IPen RangePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#e0a030"), 1);
+    private static readonly IBrush RangeFill = Paint.Brush(Color.Parse("#e0a030"), 0.18);
 
     private double? rowHeight; // set by Ctrl+Alt+wheel; null follows the theme
     private double scrollY;
@@ -59,6 +62,7 @@ internal sealed class ArrangeView : Control
         None,
         Marquee,
         Move,
+        Range,
         Paint,
         Wipe,
         Cycle,
@@ -115,7 +119,21 @@ internal sealed class ArrangeView : Control
     /// <summary>The playhead in ms (set by the window's frame timer).</summary>
     public double Playhead { get; set; }
 
-    public Tool Tool { get; set; } = Tool.Select;
+    /// <summary>The tool in use; leaving the Range tool drops its range.</summary>
+    public Tool Tool
+    {
+        get => tool;
+        set
+        {
+            tool = value;
+            if (value != Tool.Range) Edits.ClearRange();
+        }
+    }
+
+    private Tool tool = Tool.Select;
+
+    /// <summary>How far (px) the pointer must move before a press counts as a drag.</summary>
+    private const double DragThreshold = 3;
 
     /// <summary>Snap divisor (1/n of a beat) and whether snapping is on (J).</summary>
     public int Divisor { get => Edits.Divisor; set => Edits.Divisor = value; }
@@ -238,11 +256,17 @@ internal sealed class ArrangeView : Control
                     ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, HeaderHeight), new Point(x, size.Height));
                 }
 
+                var range = Edits.Range;
+                double rangeLeft = range is null ? 0 : GridLeft + Axis.X(range.Start), rangeRight = range is null ? 0 : GridLeft + Axis.X(range.End);
                 for (int i = first; i < model.Rows.Count; i++)
                 {
                     double y = HeaderHeight + i * RowHeight - scrollY;
                     if (y > size.Height) break;
-                    if (model.Rows[i] is LaneRow lane) DrawNotes(ctx, model, lane, y, from, to);
+                    if (model.Rows[i] is not LaneRow lane) continue;
+                    // The range is shaded under the notes, one box per lane row it covers.
+                    if (range is not null && range.Lanes.Contains(lane.Lane))
+                        ctx.DrawRectangle(RangeFill, RangePen, new Rect(rangeLeft, y, Math.Max(1, rangeRight - rangeLeft), RowHeight));
+                    DrawNotes(ctx, model, lane, y, from, to);
                 }
 
                 if (drag == Drag.Marquee)
@@ -794,6 +818,11 @@ internal sealed class ArrangeView : Control
                 if (under is not null) EraseHit(under);
                 break;
 
+            case Tool.Range:
+                // A press starts a new range; a click without a drag clears it (OnPointerReleased).
+                drag = Drag.Range;
+                break;
+
             case Tool.Mute:
                 // Preview-only: osu! can't store a muted sound, so this only silences it while listening.
                 if (under is not null) model.TogglePreviewMute(under);
@@ -870,6 +899,10 @@ internal sealed class ArrangeView : Control
                 break;
             }
 
+            case Drag.Range when Math.Abs(p.X - dragStart.X) >= DragThreshold:
+                Edits.MarkRange(Axis.Time(dragStart.X - GridLeft), Axis.Time(gridX), RowIndexAt(dragStart.Y), RowIndexAt(p.Y));
+                break;
+
             case Drag.Marquee:
             {
                 selection.Clear();
@@ -884,7 +917,7 @@ internal sealed class ArrangeView : Control
                 ScrollChanged?.Invoke();
                 break;
 
-            case Drag.Cycle when Math.Abs(p.X - dragStart.X) >= 3:
+            case Drag.Cycle when Math.Abs(p.X - dragStart.X) >= DragThreshold:
             {
                 double a = SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))), b = SnapTime(Math.Max(0, Axis.Time(gridX)));
                 Cycle = true;
@@ -899,7 +932,7 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (drag == Drag.None) return;
-        if (drag == Drag.Cycle && Math.Abs(dragNow.X - dragStart.X) < 3 && LocatorLeft is { } l && LocatorRight is { } r)
+        if (drag == Drag.Cycle && Math.Abs(dragNow.X - dragStart.X) < DragThreshold && LocatorLeft is { } l && LocatorRight is { } r)
         {
             // A click (no drag) inside the band toggles cycling.
             double t = Axis.Time(dragStart.X - GridLeft);
@@ -908,6 +941,8 @@ internal sealed class ArrangeView : Control
                 Cycle = !Cycle; // raises LocatorsChanged
             }
         }
+
+        if (drag == Drag.Range && Math.Abs(dragNow.X - dragStart.X) < DragThreshold) Edits.ClearRange();
 
         Session?.EndGesture();
         drag = Drag.None;

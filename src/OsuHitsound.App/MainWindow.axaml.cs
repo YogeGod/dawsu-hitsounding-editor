@@ -94,6 +94,7 @@ public partial class MainWindow : Window
         };
         Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Math.Clamp(SnapBox.SelectedIndex + step, 0, Divisors.Length - 1);
         SelectTool.Click += (_, _) => SetTool(Tool.Select);
+        RangeTool.Click += (_, _) => SetTool(Tool.Range);
         DrawTool.Click += (_, _) => SetTool(Tool.Draw);
         EraseTool.Click += (_, _) => SetTool(Tool.Erase);
         MuteTool.Click += (_, _) => SetTool(Tool.Mute);
@@ -120,7 +121,7 @@ public partial class MainWindow : Window
         [
             (OpenItem, "open"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
-            (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
+            (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
         ];
         foreach (var (item, id) in menuCommands) item.Click += (_, _) => Run(id);
         ApplyKeys();
@@ -289,6 +290,7 @@ public partial class MainWindow : Window
             case "setLeft": Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
             case "setRight": Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
             case "toolSelect": SetTool(Tool.Select); break;
+            case "toolRange": SetTool(Tool.Range); break;
             case "toolDraw": SetTool(Tool.Draw); break;
             case "toolErase": SetTool(Tool.Erase); break;
             case "toolMute": SetTool(Tool.Mute); break;
@@ -305,7 +307,9 @@ public partial class MainWindow : Window
             case "paste": Lanes.Edits.Paste(Lanes.Playhead); break;
             case "duplicate": Lanes.Edits.Duplicate(); break;
             case "selectAll": Lanes.Edits.SelectAll(); break;
-            case "deselect": Lanes.Edits.Clear(); break;
+            case "deselect": Lanes.Edits.Deselect(); break;
+            case "editRange": _ = EditRange(); break;
+            case "scaleByVolume": _ = ScaleByVolume(); break;
             case "delete": Lanes.Edits.DeleteSelection(); break;
             case "nudgeLeft": Lanes.Edits.Nudge(-1, fine: false, toGrid: false); break;
             case "nudgeRight": Lanes.Edits.Nudge(1, fine: false, toGrid: false); break;
@@ -344,6 +348,7 @@ public partial class MainWindow : Window
     {
         Lanes.Tool = tool;
         SelectTool.IsChecked = tool == Tool.Select;
+        RangeTool.IsChecked = tool == Tool.Range;
         DrawTool.IsChecked = tool == Tool.Draw;
         EraseTool.IsChecked = tool == Tool.Erase;
         MuteTool.IsChecked = tool == Tool.Mute;
@@ -405,10 +410,37 @@ public partial class MainWindow : Window
         Lanes.Edits.SelectWhere(h => h.Anchor is { } k && state.Volumes[k] >= min && state.Volumes[k] <= max);
     }
 
-    /// <summary>P: the locators span the selection (its first to last hit), or the visible range when nothing is selected.</summary>
+    /// <summary>Edit → Edit range: copies, moves or deletes the hits in the range marked with the Range tool.</summary>
+    private async Task EditRange()
+    {
+        if (Lanes.Edits.Range is not { } range)
+        {
+            flash = "Choose the Range tool (2) and drag a time range first.";
+            UpdateStatus();
+            return;
+        }
+
+        if (await Dialogs.EditRange(this, range.End - range.Start) is { } choice) Lanes.Edits.EditRange(choice.Operation, choice.Offset);
+    }
+
+    /// <summary>Edit → Scale by volume: scales the volume of the circles and slider ends in a volume range.</summary>
+    private async Task ScaleByVolume()
+    {
+        if (session is null) return;
+        var edits = Lanes.Edits;
+        if (await Dialogs.ScaleByVolume(this, edits.Selected.Count > 0, (scope, from, to) => edits.MomentsToScale(scope, from, to).Count) is { } c)
+            edits.ScaleByVolume(c.Scope, c.From, c.To, c.Percent);
+    }
+
+    /// <summary>
+    /// P: the locators span the range marked with the Range tool, else the selection (its first to last hit), else the
+    /// visible range.
+    /// </summary>
     private void LocatorsToSelection()
     {
-        if (Lanes.Selection.Count > 0)
+        if (Lanes.Edits.Range is { } range)
+            Lanes.SetLocators(range.Start, range.End);
+        else if (Lanes.Selection.Count > 0)
             Lanes.SetLocators(Lanes.Selection.Min(h => h.Time), Lanes.Selection.Max(h => h.Time));
         else
             Lanes.SetLocators(Lanes.Axis.Left, Lanes.Axis.Left + Lanes.Axis.VisibleDuration);
@@ -841,6 +873,7 @@ public partial class MainWindow : Window
             1 => $"  ·  selected: {Describe(Lanes.Selection.First())}",
             int n => $"  ·  {n} hits selected",
         };
+        if (Lanes.Edits.Range is { } range) selection += $"  ·  range {Math.Round(range.Start)} → {Math.Round(range.End)} ms";
         StatusRight.Text = $"{tool}  ·  {model.LaneRows.Count} lanes  ·  {model.Session.State.Hits.Count} hits{selection}";
         UpdateSavedTab();
     }

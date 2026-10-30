@@ -39,7 +39,7 @@ V6.39's "split crossing MIDI lengths" option is left out, because this editor ha
 **Command.** New command `scaleByVolume`, "Scale by volume…" in the Edit menu. It has no default key.
 
 **Dialog.**
-- **Scope:** Selected sounds (the default when something is selected), Active lane, or All sounds.
+- **Scope:** Selected sounds (the default when something is selected), Lanes of the selected sounds, or All sounds. (Changed while building: the editor has no "active lane", so selecting one sound in a lane stands in for it.)
 - **Volume from / to:** 1–100 %. A circle or slider end matches when its volume is inside this range.
 - **Scale by:** a percentage. 50 % halves the volume and 150 % makes it louder.
 - A live preview line: "Changes N circles/slider ends."
@@ -48,7 +48,7 @@ V6.39's "split crossing MIDI lengths" option is left out, because this editor ha
 **Rules.**
 - The unit is the circle or slider end (`MomentKey`), because that is where volume lives. A moment matches when at least one in-scope sound sits on it and its volume is in range.
 - Scaling a moment changes the volume of **every** sound on it, including sounds on other lanes outside the scope. The dialog says so in one line.
-- Results are rounded and kept within 0–100 (the existing clamp in `EditSession`). Stable plays anything below 8 % at 8 %, and the dialog doesn't hide that.
+- Results are rounded and kept within 1–100, like the volume panel's Relative edit (`VolumeRamp.Shift`), so scaling never makes a circle silent. Stable plays anything below 8 % at 8 %, and the dialog doesn't hide that.
 - Unanchored sounds have no volume yet and are skipped.
 - Selecting, setting and muting by volume are **not** in wave 1 (the user chose scale only).
 
@@ -58,7 +58,7 @@ The Cubase Key Commands import is already built (`KeyBindings.cs`, commit `cfe95
 
 - `toolRange` → `Tool|Range Tool` (the name appears in the user's Cubase 9.5 key file; check its category when implementing).
 - `editRange` and `scaleByVolume` have no Cubase equivalent and keep their built-in keys (none by default).
-- The osu! preset gives `toolRange` key 2, like the built-in set.
+- The osu! preset leaves `toolRange` without a key: it already gives 2 to Draw, as osu!'s editor uses 2 for placing circles. (Changed while building.)
 
 The uncommitted keybind changes in the working tree (a parse cache and comparing `KeyGesture` values directly) come from another session. They are not part of this spec. Commit or drop them before wave 1 starts.
 

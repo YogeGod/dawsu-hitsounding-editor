@@ -181,6 +181,9 @@
             <MenuItem Name="DeleteItem" Header="Delete" />
             <Separator />
             <MenuItem Name="SelectAllItem" Header="Select all" />
+            <Separator />
+            <MenuItem Name="EditRangeItem" Header="Edit range…" />
+            <MenuItem Name="ScaleVolumeItem" Header="Scale by volume…" />
           </MenuItem>
           <MenuItem Header="Playback">
             <MenuItem Header="Start from">
@@ -215,6 +218,7 @@
         </Menu>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" Margin="12,0" VerticalAlignment="Center">
           <ToggleButton Name="SelectTool" Content="Select" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." />
+          <ToggleButton Name="RangeTool" Content="Range" ToolTip.Tip="Range (2). Drag a time range across the lanes you want, then Edit → Edit range to copy, move or delete what's in it. A click clears it." />
           <ToggleButton Name="DrawTool" Content="Draw" ToolTip.Tip="Draw (3, or hold Alt). Click or drag along a lane; starting on a hit erases instead." />
           <ToggleButton Name="EraseTool" Content="Erase" ToolTip.Tip="Erase (4). Drag across hits to remove them." />
           <ToggleButton Name="MuteTool" Content="Mute" ToolTip.Tip="Mute (5). Click a hit to silence it while listening. Preview only: osu! cannot store a muted sound, so this is never saved." />

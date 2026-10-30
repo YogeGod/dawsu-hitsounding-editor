@@ -156,4 +156,139 @@ public class EditSessionTests
         Assert.Equal(100, s.State.Volumes[key]);
         Assert.False(s.CanUndo);
     }
+
+    // ---- Range tool (docs/spec-wave1.md) ----
+
+    private const string ThreeCircles = "256,192,1000,1,8,0:0:0:0:\n256,192,1500,1,8,0:0:0:0:\n256,192,2000,1,8,0:0:0:0:";
+
+    private static HashSet<Lane> BothLanes => [Skin("soft-hitnormal"), Skin("soft-hitclap")];
+
+    [Fact]
+    public void A_range_holds_the_hits_from_its_start_up_to_but_not_on_its_end_in_its_lanes()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        var hits = s.InRange(1000, 2000, new HashSet<Lane> { Skin("soft-hitclap") });
+        Assert.Equal([1000.0, 1500], hits.Select(h => h.Time).Order());
+        Assert.All(hits, h => Assert.Equal("soft-hitclap", h.Lane.Name));
+        Assert.Equal(4, s.InRange(2000, 1000, BothLanes).Count); // dragged right to left
+    }
+
+    [Fact]
+    public void Copying_a_range_adds_its_hits_again_at_the_offset_in_the_same_lanes()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        var copies = s.EditRange(1000, 1500, BothLanes, RangeOperation.Copy, 1000);
+
+        Assert.Equal(2, copies.Count);
+        Assert.All(copies, c => Assert.Equal(2000, c.Time));
+        Assert.All(copies, c => Assert.NotNull(c.Anchor));
+        Assert.Equal(6, s.State.Hits.Count); // the copies land on hits already at 2000: no duplicates
+        var offObject = s.EditRange(1000, 1500, BothLanes, RangeOperation.Copy, 250);
+        Assert.All(offObject, c => Assert.Null(c.Anchor)); // no object at 1250: shown as a conflict in Apply
+        Assert.Equal(8, s.State.Hits.Count);
+    }
+
+    [Fact]
+    public void Moving_a_range_moves_only_its_hits_and_never_the_objects()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        int moments = s.Moments.Count;
+        var moved = s.EditRange(1000, 1500, new HashSet<Lane> { Skin("soft-hitclap") }, RangeOperation.Move, 250);
+
+        Assert.Equal(1250, moved.Single().Time);
+        Assert.Null(moved.Single().Anchor);
+        Assert.DoesNotContain(s.State.Hits, h => h.Time == 1000 && h.Lane.Name == "soft-hitclap");
+        Assert.Contains(s.State.Hits, h => h.Time == 1000 && h.Lane.Name == "soft-hitnormal");
+        Assert.Equal(moments, s.Moments.Count);
+    }
+
+    [Fact]
+    public void Deleting_a_range_is_one_undo_step()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        Assert.Empty(s.EditRange(1000, 2000, BothLanes, RangeOperation.Delete, 0));
+        Assert.Equal(2, s.State.Hits.Count); // the circle at 2000 is on the range end, so it stays
+        s.Undo();
+        Assert.Equal(6, s.State.Hits.Count);
+        Assert.False(s.CanUndo);
+    }
+
+    [Fact]
+    public void An_empty_range_is_not_an_edit()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        s.EditRange(1100, 1400, BothLanes, RangeOperation.Delete, 0);
+        Assert.False(s.CanUndo);
+    }
+
+    // ---- Scale by volume ----
+
+    private static void Scale(EditSession s, IEnumerable<MomentKey> keys, double percent) => s.SetVolumes(VolumeRamp.Scale(s.State.Volumes, keys, percent));
+
+    private static EditSession WithVolumes(params int[] volumes)
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        s.SetVolumes(s.Moments.Select((m, i) => (m.Key, volumes[i])).ToDictionary(x => x.Key, x => x.Item2));
+        return s;
+    }
+
+    [Fact]
+    public void Moments_match_by_their_volume_inside_the_range_inclusive()
+    {
+        var s = WithVolumes(40, 60, 90);
+        var keys = s.MomentsWithVolume(s.State.Hits, 60, 90);
+        Assert.Equal([1500.0, 2000], keys.Select(k => s.MomentByKey[k].Time).Order());
+    }
+
+    [Fact]
+    public void Only_moments_with_a_hit_in_scope_match()
+    {
+        var s = WithVolumes(40, 60, 90);
+        var scope = s.State.Hits.Where(h => h.Time == 1500).Take(1);
+        Assert.Equal(1500, s.MomentByKey[s.MomentsWithVolume(scope, 1, 100).Single()].Time);
+    }
+
+    [Fact]
+    public void Hits_with_no_object_have_no_volume_and_are_skipped()
+    {
+        var s = WithVolumes(40, 60, 90);
+        var loose = s.HitAt(Skin("soft-hitclap"), 1250);
+        s.Add([loose]);
+        Assert.Empty(s.MomentsWithVolume([loose], 1, 100));
+    }
+
+    [Fact]
+    public void Scaling_rounds_keeps_within_1_to_100_and_is_one_undo_step()
+    {
+        var s = WithVolumes(45, 60, 90);
+        int steps = 0;
+        while (s.CanUndo) { s.Undo(); steps++; }
+        s.Redo();
+
+        Scale(s, s.Moments.Select(m => m.Key), 150);
+        Assert.Equal([68, 90, 100], s.Moments.Select(m => s.State.Volumes[m.Key]));
+        Scale(s, [s.Moments[0].Key], 50);
+        Assert.Equal(34, s.State.Volumes[s.Moments[0].Key]); // 45 × 150 % = 67.5 rounded up to 68, then halved
+        s.Undo();
+        s.Undo();
+        Assert.Equal([45, 60, 90], s.Moments.Select(m => s.State.Volumes[m.Key]));
+        Assert.Equal(1, steps);
+    }
+
+    [Fact]
+    public void Scaling_never_goes_silent()
+    {
+        var s = WithVolumes(1, 10, 100);
+        Scale(s, s.Moments.Select(m => m.Key), 0);
+        Assert.All(s.Moments, m => Assert.Equal(1, s.State.Volumes[m.Key]));
+    }
+
+    [Fact]
+    public void Scaling_that_changes_nothing_is_not_an_edit()
+    {
+        var s = WithVolumes(100, 100, 100);
+        s.Undo();
+        Scale(s, s.Moments.Select(m => m.Key), 120);
+        Assert.False(s.CanUndo);
+    }
 }

@@ -30,6 +30,7 @@ internal static partial class CubaseKeyFile
         ["setLeft"] = "Transport|Set Left Locator",
         ["setRight"] = "Transport|Set Right Locator",
         ["toolSelect"] = "Tool|Select Tool",
+        ["toolRange"] = "Tool|Range Tool",
         ["toolDraw"] = "Tool|Draw Tool",
         ["toolErase"] = "Tool|Delete Tool",
         ["toolMute"] = "Tool|Mute Tool",

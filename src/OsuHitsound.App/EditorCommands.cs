@@ -73,6 +73,7 @@ internal static class EditorCommands
         new("setRight", "Playback and cycle", "Set the right locator at the playhead", [K(Key.NumPad2, Ctrl)]),
 
         new("toolSelect", "Tools and snap", "Select and move", [K(Key.D1)]),
+        new("toolRange", "Tools and snap", "Range: drag a time range across lanes, then Edit range", [K(Key.D2)]),
         new("toolDraw", "Tools and snap", "Draw (hold Alt to draw with any tool)", [K(Key.D3)]),
         new("toolErase", "Tools and snap", "Erase", [K(Key.D4)]),
         new("toolMute", "Tools and snap", "Mute hits while listening (never saved)", [K(Key.D5)]),
@@ -97,6 +98,8 @@ internal static class EditorCommands
         new("gridRight", "Editing", "Move to the next grid line", [K(Key.Right, Ctrl)]),
         new("laneUp", "Editing", "Move the selection to the lane above", [K(Key.Up, Ctrl)]),
         new("laneDown", "Editing", "Move the selection to the lane below", [K(Key.Down, Ctrl)]),
+        new("editRange", "Editing", "Edit range: copy, move or delete the hits in the range", []),
+        new("scaleByVolume", "Editing", "Scale by volume: make circles in a volume range louder or quieter", []),
 
         new("zoomIn", "View and lanes", "Zoom in", [K(Key.H)]),
         new("zoomOut", "View and lanes", "Zoom out", [K(Key.G)]),
@@ -113,6 +116,7 @@ internal static class EditorCommands
     [
         ("Mouse: grid", "Click / drag (Select)", "Select hits, drag a box, or drag hits to move them"),
         ("Mouse: grid", "Ctrl+click / Shift+click", "Toggle / add a hit to the selection"),
+        ("Mouse: grid", "Drag (Range)", "Mark a time range over the lanes dragged across; a click clears it"),
         ("Mouse: grid", "Click / drag (Draw)", "Paint hits; a stroke starting on a hit erases"),
         ("Mouse: grid", "Right-click a hit", "Delete it"),
         ("Mouse: grid", "Alt+drag", "Draw with any tool"),

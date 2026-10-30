@@ -42,4 +42,8 @@ public static class VolumeRamp
     /// <summary>Relative edit: every volume moves by the same amount, kept within 1–100.</summary>
     public static Dictionary<MomentKey, int> Shift(IReadOnlyDictionary<MomentKey, int> volumes, IEnumerable<MomentKey> keys, int delta) =>
         keys.Distinct().ToDictionary(k => k, k => Math.Clamp(volumes[k] + delta, 1, 100));
+
+    /// <summary>Scale by volume: each moment's volume times <paramref name="percent"/> / 100 (150 = half as loud again), rounded, kept 1–100.</summary>
+    public static Dictionary<MomentKey, int> Scale(IReadOnlyDictionary<MomentKey, int> volumes, IEnumerable<MomentKey> keys, double percent) =>
+        keys.Distinct().ToDictionary(k => k, k => Math.Clamp((int)Math.Round(volumes[k] * percent / 100, MidpointRounding.AwayFromZero), 1, 100));
 }

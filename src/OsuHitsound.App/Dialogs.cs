@@ -1,9 +1,12 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using OsuHitsound.Format;
+using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
 
@@ -38,6 +41,81 @@ internal static class Dialogs
             body.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap, MaxWidth = 400 });
             body.Children.Add(list);
             return (() => { if (list.SelectedItem is string s) close(s); }, "Add");
+        });
+
+    /// <summary>The Range tool's Edit range dialog: what to do and the offset (ms, defaulting to the range's length).</summary>
+    public static async Task<(RangeOperation Operation, double Offset)?> EditRange(Window owner, double length) =>
+        await Show<(RangeOperation, double)?>(owner, "Edit range", (body, close) =>
+        {
+            var operation = new ComboBox { ItemsSource = Enum.GetValues<RangeOperation>(), SelectedIndex = 0, Width = 200 };
+            var offset = new TextBox { Text = length.ToString("0.###", CultureInfo.InvariantCulture), Width = 200 };
+            var problem = new TextBlock { Foreground = Brushes.OrangeRed };
+            operation.SelectionChanged += (_, _) => offset.IsEnabled = operation.SelectedItem is not RangeOperation.Delete;
+            body.Children.AddRange([
+                new TextBlock { Text = "Operation" }, operation,
+                new TextBlock { Text = "Offset (ms)" }, offset,
+                new TextBlock { Text = "The range end is excluded. Gameplay objects are never moved.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
+                problem,
+            ]);
+            return (() =>
+            {
+                var op = operation.SelectedItem as RangeOperation? ?? RangeOperation.Copy;
+                if (op == RangeOperation.Delete) close((op, 0));
+                else if (OsuNumber.TryParseDouble(offset.Text ?? "", out double ms) && double.IsFinite(ms)) close((op, ms));
+                else problem.Text = "The offset must be a number of milliseconds.";
+            }, "OK");
+        });
+
+    /// <summary>
+    /// The Scale by volume dialog. <paramref name="count"/> says how many circles and slider ends a choice changes, for
+    /// the live preview. Returns the choice, or null on Cancel.
+    /// </summary>
+    public static async Task<(VolumeScope Scope, int From, int To, double Percent)?> ScaleByVolume(Window owner, bool hasSelection, Func<VolumeScope, int, int, int> count) =>
+        await Show<(VolumeScope, int, int, double)?>(owner, "Scale by volume", (body, close) =>
+        {
+            (VolumeScope Scope, string Label)[] scopes = [(VolumeScope.Selected, "Selected hits"), (VolumeScope.SelectedLanes, "Lanes of the selected hits"), (VolumeScope.All, "All hits")];
+            var scope = new ComboBox
+            {
+                ItemsSource = scopes.Select(x => x.Label).ToList(),
+                SelectedIndex = Array.FindIndex(scopes, x => x.Scope == (hasSelection ? VolumeScope.Selected : VolumeScope.All)),
+                Width = 240,
+            };
+            var from = new TextBox { Text = "1", Width = 70 };
+            var to = new TextBox { Text = "100", Width = 70 };
+            var percent = new TextBox { Text = "100", Width = 70 };
+            var preview = new TextBlock { Opacity = 0.8 };
+
+            // The choice as typed, with the volume bounds in order; false while a box isn't a valid number.
+            bool Read(out VolumeScope s, out int low, out int high, out double p)
+            {
+                s = scopes[Math.Max(0, scope.SelectedIndex)].Scope;
+                p = 0;
+                bool ok = OsuNumber.TryParseInt(from.Text ?? "", out int a) & OsuNumber.TryParseInt(to.Text ?? "", out int b)
+                          && OsuNumber.TryParseDouble(percent.Text ?? "", out p) && double.IsFinite(p) && p >= 0;
+                (low, high) = (Math.Min(a, b), Math.Max(a, b));
+                return ok && low >= 0 && high <= 100;
+            }
+
+            void Update() => preview.Text = Read(out var s, out int a, out int b, out _)
+                ? count(s, a, b) switch { 1 => "Changes 1 circle or slider end.", var n => $"Changes {n} circles and slider ends." }
+                : "Volumes are 0–100 %, and the scale is a percentage of at least 0. Scaled volumes stay 1–100 %.";
+
+            foreach (var box in new[] { from, to, percent }) box.TextChanged += (_, _) => Update();
+            scope.SelectionChanged += (_, _) => Update();
+            var range = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            range.Children.AddRange([from, new TextBlock { Text = "to", VerticalAlignment = VerticalAlignment.Center }, to, new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center }]);
+            body.Children.AddRange([
+                new TextBlock { Text = "Look at" }, scope,
+                new TextBlock { Text = "Circles and slider ends with a volume from" }, range,
+                new TextBlock { Text = "Scale by (%; 50 halves, 150 is half as loud again)" }, percent,
+                new TextBlock { Text = "A circle has one volume, so every lane on it changes, also lanes outside this choice.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
+                preview,
+            ]);
+            Update();
+            return (() =>
+            {
+                if (Read(out var s, out int a, out int b, out double p)) close((s, a, b, p));
+            }, "Scale");
         });
 
     /// <summary>The preferences form; the edited copy on OK, null on Cancel.</summary>

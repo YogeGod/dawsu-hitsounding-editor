@@ -137,4 +137,65 @@ public class HitEditorTests
         e.Model = Editor().Model;
         Assert.Empty(e.Selected);
     }
+
+    // ---- Range tool (docs/spec-wave1.md) ----
+
+    private static int RowOf(HitEditor e, string lane) =>
+        e.Model!.Rows.Select((r, i) => (r, i)).Single(x => x.r is LaneRow l && l.Lane.Name == lane).i;
+
+    [Fact]
+    public void A_range_covers_the_lanes_dragged_across_in_either_direction()
+    {
+        var e = Editor();
+        int normal = RowOf(e, "soft-hitnormal"), clap = RowOf(e, "soft-hitclap");
+
+        e.MarkRange(900, 1600, clap, normal);
+        Assert.Equal(["soft-hitclap", "soft-hitnormal"], e.Range!.Lanes.Select(l => l.Name).Order());
+
+        e.MarkRange(900, 1600, clap, clap);
+        Assert.Equal("soft-hitclap", Assert.Single(e.Range!.Lanes).Name);
+    }
+
+    [Fact]
+    public void A_range_snaps_its_ends_when_snap_is_on()
+    {
+        var e = Editor();
+        int clap = RowOf(e, "soft-hitclap");
+        e.MarkRange(1610, 1010, clap, clap);
+        Assert.Equal((1000.0, 1625.0), (e.Range!.Start, e.Range.End));
+
+        e.SnapOn = false;
+        e.MarkRange(1010, 1610, clap, clap);
+        Assert.Equal((1010.0, 1610.0), (e.Range!.Start, e.Range.End));
+    }
+
+    [Fact]
+    public void Editing_the_range_selects_the_copies_and_clearing_forgets_it()
+    {
+        var e = Editor();
+        int normal = RowOf(e, "soft-hitnormal"), clap = RowOf(e, "soft-hitclap");
+        e.MarkRange(1000, 1500, normal, clap);
+
+        e.EditRange(RangeOperation.Copy, 500);
+        Assert.Equal([1500.0, 1500], e.Selected.Select(h => h.Time));
+        Assert.Contains(Session(e).State.Hits, h => h.Time == 1500 && h.Lane.Name == "soft-hitclap");
+
+        e.ClearRange();
+        Assert.Null(e.Range);
+        Assert.Empty(e.EditRange(RangeOperation.Delete, 0));
+    }
+
+    // ---- Scale by volume ----
+
+    [Fact]
+    public void Scale_by_volume_looks_at_the_selection_its_lanes_or_everything()
+    {
+        var e = Editor(); // circles at 1000 (normal + clap) and 1500 (normal), both at volume 100
+        e.Select([Clap(e)]);
+
+        Assert.Single(e.MomentsToScale(VolumeScope.Selected, 1, 100));
+        Assert.Single(e.MomentsToScale(VolumeScope.SelectedLanes, 1, 100)); // the clap lane has only the circle at 1000
+        Assert.Equal(2, e.MomentsToScale(VolumeScope.All, 1, 100).Count);
+        Assert.Empty(e.MomentsToScale(VolumeScope.All, 1, 99));
+    }
 }
