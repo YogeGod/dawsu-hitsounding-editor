@@ -28,15 +28,55 @@ public static class Decompiler
 
     public static DecompiledMap Decompile(OsuFile file, MapFolder folder) => new Run(file, folder).Decompile();
 
-    private sealed class Run(OsuFile file, MapFolder folder)
+    /// <summary>What a timing point gives the sounds that read it: its set (0 means the map default), index and volume.</summary>
+    internal static (SampleSet Set, int Index, int Volume) PointState(TimingPoint? point, MapSettings settings) => (
+        DecodeSet(point?.SampleSet ?? SampleSet.None, settings.DefaultSampleSet),
+        Math.Max(point?.SampleIndex ?? 0, 0),
+        Math.Clamp(point?.Volume ?? 100, 0, 100));
+
+    /// <summary>A sample-set field as it plays: None inherits; unknown set numbers act as Normal (lazer; unverified for stable).</summary>
+    internal static SampleSet DecodeSet(SampleSet field, SampleSet inherited) =>
+        field is SampleSet.None ? inherited : field is > SampleSet.None and <= SampleSet.Drum ? field : SampleSet.Normal;
+
+    /// <summary>Index ≥ 1 plays the map's file when it exists (wav, mp3, ogg); otherwise, and for index 0, the skin's.</summary>
+    internal static Lane ResolveLane(MapFolder folder, SampleSet set, string sound, int index) =>
+        HitsoundRules.BeatmapSampleName(set, sound, index) is { } name && folder.FindSample(name) is { } file
+            ? new Lane(LaneSource.BeatmapFile, file)
+            : new Lane(LaneSource.Skin, HitsoundRules.SampleName(set, sound));
+
+    /// <summary>
+    /// One moment as it plays now, after the timing points changed: the same object and node, read again with
+    /// <paramref name="timing"/>. Much cheaper than decompiling the whole map again.
+    /// </summary>
+    internal static Moment MomentNow(OsuFile file, MapFolder folder, MapSettings settings, TimingPointIndex timing, Moment moment) =>
+        new Run(file, folder, settings, timing).Reread(moment);
+
+    private sealed class Run(OsuFile file, MapFolder folder, MapSettings? knownSettings = null, TimingPointIndex? knownTiming = null)
     {
-        private readonly MapSettings settings = MapSettings.Read(file);
+        private readonly MapSettings settings = knownSettings ?? MapSettings.Read(file);
         private readonly List<string> warnings = [];
         private readonly Dictionary<Lane, Lane> lanes = [];
         private readonly Dictionary<(SampleSet, string, int), Lane> resolved = [];
         private readonly List<Moment> moments = [];
         private readonly List<PassiveSound> passive = [];
-        private TimingPointIndex timing = null!; // built first in Decompile, so its warnings come first
+        private TimingPointIndex timing = knownTiming!; // otherwise built first in Decompile, so its warnings come first
+
+        public Moment Reread(Moment m)
+        {
+            var obj = m.Object;
+            double time = m.Time - settings.TimeOffset;
+            if (obj.Kind == HitObjectKind.Slider)
+            {
+                var (normal, addition) = obj.NodeSets[m.Node];
+                AddMoment(obj, m.Node, m.Position, time, obj.NodeSounds[m.Node], new HitSample(normal, addition, 0, 0, null), objectLevel: false);
+            }
+            else
+            {
+                AddMoment(obj, 0, m.Position, time, obj.HitSound, obj.HitSample ?? default, objectLevel: true);
+            }
+
+            return moments[^1];
+        }
 
         public DecompiledMap Decompile()
         {
@@ -160,28 +200,19 @@ public static class Decompiler
         private Settled Settle(double time, HitSample sample, bool objectLevel)
         {
             var point = timing.SamplePointAt(time);
-            var pointSet = Known(point?.SampleSet ?? SampleSet.None) is var set && set != SampleSet.None ? set : settings.DefaultSampleSet;
-            int pointIndex = Math.Max(point?.SampleIndex ?? 0, 0);
-            int pointVolume = Math.Clamp(point?.Volume ?? 100, 0, 100);
+            var (pointSet, pointIndex, pointVolume) = PointState(point, settings);
 
-            var normal = Known(sample.NormalSet) is var n && n != SampleSet.None ? n : pointSet;
-            var addition = Known(sample.AdditionSet) is var a && a != SampleSet.None ? a : normal;
+            var normal = DecodeSet(sample.NormalSet, pointSet);
+            var addition = DecodeSet(sample.AdditionSet, normal);
             int index = objectLevel && sample.Index > 0 ? sample.Index : pointIndex;
             int volume = objectLevel && sample.Volume > 0 ? Math.Min(sample.Volume, 100) : pointVolume;
             return new Settled(normal, addition, index, volume, point);
         }
 
-        /// <summary>Unknown set numbers act as Normal (lazer; unverified for stable).</summary>
-        private static SampleSet Known(SampleSet set) => set is >= SampleSet.None and <= SampleSet.Drum ? set : SampleSet.Normal;
-
-        /// <summary>Index ≥ 1 plays the map's file when it exists (wav, mp3, ogg); otherwise, and for index 0, the skin's.</summary>
         private Lane Resolve(SampleSet set, string sound, int index)
         {
             if (resolved.TryGetValue((set, sound, index), out var lane)) return lane;
-            lane = HitsoundRules.BeatmapSampleName(set, sound, index) is { } name && folder.FindSample(name) is { } file
-                ? new Lane(LaneSource.BeatmapFile, file)
-                : new Lane(LaneSource.Skin, HitsoundRules.SampleName(set, sound));
-            return resolved[(set, sound, index)] = Intern(lane);
+            return resolved[(set, sound, index)] = Intern(ResolveLane(folder, set, sound, index));
         }
 
         private Lane FileLane(string path, LaneSource source)

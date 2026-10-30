@@ -122,6 +122,37 @@ public sealed class HitObject(OsuLine line) : FieldLine(line)
         }
     }
 
+    /// <summary>
+    /// Sets the hitSound of one slider node. The edgeSounds list is filled out to every node with what each node plays
+    /// now, so the other nodes keep their sounds; an unchanged value changes nothing.
+    /// </summary>
+    public void SetNodeSound(int node, HitSound sound)
+    {
+        // What every node plays now, keeping any extra entries a map has past the last node.
+        var sounds = NodeSounds.Concat(EdgeSounds.Skip(NodeCount)).ToArray();
+        if (sounds[node] == sound && EdgeSounds.Length > node) return;
+        sounds[node] = sound;
+        SetField(EdgeSoundsField, string.Join('|', sounds.Select(s => ((int)s).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+    }
+
+    /// <summary>
+    /// Sets the normal:addition banks of one slider node (None = inherit from the timing point). Other entries are kept
+    /// as written; missing or empty ones are filled with the banks they play now (the slider's own).
+    /// </summary>
+    public void SetNodeSet(int node, SampleSet normal, SampleSet addition)
+    {
+        Require(HitObjectKind.Slider);
+        var own = HitSample ?? default;
+        var entries = Field(EdgeSetsField) is { Length: > 0 } s ? s.Split('|') : [];
+        var updated = new string[Math.Max(NodeCount, entries.Length)];
+        for (int i = 0; i < updated.Length; i++)
+            updated[i] = i == node ? $"{(int)normal}:{(int)addition}"
+                : i < entries.Length && entries[i].Length > 0 ? entries[i]
+                : $"{(int)own.NormalSet}:{(int)own.AdditionSet}";
+        var text = string.Join('|', updated);
+        if (text != Field(EdgeSetsField)) SetField(EdgeSetsField, text);
+    }
+
     /// <summary>The slider's control points after the start position, from the curve field (e.g. "B|200:100|300:192").</summary>
     public (double X, double Y)[] CurvePoints
     {

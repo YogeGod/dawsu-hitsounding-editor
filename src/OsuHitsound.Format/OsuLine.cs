@@ -28,6 +28,9 @@ public sealed class OsuLine
 
     public bool IsEdited { get; private set; }
 
+    /// <summary>A line the editor added; it counts as edited and is written from its text.</summary>
+    internal void MarkInserted() => IsEdited = true;
+
     public string Text
     {
         get => text;

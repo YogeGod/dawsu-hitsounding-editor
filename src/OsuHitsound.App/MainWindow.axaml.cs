@@ -15,7 +15,8 @@ namespace OsuHitsound.App;
 /// </summary>
 public partial class MainWindow : Window
 {
-    private static readonly int[] Divisors = [1, 2, 4, 8, 16, 3, 6];
+    // Beat snap divisors, as in osu!'s editor plus 1/5, 1/7 and 1/9.
+    private static readonly int[] Divisors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16];
 
     private readonly AudioEngine? audio;
     private readonly string? audioError;
@@ -62,6 +63,8 @@ public partial class MainWindow : Window
         LaneDetailsToggle.IsCheckedChanged += (_, _) => { Lanes.ShowIndexes = LaneDetailsToggle.IsChecked == true; Lanes.InvalidateVisual(); };
         VolumeToggle.IsCheckedChanged += (_, _) => ApplyTheme();
         VolumeTab.IsCheckedChanged += (_, _) => { Volume.IsVisible = VolumeTab.IsChecked == true; SavedText.IsVisible = !Volume.IsVisible; };
+        SnapBox.ItemsSource = Divisors.Select(d => $"1/{d}").ToList();
+        SnapBox.SelectedIndex = Array.IndexOf(Divisors, 4);
         SnapBox.SelectionChanged += (_, _) => UpdateLcd();
         ZoomSlider.ValueChanged += (_, e) => { if (!syncingScroll) Lanes.Axis.Zoom = ZoomFromSlider(e.NewValue); };
         ZoomInItem.Click += (_, _) => Lanes.Axis.ZoomAt(1.25, 0);

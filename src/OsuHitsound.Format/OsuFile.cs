@@ -8,20 +8,23 @@ namespace OsuHitsound.Format;
 /// </summary>
 public sealed class OsuFile
 {
+    private readonly List<OsuLine> lines;
+    private readonly List<TimingPoint> timingPoints;
+
     private OsuFile(bool hasBom, List<OsuLine> lines, List<TimingPoint> timingPoints, List<HitObject> hitObjects)
     {
         HasBom = hasBom;
-        Lines = lines;
-        TimingPoints = timingPoints;
+        this.lines = lines;
+        this.timingPoints = timingPoints;
         HitObjects = hitObjects;
     }
 
     public bool HasBom { get; }
 
-    public IReadOnlyList<OsuLine> Lines { get; }
+    public IReadOnlyList<OsuLine> Lines => lines;
 
     /// <summary>In file order.</summary>
-    public IReadOnlyList<TimingPoint> TimingPoints { get; }
+    public IReadOnlyList<TimingPoint> TimingPoints => timingPoints;
 
     /// <summary>In file order.</summary>
     public IReadOnlyList<HitObject> HitObjects { get; }
@@ -75,6 +78,40 @@ public sealed class OsuFile
     }
 
     public void Write(string path) => File.WriteAllBytes(path, ToBytes());
+
+    /// <summary>
+    /// Inserts a timing point line after the last one (in file order) at or before its time, so it wins over points at
+    /// the same time (the later line wins). Its line ending copies the neighbouring line's.
+    /// </summary>
+    public TimingPoint InsertTimingPoint(string text)
+    {
+        double time = OsuNumber.ParseDouble(text.Split(',')[0]);
+        if (timingPoints.Count == 0) throw new InvalidOperationException("The map has no timing points to insert next to.");
+
+        int after = -1;
+        for (int i = 0; i < timingPoints.Count; i++)
+        {
+            try
+            {
+                if (timingPoints[i].Time <= time) after = i;
+            }
+            catch (FormatException)
+            {
+            }
+        }
+
+        var neighbour = timingPoints[Math.Max(after, 0)].Line;
+        if (after >= 0 && neighbour.Terminator.Length == 0)
+            throw new InvalidOperationException("The last timing point ends the file without a newline; nothing can follow it.");
+        var terminator = neighbour.Terminator.Length > 0 ? neighbour.Terminator : "\r\n"u8.ToArray();
+        var line = new OsuLine(Encoding.UTF8.GetBytes(text), text, terminator, "TimingPoints");
+        line.MarkInserted();
+        int lineIndex = lines.IndexOf(neighbour) + (after >= 0 ? 1 : 0);
+        lines.Insert(lineIndex, line);
+        var point = new TimingPoint(line);
+        timingPoints.Insert(after + 1, point);
+        return point;
+    }
 
     private static bool IsData(string text)
     {

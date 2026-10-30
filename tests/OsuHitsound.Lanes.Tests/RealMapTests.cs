@@ -56,7 +56,33 @@ public class RealMapTests
         Assert.Equal(40, first.Volume);
     }
 
-    private static string RepoRoot()
+    [Fact]
+    public void Catalyst_compiles_unchanged_and_takes_slider_head_volumes_through_green_lines()
+    {
+        if (!File.Exists(Catalyst)) return; // only on the author's machine
+
+        var file = OsuFile.Read(Catalyst);
+        var folder = MapFolder.FromDirectory(Path.GetDirectoryName(Catalyst)!);
+        Assert.Empty(Compiler.Apply(file, folder, new Dictionary<MomentKey, WantedSound>()).Conflicts);
+        Assert.False(file.IsEdited);
+
+        var map = Decompiler.Decompile(file, folder);
+        var heads = map.Moments.Where(m => m.Position == HitPosition.SliderHead).ToList();
+        var wanted = heads.ToDictionary(m => Compiler.KeyOf(file, m), m => Compiler.AsWanted(m) with { Volume = 50 });
+        int pointsBefore = file.TimingPoints.Count;
+
+        var result = Compiler.Apply(file, folder, wanted);
+
+        Assert.DoesNotContain(result.Conflicts, c => c.Reason.Contains("report"));
+        Assert.True(result.TimingPointsAdded > 0);
+        Assert.Equal(pointsBefore + result.TimingPointsAdded, file.TimingPoints.Count);
+        var after = Decompiler.Decompile(file, folder);
+        var conflicted = result.Conflicts.Select(c => c.Moment).ToHashSet();
+        Assert.All(after.Moments.Where(m => m.Position == HitPosition.SliderHead && !conflicted.Contains(Compiler.KeyOf(file, m))),
+            m => Assert.Equal(50, m.Volume));
+    }
+
+    internal static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !dir.EnumerateFiles("*.slnx").Any()) dir = dir.Parent;

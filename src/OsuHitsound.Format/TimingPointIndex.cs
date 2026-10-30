@@ -38,6 +38,9 @@ public sealed class TimingPointIndex
     /// <summary>The red line (BPM) in effect at <paramref name="time"/>.</summary>
     public TimingPoint? RedLineAt(double time) => AtOrBefore(red, time);
 
+    /// <summary>The last point at or before <paramref name="time"/> itself, with no leniency (null before the first).</summary>
+    public TimingPoint? PointAt(double time) => AtOrBefore(all, time, fallBackToFirst: false);
+
     /// <summary>Slider velocity multiplier at <paramref name="time"/> (red lines reset it to 1) and whether ticks are on (NaN green lines turn them off).</summary>
     public (double Velocity, bool Ticks) SliderVelocityAt(double time)
     {
