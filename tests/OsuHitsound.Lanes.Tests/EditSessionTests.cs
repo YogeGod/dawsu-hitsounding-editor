@@ -127,4 +127,33 @@ public class EditSessionTests
         s.Undo();
         Assert.Equal([500, 1500], s.State.Bookmarks);
     }
+
+    [Fact]
+    public void Setting_a_volume_to_its_current_value_is_not_an_edit()
+    {
+        var (s, _, _) = Load("256,192,1000,1,0,0:0:0:0:");
+        int changes = 0;
+        s.Changed += () => changes++;
+        s.SetVolume([s.State.Hits[0].Anchor!.Value], 100);
+        Assert.Equal(0, changes);
+        Assert.False(s.CanUndo);
+    }
+
+    [Fact]
+    public void A_drag_that_returns_to_its_start_still_announces_the_change_back()
+    {
+        var (s, _, _) = Load("256,192,1000,1,0,0:0:0:0:");
+        var key = s.State.Hits[0].Anchor!.Value;
+        int changes = 0;
+        s.Changed += () => changes++;
+        s.BeginGesture();
+        s.SetVolume([key], 40);
+        s.ResetToGestureStart();
+        s.SetVolume([key], 100); // back where it started: no new state, but listeners must hear about it
+        s.EndGesture();
+
+        Assert.Equal(2, changes);
+        Assert.Equal(100, s.State.Volumes[key]);
+        Assert.False(s.CanUndo);
+    }
 }

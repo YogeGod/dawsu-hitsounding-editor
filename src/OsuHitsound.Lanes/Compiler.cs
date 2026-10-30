@@ -62,8 +62,7 @@ public static partial class Compiler
         public bool IsSkin => Index == 0;
     }
 
-    [GeneratedRegex(@"^(normal|soft|drum)-(hitnormal|hitwhistle|hitfinish|hitclap)([0-9]*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex SampleName();
+    private static readonly string[] HitSounds = ["hitnormal", "hitwhistle", "hitfinish", "hitclap"];
 
     private static Parsed? Parse(Lane lane)
     {
@@ -71,17 +70,10 @@ public static partial class Compiler
         var name = lane.Source == LaneSource.Skin ? lane.Name : Path.GetFileNameWithoutExtension(lane.Name);
         if (lane.Source == LaneSource.BeatmapFile && (lane.Name.Contains('/') || !HitsoundRules.SampleExtensions.Contains(Path.GetExtension(lane.Name).ToLowerInvariant())))
             return null;
-        var m = SampleName().Match(name);
-        if (!m.Success) return null;
-        var set = Enum.Parse<SampleSet>(m.Groups[1].Value, ignoreCase: true);
-        var sound = m.Groups[2].Value.ToLowerInvariant();
-        string digits = m.Groups[3].Value;
-        if (lane.Source == LaneSource.Skin) return digits.Length == 0 ? new Parsed(lane, set, sound, 0) : null;
         // Index 1 has no number; "soft-hitclap1" or "soft-hitclap0" are only reachable through the filename field.
-        if (digits.Length == 0) return new Parsed(lane, set, sound, 1);
-        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out int index) && index >= 2 && digits[0] != '0'
-            ? new Parsed(lane, set, sound, index)
-            : null;
+        if (HitsoundRules.ParseSampleName(name) is not (var set, var sound, var index) || !HitSounds.Contains(sound)) return null;
+        if (lane.Source == LaneSource.Skin) return index == 1 && string.Equals(name, HitsoundRules.SampleName(set, sound), StringComparison.OrdinalIgnoreCase) ? new Parsed(lane, set, sound, 0) : null;
+        return new Parsed(lane, set, sound, index);
     }
 
     private sealed class Run(OsuFile file, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted)

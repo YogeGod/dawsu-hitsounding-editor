@@ -5,13 +5,26 @@ using OsuHitsound.Format;
 namespace OsuHitsound.Lanes;
 
 /// <summary>One generated sample: these lanes mixed at these volumes into a new file in the mapset.</summary>
-public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volume)> Layers);
+public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volume)> Layers)
+{
+    /// <summary>What the mix contains, as text: equal signatures make equal files.</summary>
+    public string Signature => SignatureOf(Layers);
+
+    public static string SignatureOf(IEnumerable<(Lane Lane, int Volume)> layers) => string.Join(';', layers.Select(l => $"{ProjectStore.KeyOf(l.Lane)}@{l.Volume}"));
+}
 
 /// <summary>
 /// What Generate will write: the [Hitsounds] diff (path and contents), the mixes to render first, the circle count,
 /// and anything that still can't be saved.
 /// </summary>
-public sealed record GeneratePlan(string OsuPath, OsuFile Diff, IReadOnlyList<MixFile> Mixes, int Circles, IReadOnlyList<Conflict> Conflicts);
+public sealed record GeneratePlan(string OsuPath, OsuFile Diff, IReadOnlyList<MixFile> Mixes, int Circles, IReadOnlyList<Conflict> Conflicts)
+{
+    /// <summary>Mixes from the previous Generate that are used again as they are (not rewritten).</summary>
+    public IReadOnlyList<GeneratedMix> Reused { get; init; } = [];
+
+    /// <summary>The previous Generate's mixes that nothing will use any more: removed after the diff is written (or overwritten by a new mix of the same name).</summary>
+    public IReadOnlyList<string> Removes { get; init; } = [];
+}
 
 /// <summary>
 /// Generate mode: every placed sound becomes a circle at its time in a separate [Hitsounds] difficulty, for Mapping
@@ -23,7 +36,7 @@ public static class HitsoundDiff
 {
     public const string Version = "Hitsounds";
 
-    public static GeneratePlan Plan(OsuFile source, string sourcePath, MapFolder folder, EditSession session)
+    public static GeneratePlan Plan(OsuFile source, string sourcePath, MapFolder folder, EditSession session, GenerateManifest? previous = null)
     {
         double offset = session.Map.Settings.TimeOffset;
 
@@ -44,34 +57,50 @@ public static class HitsoundDiff
             if (groups[i].Layers.Select(l => l.Volume).Distinct().Count() > 1) needsMix.Add(i);
 
         var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(sourcePath))!, FileNameFor(source, sourcePath));
-        if (needsMix.Count == 0) return new GeneratePlan(path, direct, [], groups.Count, first.Conflicts);
 
         // 3. Mix files on fresh indexes; identical layer sets share one. Volumes below stable's 8 % play at 8 %.
-        int next = FirstFreeIndex(folder);
+        //    A mix the previous Generate already wrote with the same contents keeps its file (and index).
+        var layered = groups.Select(g => g.Layers.Where(l => !l.Lane.Missing)
+            .Select(l => (l.Lane, Volume: Math.Max(l.Volume, HitsoundRules.StableMinimumVolume)))
+            .OrderBy(l => ProjectStore.KeyOf(l.Lane)).ToList()).ToList();
+        var neededSignatures = needsMix.Where(i => layered[i].Count > 0).Select(i => MixFile.SignatureOf(layered[i])).ToHashSet();
+
+        // The previous mixes still in the mapset with their bytes unchanged; the diff being replaced doesn't count as a user.
+        var ours = (previous?.Mixes ?? []).Where(m => Path.GetFileName(m.FileName) == m.FileName && IndexOf(m.FileName) is not null && folder.Find(m.FileName) is { } f && GenerateManifest.Hash(folder.ReadBytes(f)) == m.Sha256)
+            .GroupBy(m => m.Signature).Select(g => g.First()).ToList();
+        var usedByOthers = IndexesUsed(folder, except: Path.GetFileName(path));
+        var reused = ours.Where(m => neededSignatures.Contains(m.Signature)).ToDictionary(m => m.Signature, m => m.FileName);
+        var removable = ours.Where(m => !reused.ContainsValue(m.FileName) && !(IndexOf(m.FileName) is { } n && usedByOthers.Contains(n)))
+            .Select(m => m.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int next = Math.Max(MaxFileIndex(folder.Files.Where(f => !removable.Contains(f))), usedByOthers.DefaultIfEmpty(1).Max()) + 1;
+
         var mixes = new Dictionary<string, MixFile>();
         var wishes = new List<WantedSound>();
         for (int i = 0; i < groups.Count; i++)
         {
-            var layers = groups[i].Layers.Where(l => !l.Lane.Missing)
-                .Select(l => (l.Lane, Volume: Math.Max(l.Volume, HitsoundRules.StableMinimumVolume)))
-                .OrderBy(l => ProjectStore.KeyOf(l.Lane)).ToList();
+            var layers = layered[i];
             if (!needsMix.Contains(i) || layers.Count == 0)
             {
                 wishes.Add(Wish(groups[i].Layers));
                 continue;
             }
 
-            string signature = string.Join(';', layers.Select(l => $"{ProjectStore.KeyOf(l.Lane)}@{l.Volume}"));
+            string signature = MixFile.SignatureOf(layers);
             if (!mixes.TryGetValue(signature, out var mix))
-                mixes[signature] = mix = new MixFile($"soft-hitnormal{next++}.wav", layers);
+                mixes[signature] = mix = new MixFile(reused.GetValueOrDefault(signature) ?? $"soft-hitnormal{next++}.wav", layers);
             wishes.Add(new WantedSound([new Lane(LaneSource.BeatmapFile, mix.FileName)], 100));
         }
 
         // 4. The final diff, compiled against the folder as it will be (with the mixes in it).
-        var withMixes = new MapFolder(folder.Files.Concat(mixes.Values.Select(m => m.FileName)));
+        var withMixes = new MapFolder(folder.Files.Concat(mixes.Values.Select(m => m.FileName)).Distinct(StringComparer.OrdinalIgnoreCase));
         var final = OsuFile.Parse(diffBytes);
         var result = Compiler.Apply(final, withMixes, Wishes(final, withMixes, wishes));
-        return new GeneratePlan(path, final, [.. mixes.Values], groups.Count, result.Conflicts);
+        var keep = previous?.Mixes.Where(m => reused.ContainsValue(m.FileName)).ToList() ?? [];
+        return new GeneratePlan(path, final, [.. mixes.Values.Where(m => !reused.ContainsValue(m.FileName))], groups.Count, result.Conflicts)
+        {
+            Reused = keep,
+            Removes = [.. removable],
+        };
     }
 
     private static WantedSound Wish(List<(Lane Lane, int Volume)> layers) =>
@@ -137,16 +166,22 @@ public static class HitsoundDiff
     /// (timing points and hit samples), so a new file can't change how another difficulty sounds. A difficulty that can't be
     /// read stops it (IOException) rather than being skipped.
     /// </summary>
-    public static int FirstFreeIndex(MapFolder folder)
-    {
-        int max = 1;
-        foreach (var name in folder.Files)
-        {
-            var m = System.Text.RegularExpressions.Regex.Match(Path.GetFileNameWithoutExtension(name), @"^(normal|soft|drum)-[a-z]+(\d+)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (m.Success && int.TryParse(m.Groups[2].Value, out int n)) max = Math.Max(max, n);
-        }
+    public static int FirstFreeIndex(MapFolder folder) => Math.Max(MaxFileIndex(folder.Files), IndexesUsed(folder, except: null).DefaultIfEmpty(1).Max()) + 1;
 
-        foreach (var name in folder.Files.Where(f => f.EndsWith(".osu", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".osb", StringComparison.OrdinalIgnoreCase)))
+    /// <summary>The index in a sample file name ("soft-hitnormal7.wav" → 7), or null.</summary>
+    public static int? IndexOf(string fileName) => HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(fileName))?.Index;
+
+    private static int MaxFileIndex(IEnumerable<string> files) => files.Select(IndexOf).OfType<int>().DefaultIfEmpty(1).Max();
+
+    /// <summary>
+    /// Every sample index the folder's .osu and .osb files use (timing points and hit samples), except in the file named
+    /// <paramref name="except"/>. Fails closed: a file that can't be read throws IOException.
+    /// </summary>
+    private static HashSet<int> IndexesUsed(MapFolder folder, string? except)
+    {
+        var used = new HashSet<int>();
+        foreach (var name in folder.Files.Where(f => (f.EndsWith(".osu", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".osb", StringComparison.OrdinalIgnoreCase))
+                                                     && !string.Equals(f, except, StringComparison.OrdinalIgnoreCase)))
         {
             OsuFile file;
             try
@@ -160,11 +195,11 @@ public static class HitsoundDiff
             }
 
             foreach (var p in file.TimingPoints)
-                try { max = Math.Max(max, p.SampleIndex ?? 0); } catch (FormatException) { }
+                try { if (p.SampleIndex is > 0 and var i) used.Add(i); } catch (FormatException) { }
             foreach (var o in file.HitObjects)
-                try { max = Math.Max(max, o.HitSample?.Index ?? 0); } catch (Exception e) when (e is FormatException or InvalidOperationException) { }
+                try { if (o.HitSample?.Index is > 0 and var i) used.Add(i); } catch (Exception e) when (e is FormatException or InvalidOperationException) { }
         }
 
-        return max + 1;
+        return used;
     }
 }

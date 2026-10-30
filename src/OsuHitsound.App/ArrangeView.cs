@@ -33,13 +33,13 @@ internal sealed class ArrangeView : Control
     public static double GridLeft => NumberWidth + ListWidth;
     public static double SectionsHeight => Theme_.Number("header.sections");
     public const double RulerHeight = 24;
-    public static double HeaderHeight => RulerBottom + WaveHeight + ObjectsHeight;
+    public double HeaderHeight => RulerBottom + WaveHeight + ObjectsHeight;
 
     /// <summary>Bottom of the ruler: the waveform lane and the object strip sit between it and the lanes.</summary>
     public static double RulerBottom => SectionsHeight + RulerHeight;
 
     /// <summary>Height of the waveform lane; drag the line under it to resize, double-click to reset.</summary>
-    public static double WaveHeight { get; set; } = DefaultWaveHeight;
+    public double WaveHeight { get; set; } = DefaultWaveHeight;
 
     public const double DefaultWaveHeight = 44, ObjectsHeight = 26;
     public const double MinRowHeight = 16, MaxRowHeight = 64;
@@ -52,7 +52,7 @@ internal sealed class ArrangeView : Control
 
     private double? rowHeight; // set by Ctrl+Alt+wheel; null follows the theme
     private double scrollY;
-    private readonly HashSet<EditHit> selection = [];
+    private HashSet<EditHit> selection => Edits.Selected;
 
     // The gesture in progress.
     private enum Drag
@@ -79,6 +79,11 @@ internal sealed class ArrangeView : Control
     {
         ClipToBounds = true;
         Focusable = true;
+        Edits.Changed += () =>
+        {
+            SelectionChanged?.Invoke();
+            InvalidateVisual();
+        };
     }
 
     /// <summary>Row height in px (vertical zoom, Ctrl+Alt+wheel). Design G's compact rows are 22 px.</summary>
@@ -101,6 +106,9 @@ internal sealed class ArrangeView : Control
 
     public ArrangeModel? Model { get; private set; }
 
+    /// <summary>The selection and the editing commands (keyboard and menus).</summary>
+    public HitEditor Edits { get; } = new();
+
     private EditSession? Session => Model?.Session;
 
     public TimeAxis Axis { get; } = new();
@@ -111,9 +119,9 @@ internal sealed class ArrangeView : Control
     public Tool Tool { get; set; } = Tool.Select;
 
     /// <summary>Snap divisor (1/n of a beat) and whether snapping is on (J).</summary>
-    public int Divisor { get; set; } = 4;
+    public int Divisor { get => Edits.Divisor; set => Edits.Divisor = value; }
 
-    public bool SnapOn { get; set; } = true;
+    public bool SnapOn { get => Edits.SnapOn; set => Edits.SnapOn = value; }
 
     /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
     public bool ShowIndexes { get; set; } = true;
@@ -121,7 +129,7 @@ internal sealed class ArrangeView : Control
     public IReadOnlyCollection<EditHit> Selection => selection;
 
     /// <summary>The moments the selected hits play on.</summary>
-    public IReadOnlySet<MomentKey> SelectedMoments => selection.Where(h => h.Anchor is not null).Select(h => h.Anchor!.Value).ToHashSet();
+    public IReadOnlySet<MomentKey> SelectedMoments => Edits.SelectedMoments;
 
     public event Action<Lane>? PreviewRequested;
 
@@ -172,7 +180,7 @@ internal sealed class ArrangeView : Control
         Model = model;
         if (model is not null) model.Changed += InvalidateVisual;
         scrollY = 0;
-        selection.Clear();
+        Edits.Model = model;
         drag = Drag.None;
         Axis.End = model?.LastTime ?? 0;
         InvalidateVisual();
@@ -632,7 +640,7 @@ internal sealed class ArrangeView : Control
         return i >= 0 ? notes![i].Hit : null;
     }
 
-    private double SnapTime(double time) => SnapOn && Model is { } m ? m.Snap(time, Divisor) : time;
+    private double SnapTime(double time) => Edits.SnapTime(time);
 
     /// <summary>The inspector part under a point, for Pick.</summary>
     public string PartAt(Point p)
@@ -849,7 +857,7 @@ internal sealed class ArrangeView : Control
                 int rowShift = RowIndexAt(p.Y) - RowIndexAt(dragStart.Y);
                 session.ResetToGestureStart();
                 selection.Clear();
-                selection.UnionWith(session.Move(dragHits, offset, h => ShiftLane(model, h.Lane, rowShift)));
+                selection.UnionWith(session.Move(dragHits, offset, h => HitEditor.ShiftLane(model, h.Lane, rowShift)));
                 break;
             }
 
@@ -921,15 +929,6 @@ internal sealed class ArrangeView : Control
         }
     }
 
-    /// <summary>The lane <paramref name="shift"/> visible lane rows away (group rows skipped), clamped to the list.</summary>
-    private static Lane ShiftLane(ArrangeModel model, Lane lane, int shift)
-    {
-        if (shift == 0) return lane;
-        var lanes = model.Rows.OfType<LaneRow>().Select(r => r.Lane).ToList();
-        int at = lanes.IndexOf(lane);
-        return at < 0 ? lane : lanes[Math.Clamp(at + shift, 0, lanes.Count - 1)];
-    }
-
 
     /// <summary>Double-clicking an object asks to hear its hits (at their moments' volumes).</summary>
     public event Action<IReadOnlyList<EditHit>>? HitsPreviewRequested;
@@ -949,117 +948,11 @@ internal sealed class ArrangeView : Control
         SeekRequested?.Invoke(onNode ? node.Time : o.Start);
         if (doubleClick) HitsPreviewRequested?.Invoke(hits);
     }
-    // ---------------------------------------------------------------- editing commands (keyboard and menus)
+    // ---------------------------------------------------------------- selection (the commands are in HitEditor)
 
-    private void SetSelection(IEnumerable<EditHit> hits)
-    {
-        selection.Clear();
-        selection.UnionWith(hits);
-        NotifySelection();
-    }
+    private void SetSelection(IEnumerable<EditHit> hits) => Edits.Select(hits);
 
-    private void NotifySelection()
-    {
-        SelectionChanged?.Invoke();
-        InvalidateVisual();
-    }
+    private void NotifySelection() => Edits.Notify();
 
-    /// <summary>Removes one hit and drops it from the selection (right-click, Draw strokes that start on a hit, Erase).</summary>
-    private void EraseHit(EditHit hit)
-    {
-        Session?.Remove([hit]);
-        selection.Remove(hit);
-    }
-
-    /// <summary>Moves the selected hits and keeps them selected.</summary>
-    private void MoveSelection(double offset, Func<EditHit, Lane> laneOf)
-    {
-        if (Session is not { } session || selection.Count == 0) return;
-        SetSelection(session.Move(selection.ToList(), offset, laneOf));
-    }
-
-    public void SelectAll()
-    {
-        if (Session is not null) SetSelection(Session.State.Hits);
-    }
-
-    public void ClearSelection() => SetSelection([]);
-
-    public void SelectWhere(Func<EditHit, bool> predicate)
-    {
-        if (Session is not null) SetSelection(Session.State.Hits.Where(predicate));
-    }
-
-    public void DeleteSelection()
-    {
-        if (Session is null || selection.Count == 0) return;
-        Session.Remove(selection.ToList());
-        ClearSelection();
-    }
-
-    /// <summary>Left/Right: by one snap step, keeping offsets (Alt: 1 ms). Ctrl+Left/Right: to the previous/next grid line.</summary>
-    public void Nudge(int direction, bool fine, bool toGrid)
-    {
-        if (Session is not { } session || Model is not { } model || selection.Count == 0) return;
-        var anchor = selection.MinBy(h => h.Time)!;
-        double offset;
-        if (fine) offset = direction;
-        else
-        {
-            double step = (model.RedLineAt(anchor.Time)?.BeatLength ?? 500) / Divisor;
-            offset = toGrid ? model.Snap(anchor.Time + direction * step * 0.51, Divisor) - anchor.Time : direction * step;
-            if (toGrid && Math.Abs(offset) < 1e-6) offset = direction * step;
-        }
-
-        MoveSelection(offset, h => h.Lane);
-    }
-
-    /// <summary>Ctrl+Up/Down: move the selection to the adjacent visible lane.</summary>
-    public void ShiftSelectedLanes(int direction)
-    {
-        if (Model is { } model) MoveSelection(0, h => ShiftLane(model, h.Lane, direction));
-    }
-
-    private List<(Lane Lane, double Offset)> clipboard = [];
-
-    public void Copy()
-    {
-        if (selection.Count == 0) return;
-        double start = selection.Min(h => h.Time);
-        clipboard = [.. selection.Select(h => (h.Lane, h.Time - start))];
-    }
-
-    public void Cut()
-    {
-        Copy();
-        DeleteSelection();
-    }
-
-    /// <summary>Pastes at <paramref name="time"/> (snapped), selecting the pasted hits.</summary>
-    public void Paste(double time)
-    {
-        if (Session is not { } session || clipboard.Count == 0) return;
-        double at = SnapTime(time);
-        var hits = clipboard.Select(c => session.HitAt(c.Lane, at + c.Offset)).Distinct().ToList();
-        session.Add(hits);
-        SetSelection(hits);
-    }
-
-    /// <summary>Ctrl+D: copies the selection right after itself (its length rounded up to a snap step).</summary>
-    public void Duplicate()
-    {
-        if (selection.Count == 0 || Model is not { } model) return;
-        double start = selection.Min(h => h.Time), end = selection.Max(h => h.Time);
-        double step = (model.RedLineAt(start)?.BeatLength ?? 500) / Divisor;
-        Copy();
-        Paste(start + Math.Max(step, Math.Ceiling((end - start + step / 2) / step) * step));
-    }
-
-    /// <summary>Drops selected hits that no longer exist (after undo or redo).</summary>
-    public void PruneSelection()
-    {
-        if (Session is null) return;
-        var present = Session.State.Hits.ToHashSet();
-        if (selection.RemoveWhere(h => !present.Contains(h)) > 0) SelectionChanged?.Invoke();
-    }
+    private void EraseHit(EditHit hit) => Edits.Erase(hit);
 }

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.Media;
 using OsuHitsound.Lanes;
 
@@ -147,14 +148,27 @@ internal sealed class VolumeLane : Control
         Apply(p);
     }
 
+    // Mouse moves arrive faster than frames: only the latest point is applied, once per frame.
+    private Point? pending;
+
     protected override void OnPointerMoved(PointerEventArgs e)
     {
-        if (gesture != Gesture.None) Apply(e.GetPosition(this));
+        if (gesture == Gesture.None) return;
+        bool scheduled = pending is not null;
+        pending = e.GetPosition(this);
+        if (!scheduled) Dispatcher.UIThread.Post(ApplyPending, DispatcherPriority.Render);
+    }
+
+    private void ApplyPending()
+    {
+        if (pending is { } p && gesture != Gesture.None) Apply(p);
+        pending = null;
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (gesture == Gesture.None) return;
+        ApplyPending();
         model?.Session.EndGesture();
         gesture = Gesture.None;
         dragging = null;

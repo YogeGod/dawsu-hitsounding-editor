@@ -23,6 +23,7 @@ AppBuilder.Configure<App>()
 
 var window = new MainWindow(args[0], startAudio: false, showInspector: false, usePreferences: false) { Width = 1920, Height = 1080 };
 window.Show();
+while (!window.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
 Pump();
 Save("01-open.png");
 

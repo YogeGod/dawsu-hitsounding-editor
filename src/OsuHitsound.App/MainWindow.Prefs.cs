@@ -126,6 +126,8 @@ public partial class MainWindow
             foreach (var lane in model.LaneRows.Select(r => r.Lane).Where(l => l.Source == LaneSource.BeatmapFile && !session.Lanes.Contains(l)))
                 if (folder.Find(lane.Name) is { } f) audio.LoadLane(lane, folder.ReadBytes(f));
             audio.IsAudible = model.IsAudible;
+            model.Silent = audio.SilentLanes; // which lanes have no sound may differ with other default sounds
+            Lanes.InvalidateVisual();
             (audio.Speed, audio.SongOffset, audio.SongVolume) = (speed, offset, (float)(SongVolumeSlider.Value / 100));
             UpdateSongMute();
             UpdateCues();

@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private (CompileResult Result, OsuFile File)? lastCompile;
     private bool closeConfirmed;
     private string? flash; // a one-off message (saved, not saved, close warning) shown until the next edit
+    private object? drawnHits; // the hit list the notes were last built from
 
     public MainWindow() : this(null, startAudio: true)
     {
@@ -142,6 +143,7 @@ public partial class MainWindow : Window
         };
         Closed += (_, _) =>
         {
+            loadNumber++; // a map still loading is dropped, not shown in a closed window
             compileCancel?.Cancel();
             frameTimer.Stop();
             UiTheme.Current.Changed -= OnThemeChanged;
@@ -160,19 +162,35 @@ public partial class MainWindow : Window
         if (path is not null) Open(path);
     }
 
-    /// <summary>Opens a map. Errors are shown in the status bar, never thrown.</summary>
-    public void Open(string path)
+    private int loadNumber; // a newer Open makes an older one still loading drop its result
+
+    /// <summary>The map loading now (completed when idle), for the headless snapshots.</summary>
+    internal Task Loading { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Opens a map: reading and decoding run off the UI thread. Errors are shown in the status bar, never thrown.</summary>
+    public Task Open(string path) => Loading = OpenAsync(path);
+
+    private async Task OpenAsync(string path)
     {
         // The current map's project first: a save still waiting for its timer must not be lost or land on the new map.
         SaveProject();
+        int number = ++loadNumber;
+        flash = $"Loading {Path.GetFileName(path)}…";
+        UpdateStatus();
+        var skinSounds = skin;
         try
         {
             var full = Path.GetFullPath(path);
-            var bytes = File.ReadAllBytes(full);
-            var file = OsuFile.Parse(bytes);
-            var mapFolder = MapFolder.FromDirectory(Path.GetDirectoryName(full)!);
-            var map = Decompiler.Decompile(file, mapFolder);
-            var editing = new EditSession(file, mapFolder, map);
+            var (bytes, file, mapFolder, map, editing) = await Task.Run(() =>
+            {
+                var bytes = File.ReadAllBytes(full);
+                var file = OsuFile.Parse(bytes);
+                var mapFolder = MapFolder.FromDirectory(Path.GetDirectoryName(full)!);
+                var map = Decompiler.Decompile(file, mapFolder);
+                _ = skinSounds.Value; // read the default sounds here too, the first time
+                return (bytes, file, mapFolder, map, new EditSession(file, mapFolder, map));
+            });
+            if (number != loadNumber) return;
 
             compileCancel?.Cancel();
             if (session is not null) session.Changed -= OnEdited;
@@ -205,6 +223,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException)
         {
+            if (number != loadNumber) return;
             flash = $"Couldn't open {Path.GetFileName(path)}: {ex.Message}";
             UpdateStatus();
         }
@@ -221,7 +240,7 @@ public partial class MainWindow : Window
             SuggestedStartLocation = prefs.SongsFolder is { } songs ? await StorageProvider.TryGetFolderFromPathAsync(songs) : null,
             FileTypeFilter = [new FilePickerFileType("osu! map") { Patterns = ["*.osu"] }],
         });
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } local) Open(local);
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { } local) await Open(local);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -275,21 +294,21 @@ public partial class MainWindow : Window
                 break;
             case "undo": session?.Undo(); break;
             case "redo": session?.Redo(); break;
-            case "copy": Lanes.Copy(); break;
-            case "cut": Lanes.Cut(); break;
-            case "paste": Lanes.Paste(Lanes.Playhead); break;
-            case "duplicate": Lanes.Duplicate(); break;
-            case "selectAll": Lanes.SelectAll(); break;
-            case "deselect": Lanes.ClearSelection(); break;
-            case "delete": Lanes.DeleteSelection(); break;
-            case "nudgeLeft": Lanes.Nudge(-1, fine: false, toGrid: false); break;
-            case "nudgeRight": Lanes.Nudge(1, fine: false, toGrid: false); break;
-            case "nudgeLeftFine": Lanes.Nudge(-1, fine: true, toGrid: false); break;
-            case "nudgeRightFine": Lanes.Nudge(1, fine: true, toGrid: false); break;
-            case "gridLeft": Lanes.Nudge(-1, fine: false, toGrid: true); break;
-            case "gridRight": Lanes.Nudge(1, fine: false, toGrid: true); break;
-            case "laneUp": Lanes.ShiftSelectedLanes(-1); break;
-            case "laneDown": Lanes.ShiftSelectedLanes(1); break;
+            case "copy": Lanes.Edits.Copy(); break;
+            case "cut": Lanes.Edits.Cut(); break;
+            case "paste": Lanes.Edits.Paste(Lanes.Playhead); break;
+            case "duplicate": Lanes.Edits.Duplicate(); break;
+            case "selectAll": Lanes.Edits.SelectAll(); break;
+            case "deselect": Lanes.Edits.Clear(); break;
+            case "delete": Lanes.Edits.DeleteSelection(); break;
+            case "nudgeLeft": Lanes.Edits.Nudge(-1, fine: false, toGrid: false); break;
+            case "nudgeRight": Lanes.Edits.Nudge(1, fine: false, toGrid: false); break;
+            case "nudgeLeftFine": Lanes.Edits.Nudge(-1, fine: true, toGrid: false); break;
+            case "nudgeRightFine": Lanes.Edits.Nudge(1, fine: true, toGrid: false); break;
+            case "gridLeft": Lanes.Edits.Nudge(-1, fine: false, toGrid: true); break;
+            case "gridRight": Lanes.Edits.Nudge(1, fine: false, toGrid: true); break;
+            case "laneUp": Lanes.Edits.ShiftLanes(-1); break;
+            case "laneDown": Lanes.Edits.ShiftLanes(1); break;
             case "zoomIn": Lanes.Axis.ZoomAt(1.25, Lanes.Axis.X(Lanes.Playhead)); break;
             case "zoomOut": Lanes.Axis.ZoomAt(0.8, Lanes.Axis.X(Lanes.Playhead)); break;
             case "filter": ShowFilter(); break;
@@ -363,7 +382,7 @@ public partial class MainWindow : Window
         if (session is null) return;
         int min = int.TryParse(VolumeMinBox.Text, out int a) ? a : 0, max = int.TryParse(VolumeMaxBox.Text, out int b) ? b : 100;
         var state = session.State;
-        Lanes.SelectWhere(h => h.Anchor is { } k && state.Volumes[k] >= min && state.Volumes[k] <= max);
+        Lanes.Edits.SelectWhere(h => h.Anchor is { } k && state.Volumes[k] >= min && state.Volumes[k] <= max);
     }
 
     /// <summary>P: the locators span the selection (its first to last hit), or the visible range when nothing is selected.</summary>
@@ -426,9 +445,16 @@ public partial class MainWindow : Window
     private void OnEdited()
     {
         if (model is null || session is null) return;
-        Lanes.PruneSelection();
-        model.RebuildNotes();
-        if (model.HasHiddenLanes) model.RefreshRows(); // a deleted lane whose hits came back (undo) shows again
+        if (!ReferenceEquals(session.State.Hits, drawnHits))
+        {
+            // Volume-only edits (bar drags, ramps) skip this: the notes and the selection only depend on the hits.
+            drawnHits = session.State.Hits;
+            Lanes.Edits.Prune();
+            model.RebuildNotes();
+            if (model.HasHiddenLanes) model.RefreshRows(); // a deleted lane whose hits came back (undo) shows again
+        }
+        else Lanes.InvalidateVisual();
+
         UpdateCues();
         Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
         closeConfirmed = false;
@@ -712,7 +738,7 @@ public partial class MainWindow : Window
         HScroll.Maximum = Math.Max(axis.End, 0);
         HScroll.ViewportSize = axis.VisibleDuration;
         HScroll.Value = axis.Left;
-        double visibleRows = Math.Max(0, Lanes.Bounds.Height - ArrangeView.HeaderHeight);
+        double visibleRows = Math.Max(0, Lanes.Bounds.Height - Lanes.HeaderHeight);
         VScroll.Maximum = Math.Max(0, Lanes.ContentHeight - visibleRows);
         VScroll.ViewportSize = visibleRows;
         VScroll.Value = Lanes.ScrollY;

@@ -212,7 +212,9 @@ public partial class MainWindow
             (plan, fresh) = await Task.Run(() =>
             {
                 var current = MapFolder.FromDirectory(Path.GetDirectoryName(path)!);
-                return (HitsoundDiff.Plan(OsuFile.Parse(opened), path, current, editing), current);
+                var source = OsuFile.Parse(opened);
+                var previous = GenerateManifest.Load(GenerateManifest.DefaultRoot(), Path.Combine(Path.GetDirectoryName(path)!, HitsoundDiff.FileNameFor(source, path)));
+                return (HitsoundDiff.Plan(source, path, current, editing, previous), current);
             });
         }
         catch (IOException ex)
@@ -236,7 +238,11 @@ public partial class MainWindow
             (plan.Mixes.Count > 0
                 ? $"{plan.Mixes.Count} mixed sample{(plan.Mixes.Count == 1 ? "" : "s")} will be written to the mapset ({string.Join(", ", plan.Mixes.Take(4).Select(m => m.FileName))}{(plan.Mixes.Count > 4 ? ", …" : "")}). " +
                   "Mixes that include default skin sounds contain that audio (non-commercial licence).\n\n"
-                : "No mixed samples are needed.\n\n") +
+                : "No new mixed samples are needed.\n\n") +
+            (plan.Reused.Count > 0 ? $"{plan.Reused.Count} mix(es) from the last Generate are used again as they are (same files, same indexes).\n\n" : "") +
+            (plan.Removes.Count > 0
+                ? $"{plan.Removes.Count} mix(es) from the last Generate that nothing uses any more will be removed ({string.Join(", ", plan.Removes.Take(4))}{(plan.Removes.Count > 4 ? ", …" : "")}).\n\n"
+                : "") +
             (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
             "Your opened map is not changed.";
         if (!await Dialogs.Confirm(this, "Generate hitsound diff", summary, "Generate")) return;
@@ -244,6 +250,7 @@ public partial class MainWindow
         var skinSounds = skin.Value;
         try
         {
+            string? note = null;
             await Task.Run(() =>
             {
                 // Each sample is read and decoded once, however many mixes use it.
@@ -263,10 +270,19 @@ public partial class MainWindow
                     return layers.Count == 0 ? null : SampleMixer.Mix(layers);
                 }
 
-                GenerateWriter.Write(plan, Render, MapSaver.DefaultBackupRoot());
+                var written = GenerateWriter.Write(plan, Render, MapSaver.DefaultBackupRoot());
+                try
+                {
+                    written.Manifest.Save(GenerateManifest.DefaultRoot(), plan.OsuPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The mapset is written; only reuse next time is lost (the next Generate takes fresh indexes).
+                    note = $" (Couldn't record its mixes for next time: {ex.Message})";
+                }
             });
-            flash = $"Generated {Path.GetFileName(plan.OsuPath)}: {plan.Circles} circles, {plan.Mixes.Count} mixed sample(s)." +
-                    (plan.Conflicts.Count > 0 ? $" {plan.Conflicts.Count} moment(s) couldn't be written." : "");
+            flash = $"Generated {Path.GetFileName(plan.OsuPath)}: {plan.Circles} circles, {plan.Mixes.Count} new and {plan.Reused.Count} reused mixed sample(s)." +
+                    (plan.Conflicts.Count > 0 ? $" {plan.Conflicts.Count} moment(s) couldn't be written." : "") + note;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

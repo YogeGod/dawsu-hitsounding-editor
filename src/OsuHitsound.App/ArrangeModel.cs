@@ -82,7 +82,7 @@ internal sealed partial class ArrangeModel
 
     public DecompiledMap Map { get; }
 
-    public IReadOnlySet<Lane> Silent { get; }
+    public IReadOnlySet<Lane> Silent { get; set; }
 
     public IReadOnlyDictionary<Lane, List<Note>> Notes { get; private set; } = new Dictionary<Lane, List<Note>>();
 
@@ -468,17 +468,8 @@ internal sealed partial class ArrangeModel
         });
     }
 
-    /// <summary>The custom index a lane plays as: the number at the end of a set-named file, 1 without one, 0 for the skin.</summary>
-    private static int? IndexOf(Lane lane)
-    {
-        if (lane.Source == LaneSource.Skin) return 0;
-        if (lane.Group == LaneGroup.OwnFiles) return null;
-        var match = TrailingNumber().Match(Path.GetFileNameWithoutExtension(lane.Name));
-        return match.Success ? int.Parse(match.Value) : 1;
-    }
-
-    [GeneratedRegex(@"\d+$")]
-    private static partial Regex TrailingNumber();
+    /// <summary>The custom index a lane plays as (0 for the skin); null for files osu! only plays by name.</summary>
+    private static int? IndexOf(Lane lane) => lane.Sample?.Index;
 
     private static List<Section> KiaiSections(OsuFile file, double offset)
     {

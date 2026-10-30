@@ -41,6 +41,7 @@ public sealed class EditSession
             [.. Moments.SelectMany(x => x.Moment.Hits.Select(h => new EditHit(h.Lane, x.Moment.Time, x.Key)))],
             Moments.ToImmutableDictionary(x => x.Key, x => x.Moment.Volume),
             [.. file.Bookmarks.Order()]);
+        announced = State;
         timeOffset = map.Settings.TimeOffset;
         Lanes = AllLanes(map, folder);
     }
@@ -109,11 +110,11 @@ public sealed class EditSession
         return moved.Distinct().ToList();
     }
 
-    public void SetVolume(IEnumerable<MomentKey> keys, int volume) => Change(s =>
+    public void SetVolume(IEnumerable<MomentKey> keys, int volume)
     {
         int v = Math.Clamp(volume, 0, 100);
-        return s with { Volumes = s.Volumes.SetItems(keys.Select(k => new KeyValuePair<MomentKey, int>(k, v))) };
-    });
+        SetVolumes(keys.Distinct().ToDictionary(k => k, _ => v));
+    }
 
     /// <summary>Puts back hits from a saved project (hits with no object): not an edit, so not an undo step.</summary>
     public void Restore(IEnumerable<EditHit> hits)
@@ -122,13 +123,16 @@ public sealed class EditSession
         var added = hits.Where(existing.Add).ToList();
         if (added.Count == 0) return;
         State = State with { Hits = State.Hits.AddRange(added) };
-        Changed?.Invoke();
+        Announce();
     }
 
     /// <summary>Sets several moments' volumes at once (ramps, paint strokes, relative edits); values are kept within 0–100.</summary>
-    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes) => Change(s => volumes.Count == 0 ? s : s with
+    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes) => Change(s =>
     {
-        Volumes = s.Volumes.SetItems(volumes.Select(kv => new KeyValuePair<MomentKey, int>(kv.Key, Math.Clamp(kv.Value, 0, 100)))),
+        // Only the values that differ: a drag that stays on the same value is not an edit (no redraw, no recompile).
+        var changed = volumes.Select(kv => new KeyValuePair<MomentKey, int>(kv.Key, Math.Clamp(kv.Value, 0, 100)))
+            .Where(kv => !s.Volumes.TryGetValue(kv.Key, out int old) || old != kv.Value).ToList();
+        return changed.Count == 0 ? s : s with { Volumes = s.Volumes.SetItems(changed) };
     });
 
     /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step.</summary>
@@ -158,7 +162,7 @@ public sealed class EditSession
         redo.Add(State);
         State = undo[^1];
         undo.RemoveAt(undo.Count - 1);
-        Changed?.Invoke();
+        Announce();
     }
 
     public void Redo()
@@ -167,7 +171,7 @@ public sealed class EditSession
         undo.Add(State);
         State = redo[^1];
         redo.RemoveAt(redo.Count - 1);
-        Changed?.Invoke();
+        Announce();
     }
 
     /// <summary>The compiler's input: every moment's lanes and volume. Hits with no object aren't included.</summary>
@@ -212,14 +216,27 @@ public sealed class EditSession
     private void Change(Func<EditState, EditState> edit)
     {
         var next = edit(State);
-        if (ReferenceEquals(next, State)) return;
-        if (gestureStart is null)
+        if (!ReferenceEquals(next, State))
         {
-            undo.Add(State);
-            redo.Clear();
+            if (gestureStart is null)
+            {
+                undo.Add(State);
+                redo.Clear();
+            }
+
+            State = next;
         }
 
-        State = next;
+        Announce(); // also after a drag went back to its start and then made no change
+    }
+
+    private EditState? announced;
+
+    /// <summary>Raises <see cref="Changed"/> when the state differs from the one last announced.</summary>
+    private void Announce()
+    {
+        if (ReferenceEquals(State, announced)) return;
+        announced = State;
         Changed?.Invoke();
     }
 

@@ -92,4 +92,71 @@ public class GenerateTests
         Assert.Equal(8, HitsoundDiff.FirstFreeIndex(folder));
         Assert.Equal(2, HitsoundDiff.FirstFreeIndex(new MapFolder([])));
     }
+
+    // ---- regenerating: reuse, refuse to touch changed files, remove what nothing uses
+
+    private const string Diff = "Band - Song (Me) [Hitsounds].osu";
+    private static readonly byte[] MixBytes = [1, 2, 3];
+
+    /// <summary>A map whose drum clap at 1250 (no hitnormal) needs a mix, in a folder that already has the previous
+    /// Generate's diff (using index 4) and its mix soft-hitnormal4.wav, plus any extra files.</summary>
+    private static (EditSession Session, OsuFile File, MapFolder Folder) Regenerating(Dictionary<string, byte[]> extra, Lane? clap = null)
+    {
+        var oldDiff = Encoding.UTF8.GetBytes(Header + "[HitObjects]\r\n256,192,1250,1,0,0:0:4:0:\r\n");
+        var bytes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase) { [Diff] = oldDiff, ["soft-hitnormal4.wav"] = MixBytes };
+        foreach (var (k, v) in extra) bytes[k] = v;
+        var (s, file, folder) = Load("256,192,1000,1,0,0:0:0:0:", [.. bytes.Keys], name => bytes[name]);
+        s.Add([s.HitAt(clap ?? Skin("drum-hitclap"), 1250)]);
+        return (s, file, folder);
+    }
+
+    private static GenerateManifest Previous(string signature, byte[]? bytes = null) =>
+        new([new GeneratedMix("soft-hitnormal4.wav", signature, GenerateManifest.Hash(bytes ?? MixBytes))]);
+
+    private static string ClapSignature => MixFile.SignatureOf([(Skin("drum-hitclap"), 100)]);
+
+    [Fact]
+    public void Regenerating_reuses_an_unchanged_mix_with_the_same_contents()
+    {
+        var (s, file, folder) = Regenerating([]);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, Previous(ClapSignature));
+
+        Assert.Empty(plan.Mixes);
+        Assert.Equal("soft-hitnormal4.wav", Assert.Single(plan.Reused).FileName);
+        Assert.Empty(plan.Removes);
+        var moments = Decompiler.Decompile(plan.Diff, folder).Moments;
+        Assert.Contains(moments, m => m.Hits.Any(h => h.Lane.Name == "soft-hitnormal4.wav"));
+    }
+
+    [Fact]
+    public void A_mix_file_changed_since_is_never_reused_or_removed()
+    {
+        var (s, file, folder) = Regenerating([]);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, Previous(ClapSignature, bytes: [9, 9]));
+
+        Assert.Empty(plan.Reused);
+        Assert.Empty(plan.Removes);
+        Assert.Equal("soft-hitnormal5.wav", Assert.Single(plan.Mixes).FileName);
+    }
+
+    [Fact]
+    public void An_unneeded_mix_is_removed_and_no_longer_holds_up_the_indexes()
+    {
+        var (s, file, folder) = Regenerating([], clap: Skin("normal-hitclap")); // the mix now has other contents
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, Previous(ClapSignature));
+
+        Assert.Equal(["soft-hitnormal4.wav"], plan.Removes);
+        Assert.Equal("soft-hitnormal2.wav", Assert.Single(plan.Mixes).FileName); // neither the old diff nor its old mix holds an index any more
+    }
+
+    [Fact]
+    public void An_unneeded_mix_whose_index_another_difficulty_uses_is_kept()
+    {
+        var copied = Encoding.UTF8.GetBytes(Header + "[HitObjects]\r\n256,192,1250,1,0,0:0:4:0:\r\n"); // e.g. after Hitsound Copier
+        var (s, file, folder) = Regenerating(new() { ["Band - Song (Me) [Insane].osu"] = copied }, clap: Skin("normal-hitclap"));
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, Previous(ClapSignature));
+
+        Assert.Empty(plan.Removes);
+        Assert.Equal("soft-hitnormal5.wav", Assert.Single(plan.Mixes).FileName);
+    }
 }

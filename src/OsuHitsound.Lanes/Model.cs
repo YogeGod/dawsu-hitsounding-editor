@@ -30,7 +30,7 @@ public enum LaneGroup
 /// </summary>
 public sealed record Lane(LaneSource Source, string Name, bool Missing = false)
 {
-    public LaneGroup Group => Source == LaneSource.Skin ? LaneGroup.Skin : SetOf(Name) switch
+    public LaneGroup Group => Source == LaneSource.Skin ? LaneGroup.Skin : Sample?.Set switch
     {
         SampleSet.Soft => LaneGroup.SoftSet,
         SampleSet.Normal => LaneGroup.NormalSet,
@@ -38,13 +38,13 @@ public sealed record Lane(LaneSource Source, string Name, bool Missing = false)
         _ => LaneGroup.OwnFiles,
     };
 
-    /// <summary>The sample set a file name follows from its "soft-" / "normal-" / "drum-" prefix, if any.</summary>
-    private static SampleSet SetOf(string name)
-    {
-        var file = Path.GetFileName(name);
-        int dash = file.IndexOf('-');
-        return dash > 0 && Enum.TryParse(file[..dash], ignoreCase: true, out SampleSet set) && set != SampleSet.None ? set : SampleSet.None;
-    }
+    /// <summary>
+    /// Set, sound and index when the file follows osu!'s sample naming ("drum-hitclap3.ogg"); null for other names, which
+    /// osu! only plays through the filename field. Skin sounds have no file: index 0.
+    /// </summary>
+    public (SampleSet Set, string Sound, int Index)? Sample => Source == LaneSource.Skin
+        ? HitsoundRules.ParseSampleName(Name) is (var set, var sound, _) ? (set, sound, 0) : null
+        : HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(Name));
 }
 
 public enum HitPosition

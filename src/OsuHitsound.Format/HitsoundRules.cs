@@ -40,4 +40,24 @@ public static class HitsoundRules
 
     /// <summary>Extensions osu! tries for a beatmap sample, in order.</summary>
     public static readonly string[] SampleExtensions = [".wav", ".mp3", ".ogg"];
+
+    /// <summary>
+    /// The reverse of <see cref="BeatmapSampleName"/>: set, sound and index from a sample name without extension, e.g.
+    /// "drum-hitclap3" or "soft-sliderslide" (index 1). Null for names osu! never asks for by index: other prefixes, an
+    /// explicit "1" or "0", or a leading zero (those are only reachable through the filename field).
+    /// </summary>
+    public static (SampleSet Set, string Sound, int Index)? ParseSampleName(string nameWithoutExtension)
+    {
+        int dash = nameWithoutExtension.IndexOf('-');
+        if (dash <= 0 || !Enum.TryParse(nameWithoutExtension[..dash], ignoreCase: true, out SampleSet set) || set == SampleSet.None
+            || !nameWithoutExtension[..dash].All(char.IsAsciiLetter))
+            return null;
+        var rest = nameWithoutExtension[(dash + 1)..];
+        int digitsAt = rest.Length;
+        while (digitsAt > 0 && char.IsAsciiDigit(rest[digitsAt - 1])) digitsAt--;
+        string sound = rest[..digitsAt], digits = rest[digitsAt..];
+        if (sound.Length == 0 || !sound.All(char.IsAsciiLetter)) return null;
+        if (digits.Length == 0) return (set, sound.ToLowerInvariant(), 1);
+        return digits[0] != '0' && int.TryParse(digits, out int index) && index >= 2 ? (set, sound.ToLowerInvariant(), index) : null;
+    }
 }
