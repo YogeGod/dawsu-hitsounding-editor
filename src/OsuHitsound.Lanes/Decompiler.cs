@@ -28,9 +28,12 @@ public static class Decompiler
 
     public static DecompiledMap Decompile(OsuFile file, MapFolder folder) => new Run(file, folder).Decompile();
 
-    /// <summary>What a timing point gives the sounds that read it: its set (0 means the map default), index and volume.</summary>
+    /// <summary>
+    /// What a timing point gives the sounds that read it: its set, index and volume. Set 0 ("auto") plays Soft in stable,
+    /// whatever the map default (heard in the test maps, 2026-10-30); a line with no set field uses the map default.
+    /// </summary>
     internal static (SampleSet Set, int Index, int Volume) PointState(TimingPoint? point, MapSettings settings) => (
-        DecodeSet(point?.SampleSet ?? SampleSet.None, settings.DefaultSampleSet),
+        point?.SampleSet is { } set ? DecodeSet(set, SampleSet.Soft) : settings.DefaultSampleSet,
         Math.Max(point?.SampleIndex ?? 0, 0),
         Math.Clamp(point?.Volume ?? 100, 0, 100));
 

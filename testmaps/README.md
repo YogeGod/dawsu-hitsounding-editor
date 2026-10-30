@@ -38,18 +38,21 @@ Listen for which of these you hear on the even sliders:
 - **A high hum during the slide** → the body uses the slider's own index.
 - **Louder than the odd ones** → the slider's own volume is used.
 
-## Diff "3 SampleSet 0": what does sampleset 0 on a timing point mean?
+## Diff "3 SampleSet 0 v2": what does sampleset 0 ("auto") on a timing point mean?
 
-The map's default sampleset (`[General] SampleSet`) is **Drum**. The diff has four groups of four circles:
+The map's default sampleset (`[General] SampleSet`) is **Drum**. The diff has five groups of four circles, with a short gap between groups:
 
-| Group | Timing point says | Sound if it's Drum | Sound if it's Normal |
-|---|---|---|---|
-| 1 | sampleset 0 | high | low |
-| 2 | Drum | high | high |
-| 3 | Normal | low | low |
-| 4 | sampleset 0 | high | low |
+| Group | Green line says | Sound |
+|---|---|---|
+| 1 | auto | ? |
+| 2 | Drum | high beep |
+| 3 | Normal | low beep |
+| 4 | Soft | middle beep |
+| 5 | auto | ? |
 
-The soft sampleset is a mid beep, in case groups 1 and 4 land on Soft.
+Listen for which group 1 and 5 match exactly: 2 (the map default), 3 (Normal, as in lazer) or 4 (Soft). The first run (2026-10-30, without group 4) heard "between high and low", and v2 matched group 4 (Soft).
+
+Diff **"3 SampleSet 0 v3 (default Normal)"** is the same, but the map's default is **Normal**. If groups 1 and 5 still match group 4 (Soft), auto always means Soft. If they match group 3 (Normal), auto means the map default and stable ignored the Drum default in v2.
 
 ## Optional
 

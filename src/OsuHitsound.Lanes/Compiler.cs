@@ -256,7 +256,8 @@ public static partial class Compiler
                 file.InsertTimingPoint(TimingPoint.FormatLine(at,
                     beatLength: inForce.Uninherited ? "-100" : inForce.BeatLengthText,
                     meter: timing.RedLineAt(at)?.Meter ?? 4,
-                    sampleSet: inForce.SampleSet ?? SampleSet.None, index, volume, uninherited: false,
+                    // A line with no set field plays the map default; written as 0 it would play Soft.
+                    sampleSet: inForce.SampleSet ?? settings.DefaultSampleSet, index, volume, uninherited: false,
                     effects: inForce.Effects & ~8)); // "omit first bar line" belongs to red lines only
                 added++;
             }

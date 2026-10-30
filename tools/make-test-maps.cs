@@ -71,21 +71,23 @@ foreach (var (name, bytes) in samples) File.WriteAllBytes(Path.Combine(outDir, n
     WriteDiff("2 Slider body", "Soft", tp, ho);
 }
 
-// Diff 3: what does sampleSet 0 on a timing point mean? [General] SampleSet is Drum.
-// Groups of 4 circles: sampleSet 0, explicit Drum, explicit Normal, then sampleSet 0 again.
+// Diff 3: what does sampleSet 0 on a timing point mean? [General] SampleSet is Drum in "v2" and Normal in "v3".
+// Groups of 4 circles: sampleSet 0, explicit Drum, explicit Normal, explicit Soft, then sampleSet 0 again.
+foreach (var (diffName, defaultSet) in new[] { ("3 SampleSet 0 v2", "Drum"), ("3 SampleSet 0 v3 (default Normal)", "Normal") })
 {
     var tp = new List<string>
     {
         TimingPoint(T0, Beat, 0, 5, 70, red: true),
         TimingPoint(At(6), -100, 3, 5, 70),
         TimingPoint(At(12), -100, 1, 5, 70),
-        TimingPoint(At(18), -100, 0, 5, 70),
+        TimingPoint(At(18), -100, 2, 5, 70),
+        TimingPoint(At(24), -100, 0, 5, 70),
     };
     var ho = new List<string>();
-    foreach (int group in new[] { 0, 6, 12, 18 })
+    foreach (int group in new[] { 0, 6, 12, 18, 24 })
         for (int i = 0; i < 4; i++)
             ho.Add($"{64 + i * 96},192,{At(group + i)},{(i == 0 ? 5 : 1)},0,0:0:0:0:");
-    WriteDiff("3 SampleSet 0", "Drum", tp, ho);
+    WriteDiff(diffName, defaultSet, tp, ho);
 }
 
 MakeSilentAudio(Path.Combine(outDir, "audio.mp3"), seconds: 20);

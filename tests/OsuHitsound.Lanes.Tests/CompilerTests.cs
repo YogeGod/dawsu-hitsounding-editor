@@ -8,8 +8,8 @@ public class CompilerTests
 {
     private const string Red = "0,500,4,2,0,100,1,0"; // 120 BPM, soft, index 0, volume 100
 
-    private static OsuFile Map(string timingPoints, string hitObjects, int version = 14) => OsuFile.Parse(Encoding.UTF8.GetBytes(
-        $"osu file format v{version}\r\n\r\n[General]\r\nSampleSet: Soft\r\n\r\n[Difficulty]\r\nSliderMultiplier:1.4\r\nSliderTickRate:1\r\n\r\n" +
+    private static OsuFile Map(string timingPoints, string hitObjects, int version = 14, string defaultSet = "Soft") => OsuFile.Parse(Encoding.UTF8.GetBytes(
+        $"osu file format v{version}\r\n\r\n[General]\r\nSampleSet: {defaultSet}\r\n\r\n[Difficulty]\r\nSliderMultiplier:1.4\r\nSliderTickRate:1\r\n\r\n" +
         $"[TimingPoints]\r\n{timingPoints.Replace("\n", "\r\n")}\r\n\r\n[HitObjects]\r\n{hitObjects.Replace("\n", "\r\n")}\r\n"));
 
     private static Lane Skin(string name) => new(LaneSource.Skin, name);
@@ -58,6 +58,21 @@ public class CompilerTests
         Assert.Empty(result.Conflicts);
         Assert.Contains("256,192,1000,1,2,0:3:0:0:", Text(file));
         Assert.Equal(["drum-hitwhistle", "soft-hitnormal"], Names(after.Moments[0]));
+    }
+
+    [Fact]
+    public void Under_an_auto_timing_point_soft_is_inherited_and_the_maps_default_is_written()
+    {
+        var file = Map("0,500,4,0,0,100,1,0", "256,192,1000,1,0,0:0:0:0:\n256,192,1500,1,0,0:0:0:0:", defaultSet: "Drum");
+        var (result, after, _) = Apply(file, new MapFolder([]),
+            (0, [Skin("soft-hitnormal"), Skin("soft-hitclap")], 100),
+            (1, [Skin("drum-hitnormal")], 100));
+
+        Assert.Empty(result.Conflicts);
+        Assert.Contains("256,192,1000,1,8,0:0:0:0:", Text(file));
+        Assert.Contains("256,192,1500,1,0,3:0:0:0:", Text(file));
+        Assert.Equal(["soft-hitclap", "soft-hitnormal"], Names(after.Moments[0]));
+        Assert.Equal(["drum-hitnormal"], Names(after.Moments[1]));
     }
 
     [Fact]

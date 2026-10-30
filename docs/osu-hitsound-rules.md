@@ -296,7 +296,7 @@ for each "hit event" e of O:
    slider body: q = O.time+6; sounds = sliderslide (always) + sliderwhistle (if O.hitSound&2)
         ticks: slidertick at each tick time, using the body's resolved bank/index/vol (lazer)
   P = active TP at q (rightmost time<=q; on ties the later line in the file wins, as HitsoundRules does (lazer instead prefers the green line, §above); before the first point use the first point)
-  normalSet = e.normalSet!=0 ? e.normalSet : (P.sampleSet!=0 ? P.sampleSet : Normal   # lazer; wiki says [General] default — OPEN)
+  normalSet = e.normalSet!=0 ? e.normalSet : (P.sampleSet!=0 ? P.sampleSet : Soft   # stable, tested 2026-10-30; lazer reads Normal, wiki says [General] default)
   addSet    = e.addSet!=0 ? e.addSet : normalSet
   index     = e.index>0 ? e.index : P.sampleIndex
   vol       = e.vol>0 ? e.vol : P.volume ; played = max(vol, 5 lazer / 8 stable)
@@ -329,7 +329,7 @@ for each "hit event" e of O:
 ## Open questions (need empirical tests in osu!stable, since its source is not public)
 
 1. **Filename override, stable:** does the hitnormal still play? Do additions play? The wiki says additions are dropped, and lazer plays them. *Author (2026-10-29), from experience: stable plays only the file. No hitnormal and no additions.*
-2. **sampleSet 0 on a timing point:** does it mean `[General] SampleSet` in stable (as the wiki says), versus `normal` in lazer's parser? *Author (2026-10-29), from experience: yes, it falls back to the map's default. Still confirm with a test map.*
+2. **sampleSet 0 on a timing point:** does it mean `[General] SampleSet` in stable (as the wiki says), versus `normal` in lazer's parser? *Author (2026-10-29), from experience: yes, it falls back to the map's default. Still confirm with a test map.* **Tested in stable 2026-10-30 (diff "3 SampleSet 0", map default Drum):** the auto groups played neither Drum (the map default) nor Normal (lazer's reading). By ear they were between the two, which matches **Soft** (`soft-hitnormal5.wav`, 800 Hz, vs normal 300 Hz and drum 2000 Hz). This contradicts both the wiki and lazer. **Confirmed 2026-10-30 (diff "3 SampleSet 0 v2", with an explicit Soft group):** both auto groups matched Soft exactly. **Answer: in stable, sampleSet 0 on a timing point plays Soft, not the map default (Drum here) and not Normal.** It isn't "inherit the previous green line" either: in the first run the second auto group followed a Normal group and still played Soft. **Rechecked 2026-10-30 in stable with diff "3 SampleSet 0 v3 (default Normal)":** both auto groups again matched Soft. So the map default doesn't matter: **auto on a timing point always plays Soft in stable.** A timing-point line with no sampleSet field at all is a separate case and still follows lazer (map default); untested in stable.
 3. **Slider hitSample index, volume and filename in stable:** honoured or ignored (lazer ignores them)? Does stable read anything beyond `n:a` in an edgeSet entry? *Author (2026-10-29): the head and end ignore the slider's own index and volume (the timing point wins, as in lazer). Unsure about the body.*
 4. **Slider ticks and sliderslide in stable:** are bank, index and volume evaluated at each tick's own time, or at slider start (lazer: start + 6 ms)? *Author (2026-10-29), unsure: ticks follow the slider body's sampleset. Timing is still open.*
 5. **Stable fallback for a missing custom file:** is it the user skin only, or also a bare `hitclap.wav` in the beatmap folder (the lazer quirk)? And for a missing filename-override file?

@@ -28,11 +28,13 @@ public class DecompilerTests
         Assert.Equal(70, m.Volume);
     }
 
-    [Fact]
-    public void Timing_point_sample_set_0_means_the_maps_default_set()
+    [Theory]
+    [InlineData("Drum")]
+    [InlineData("Normal")]
+    public void Timing_point_sample_set_0_plays_soft_whatever_the_maps_default(string defaultSet)
     {
-        var m = Decompile("0,500,4,0,0,100,1,0", "256,192,1000,1,0,0:0:0:0:", defaultSet: "Drum").Moments.Single();
-        Assert.Equal(["drum-hitnormal"], LaneNames(m));
+        var m = Decompile("0,500,4,0,0,100,1,0", "256,192,1000,1,0,0:0:0:0:", defaultSet: defaultSet).Moments.Single();
+        Assert.Equal(["soft-hitnormal"], LaneNames(m));
     }
 
     [Fact]
@@ -237,7 +239,7 @@ public class DecompilerTests
     [Fact]
     public void Object_volume_above_100_is_clamped_and_a_numeric_default_set_outside_the_enum_means_normal()
     {
-        var m = Decompile("0,500,4,0,0,100,1,0", "256,192,1000,1,0,0:0:0:250:", defaultSet: "7").Moments.Single();
+        var m = Decompile("0,500", "256,192,1000,1,0,0:0:0:250:", defaultSet: "7").Moments.Single();
         Assert.Equal(100, m.Volume);
         Assert.Equal(["normal-hitnormal"], LaneNames(m));
     }
