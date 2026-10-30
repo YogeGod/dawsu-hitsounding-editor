@@ -37,6 +37,25 @@ internal static class Paint
 
     public static IPen BeatPen => P("line.beat", 1);
     public static IPen BarPen => P("line.bar", 1);
+
+    /// <summary>
+    /// Snap line colour by beat fraction, osu!'s convention: 1/2 red, 1/4 blue, 1/8 yellow, 1/3 and 1/6 purple, finer
+    /// ones grey; 1/5, 1/7 and 1/9 (not in osu!) teal. Dimmed so the lanes stay readable.
+    /// </summary>
+    public static IPen SnapPen(int fraction) => SnapPens.TryGetValue(SnapColour(fraction), out var pen) ? pen : SnapPens[SnapColour(fraction)] = new ImmutablePen(Brush(Color.Parse(SnapColour(fraction)), 0.5), 1);
+
+    public static string SnapColour(int fraction) => fraction switch
+    {
+        2 => "#ff4b4b",
+        4 => "#4b8cff",
+        8 => "#f0d24b",
+        3 => "#b46ef0",
+        6 => "#8a5ad0",
+        5 or 7 or 9 => "#3cc8b4",
+        _ => "#6e6e74",
+    };
+
+    private static readonly Dictionary<string, IPen> SnapPens = [];
     public static IPen DividerPen => P("divider", 1);
     public static IPen PlayheadPen => P("playhead.color", T.Number("playhead.width"));
     public static IPen NoteRingPen => P("note.ring", 1);

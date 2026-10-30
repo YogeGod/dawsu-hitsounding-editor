@@ -15,6 +15,7 @@ public partial class MainWindow
     private void WireMapFeatures()
     {
         Lanes.LaneMenuRequested += ShowLaneMenu;
+        Lanes.AddLaneRequested += async () => await AddLaneDialog();
         AddLaneItem.Click += async (_, _) => await AddLaneDialog();
         GenerateItem.Click += async (_, _) => await Generate();
         LaneFilterBox.TextChanged += (_, _) =>
@@ -75,14 +76,17 @@ public partial class MainWindow
                     model.HideLane(lane);
                     ScheduleProjectSave();
                 }),
-                Item("Add lane…", async () => await AddLaneDialog()),
+                Item("Add lane…", async () => await AddLaneDialog(lane)),
             },
         };
         menu.Open(Lanes);
     }
 
     /// <summary>Lists the mapset's audio files that have no lane yet; the chosen one gets a lane (rule 5: mapset files only).</summary>
-    private async Task AddLaneDialog()
+    private Lane? lastAddedLane;
+
+    /// <param name="after">The lane the new one follows (right-clicked); otherwise the lane added last.</param>
+    private async Task AddLaneDialog(Lane? after = null)
     {
         if (model is null || folder is null) return;
         var shown = model.LaneRows.Select(r => r.Lane).ToHashSet();
@@ -98,8 +102,9 @@ public partial class MainWindow
             return;
         }
 
-        if (await Dialogs.Choose(this, "Add lane", "Audio files in the mapset folder without a lane:", candidates) is not { } file) return;
-        AddLane(new Lane(LaneSource.BeatmapFile, file));
+        var suggested = ArrangeModel.SuggestNewLane(candidates, after ?? lastAddedLane ?? model.LaneRows.LastOrDefault(r => r.Lane.Source == LaneSource.BeatmapFile)?.Lane);
+        if (await Dialogs.Choose(this, "Add lane", "Audio files in the mapset folder without a lane:", candidates, suggested) is not { } file) return;
+        AddLane(lastAddedLane = new Lane(LaneSource.BeatmapFile, file));
         ScheduleProjectSave();
     }
 

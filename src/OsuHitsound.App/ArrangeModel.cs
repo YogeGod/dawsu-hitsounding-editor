@@ -157,7 +157,11 @@ internal sealed partial class ArrangeModel
     }
 
     /// <summary>Snap lines between beats (beat / divisor), for drawing when zoomed in enough.</summary>
-    public IEnumerable<double> SubLines(double from, double to, int divisor)
+    /// <summary>
+    /// The snap lines between beats, each with the beat fraction it falls on in lowest terms: with 1/4 snap, the line
+    /// halfway is a 1/2 (Fraction 2) and the others are 1/4 (Fraction 4), as osu!'s editor colours them.
+    /// </summary>
+    public IEnumerable<(double Time, int Fraction)> SubLines(double from, double to, int divisor)
     {
         if (divisor <= 1) yield break;
         // From one beat earlier, so a beat that starts before the view still gets its subdivisions.
@@ -166,7 +170,7 @@ internal sealed partial class ArrangeModel
             for (int k = 1; k < divisor; k++)
             {
                 double t = line.Time + k * line.BeatLength / divisor;
-                if (t >= from && t <= to) yield return t;
+                if (t >= from && t <= to) yield return (t, divisor / (int)System.Numerics.BigInteger.GreatestCommonDivisor(k, divisor));
             }
     }
 
@@ -466,6 +470,23 @@ internal sealed partial class ArrangeModel
             laneRows.Clear();
             laneRows.AddRange(sorted);
         });
+    }
+
+    /// <summary>
+    /// Which file Add lane should start on, following the lane added last (or the lane right-clicked): the next index
+    /// of the same sound ("drum-hitclap3" → "drum-hitclap4"), else that sound at any index, else the same set, else the
+    /// first file. Null when there are no candidates.
+    /// </summary>
+    public static string? SuggestNewLane(IReadOnlyList<string> candidates, Lane? previous)
+    {
+        if (candidates.Count == 0) return null;
+        if (previous?.Sample is not (var set, var sound, var index)) return candidates[0];
+        var parsed = candidates.Select(c => (File: c, Sample: new Lane(LaneSource.BeatmapFile, c).Sample)).ToList();
+        var sameSound = parsed.Where(c => c.Sample is { } s && s.Set == set && s.Sound == sound).OrderBy(c => c.Sample!.Value.Index).ToList();
+        return sameSound.FirstOrDefault(c => c.Sample!.Value.Index > index).File
+               ?? sameSound.FirstOrDefault().File
+               ?? parsed.FirstOrDefault(c => c.Sample?.Set == set).File
+               ?? candidates[0];
     }
 
     /// <summary>The custom index a lane plays as (0 for the skin); null for files osu! only plays by name.</summary>

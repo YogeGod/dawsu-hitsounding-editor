@@ -46,7 +46,6 @@ internal sealed class ArrangeView : Control
 
     private static readonly IBrush StripeA = Paint.Brush("#3a1517"), StripeB = Paint.Brush("#6b1f24");
     private static readonly IPen ConflictRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
-    private static readonly IPen SubPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#323236"), 1);
     private static readonly IPen MarqueePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#2f6fd0"), 1);
     private static readonly IBrush MarqueeFill = Paint.Brush(Color.Parse("#2f6fd0"), 0.15);
 
@@ -138,6 +137,9 @@ internal sealed class ArrangeView : Control
     /// <summary>Right-click on a lane name: the window shows the lane menu (rename, move, delete, add).</summary>
     public event Action<LaneRow>? LaneMenuRequested;
 
+    /// <summary>The "+" above the lane list was clicked.</summary>
+    public event Action? AddLaneRequested;
+
     /// <summary>The L and R cycle locators changed, or cycling was switched on or off from the ruler.</summary>
     public event Action? LocatorsChanged;
 
@@ -224,10 +226,10 @@ internal sealed class ArrangeView : Control
 
                 // Snap lines only when they are at least 6 px apart.
                 if (SnapOn && lines.Count > 0 && Axis.Zoom * lines[0].BeatLength / Divisor >= 6)
-                    foreach (double t in model.SubLines(from, to, Divisor))
+                    foreach (var (t, fraction) in model.SubLines(from, to, Divisor))
                     {
                         double x = GridLeft + Axis.X(t);
-                        ctx.DrawLine(SubPen, new Point(x, HeaderHeight), new Point(x, size.Height));
+                        ctx.DrawLine(Paint.SnapPen(fraction), new Point(x, HeaderHeight), new Point(x, size.Height));
                     }
 
                 foreach (var line in lines)
@@ -674,7 +676,14 @@ internal sealed class ArrangeView : Control
 
         if (p.Y < HeaderHeight)
         {
-            if (p.X < GridLeft || !point.Properties.IsLeftButtonPressed) return;
+            if (!point.Properties.IsLeftButtonPressed) return;
+            if (p.X < 30 && p.Y < 34)
+            {
+                AddLaneRequested?.Invoke(); // the "+" at the top of the lane list
+                return;
+            }
+
+            if (p.X < GridLeft) return;
             double t = Math.Max(0, Axis.Time(p.X - GridLeft));
             double waveBottom = RulerBottom + WaveHeight;
             if (p.Y >= RulerBottom && Math.Abs(p.Y - waveBottom) <= 4)

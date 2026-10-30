@@ -28,10 +28,12 @@ internal static class Dialogs
             return (() => close(box.Text ?? ""), "OK");
         });
 
-    public static async Task<string?> Choose(Window owner, string title, string label, IReadOnlyList<string> items) =>
+    public static async Task<string?> Choose(Window owner, string title, string label, IReadOnlyList<string> items, string? initial = null) =>
         await Show<string?>(owner, title, (body, close) =>
         {
-            var list = new ListBox { ItemsSource = items, Height = 260, Width = 400 };
+            var list = new ListBox { ItemsSource = items, Height = 260, Width = 400, SelectedItem = initial };
+            list.AttachedToVisualTree += (_, _) => { if (list.SelectedItem is { } s) list.ScrollIntoView(s); };
+            list.KeyDown += (_, e) => { if (e.Key == Key.Enter && list.SelectedItem is string s) close(s); };
             list.DoubleTapped += (_, _) => { if (list.SelectedItem is string s) close(s); };
             body.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap, MaxWidth = 400 });
             body.Children.Add(list);

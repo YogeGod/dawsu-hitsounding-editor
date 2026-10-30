@@ -274,6 +274,11 @@ public partial class MainWindow : Window
             case "inspector": ToggleInspector(); break;
             case "play": TogglePlay(); break;
             case "start": Seek(0); break;
+            case "first": JumpToEnd(first: true); break;
+            case "last": JumpToEnd(first: false); break;
+            case ['s', 'n', 'a', 'p', var digit] when char.IsAsciiDigit(digit):
+                SnapBox.SelectedIndex = Array.IndexOf(Divisors, digit - '0');
+                break;
             case "stop": StopPressed(); break;
             case "cycle": ToggleCycle(); break;
             case "locatorsToSelection": LocatorsToSelection(); break;
@@ -318,6 +323,20 @@ public partial class MainWindow : Window
             case "nextBookmark": JumpToBookmark(1); break;
             default: throw new ArgumentException($"Unknown command {id}", nameof(id));
         }
+    }
+
+    private (string Id, long At)? lastJump;
+
+    /// <summary>Z / V: to the first / last object; pressed again within 400 ms, to the start / end of the song.</summary>
+    private void JumpToEnd(bool first)
+    {
+        if (session is null) return;
+        string id = first ? "first" : "last";
+        long now = Environment.TickCount64;
+        bool twice = lastJump is { } j && j.Id == id && now - j.At <= 400;
+        lastJump = twice ? null : (id, now);
+        if (twice) Seek(first ? 0 : Lanes.Axis.End);
+        else if (session.Moments.Count > 0) Seek(first ? session.Moments.Min(m => m.Moment.Time) : session.Moments.Max(m => m.Moment.Time)); // a slider end can come after the next object starts
     }
 
     private void SetTool(Tool tool)

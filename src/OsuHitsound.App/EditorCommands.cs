@@ -52,6 +52,8 @@ internal static class EditorCommands
 
         new("play", "Playback and cycle", "Play / stop", [K(Key.Space)]),
         new("start", "Playback and cycle", "Go to the start", [K(Key.Home)]),
+        new("first", "Playback and cycle", "To the first object (twice: to the start of the song)", [K(Key.Z)]),
+        new("last", "Playback and cycle", "To the last object (twice: to the end of the song)", [K(Key.V)]),
         new("stop", "Playback and cycle", "Stop (again: to the start)", [K(Key.NumPad0)]),
         new("cycle", "Playback and cycle", "Cycle between the L and R locators", [K(Key.L), K(Key.Divide), K(Key.Oem2)]),
         new("locatorsToSelection", "Playback and cycle", "Locators to the selection (or the visible range)", [K(Key.P)]),
@@ -67,6 +69,7 @@ internal static class EditorCommands
         new("toolMute", "Tools and snap", "Mute hits while listening (never saved)", [K(Key.D5)]),
         new("toolRamp", "Tools and snap", "Ramp volumes in the volume lane", [K(Key.D6)]),
         new("snap", "Tools and snap", "Snapping on / off", [K(Key.J)]),
+        .. Enumerable.Range(1, 9).Select(n => new EditorCommand($"snap{n}", "Tools and snap", $"Snap to 1/{n}", [K(Key.D0 + n, Shift)])),
 
         new("undo", "Editing", "Undo", [K(Key.Z, Ctrl)]),
         new("redo", "Editing", "Redo", [K(Key.Y, Ctrl), K(Key.Z, Ctrl | Shift)]),
