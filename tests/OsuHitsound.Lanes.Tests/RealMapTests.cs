@@ -57,6 +57,25 @@ public class RealMapTests
     }
 
     [Fact]
+    public void Catalyst_generates_a_hitsound_diff_that_plays_every_sound()
+    {
+        if (!File.Exists(Catalyst)) return; // only on the author's machine
+
+        var file = OsuFile.Read(Catalyst);
+        var folder = MapFolder.FromDirectory(Path.GetDirectoryName(Catalyst)!);
+        var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
+
+        var plan = HitsoundDiff.Plan(file, Catalyst, folder, session);
+
+        int times = session.State.Hits.Select(h => (int)Math.Round(h.Time)).Distinct().Count();
+        Assert.Equal(times, plan.Circles);
+        Assert.Empty(plan.Conflicts);
+        Assert.EndsWith("[Hitsounds].osu", plan.OsuPath);
+        var after = new MapFolder(folder.Files.Concat(plan.Mixes.Select(m => m.FileName)));
+        Assert.Equal(times, Decompiler.Decompile(plan.Diff, after).Moments.Count);
+    }
+
+    [Fact]
     public void Catalyst_compiles_unchanged_and_takes_slider_head_volumes_through_green_lines()
     {
         if (!File.Exists(Catalyst)) return; // only on the author's machine

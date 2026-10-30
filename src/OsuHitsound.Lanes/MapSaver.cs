@@ -29,24 +29,8 @@ public static class MapSaver
         if (bookmarks is not null && !copy.Bookmarks.Order().SequenceEqual(bookmarks.Order())) copy.SetBookmarks([.. bookmarks.Order()]);
         if (!copy.IsEdited) return new SaveResult(result, null, false);
 
-        var invalid = Path.GetInvalidFileNameChars();
-        var name = string.Concat(Path.GetFileNameWithoutExtension(osuPath).Select(c => invalid.Contains(c) ? '_' : c));
-        var backups = Path.Combine(backupRoot, name);
-        Directory.CreateDirectory(backups);
-        var backup = Path.Combine(backups, $"{DateTime.Now:yyyyMMdd-HHmmss-fff}.osu");
-        File.WriteAllBytes(backup, opened);
-
-        // Through a temporary file, so a failed write never leaves a half-written .osu; never leave the temp file behind.
-        var temp = osuPath + ".saving";
-        try
-        {
-            File.WriteAllBytes(temp, copy.ToBytes());
-            File.Move(temp, osuPath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temp)) File.Delete(temp);
-        }
+        var backup = SafeFile.Backup(backupRoot, osuPath, opened);
+        SafeFile.WriteAllBytes(osuPath, copy.ToBytes());
         return new SaveResult(result, backup, true);
     }
 }

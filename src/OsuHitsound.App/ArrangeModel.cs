@@ -98,6 +98,8 @@ internal sealed partial class ArrangeModel
     private readonly HashSet<EditHit> previewMuted = [];
 
     /// <summary>Hits silenced while listening (the Mute tool). Never saved: osu! can't store a muted sound.</summary>
+    public IReadOnlyCollection<EditHit> PreviewMutedHits => previewMuted;
+
     public bool IsPreviewMuted(EditHit hit) => previewMuted.Contains(hit);
 
     public void TogglePreviewMute(EditHit hit)
@@ -372,14 +374,98 @@ internal sealed partial class ArrangeModel
 
     private List<Row> BuildRows()
     {
+        // Hidden lanes (deleted) stay out unless they still have hits; the filter (Ctrl+F) matches names.
+        var withHits = Session.State.Hits.Select(h => h.Lane).ToHashSet();
         var rows = new List<Row>();
-        foreach (var group in laneRows.GroupBy(r => r.Group))
+        foreach (var group in laneRows.Where(r => (!hidden.Contains(r.Lane) || withHits.Contains(r.Lane)) && MatchesFilter(r.Lane)).GroupBy(r => r.Group))
         {
             rows.Add(new GroupRow(group.Key, group.Count()));
             if (!collapsed.Contains(group.Key)) rows.AddRange(group);
         }
 
         return rows;
+    }
+
+    // ---------------------------------------------------------------- lane management (kept in the project file)
+
+    private readonly Dictionary<Lane, string> names = [];
+    private readonly HashSet<Lane> hidden = [];
+    private readonly HashSet<Lane> added = [];
+
+    public string Filter { get; private set; } = "";
+
+    /// <summary>The name shown for a lane: its display name if renamed, else its file or skin name.</summary>
+    public string NameOf(Lane lane) => names.TryGetValue(lane, out var n) ? n : lane.Name;
+
+    private bool MatchesFilter(Lane lane) =>
+        Filter.Length == 0 || NameOf(lane).Contains(Filter, StringComparison.OrdinalIgnoreCase) || lane.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase);
+
+    public void SetFilter(string text) => Relayout(() => Filter = text.Trim());
+
+    /// <summary>Renames a lane on screen only; its file and what it saves as stay the same. Blank restores the file name.</summary>
+    public void RenameLane(Lane lane, string name) => Relayout(() =>
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Trim() == lane.Name) names.Remove(lane);
+        else names[lane] = name.Trim();
+    });
+
+    /// <summary>Moves a lane up (-1) or down (+1) within its group.</summary>
+    public void MoveLane(Lane lane, int direction) => Relayout(() =>
+    {
+        int i = laneRows.FindIndex(r => r.Lane == lane), j = i + direction;
+        if (i < 0 || j < 0 || j >= laneRows.Count || laneRows[j].Group != laneRows[i].Group) return;
+        (laneRows[i], laneRows[j]) = (laneRows[j], laneRows[i]);
+    });
+
+    /// <summary>Adds a lane (a sample file in the mapset) at the end of its group, or shows it again if it was deleted.</summary>
+    public void AddLane(Lane lane) => Relayout(() =>
+    {
+        hidden.Remove(lane);
+        if (laneRows.Any(r => r.Lane == lane)) return;
+        added.Add(lane);
+        int last = laneRows.FindLastIndex(r => r.Group <= lane.Group);
+        int shade = laneRows.Count(r => r.Group == lane.Group);
+        laneRows.Insert(last + 1, new LaneRow(lane.Group, lane, 0, shade, IndexOf(lane)));
+    });
+
+    /// <summary>Hides a lane after its hits were deleted (the file is kept); undoing brings its hits, and the lane, back.</summary>
+    public void HideLane(Lane lane) => Relayout(() => hidden.Add(lane));
+
+    /// <summary>Whether any lane is hidden: only then can an edit (undo) make a lane reappear.</summary>
+    public bool HasHiddenLanes => hidden.Count > 0;
+
+    /// <summary>Lanes rebuilt after hits change (a hidden lane with hits again shows up).</summary>
+    public void RefreshRows() => Relayout(() => { });
+
+    private void Relayout(Action change)
+    {
+        change();
+        for (int i = 0; i < laneRows.Count; i++) laneRows[i] = laneRows[i] with { Number = i + 1 };
+        Rows = BuildRows();
+        Changed?.Invoke();
+    }
+
+    /// <summary>The lane part of the project file.</summary>
+    public (Dictionary<string, string> Names, List<string> Order, List<string> Added, List<string> Hidden) LaneLayout() =>
+        (names.ToDictionary(kv => ProjectStore.KeyOf(kv.Key), kv => kv.Value),
+         laneRows.Select(r => ProjectStore.KeyOf(r.Lane)).ToList(),
+         added.Select(ProjectStore.KeyOf).ToList(),
+         hidden.Select(ProjectStore.KeyOf).ToList());
+
+    /// <summary>Restores lane names, added and hidden lanes and order from a project; unknown or vanished lanes are skipped.</summary>
+    public void ApplyLaneLayout(ProjectData project, Func<Lane, bool> exists)
+    {
+        foreach (var lane in project.AddedLanes.Select(ProjectStore.LaneOf).OfType<Lane>().Where(exists)) AddLane(lane);
+        Relayout(() =>
+        {
+            foreach (var (key, name) in project.LaneNames)
+                if (ProjectStore.LaneOf(key) is { } lane) names[lane] = name;
+            foreach (var lane in project.HiddenLanes.Select(ProjectStore.LaneOf).OfType<Lane>()) hidden.Add(lane);
+            var order = project.LaneOrder.Select((k, i) => (k, i)).ToDictionary(x => x.k, x => x.i);
+            var sorted = laneRows.OrderBy(r => r.Group).ThenBy(r => order.TryGetValue(ProjectStore.KeyOf(r.Lane), out int i) ? i : int.MaxValue).ToList();
+            laneRows.Clear();
+            laneRows.AddRange(sorted);
+        });
     }
 
     /// <summary>The custom index a lane plays as: the number at the end of a set-named file, 1 without one, 0 for the skin.</summary>

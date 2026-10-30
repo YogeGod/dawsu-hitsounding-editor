@@ -115,6 +115,16 @@ public sealed class EditSession
         return s with { Volumes = s.Volumes.SetItems(keys.Select(k => new KeyValuePair<MomentKey, int>(k, v))) };
     });
 
+    /// <summary>Puts back hits from a saved project (hits with no object): not an edit, so not an undo step.</summary>
+    public void Restore(IEnumerable<EditHit> hits)
+    {
+        var existing = State.Hits.ToHashSet();
+        var added = hits.Where(existing.Add).ToList();
+        if (added.Count == 0) return;
+        State = State with { Hits = State.Hits.AddRange(added) };
+        Changed?.Invoke();
+    }
+
     /// <summary>Sets several moments' volumes at once (ramps, paint strokes, relative edits); values are kept within 0–100.</summary>
     public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes) => Change(s => volumes.Count == 0 ? s : s with
     {

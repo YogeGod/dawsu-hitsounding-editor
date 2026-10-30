@@ -127,6 +127,9 @@ internal sealed class ArrangeView : Control
 
     public event Action<double>? SeekRequested;
 
+    /// <summary>Right-click on a lane name: the window shows the lane menu (rename, move, delete, add).</summary>
+    public event Action<LaneRow>? LaneMenuRequested;
+
     /// <summary>The L and R cycle locators changed, or cycling was switched on or off from the ruler.</summary>
     public event Action? LocatorsChanged;
 
@@ -485,7 +488,7 @@ internal sealed class ArrangeView : Control
                 DrawToggle(ctx, "S", NumberWidth + LaneSoloX, y, model.IsSoloed(lane.Lane) ? Paint.SoloOn : null);
 
                 bool silent = lane.Lane.Missing || model.Silent.Contains(lane.Lane);
-                string name = lane.Lane.Source == LaneSource.StoryboardFile ? "SB " + lane.Lane.Name : lane.Lane.Name;
+                string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.NameOf(lane.Lane);
                 if (silent) name += lane.Lane.Missing ? "  (missing)" : "  (no sound)";
                 Paint.DrawText(ctx, name, new Point(NumberWidth + 84, y + Pad + 4), LaneFont, silent ? Paint.MissingText : Paint.Text, ListWidth - 84 - 48);
                 if (ShowIndexes && lane.Index is { } idx)
@@ -707,6 +710,12 @@ internal sealed class ArrangeView : Control
         if (RowAt(p.Y) is not { } row) return;
         if (p.X < GridLeft)
         {
+            if (point.Properties.IsRightButtonPressed && row is LaneRow menuLane)
+            {
+                LaneMenuRequested?.Invoke(menuLane);
+                return;
+            }
+
             if (!point.Properties.IsLeftButtonPressed) return;
             switch (row, ListTargetAt(row, p.X - NumberWidth))
             {

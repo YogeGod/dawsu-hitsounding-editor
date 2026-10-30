@@ -9,6 +9,9 @@ public sealed class MapFolder
 {
     // Relative path with '/' separators → the name as it is on disk.
     private readonly Dictionary<string, string> files;
+
+    /// <summary>Every file in the folder, as named on disk ('/' separators).</summary>
+    public IEnumerable<string> Files => files.Values;
     private readonly Func<string, byte[]>? readBytes;
 
     public MapFolder(IEnumerable<string> relativePaths, Func<string, byte[]>? readBytes = null)

@@ -152,6 +152,7 @@ public partial class MainWindow : Window
         // Pick mode: while the inspector's Pick is on, a click selects the part under it instead of acting on it.
         AddHandler(PointerPressedEvent, OnPickPressed, RoutingStrategies.Tunnel);
         UiTheme.Current.Changed += OnThemeChanged;
+        WireMapFeatures();
         ApplyTheme();
         if (showInspector) Opened += (_, _) => ToggleInspector();
         InspectorItem.Click += (_, _) => ToggleInspector();
@@ -163,6 +164,8 @@ public partial class MainWindow : Window
     /// <summary>Opens a map. Errors are shown in the status bar, never thrown.</summary>
     public void Open(string path)
     {
+        // The current map's project first: a save still waiting for its timer must not be lost or land on the new map.
+        SaveProject();
         try
         {
             var full = Path.GetFullPath(path);
@@ -182,7 +185,9 @@ public partial class MainWindow : Window
             if (audio is not null) audio.IsAudible = model.IsAudible;
             editing.Changed += OnEdited;
             LoadWaveform();
+            RestoreProject();
             model.PreviewMutesChanged += UpdateCues;
+            model.PreviewMutesChanged += ScheduleProjectSave;
             model.Changed += UpdateSongMute; // soloing a lane silences the song
 
             Lanes.SetModel(model);
@@ -251,6 +256,7 @@ public partial class MainWindow : Window
             case Key.G when !ctrl: Lanes.Axis.ZoomAt(0.8, Lanes.Axis.X(Lanes.Playhead)); break;
             case Key.O when ctrl: _ = PickMap(); break;
             case Key.S when ctrl: Save(); break;
+            case Key.F when ctrl: ShowFilter(); break;
             case Key.I when ctrl && shift: ToggleInspector(); break;
 
             // Tools (dawsu numbering) and snapping.
@@ -323,6 +329,7 @@ public partial class MainWindow : Window
 
         audio.SongOffset = offset;
         Lanes.SongOffset = audio.SongOffset;
+        ScheduleProjectSave();
         Lanes.InvalidateVisual();
         SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
@@ -413,12 +420,14 @@ public partial class MainWindow : Window
         if (model is null || session is null) return;
         Lanes.PruneSelection();
         model.RebuildNotes();
+        if (model.HasHiddenLanes) model.RefreshRows(); // a deleted lane whose hits came back (undo) shows again
         UpdateCues();
         Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
         closeConfirmed = false;
         flash = null;
         UpdateStatus();
         ScheduleCompile();
+        ScheduleProjectSave();
     }
 
     /// <summary>Compiles the wanted sounds on a copy of the original in the background, 150 ms after the last edit.</summary>

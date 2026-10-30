@@ -251,6 +251,15 @@ public sealed class AudioEngine : IDisposable
     /// <summary>Plays one lane's sample now, e.g. when its name is clicked.</summary>
     public void Preview(Lane lane, float volume = 1) => Trigger(lane, volume);
 
+    /// <summary>Loads the sample of a lane added after the map was opened (no-op if it is already loaded).</summary>
+    public void LoadLane(Lane lane, byte[]? data)
+    {
+        if (samples.ContainsKey(lane)) return;
+        int handle = data is { Length: > 0 } ? Bass.SampleLoad(data, 0, data.Length, 16, BassFlags.SampleOverrideLongestPlaying) : 0;
+        if (handle != 0) samples[lane] = handle;
+        else silent.Add(lane);
+    }
+
     private void Run()
     {
         TimeBeginPeriod(1);

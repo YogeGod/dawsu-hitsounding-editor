@@ -124,6 +124,12 @@
               <MenuItem Name="Speed150Item" Header="150 %" ToggleType="Radio" GroupName="speed" />
             </MenuItem>
           </MenuItem>
+          <MenuItem Header="Map">
+            <MenuItem Name="AddLaneItem" Header="Add lane…" />
+            <MenuItem Name="FilterLanesItem" Header="Filter lanes" InputGesture="Ctrl+F" />
+            <Separator />
+            <MenuItem Name="GenerateItem" Header="Generate hitsound diff…" />
+          </MenuItem>
           <MenuItem Header="View">
             <MenuItem Name="ZoomInItem" Header="Zoom in (H)" />
             <MenuItem Name="ZoomOutItem" Header="Zoom out (G)" />
@@ -153,6 +159,7 @@
     <!-- 5. Arrange area -->
     <Grid Grid.Row="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <app:ArrangeView Name="Lanes" />
+      <TextBox Name="LaneFilterBox" IsVisible="False" Width="200" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="40,8,0,0" Watermark="Filter lanes (Esc closes)" />
       <ScrollBar Grid.Column="1" Name="VScroll" Orientation="Vertical" />
       <ScrollBar Grid.Row="1" Name="HScroll" Orientation="Horizontal" Margin="328,0,0,0" />
     </Grid>
