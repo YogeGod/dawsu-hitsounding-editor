@@ -27,7 +27,7 @@ public class PreferencesAndHelpTests : IDisposable
         var broken = Path.Combine(dir, "broken.json");
         File.WriteAllText(broken, "{ not json");
         var loaded = Preferences.Load(broken);
-        Assert.Equal(100, loaded.BufferMs);
+        Assert.Equal(30, loaded.BufferMs);
         Assert.Empty(loaded.RecentMaps);
     }
 

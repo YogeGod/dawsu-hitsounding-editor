@@ -28,12 +28,14 @@ public sealed class AudioEngine : IDisposable
     {
     }
 
-    /// <summary>Opens the default output device. Throws when BASS can't start.</summary>
+    /// <summary>Playback buffer when none is chosen. Hitsounds lag the song by about the buffer, and 30 ms lines up by ear.</summary>
+    public const int DefaultBufferMs = 30;
+
     /// <summary>
     /// Opens an output device (-1: the system default) with a playback buffer of <paramref name="bufferMs"/> ms (smaller
-    /// reacts faster, larger is safer against crackles). Throws when BASS can't start.
+    /// keeps hitsounds in time, larger is safer against crackles). Throws when BASS can't start.
     /// </summary>
-    public static AudioEngine Create(int device = -1, int bufferMs = 100)
+    public static AudioEngine Create(int device = -1, int bufferMs = DefaultBufferMs)
     {
         Bass.Configure(Configuration.UpdatePeriod, 5);
         Bass.Configure(Configuration.PlaybackBufferLength, Math.Clamp(bufferMs, 20, 500));

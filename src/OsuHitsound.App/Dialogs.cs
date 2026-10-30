@@ -74,7 +74,7 @@ internal static class Dialogs
 
             var bufferText = new TextBlock();
             var buffer = new Slider { Minimum = 20, Maximum = 500, Value = prefs.BufferMs, Width = 380, TickFrequency = 10, IsSnapToTickEnabled = true };
-            void ShowBuffer() => bufferText.Text = $"Buffer: {buffer.Value:0} ms. Smaller reacts faster; raise it if playback crackles.";
+            void ShowBuffer() => bufferText.Text = $"Buffer: {buffer.Value:0} ms. Hitsounds lag the music by about this much, so keep it small; raise it only if playback crackles.";
             buffer.ValueChanged += (_, _) => ShowBuffer();
             ShowBuffer();
             body.Children.Add(bufferText);

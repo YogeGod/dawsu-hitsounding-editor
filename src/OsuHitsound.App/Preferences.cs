@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using OsuHitsound.Audio;
 using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
@@ -19,7 +20,7 @@ internal sealed record Preferences
     public int AudioDevice { get; init; } = -1;
 
     /// <summary>Playback buffer in ms: smaller reacts faster, larger is safer against crackles.</summary>
-    public int BufferMs { get; init; } = 100;
+    public int BufferMs { get; init; } = AudioEngine.DefaultBufferMs;
 
     /// <summary>osu.Game.Resources.dll to read the default sounds from; null uses the standard lazer install.</summary>
     public string? LazerResources { get; init; }
