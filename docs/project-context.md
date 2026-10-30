@@ -23,6 +23,7 @@ A standalone hitsound editor for **osu!standard** maps that works like **Cubase'
 | Main-screen UI design: chosen direction, colours, layout | `docs/ui-design.md` (design canvas: https://claude.ai/artifact/C3ChZkS3d9onU2eF5bHW41) |
 | Stable listening test instructions | `testmaps/README.md` |
 | Roadmap dashboard (Now/Next/Later, milestone status) | https://claude.ai/artifact/WjSNkbCWpSu7vMKrKM9aqY |
+| Merge decisions with dawsu! V6.39 (UI to Avalonia, C# model, waves) | `docs/merge-decisions.md` (map: https://claude.ai/artifact/VVUhNS5uTAL1aKynTLpo4B) |
 
 ## Decisions made
 
@@ -61,7 +62,7 @@ A standalone hitsound editor for **osu!standard** maps that works like **Cubase'
   - editing slider body and tick sounds (shown read-only)
   - per-note velocity
   - a built-in hitsound copier
-  - MIDI import or live recording
+  - live MIDI recording (MIDI import/export is planned for wave 3 of the V6.39 port: `docs/merge-decisions.md`)
 
 ## osu!stable behaviour: confirmed by ear (2026-10-30)
 
