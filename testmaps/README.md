@@ -54,6 +54,19 @@ Listen for which group 1 and 5 match exactly: 2 (the map default), 3 (Normal, as
 
 Diff **"3 SampleSet 0 v3 (default Normal)"** is the same, but the map's default is **Normal**. If groups 1 and 5 still match group 4 (Soft), auto always means Soft. If they match group 3 (Normal), auto means the map default and stable ignored the Drum default in v2.
 
+## Diff "4 Filename override": does a custom file replace the hitnormal and the additions?
+
+Four groups of four circles:
+
+| Group | Object says | Sound |
+|---|---|---|
+| 1 | hitnormal only | short high click |
+| 2 | hitnormal + clap | short high click + low beep |
+| 3 | custom file only | long middle tone (and the click too?) |
+| 4 | custom file + clap | long middle tone (and the low beep too?) |
+
+In groups 3 and 4, listen for whether the click or the low beep still plays under the tone.
+
 ## Optional
 
 Play the same diffs in lazer to hear where the two clients disagree.

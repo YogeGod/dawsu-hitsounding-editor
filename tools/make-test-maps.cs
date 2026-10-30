@@ -38,6 +38,10 @@ var samples = new Dictionary<string, byte[]>
     ["normal-hitnormal5.wav"] = Beep(300, 0.10),
     ["soft-hitnormal5.wav"] = Beep(800, 0.10),
     ["drum-hitnormal5.wav"] = Beep(2000, 0.10),
+    // Diff 4: index 6 hitnormal = short high click, hitclap = low beep, the override file = a long middle tone.
+    ["soft-hitnormal6.wav"] = Beep(2000, 0.06),
+    ["soft-hitclap6.wav"] = Beep(300, 0.10),
+    ["override.wav"] = Tone(800, 0.3),
 };
 foreach (var (name, bytes) in samples) File.WriteAllBytes(Path.Combine(outDir, name), bytes);
 
@@ -88,6 +92,18 @@ foreach (var (diffName, defaultSet) in new[] { ("3 SampleSet 0 v2", "Drum"), ("3
         for (int i = 0; i < 4; i++)
             ho.Add($"{64 + i * 96},192,{At(group + i)},{(i == 0 ? 5 : 1)},0,0:0:0:0:");
     WriteDiff(diffName, defaultSet, tp, ho);
+}
+
+// Diff 4: with a filename override, does stable still play the hitnormal and the additions?
+// Groups of 4 circles: hitnormal only, hitnormal + clap, override only, override + clap.
+{
+    var tp = new List<string> { TimingPoint(T0, Beat, 2, 6, 70, red: true) };
+    var ho = new List<string>();
+    var groups = new[] { (0, 0, ""), (6, 8, ""), (12, 0, "override.wav"), (18, 8, "override.wav") };
+    foreach (var (beat, sound, fileName) in groups)
+        for (int i = 0; i < 4; i++)
+            ho.Add($"{64 + i * 96},192,{At(beat + i)},{(i == 0 ? 5 : 1)},{sound},0:0:0:0:{fileName}");
+    WriteDiff("4 Filename override", "Soft", tp, ho);
 }
 
 MakeSilentAudio(Path.Combine(outDir, "audio.mp3"), seconds: 20);
