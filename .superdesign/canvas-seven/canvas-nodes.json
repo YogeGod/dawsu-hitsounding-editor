@@ -1,0 +1,113 @@
+{
+  "projectId": "e3beea69-9bff-4579-81c5-c816459dd5ce",
+  "nodes": [
+    {
+      "id": "bfcbd80d-2716-460d-bf86-bafa65dbd080",
+      "title": "07 Win98",
+      "description": "",
+      "screenshot": null,
+      "parentDraftId": null,
+      "iterationDepth": 0,
+      "previewUrl": "https://p.superdesign.dev/draft/bfcbd80d-2716-460d-bf86-bafa65dbd080",
+      "createdAt": "2026-10-30T11:00:37.246Z",
+      "currentVersion": 1
+    },
+    {
+      "id": "a72e50bf-feb8-4cb9-ac76-766ff0ab670a",
+      "title": "06 Newsprint",
+      "description": "",
+      "screenshot": null,
+      "parentDraftId": null,
+      "iterationDepth": 0,
+      "previewUrl": "https://p.superdesign.dev/draft/a72e50bf-feb8-4cb9-ac76-766ff0ab670a",
+      "createdAt": "2026-10-30T11:00:29.319Z",
+      "currentVersion": 1
+    },
+    {
+      "id": "cdfc8520-1f27-4950-9b2c-d2825d247aed",
+      "title": "05 Neumorphism",
+      "description": "",
+      "screenshot": null,
+      "parentDraftId": null,
+      "iterationDepth": 0,
+      "previewUrl": "https://p.superdesign.dev/draft/cdfc8520-1f27-4950-9b2c-d2825d247aed",
+      "createdAt": "2026-10-30T11:00:20.063Z",
+      "currentVersion": 1
+    },
+    {
+      "id": "3082dbf3-ecac-49d1-a7f3-ec54de800ba9",
+      "title": "Hitsound Editor - 01 Bauhaus",
+      "description": "Applied Bauhaus preset with off-white background, ink text, strong geometric shapes, and a narrow left tool rail.",
+      "screenshot": {
+        "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/screenshots/drafts/3082dbf3-ecac-49d1-a7f3-ec54de800ba9/1793357787950.png",
+        "width": 800,
+        "height": 600
+      },
+      "parentDraftId": "ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed",
+      "iterationDepth": 1,
+      "previewUrl": "https://p.superdesign.dev/draft/3082dbf3-ecac-49d1-a7f3-ec54de800ba9",
+      "createdAt": "2026-10-30T10:56:23.286Z",
+      "currentVersion": 2
+    },
+    {
+      "id": "5ba244c1-8bd6-4364-bfd1-d90c4071a3bc",
+      "title": "Hitsound Editor - Beam",
+      "description": "Redesign of the Hitsound Editor using the Beam preset (light theme). Recomposed into a calm productivity workspace with a slim menu/document row, compact two-tier command header, centered rounded transport pod, light timeline, slim left sample column, and integrated bottom automation drawer.",
+      "screenshot": {
+        "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/screenshots/drafts/5ba244c1-8bd6-4364-bfd1-d90c4071a3bc/1793357850302.png",
+        "width": 800,
+        "height": 600
+      },
+      "parentDraftId": "ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed",
+      "iterationDepth": 1,
+      "previewUrl": "https://p.superdesign.dev/draft/5ba244c1-8bd6-4364-bfd1-d90c4071a3bc",
+      "createdAt": "2026-10-30T10:55:57.614Z",
+      "currentVersion": 1
+    },
+    {
+      "id": "2e7811c1-d841-4dec-b3d1-9d899e3f5912",
+      "title": "Hitsound Editor - Kinetic",
+      "description": "03 Kinetic style: acid yellow highlights, dark background, bottom transport dock.",
+      "screenshot": {
+        "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/screenshots/drafts/2e7811c1-d841-4dec-b3d1-9d899e3f5912/1793357850926.png",
+        "width": 800,
+        "height": 600
+      },
+      "parentDraftId": "ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed",
+      "iterationDepth": 1,
+      "previewUrl": "https://p.superdesign.dev/draft/2e7811c1-d841-4dec-b3d1-9d899e3f5912",
+      "createdAt": "2026-10-30T10:55:45.846Z",
+      "currentVersion": 1
+    },
+    {
+      "id": "aab44a5b-84c2-4913-af14-4860fa9522bf",
+      "title": "Hitsound Editor - Luxury",
+      "description": "Luxury preset implementation: warm F9F8F6 surfaces, 1A1A1A ink, D4AF37 gold highlights, square geometry, subtle shadows. Right-side volume panel layout.",
+      "screenshot": {
+        "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/screenshots/drafts/aab44a5b-84c2-4913-af14-4860fa9522bf/1793357851125.png",
+        "width": 800,
+        "height": 600
+      },
+      "parentDraftId": "ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed",
+      "iterationDepth": 1,
+      "previewUrl": "https://p.superdesign.dev/draft/aab44a5b-84c2-4913-af14-4860fa9522bf",
+      "createdAt": "2026-10-30T10:55:41.161Z",
+      "currentVersion": 1
+    },
+    {
+      "id": "ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed",
+      "title": "Hitsound Editor Baseline",
+      "description": "Baseline replication of the native Avalonia hitsound editor layout, incorporating original palette, structure, and dense desktop proportions.",
+      "screenshot": {
+        "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/screenshots/drafts/ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed/1793357709809.png",
+        "width": 800,
+        "height": 600
+      },
+      "parentDraftId": null,
+      "iterationDepth": 0,
+      "previewUrl": "https://p.superdesign.dev/draft/ca3d6e0a-2a4f-4c31-8901-f6f14ffa18ed",
+      "createdAt": "2026-10-30T10:53:07.309Z",
+      "currentVersion": 1
+    }
+  ]
+}

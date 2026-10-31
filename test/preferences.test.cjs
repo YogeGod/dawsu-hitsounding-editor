@@ -1,8 +1,0 @@
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),P=require('../src/preferences.cjs');
-function temp(fn){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hse-prefs-'));try{return fn(dir,path.join(dir,'preferences.json'));}finally{for(const name of fs.readdirSync(dir))fs.unlinkSync(path.join(dir,name));fs.rmdirSync(dir);}}
-test('missing preferences default to no Songs folder',()=>temp((dir,file)=>assert.deepEqual(P.load(file),{songsFolder:''})));
-test('saved Songs folder survives a fresh preferences load',()=>temp((dir,file)=>{P.save(file,{songsFolder:dir});assert.equal(P.load(file).songsFolder,fs.realpathSync(dir));}));
-test('saved folder can be replaced and cleared',()=>temp((dir,file)=>{P.save(file,{songsFolder:dir});P.save(file,{songsFolder:''});assert.deepEqual(P.load(file),{songsFolder:''});}));
-test('a file or missing folder is rejected without corrupting saved preferences',()=>temp((dir,file)=>{P.save(file,{songsFolder:dir});const before=fs.readFileSync(file,'utf8');assert.throws(()=>P.save(file,{songsFolder:file}));assert.throws(()=>P.save(file,{songsFolder:path.join(dir,'missing')}));assert.equal(fs.readFileSync(file,'utf8'),before);}));
-test('relative paths and invalid data are rejected',()=>temp((dir,file)=>{assert.throws(()=>P.save(file,{songsFolder:'relative'}));assert.throws(()=>P.save(file,{songsFolder:42}));}));
-test('malformed preferences fail safely to defaults',()=>temp((dir,file)=>{fs.writeFileSync(file,'invalid json');assert.deepEqual(P.load(file),{songsFolder:''});}));

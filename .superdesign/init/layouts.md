@@ -1,0 +1,331 @@
+# Main editor shell
+
+A single native desktop window, with document title, transport, two-row editing strip, overview, arrange canvas, volume panel and status bar. Named controls retain existing event handlers.
+
+## src/OsuHitsound.App/MainWindow.axaml
+
+```xml
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:OsuHitsound.App"
+        x:Class="OsuHitsound.App.MainWindow"
+        Title="osu! Hitsound Editor"
+        Width="1600" Height="900" MinWidth="900" MinHeight="500"
+        Background="#262628" RequestedThemeVariant="Dark">
+  <Window.Styles>
+    <!-- Shared control styling; colour resources remain editable in the UI inspector. -->
+    <Style Selector="Border.chrome">
+      <Setter Property="Background" Value="{DynamicResource ChromeBg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    </Style>
+    <Style Selector="Border.chrome TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    </Style>
+    <Style Selector="Button, ToggleButton">
+      <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="FontSize" Value="{DynamicResource ButtonFontSize}" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    </Style>
+    <Style Selector="MenuItem">
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter, ToggleButton:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    </Style>
+    <Style Selector="ToggleButton:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
+      <Setter Property="Foreground" Value="#ffffff" />
+    </Style>
+    <Style Selector="Button.transport, ToggleButton.transport">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
+      <Setter Property="Foreground" Value="#ffffff" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="16,6" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
+      <Setter Property="Foreground" Value="#ffffff" />
+    </Style>
+    <Style Selector="ComboBox, TextBox">
+      <Setter Property="Background" Value="{DynamicResource LcdBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.sectionLabel">
+      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.separator">
+      <Setter Property="Background" Value="{DynamicResource ChromeBorder}" />
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Margin" Value="10,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.lcd">
+      <Setter Property="Foreground" Value="{DynamicResource LcdText}" />
+      <Setter Property="FontFamily" Value="Consolas, Cascadia Mono, monospace" />
+      <Setter Property="FontSize" Value="{DynamicResource LcdFontSize}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="RadioButton.tab">
+      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="TabBorder" Padding="14,8" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="Transparent">
+            <ContentPresenter Content="{TemplateBinding Content}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="RadioButton.tab:checked">
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="RadioButton.tab:checked /template/ Border#TabBorder">
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+    </Style>
+    <Style Selector="RadioButton.tab:pointerover /template/ Border#TabBorder">
+      <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Name="Root" RowDefinitions="32,64,76,24,*,180,28">
+    <!-- 1. File title -->
+    <Border Grid.Row="0" Name="TitleBar" Classes="chrome" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0">
+        <TextBlock Text="HITSOUND EDITOR" Classes="sectionLabel" Margin="0,0,24,0" />
+        <TextBlock Grid.Column="1" Name="FileTitle" Text="No map open — Hitsounds" TextTrimming="CharacterEllipsis" FontSize="12" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="2" Text="F1  Shortcuts" Classes="sectionLabel" Margin="16,0,0,0" />
+      </Grid>
+    </Border>
+
+    <!-- 2. Control bar -->
+    <Border Grid.Row="1" Name="ControlBar" Classes="chrome" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0">
+        <Button Grid.Column="0" Name="OpenButton" Content="Open .osu…" VerticalAlignment="Center" ToolTip.Tip="Open a map (Ctrl+O)" />
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0">
+          <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
+            <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="13" Height="14" Stretch="Uniform" />
+          </Button>
+          <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop">
+            <Path Data="M 0,0 L 12,0 L 12,12 L 0,12 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="12" Stretch="Uniform" />
+          </Button>
+          <Button Name="PlayButton" Classes="transport" Content="▶" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop (Space)" />
+          <ToggleButton Name="LoopButton" Classes="transport" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R, drag in the upper ruler draws a range." AutomationProperties.Name="Loop">
+            <Path Data="M 2,5 L 2,2 L 15,2 M 12,0 L 15,2 L 12,5 M 15,8 L 15,12 L 2,12 M 5,9 L 2,12 L 5,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.7" Width="17" Height="15" Stretch="Uniform" />
+          </ToggleButton>
+          <Border Name="Lcd" Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,4" Margin="12,0,0,0" Height="50">
+            <Grid ColumnDefinitions="96,132,66,110" VerticalAlignment="Center">
+              <StackPanel Grid.Column="0"><TextBlock Name="LcdBar" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="BAR · BEAT · TICK" /></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Name="LcdTime" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Name="LcdBpm" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="BPM" /></StackPanel>
+              <StackPanel Grid.Column="3"><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="SIGNATURE · SNAP" /></StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <Button Grid.Column="2" Name="SaveButton" Classes="primary" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Save .osu"
+                ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
+      </Grid>
+    </Border>
+
+    <!-- 3. Edit bar -->
+    <Border Grid.Row="2" Name="EditBar" Classes="chrome" BorderThickness="0,0,0,1">
+      <Grid RowDefinitions="38,38" Margin="10,0">
+      <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto">
+        <Menu Grid.Column="0" VerticalAlignment="Center">
+          <MenuItem Header="File">
+            <MenuItem Name="OpenItem" Header="Open…" />
+            <MenuItem Name="RecentItem" Header="Recent maps" />
+            <MenuItem Name="SaveItem" Header="Save" />
+            <Separator />
+            <MenuItem Name="GenerateFileItem" Header="Generate hitsound diff…" />
+            <Separator />
+            <MenuItem Name="PreferencesItem" Header="Preferences…" />
+          </MenuItem>
+          <MenuItem Header="Edit">
+            <MenuItem Name="UndoItem" Header="Undo" />
+            <MenuItem Name="RedoItem" Header="Redo" />
+            <Separator />
+            <MenuItem Name="CutItem" Header="Cut" />
+            <MenuItem Name="CopyItem" Header="Copy" />
+            <MenuItem Name="PasteItem" Header="Paste at playhead" />
+            <MenuItem Name="DuplicateItem" Header="Duplicate" />
+            <MenuItem Name="DeleteItem" Header="Delete" />
+            <Separator />
+            <MenuItem Name="SelectAllItem" Header="Select all" />
+          </MenuItem>
+          <MenuItem Header="Playback">
+            <MenuItem Header="Start from">
+              <MenuItem Name="StartCursorItem" Header="Cursor" ToggleType="Radio" GroupName="start" IsChecked="True" />
+              <MenuItem Name="StartLeftItem" Header="Left locator" ToggleType="Radio" GroupName="start" />
+              <MenuItem Name="StartSelectionItem" Header="Selection" ToggleType="Radio" GroupName="start" />
+              <MenuItem Name="StartSelectionOrLeftItem" Header="Selection, else left locator" ToggleType="Radio" GroupName="start" />
+            </MenuItem>
+            <MenuItem Name="ReturnOnStopItem" Header="Return on stop" ToggleType="CheckBox" />
+            <MenuItem Name="FollowItem" Header="Follow playback" ToggleType="CheckBox" IsChecked="True" />
+            <MenuItem Header="Speed">
+              <MenuItem Name="Speed50Item" Header="50 %" ToggleType="Radio" GroupName="speed" />
+              <MenuItem Name="Speed75Item" Header="75 %" ToggleType="Radio" GroupName="speed" />
+              <MenuItem Name="Speed100Item" Header="100 %" ToggleType="Radio" GroupName="speed" IsChecked="True" />
+              <MenuItem Name="Speed125Item" Header="125 %" ToggleType="Radio" GroupName="speed" />
+              <MenuItem Name="Speed150Item" Header="150 %" ToggleType="Radio" GroupName="speed" />
+            </MenuItem>
+          </MenuItem>
+          <MenuItem Header="Map">
+            <MenuItem Name="AddLaneItem" Header="Add lane…" />
+            <MenuItem Name="FilterLanesItem" Header="Filter lanes" />
+            <Separator />
+            <MenuItem Name="GenerateItem" Header="Generate hitsound diff…" />
+          </MenuItem>
+          <MenuItem Header="View">
+            <MenuItem Name="ZoomInItem" Header="Zoom in" />
+            <MenuItem Name="ZoomOutItem" Header="Zoom out" />
+            <MenuItem Name="CollapseAllItem" Header="Collapse all groups" />
+            <MenuItem Name="InspectorItem" Header="UI inspector" />
+            <MenuItem Name="HelpItem" Header="Shortcuts and help" />
+          </MenuItem>
+        </Menu>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" Margin="12,0" VerticalAlignment="Center">
+          <ToggleButton Name="SelectTool" Content="Select" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." />
+          <ToggleButton Name="DrawTool" Content="Draw" ToolTip.Tip="Draw (3, or hold Alt). Click or drag along a lane; starting on a hit erases instead." />
+          <ToggleButton Name="EraseTool" Content="Erase" ToolTip.Tip="Erase (4). Drag across hits to remove them." />
+          <ToggleButton Name="MuteTool" Content="Mute" ToolTip.Tip="Mute (5). Click a hit to silence it while listening. Preview only: osu! cannot store a muted sound, so this is never saved." />
+          <ToggleButton Name="RampTool" Content="Ramp" ToolTip.Tip="Ramp (6). Drag in the volume lane to draw a volume ramp." />
+        </StackPanel>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="Snap" VerticalAlignment="Center" />
+          <ComboBox Name="SnapBox" Width="74" Focusable="False" />
+          <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Slider Name="ZoomSlider" Width="110" Minimum="0" Maximum="1" Value="0.5" Focusable="False" VerticalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+          <TextBlock Text="VIEW" Classes="sectionLabel" Margin="4,0,8,0" />
+          <ToggleButton Name="LaneDetailsToggle" Content="Lane details" IsChecked="True" ToolTip.Tip="Show each lane's file index" />
+          <ToggleButton Name="VolumeToggle" Content="Volume lane" IsChecked="True" ToolTip.Tip="Show the bottom panel" />
+          <ToggleButton Content="Sample browser" IsEnabled="False" ToolTip.Tip="Comes later" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="SONG" Classes="sectionLabel" />
+          <Slider Name="SongVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" Focusable="False" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
+          <ToggleButton Name="SongMuteButton" Content="Mute" ToolTip.Tip="Mute the song. Soloing a lane also silences it." />
+          <Border Classes="separator" />
+          <TextBlock Text="Offset" VerticalAlignment="Center" />
+          <TextBox Name="SongOffsetBox" Width="60" Text="0" VerticalAlignment="Center" ToolTip.Tip="Song offset in ms: positive plays the song later. Enter applies. Not saved into the map." />
+          <TextBlock Text="ms" Classes="sectionLabel" Margin="0,0,4,0" />
+        </StackPanel>
+      </Grid>
+      </Grid>
+    </Border>
+
+    <!-- 4. Overview strip -->
+    <app:OverviewStrip Grid.Row="3" Name="Overview" />
+
+    <!-- 5. Arrange area -->
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+      <app:ArrangeView Name="Lanes" />
+      <TextBox Name="LaneFilterBox" IsVisible="False" Width="200" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="40,8,0,0" Watermark="Filter lanes (Esc closes)" />
+      <ScrollBar Grid.Column="1" Name="VScroll" Orientation="Vertical" />
+      <ScrollBar Grid.Row="1" Name="HScroll" Orientation="Horizontal" Margin="328,0,0,0" />
+    </Grid>
+
+    <!-- Bottom panel: Volume | What gets saved -->
+    <Border Grid.Row="5" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="#1c1c1e" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,*" Margin="0,0,12,0">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <RadioButton Name="VolumeTab" Classes="tab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="False" />
+          <RadioButton Name="SavedTab" Classes="tab" Content="What gets saved" GroupName="bottom" Focusable="False" />
+        </StackPanel>
+        <TextBlock Grid.Column="1" Text="One volume per moment · shared by all lanes" Classes="sectionLabel" HorizontalAlignment="Right" />
+        </Grid>
+        </Border>
+        <Panel>
+          <app:VolumeLane Name="Volume" />
+          <ScrollViewer Name="VolumeControlScroller" HorizontalAlignment="Left" Width="347" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <StackPanel Name="VolumeControls" Margin="14,8" Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Volume" FontWeight="Bold" Foreground="#e4e4e6" VerticalAlignment="Center" />
+              <TextBlock Text="Ramp" Foreground="#a4a4a9" VerticalAlignment="Center" Margin="12,0,0,0" />
+              <ComboBox Name="RampShapeBox" Width="110" Focusable="False" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBox Name="VolumeValueBox" Width="56" Watermark="0-100" ToolTip.Tip="A value for the selected moments" />
+              <ComboBox Name="VolumeModeBox" Width="96" Focusable="False" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
+              <Button Name="VolumeApplyButton" Content="Apply" Focusable="False" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Select" Foreground="#a4a4a9" VerticalAlignment="Center" />
+              <TextBox Name="VolumeMinBox" Width="46" Watermark="min" />
+              <TextBlock Text="to" Foreground="#a4a4a9" VerticalAlignment="Center" />
+              <TextBox Name="VolumeMaxBox" Width="46" Watermark="max" />
+              <Button Name="VolumeSelectButton" Content="Select" Focusable="False" ToolTip.Tip="Select every hit whose moment volume is in this range" />
+            </StackPanel>
+          </StackPanel>
+          </ScrollViewer>
+          <TextBlock Name="SavedText" IsVisible="False" Margin="14,8" Foreground="#a4a4a9" TextWrapping="Wrap"
+                     Text="This tab will show the hitSound and hitSample fields (and any green lines) the selected moment saves as. It arrives with the compiler." />
+        </Panel>
+      </DockPanel>
+    </Border>
+
+    <!-- 6. Status bar -->
+    <Border Grid.Row="6" Name="StatusBar" Classes="chrome" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto" Margin="14,0">
+        <TextBlock Name="StatusLeft" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1" Name="StatusRight" VerticalAlignment="Center" FontSize="12" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
+
+```
+## src/OsuHitsound.App/App.axaml
+
+```xml
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OsuHitsound.App.App"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme DensityStyle="Compact" />
+    <Style Selector="Window">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+  </Application.Styles>
+</Application>
+
+```
+

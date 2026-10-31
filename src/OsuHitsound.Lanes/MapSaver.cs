@@ -1,0 +1,36 @@
+using OsuHitsound.Format;
+
+namespace OsuHitsound.Lanes;
+
+/// <summary>What <see cref="MapSaver.Save"/> did: the compile result, and the backup path (null when nothing was written).</summary>
+public sealed record SaveResult(CompileResult Compile, string? Backup, bool Written);
+
+/// <summary>
+/// Saves wanted sounds into a .osu: compiles a fresh copy of the map as it was opened, refuses when the file changed on
+/// disk since, keeps a timestamped backup under <c>backupRoot</c> (outside the mapset), and replaces the .osu through a
+/// temporary file next to it. Only the .osu is written; nothing else in the mapset folder is touched.
+/// </summary>
+public static class MapSaver
+{
+    public static string DefaultBackupRoot() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OsuHitsoundEditor", "backups");
+
+    /// <exception cref="IOException">The file changed on disk since it was opened, or couldn't be written.</exception>
+    public static SaveResult Save(string osuPath, byte[] opened, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, string backupRoot,
+        IReadOnlyList<int>? bookmarks = null)
+    {
+        if (!File.ReadAllBytes(osuPath).AsSpan().SequenceEqual(opened))
+            throw new IOException("The .osu changed on disk since it was opened (another program?). Reopen it to edit the new version.");
+
+        var copy = OsuFile.Parse(opened);
+        var result = Compiler.Apply(copy, folder, wanted);
+
+        // Bookmarks: only when the set changed, so a map with bookmarks out of order is left as it is.
+        if (bookmarks is not null && !copy.Bookmarks.Order().SequenceEqual(bookmarks.Order())) copy.SetBookmarks([.. bookmarks.Order()]);
+        if (!copy.IsEdited) return new SaveResult(result, null, false);
+
+        var backup = SafeFile.Backup(backupRoot, osuPath, opened);
+        SafeFile.WriteAllBytes(osuPath, copy.ToBytes());
+        return new SaveResult(result, backup, true);
+    }
+}

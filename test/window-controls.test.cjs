@@ -1,4 +1,0 @@
-const test=require('node:test'),assert=require('node:assert/strict'),Controls=require('../src/window-controls.cjs');
-test('titlebar close uses the normal window close path so unsaved-change protection remains active',()=>{let calls=0;Controls.apply({close(){calls++;}},'close');assert.equal(calls,1);});
-test('titlebar minimize and maximize/restore operate independently',()=>{let minimized=0,maximized=false;const window={minimize(){minimized++;},maximize(){maximized=true;},unmaximize(){maximized=false;},isMaximized(){return maximized;}};Controls.apply(window,'minimize');assert.equal(minimized,1);assert.equal(Controls.apply(window,'maximize').maximized,true);assert.equal(Controls.apply(window,'maximize').maximized,false);});
-test('titlebar bridge rejects commands outside its window-action whitelist',()=>{assert.throws(()=>Controls.apply({},'destroy'),/Unknown window action/);});

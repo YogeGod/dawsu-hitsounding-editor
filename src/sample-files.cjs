@@ -1,8 +1,0 @@
-"use strict";
-const fs=require('fs'),path=require('path');
-function relativeName(name){if(typeof name!=='string'||!name||name.includes('\0'))return null;const value=name.replace(/\\/g,'/');if(value.startsWith('/')||value.includes(':')||value.split('/').includes('..'))return null;return value.split('/').filter(part=>part&&part!=='.').join('/');}
-function candidates(name){return [...new Set([name,name.replace(/\.wav$/i,'.ogg'),name.replace(/\.wav$/i,'.mp3')])];}
-function localLookup(folder){const root=fs.realpathSync(folder),directories=new Map();return name=>{const relative=relativeName(name);if(!relative)return null;let current=root;try{for(const segment of relative.split('/')){if(!directories.has(current))directories.set(current,new Map(fs.readdirSync(current).map(v=>[v.toLowerCase(),v])));const actual=directories.get(current).get(segment.toLowerCase());if(!actual)return null;current=fs.realpathSync(path.join(current,actual));if(!current.toLowerCase().startsWith((root+path.sep).toLowerCase()))return null;}return fs.statSync(current).isFile()?current:null;}catch{return null;}};}
-function archivePath(name,mapEntry=''){const relative=relativeName(name);if(!relative)throw Error('Unsafe sample path: '+name);const parent=path.posix.dirname((mapEntry||'').replace(/\\/g,'/'));return parent&&parent!=='.'?parent+'/'+relative:relative;}
-function archiveLookup(zip,mapEntry=''){const entries=new Map(Object.values(zip.files).filter(e=>!e.dir).map(e=>[e.name.replace(/\\/g,'/').toLowerCase(),e]));return name=>{if(!relativeName(name))return null;return entries.get(archivePath(name,mapEntry).toLowerCase())||entries.get(relativeName(name).toLowerCase())||null;};}
-module.exports={relativeName,candidates,localLookup,archiveLookup,archivePath};

@@ -1,0 +1,1223 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media;
+using OsuHitsound.Format;
+using OsuHitsound.Lanes;
+
+namespace OsuHitsound.App;
+
+/// <summary>The editing tools (dawsu numbering: 1 Select, 2 Range, 3 Draw, 4 Erase, 5 Mute, 6 Ramp in the volume lane).</summary>
+internal enum Tool
+{
+    Select,
+    Range,
+    Draw,
+    Erase,
+    Mute,
+    Ramp,
+}
+
+/// <summary>
+/// The arrange area, drawn in one pass so maps with thousands of notes stay smooth: a header row (lane count, song
+/// sections, ruler), then per row a number strip, the lane list (group rows with collapse and M/S; lane rows with M, S,
+/// file name and index) and the tinted grid with diamond notes. Editing: Select (click, Ctrl/Shift+click, marquee,
+/// drag to move), Draw (click or drag to paint; starting on a hit erases instead), Erase (drag across hits), right-click
+/// deletes a hit, Alt draws temporarily. Hits that won't be saved are drawn white with a red ring on red stripes.
+/// </summary>
+internal sealed class ArrangeView : Control
+{
+    private static UiTheme Theme_ => UiTheme.Current;
+
+    public static double NumberWidth => Theme_.Number("numbers.width");
+    public static double ListWidth => Theme_.Number("list.width");
+    public static double GridLeft => NumberWidth + ListWidth;
+    public static double SectionsHeight => Theme_.Number("header.sections");
+    public const double RulerHeight = 24;
+    public double HeaderHeight => RulerBottom + WaveHeight + ObjectsHeight;
+
+    /// <summary>Bottom of the ruler: the waveform lane and the object strip sit between it and the lanes.</summary>
+    public static double RulerBottom => SectionsHeight + RulerHeight;
+
+    /// <summary>Height of the waveform lane; drag the line under it to resize, double-click to reset.</summary>
+    public double WaveHeight { get; set; } = DefaultWaveHeight;
+
+    public const double DefaultWaveHeight = 44, ObjectsHeight = 26;
+    public const double MinRowHeight = 16, MaxRowHeight = 64;
+
+    private static readonly IBrush StripeA = Paint.Brush("#3a1517"), StripeB = Paint.Brush("#6b1f24");
+    private static readonly IPen ConflictRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
+    private static readonly IPen MarqueePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#2f6fd0"), 1);
+    private static readonly IBrush MarqueeFill = Paint.Brush(Color.Parse("#2f6fd0"), 0.15);
+    private static readonly IPen RangePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#e0a030"), 1);
+    private static readonly IBrush RangeFill = Paint.Brush(Color.Parse("#e0a030"), 0.18);
+
+    private double? rowHeight; // set by Ctrl+Alt+wheel; null follows the theme
+    private double scrollY;
+    private HashSet<EditHit> selection => Edits.Selected;
+
+    // The gesture in progress.
+    private enum Drag
+    {
+        None,
+        Marquee,
+        Move,
+        Range,
+        Paint,
+        Wipe,
+        Cycle,
+        ResizeWave,
+    }
+
+    private Drag drag;
+    private Point dragStart, dragNow;
+    private EditHit? dragAnchor;
+    private List<EditHit> dragHits = [];
+    private LaneRow? paintRow;
+    private double waveHeightAtStart;
+    private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
+    private HashSet<EditHit> marqueeBase = [];
+
+    public ArrangeView()
+    {
+        ClipToBounds = true;
+        Focusable = true;
+        Edits.Changed += () =>
+        {
+            SelectionChanged?.Invoke();
+            InvalidateVisual();
+        };
+    }
+
+    /// <summary>Row height in px (vertical zoom, Ctrl+Alt+wheel). Design G's compact rows are 22 px.</summary>
+    public double RowHeight
+    {
+        get => rowHeight ?? Theme_.Number("row.height");
+        set
+        {
+            rowHeight = Math.Clamp(value, MinRowHeight, MaxRowHeight);
+            ScrollY = scrollY;
+            InvalidateVisual();
+        }
+    }
+
+    // Row contents are laid out for 22 px and kept centred in taller rows.
+    private double Pad => (RowHeight - 22) / 2;
+    private static double NoteSize => Theme_.Number("note.size");
+    private static double LaneFont => Theme_.Number("lane.fontSize");
+    private static double RulerFont => Theme_.Number("ruler.fontSize");
+
+    public ArrangeModel? Model { get; private set; }
+
+    /// <summary>The selection and the editing commands (keyboard and menus).</summary>
+    public HitEditor Edits { get; } = new();
+
+    private EditSession? Session => Model?.Session;
+
+    public TimeAxis Axis { get; } = new();
+
+    /// <summary>The playhead in ms (set by the window's frame timer).</summary>
+    public double Playhead { get; set; }
+
+    /// <summary>The tool in use; leaving the Range tool drops its range.</summary>
+    public Tool Tool
+    {
+        get => tool;
+        set
+        {
+            tool = value;
+            if (value != Tool.Range) Edits.ClearRange();
+            UpdateCursor(KeyModifiers.None);
+        }
+    }
+
+    private Tool tool = Tool.Select;
+
+    /// <summary>How far (px) the pointer must move before a press counts as a drag.</summary>
+    private const double DragThreshold = 3;
+
+    /// <summary>Snap divisor (1/n of a beat) and whether snapping is on (J).</summary>
+    public int Divisor { get => Edits.Divisor; set => Edits.Divisor = value; }
+
+    public bool SnapOn { get => Edits.SnapOn; set => Edits.SnapOn = value; }
+
+    /// <summary>View → Colour by Volume: notes go from dark (quiet) to bright (loud) instead of their lane's colour.</summary>
+    public bool ColourByVolume { get; set; }
+
+    private static readonly IBrush[] VolumeFills = [.. Enumerable.Range(0, 101).Select(v => Paint.Brush(VolumeColor(v)))];
+
+    /// <summary>The Volume colour mode's fill: one ramp for every lane, dark blue-grey at 0 % to warm white at 100 %.</summary>
+    public static Color VolumeColor(int volume)
+    {
+        double k = Math.Clamp(volume, 0, 100) / 100.0;
+        static byte Mix(byte a, byte b, double k) => (byte)Math.Round(a + (b - a) * k);
+        Color dark = Color.Parse("#2a3442"), bright = Color.Parse("#ffe9b0");
+        return Color.FromRgb(Mix(dark.R, bright.R, k), Mix(dark.G, bright.G, k), Mix(dark.B, bright.B, k));
+    }
+
+    // ---- areas the tutorial points at (this control's coordinates)
+
+    /// <summary>The lane list's title: SAMPLE LANES, the filter and the + button.</summary>
+    public Rect LaneListHeaderRect => new(0, 0, GridLeft, RulerBottom);
+
+    /// <summary>The icon and + ● M S buttons of the first visible lane, or null when no lane is in view.</summary>
+    public Rect? FirstLaneButtonsRect()
+    {
+        if (Model is not { } model) return null;
+        for (int i = Math.Max(0, RowIndexAt(HeaderHeight)); i < model.Rows.Count; i++)
+        {
+            double y = HeaderHeight + RowTop(i) - scrollY;
+            if (y > Bounds.Height) break;
+            if (model.Rows[i] is LaneRow) return new Rect(GridLeft - IconFromRight - 14, y, IconFromRight + 14, RowHeight);
+        }
+
+        return null;
+    }
+
+    /// <summary>The grid of hits, below the ruler and the object strip.</summary>
+    public Rect GridRect => new(GridLeft, HeaderHeight, Math.Max(0, Bounds.Width - GridLeft), Math.Max(0, Bounds.Height - HeaderHeight));
+
+    /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
+    public bool ShowIndexes { get; set; }
+
+    public IReadOnlyCollection<EditHit> Selection => selection;
+
+    /// <summary>The moments the selected hits play on.</summary>
+    public IReadOnlySet<MomentKey> SelectedMoments => Edits.SelectedMoments;
+
+    public event Action<Lane>? PreviewRequested;
+
+    public event Action<double>? SeekRequested;
+
+    /// <summary>Right-click on a lane name: the window shows the lane menu (rename, move, delete, add).</summary>
+    public event Action<LaneRow>? LaneMenuRequested;
+
+    /// <summary>The "+" above the lane list was clicked.</summary>
+    public event Action? AddLaneRequested;
+
+    /// <summary>The L and R cycle locators changed, or cycling was switched on or off from the ruler.</summary>
+    public event Action? LocatorsChanged;
+
+    public double? LocatorLeft { get; private set; }
+
+    public double? LocatorRight { get; private set; }
+
+    /// <summary>Cycle playback between the locators (R before L skips that stretch instead).</summary>
+    public bool Cycle
+    {
+        get => cycle;
+        set
+        {
+            if (cycle == value) return;
+            cycle = value;
+            LocatorsChanged?.Invoke();
+            InvalidateVisual();
+        }
+    }
+
+    private bool cycle;
+
+    public void SetLocators(double left, double right)
+    {
+        (LocatorLeft, LocatorRight) = (left, right);
+        LocatorsChanged?.Invoke();
+        InvalidateVisual();
+    }
+
+    public event Action? SelectionChanged;
+
+    /// <summary>The lanes scrolled up or down (wheel), so the window can move its scroll bar.</summary>
+    public event Action? ScrollChanged;
+
+    public double ContentHeight => Tops()[^1];
+
+    /// <summary>Group rows ("Soft sampleset") are compact, as in V6.39; lane rows are <see cref="RowHeight"/>.</summary>
+    public const double GroupRowHeight = 18;
+
+    private double HeightOf(Row row) => row is GroupRow ? Math.Min(GroupRowHeight, RowHeight) : RowHeight;
+
+    private double[] rowTops = [0];
+    private (IReadOnlyList<Row>? Rows, double Height) rowTopsFor;
+
+    // Each row's top (content coordinates), plus the total height at the end; rebuilt when the rows or their height change.
+    private double[] Tops()
+    {
+        if (Model?.Rows is not { } rows) return [0];
+        if (!ReferenceEquals(rowTopsFor.Rows, rows) || rowTopsFor.Height != RowHeight)
+        {
+            var tops = new double[rows.Count + 1];
+            for (int i = 0; i < rows.Count; i++) tops[i + 1] = tops[i] + HeightOf(rows[i]);
+            (rowTops, rowTopsFor) = (tops, (rows, RowHeight));
+        }
+
+        return rowTops;
+    }
+
+    private double RowTop(int i)
+    {
+        var tops = Tops();
+        return tops[Math.Clamp(i, 0, tops.Length - 1)];
+    }
+
+    public void SetModel(ArrangeModel? model)
+    {
+        if (Model is not null) Model.Changed -= InvalidateVisual;
+        Model = model;
+        if (model is not null) model.Changed += InvalidateVisual;
+        scrollY = 0;
+        Edits.Model = model;
+        drag = Drag.None;
+        Axis.End = model?.LastTime ?? 0;
+        InvalidateVisual();
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        Axis.Width = Math.Max(1, finalSize.Width - GridLeft);
+        return base.ArrangeOverride(finalSize);
+    }
+
+    // ---------------------------------------------------------------- drawing
+
+    public override void Render(DrawingContext ctx)
+    {
+        var size = Bounds.Size;
+        ctx.FillRectangle(Paint.Bg, new Rect(size));
+        if (Model is not { } model)
+        {
+            Paint.DrawText(ctx, "Open a .osu file to see its hitsounds.", new Point(GridLeft + 20, HeaderHeight + 20), Paint.BaseSize, Paint.Dim, 0);
+            return;
+        }
+
+        double gridWidth = size.Width - GridLeft;
+        double from = Axis.Time(0), to = Axis.Time(gridWidth);
+        var lines = model.GridLines(from, to).ToList();
+
+        using (ctx.PushClip(new Rect(0, HeaderHeight, size.Width, size.Height - HeaderHeight)))
+        {
+            int first = Math.Max(0, RowIndexAt(HeaderHeight));
+            for (int i = first; i < model.Rows.Count; i++)
+            {
+                double y = HeaderHeight + RowTop(i) - scrollY;
+                if (y > size.Height) break;
+                DrawRow(ctx, model, model.Rows[i], i, y, gridWidth);
+            }
+
+            using (ctx.PushClip(new Rect(GridLeft, HeaderHeight, gridWidth, size.Height - HeaderHeight)))
+            {
+                DrawConflictColumns(ctx, model, from, to, size.Height);
+
+                // Snap lines only when they are at least 6 px apart.
+                if (SnapOn && lines.Count > 0 && Axis.Zoom * lines[0].BeatLength / Divisor >= 6)
+                    foreach (var (t, fraction) in model.SubLines(from, to, Divisor))
+                    {
+                        double x = GridLeft + Axis.X(t);
+                        ctx.DrawLine(Paint.SnapPen(fraction), new Point(x, HeaderHeight), new Point(x, size.Height));
+                    }
+
+                foreach (var line in lines)
+                {
+                    double x = GridLeft + Axis.X(line.Time);
+                    ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, HeaderHeight), new Point(x, size.Height));
+                }
+
+                var range = Edits.Range;
+                double rangeLeft = range is null ? 0 : GridLeft + Axis.X(range.Start), rangeRight = range is null ? 0 : GridLeft + Axis.X(range.End);
+                for (int i = first; i < model.Rows.Count; i++)
+                {
+                    double y = HeaderHeight + RowTop(i) - scrollY;
+                    if (y > size.Height) break;
+                    if (model.Rows[i] is not LaneRow lane) continue;
+                    // The range is shaded under the notes, one box per lane row it covers.
+                    if (range is not null && range.Lanes.Contains(lane.Lane))
+                        ctx.DrawRectangle(RangeFill, RangePen, new Rect(rangeLeft, y, Math.Max(1, rangeRight - rangeLeft), RowHeight));
+                    DrawNotes(ctx, model, lane, y, from, to);
+                }
+
+                if (drag == Drag.Marquee)
+                {
+                    var r = new Rect(dragStart, dragNow).Normalize();
+                    ctx.DrawRectangle(MarqueeFill, MarqueePen, r);
+                }
+
+                double px = GridLeft + Axis.X(Playhead);
+                ctx.DrawLine(Paint.PlayheadPen, new Point(px, HeaderHeight), new Point(px, size.Height));
+            }
+        }
+
+        DrawHeader(ctx, model, lines, size.Width, gridWidth);
+        ctx.DrawLine(Paint.DividerPen, new Point(GridLeft - 0.5, 0), new Point(GridLeft - 0.5, size.Height));
+    }
+
+    /// <summary>The design's conflict marking: red 135° stripes down the whole column of a moment that won't save.</summary>
+    private void DrawConflictColumns(DrawingContext ctx, ArrangeModel model, double from, double to, double height)
+    {
+        const double half = 6;
+        var times = model.ProblemTimes;
+        for (int i = Sorted.LowerBound(times, from - 20, t => t); i < times.Count && times[i] <= to + 20; i++)
+        {
+            double t = times[i];
+            double x = GridLeft + Axis.X(t);
+            var column = new Rect(x - half, HeaderHeight, half * 2, height - HeaderHeight);
+            using (ctx.PushClip(column))
+            {
+                ctx.FillRectangle(StripeA, column);
+                for (double y = HeaderHeight - half * 2; y < height; y += 10)
+                {
+                    var g = new StreamGeometry();
+                    using (var c = g.Open())
+                    {
+                        c.BeginFigure(new Point(x - half, y), true);
+                        c.LineTo(new Point(x - half, y + 5));
+                        c.LineTo(new Point(x + half, y + 5 + half * 2));
+                        c.LineTo(new Point(x + half, y + half * 2));
+                        c.EndFigure(true);
+                    }
+
+                    ctx.DrawGeometry(StripeB, null, g);
+                }
+            }
+        }
+    }
+
+    private void DrawHeader(DrawingContext ctx, ArrangeModel model, List<GridLine> lines, double width, double gridWidth)
+    {
+        ctx.FillRectangle(Paint.Chrome2, new Rect(0, 0, width, HeaderHeight));
+        ctx.FillRectangle(TitleBand, new Rect(0, 0, GridLeft, RulerBottom));
+        Paint.DrawText(ctx, "SAMPLE LANES", new Point(10, 6), 8, Paint.Dim, ListWidth - 60, Paint.UiBold);
+        DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, -((RowHeight - 18) / 2) + 2, null);
+        // The waveform and the objects strip are rows of the list, as in V6.39.
+        ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom - 0.5), new Point(GridLeft, RulerBottom - 0.5));
+        if (WaveHeight >= 14)
+        {
+            Paint.DrawText(ctx, "Song audio", new Point(12, RulerBottom + WaveHeight / 2 - 7), 11, Paint.Dim, ListWidth - 60);
+            DrawToggle(ctx, "M", GridLeft - SoloFromRight, RulerBottom + (WaveHeight - RowHeight) / 2, SongMuted ? Paint.MuteOn : null);
+        }
+        ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom + WaveHeight - 0.5), new Point(GridLeft, RulerBottom + WaveHeight - 0.5));
+        Paint.DrawText(ctx, "Gameplay objects", new Point(12, RulerBottom + WaveHeight + ObjectsHeight / 2 - 7), 11, Paint.Dim, ListWidth - 20);
+
+        using (ctx.PushClip(new Rect(GridLeft, 0, gridWidth, HeaderHeight)))
+        {
+            foreach (var s in model.Sections)
+            {
+                double x0 = GridLeft + Axis.X(s.Start), x1 = double.IsInfinity(s.End) ? width : GridLeft + Axis.X(s.End);
+                if (x1 < GridLeft || x0 > width) continue;
+                var rect = new Rect(x0, 2, Math.Max(2, x1 - x0), SectionsHeight - 4);
+                ctx.DrawRectangle(Paint.Brush(Theme_.Color("section.fill"), Theme_.Number("section.opacity")), null, rect, 3, 3);
+                Paint.DrawText(ctx, s.Name, new Point(Math.Max(x0, GridLeft) + 5, 3), 11, Paint.Text, 0);
+            }
+
+            double rulerTop = SectionsHeight;
+            ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, rulerTop), new Point(width, rulerTop));
+            double lastLabel = double.NegativeInfinity;
+            foreach (var line in lines)
+            {
+                double x = GridLeft + Axis.X(line.Time);
+                ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, rulerTop + (line.IsBar ? 4 : 14)), new Point(x, RulerBottom));
+                string label = line.IsBar ? line.Bar.ToString() : $"{line.Bar}.{line.Beat}";
+                double labelWidth = line.IsBar ? 24 : 30;
+                if (x - lastLabel < labelWidth + 6 || (!line.IsBar && Axis.Zoom * line.BeatLength < 48)) continue;
+                Paint.DrawText(ctx, label, new Point(x + 3, rulerTop + 3), RulerFont, line.IsBar ? Paint.RulerBar : Paint.RulerBeat, 0, line.IsBar ? Paint.UiBold : Paint.Ui);
+                lastLabel = x;
+            }
+
+            DrawLocators(ctx, width);
+            DrawBookmarks(ctx);
+            DrawWaveform(ctx, width);
+            DrawObjects(ctx, model, width);
+
+            double px = GridLeft + Axis.X(Playhead);
+            ctx.FillRectangle(Paint.White, new Rect(px - 2, rulerTop, 4, RulerHeight));
+        }
+
+        ctx.DrawLine(Paint.DividerPen, new Point(0, HeaderHeight - 0.5), new Point(width, HeaderHeight - 0.5));
+    }
+
+    private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
+        SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
+
+    private static readonly IBrush WaveFill = Paint.Brush(Color.Parse("#8fb7e8"), 0.75), StripBg = Paint.Brush("#1f1f21"),
+        ObjectFill = Paint.Brush(Color.Parse("#c9c9cf"), 0.85), SliderBody = Paint.Brush(Color.Parse("#c9c9cf"), 0.35),
+        SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.45), BookmarkFill = Paint.Brush("#4cc3d1");
+    private static readonly IPen ObjectConflictPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
+
+    /// <summary>The song's waveform (set when decoding finishes) and its offset, so it lines up with the song as heard.</summary>
+    public Audio.Waveform? Wave { get; set; }
+
+    private StreamGeometry? waveGeometry;
+    private (double, double, double, double, double, double, Audio.Waveform?) waveKey;
+
+    public double SongOffset { get; set; }
+
+    /// <summary>The waveform lane: one vertical line per pixel, the loudest peak in that pixel's time slice.</summary>
+    private void DrawWaveform(DrawingContext ctx, double width)
+    {
+        double top = RulerBottom, h = WaveHeight;
+        ctx.FillRectangle(StripBg, new Rect(GridLeft, top, width - GridLeft, h));
+        ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, top + h - 0.5), new Point(width, top + h - 0.5));
+        if (Wave is not { } wave || h < 6) return;
+
+        // The shape only changes on scroll, zoom, resize or offset: during playback the cached geometry is reused.
+        var key = (Axis.Left, Axis.Zoom, width, h, SongOffset, GridLeft, wave);
+        if (waveGeometry is null || !waveKey.Equals(key))
+        {
+            double mid = top + h / 2, half = h / 2 - 2, msPerPixel = 1 / Axis.Zoom;
+            var geometry = new StreamGeometry();
+            using (var g = geometry.Open())
+            {
+                for (double x = GridLeft; x < width; x++)
+                {
+                    double t = Axis.Time(x - GridLeft) - SongOffset;
+                    float peak = wave.Max(t, t + msPerPixel);
+                    if (peak <= 0.002f) continue;
+                    double a = Math.Max(0.5, peak * half);
+                    g.BeginFigure(new Point(x, mid - a), true);
+                    g.LineTo(new Point(x + 1, mid - a));
+                    g.LineTo(new Point(x + 1, mid + a));
+                    g.LineTo(new Point(x, mid + a));
+                    g.EndFigure(true);
+                }
+            }
+
+            (waveGeometry, waveKey) = (geometry, key);
+        }
+
+        ctx.DrawGeometry(WaveFill, null, waveGeometry);
+    }
+
+    /// <summary>
+    /// The object strip: circles as dots, sliders as a body with H at the head, chevrons at repeats and E at the end,
+    /// spinners as a bar. Objects with a conflict get a red outline.
+    /// </summary>
+    private void DrawObjects(DrawingContext ctx, ArrangeModel model, double width)
+    {
+        double top = RulerBottom + WaveHeight, h = ObjectsHeight, cy = top + h / 2;
+        ctx.FillRectangle(Paint.Chrome2, new Rect(GridLeft, top, width - GridLeft, h));
+        double from = Axis.Time(0) - 50, to = Axis.Time(width - GridLeft) + 50;
+        var objects = model.Objects;
+        for (int i = Sorted.LowerBound(objects, from - ObjectLookBack, o => o.Start); i < objects.Count && objects[i].Start <= to; i++)
+        {
+            var o = objects[i];
+            if (o.End < from) continue;
+            double x0 = GridLeft + Axis.X(o.Start), x1 = GridLeft + Axis.X(o.End);
+            bool conflict = o.Nodes.Any(n => model.Conflicted.Contains(n.Key));
+            var outline = conflict ? ObjectConflictPen : null;
+            switch (o.Kind)
+            {
+                case HitObjectKind.Slider:
+                    ctx.DrawRectangle(SliderBody, outline, new Rect(x0, cy - 6, Math.Max(2, x1 - x0), 12), 6, 6);
+                    // Node letters only when there is room for them; otherwise dots.
+                    bool labels = o.Nodes.Count < 2 || (x1 - x0) / (o.Nodes.Count - 1) >= 16;
+                    foreach (var (time, _, position) in o.Nodes)
+                    {
+                        double x = GridLeft + Axis.X(time);
+                        string mark = position switch { HitPosition.SliderHead => "H", HitPosition.SliderTail => "E", _ => "›" };
+                        ctx.DrawEllipse(ObjectFill, null, new Point(x, cy), 5, 5);
+                        if (labels) Paint.DrawText(ctx, mark, new Point(x - 3, cy - 7), 9, Paint.Divider, 0, Paint.UiBold);
+                    }
+
+                    break;
+
+                case HitObjectKind.Spinner:
+                    ctx.DrawRectangle(SpinnerFill, outline, new Rect(x0, cy - 5, Math.Max(2, x1 - x0), 10), 2, 2);
+                    break;
+
+                default:
+                    ctx.DrawEllipse(ObjectFill, outline, new Point(x0, cy), 5, 5);
+                    break;
+            }
+        }
+
+        ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, top + h - 0.5), new Point(width, top + h - 0.5));
+    }
+
+    /// <summary>Bookmark flags on the ruler (osu!'s editor bookmarks, saved in the .osu).</summary>
+    private void DrawBookmarks(DrawingContext ctx)
+    {
+        if (Session is null) return;
+        foreach (double t in Session.BookmarkTimes)
+        {
+            double x = GridLeft + Axis.X(t);
+            var flag = new StreamGeometry();
+            using (var g = flag.Open())
+            {
+                g.BeginFigure(new Point(x, SectionsHeight), true);
+                g.LineTo(new Point(x + 7, SectionsHeight + 4));
+                g.LineTo(new Point(x, SectionsHeight + 8));
+                g.EndFigure(true);
+            }
+
+            ctx.DrawGeometry(BookmarkFill, null, flag);
+            ctx.FillRectangle(BookmarkFill, new Rect(x, SectionsHeight, 1, RulerHeight));
+        }
+    }
+
+    /// <summary>The cycle band in the upper ruler between the L and R flags: blue when cycling, red when it skips (R before L).</summary>
+    private void DrawLocators(DrawingContext ctx, double width)
+    {
+        if (LocatorLeft is not { } l || LocatorRight is not { } r) return;
+        double xl = GridLeft + Axis.X(l), xr = GridLeft + Axis.X(r);
+        var band = new Rect(Math.Min(xl, xr), 1, Math.Abs(xr - xl), SectionsHeight - 2);
+        ctx.FillRectangle(!Cycle ? CycleOff : r < l ? SkipOn : CycleOn, band);
+        foreach (var (x, label) in new[] { (xl, "L"), (xr, "R") })
+        {
+            ctx.FillRectangle(Paint.White, new Rect(x - 0.5, 0, 1, HeaderHeight));
+            ctx.FillRectangle(Paint.White, new Rect(x, 0, 12, 12));
+            Paint.DrawText(ctx, label, new Point(x + 2, -1), 10, Paint.Divider, 0, Paint.UiBold);
+        }
+    }
+
+    private void DrawRow(DrawingContext ctx, ArrangeModel model, Row row, int index, double y, double gridWidth)
+    {
+        switch (row)
+        {
+            case GroupRow group:
+            {
+                // V6.39: grip, fold arrow, "Soft sampleset", then the lane count, M and S at the right edge.
+                var color = ArrangeModel.GroupColor(group.Group);
+                double gh = HeightOf(row), ty = y + (gh - 14) / 2;
+                ctx.FillRectangle(Paint.GroupHead, new Rect(0, y, NumberWidth + ListWidth, gh));
+                Paint.DrawText(ctx, "⠿", new Point(12, y + (gh - 16) / 2), 12, Paint.Text, 0);
+                Paint.DrawText(ctx, model.IsCollapsed(group.Group) ? "▸" : "▾", new Point(34, ty), 11, Paint.Dim, 0);
+                Paint.DrawText(ctx, ArrangeModel.GroupName(group.Group), new Point(GroupNameX, ty), 10, Paint.Text, ListWidth - 110, Paint.UiBold);
+                Paint.DrawText(ctx, group.LaneCount.ToString(), new Point(NumberWidth + ListWidth - MuteFromRight - 18, ty), 10, Paint.Dim, 0);
+                DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsGroupMuted(group.Group) ? Paint.MuteOn : null, gh);
+                DrawToggle(ctx, "S", NumberWidth + ListWidth - SoloFromRight, y, model.IsGroupSoloed(group.Group) ? Paint.SoloOn : null, gh);
+                ctx.FillRectangle(GroupBand, new Rect(GridLeft, y, gridWidth, gh));
+                Paint.DrawText(ctx, ArrangeModel.GroupName(group.Group), new Point(GridLeft + 6, ty), 10, Paint.Brush(color, 0.8), 0, Paint.UiBold);
+                break;
+            }
+
+            case LaneRow lane:
+            {
+                bool greyed = !model.IsAudible(lane.Lane);
+                var sound = greyed ? ArrangeModel.MutedColor : SoundColor(lane.Lane);
+                // V6.39: the row tinted by sound type; grip, tree line to the group's first lane, "• name", then the
+                // sound icon, + (add a lane), ● (hear it), M and S at the right edge.
+                ctx.FillRectangle(Paint.LaneHeadA, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
+                ctx.FillRectangle(Tint(sound, 0.10), new Rect(0, y, NumberWidth + ListWidth, RowHeight));
+                // Positions measured on V6.39 (list's left edge = 0): the first lane of a group has its grip at 17, a faint
+                // disclosure dot at 36, the sample dot at 49 and the name at 55; the lanes under it shift 18 px right, with
+                // the tree line at 21 (down to the row's middle for the last one, then across to 31).
+                var rows = model.Rows;
+                bool first = index == 0 || rows[index - 1] is not LaneRow, last = index + 1 >= rows.Count || rows[index + 1] is not LaneRow;
+                double indent = first ? 0 : ChildIndent, cy = y + RowHeight / 2;
+                Paint.DrawText(ctx, "⠿", new Point(GripX + indent, y + (RowHeight - 16) / 2), 12, Paint.Dim, 0);
+                if (!first)
+                {
+                    ctx.DrawLine(TreePen, new Point(TreeX, y), new Point(TreeX, last ? cy : y + RowHeight));
+                    ctx.DrawLine(TreePen, new Point(TreeX, cy), new Point(TreeX + 10, cy));
+                }
+                else if (!last) ctx.DrawLine(TreePen, new Point(TreeX, y + RowHeight * 0.6), new Point(TreeX, y + RowHeight));
+                ctx.DrawEllipse(DisclosureDot, null, new Point(DisclosureX + indent, cy), 1.2, 1.2);
+
+                bool silent = lane.Lane.Missing || model.Silent.Contains(lane.Lane);
+                string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.NameOf(lane.Lane);
+                if (silent) name += lane.Lane.Missing ? "  (missing)" : "  (no sound)";
+                if (ShowIndexes && lane.Index is { } idx) name += $"  · idx {idx}";
+                ctx.DrawEllipse(silent ? MissingDot : LoadedDot, null, new Point(DotX + indent, cy), 2.5, 2.5);
+                Paint.DrawText(ctx, name, new Point(NameX + indent, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, silent ? Paint.MissingText : Paint.Text,
+                    GridLeft - IconFromRight - 14 - NameX - indent, first ? Paint.UiBold : Paint.Ui);
+                DrawSoundIcon(ctx, lane.Lane.Sample?.Sound, new Point(NumberWidth + ListWidth - IconFromRight, cy), IconTone);
+                DrawToggle(ctx, "+", NumberWidth + ListWidth - AddFromRight, y, AddFill);
+                DrawToggle(ctx, "●", NumberWidth + ListWidth - PreviewFromRight, y, null);
+                DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsMuted(lane.Lane) ? Paint.MuteOn : null);
+                DrawToggle(ctx, "S", NumberWidth + ListWidth - SoloFromRight, y, model.IsSoloed(lane.Lane) ? Paint.SoloOn : null);
+
+                ctx.FillRectangle(Tint(sound, Theme_.Number("lane.tint")), new Rect(GridLeft, y, gridWidth, RowHeight));
+                break;
+            }
+        }
+
+        double bottom = y + HeightOf(row) - 0.5;
+        ctx.DrawLine(Paint.DividerPen, new Point(0, bottom), new Point(GridLeft + gridWidth, bottom));
+    }
+
+    private static readonly Dictionary<(Color, double), IBrush> Tints = [];
+
+    // A row tint, made once per colour and opacity (rows are redrawn every frame while playing).
+    private static IBrush Tint(Color color, double opacity) =>
+        Tints.TryGetValue((color, opacity), out var brush) ? brush : Tints[(color, opacity)] = Paint.Brush(color, opacity);
+
+    // Lane row positions from the list's left edge, measured on V6.39.
+    private const double GripX = 16, TreeX = 21, DisclosureX = 36, DotX = 49, NameX = 55, ChildIndent = 18;
+
+    private static readonly IBrush DisclosureDot = Paint.Brush("#6a6a7a");
+
+    private static readonly IPen TreePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#5a5a68"), 1);
+    private static readonly Color IconTone = Color.Parse("#c9c9d6");
+    private static readonly IBrush AddFill = Paint.Brush("#324761"); // V6.39 .addLayer: #324761 with a #526b8d border
+
+    /// <summary>The song is muted (drawn on the Song audio row's M); clicking that M raises <see cref="SongMuteRequested"/>.</summary>
+    public bool SongMuted { get; set; }
+
+    public event Action? SongMuteRequested;
+
+    private static readonly IBrush TitleBand = Paint.Brush("#303038"), GroupBand = Paint.Brush(Color.Parse("#000000"), 0.18),
+        LoadedDot = Paint.Brush("#85b9a9"), MissingDot = Paint.Brush("#c6a772");
+
+    /// <summary>V6.39's lane colours by sound type: hitnormal blue, whistle yellow, finish red, clap purple; other files grey.</summary>
+    public static Color SoundColor(Lane lane) => lane.Sample?.Sound switch
+    {
+        "hitnormal" => Color.Parse("#5b8def"),
+        "hitwhistle" => Color.Parse("#d6c25a"),
+        "hitfinish" => Color.Parse("#e0605f"),
+        "hitclap" => Color.Parse("#a979e6"),
+        _ => Color.Parse("#8a8a9a"),
+    };
+
+
+    /// <summary>A small icon for the sound (V6.39 shows one per lane): ring, wave, cymbal or hands; a note for other files.</summary>
+    // V6.39's lane icons (src/icons/*.svg on tag V6.39): stroked outlines in a 34×32 box, drawn 24 px high at 84 % opacity.
+    // Circles are (cx, cy, r, filled); paths are SVG path data, which Avalonia parses as is.
+    private static readonly Dictionary<string, (string[] Paths, (double X, double Y, double R, bool Fill)[] Circles)> SoundIcons = new()
+    {
+        ["hitnormal"] = (["M17 2v2m0 24v2M3 16h2m24 0h2"], [(17, 16, 10, false), (17, 16, 6, false), (17, 16, 1.5, true)]),
+        ["hitwhistle"] = (["M5 15.5 12 10l7 1.5a6 6 0 1 1-6 9l-5 1.8-3-3.8z", "m5 15.5 5 4 7-6M12 10v5l-4 3", "m19 6 1-3m3 5 3-1m-12 0-1-3"], [(19, 17, 2.5, false)]),
+        ["hitfinish"] = (["M5 15c4-5 15-7 23-3-4 5-15 7-23 3z", "m14 11 2-3 4-.5 2 3M17 15l-2 10m-5 2h10M24 5l2-3m1 5 3-1", "m5 6 8 5"], []),
+        ["hitclap"] = (["m8 18-2-6c-.8-2 1-3 2-1l4 6-3-10c-.5-2 1.6-2.7 2.3-.8L15 16 13.5 6c-.3-2 2-2.2 2.4-.3L18 16l.3-7c.1-2 2.3-2 2.4 0l.4 10 2-3c1.4-1.6 3 .1 1.8 1.6l-4 7c-2 3.5-6.7 4.8-10 1.8L5 20c-1.4-1.6.5-3.1 1.8-1.8l3 2.7", "m25 9 2-2m-3-1 1-3m3 10 3-1"], []),
+    };
+
+    private static readonly Dictionary<string, Geometry[]> IconGeometry = SoundIcons.ToDictionary(
+        kv => kv.Key, kv => kv.Value.Paths.Select(p => (Geometry)StreamGeometry.Parse(p)).ToArray());
+
+    private static readonly IBrush IconStroke = Paint.Brush(Color.Parse("#b6c8c3"), 0.84), WhistleStroke = Paint.Brush(Color.Parse("#c9c0a4"), 0.84);
+    private static readonly IPen IconPen = new Pen(IconStroke, 1.45) { LineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round },
+        WhistlePen = new Pen(WhistleStroke, 1.45) { LineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+
+    private static void DrawSoundIcon(DrawingContext ctx, string? sound, Point c, Color tone)
+    {
+        if (sound is null || !SoundIcons.TryGetValue(sound, out var icon))
+        {
+            Paint.DrawText(ctx, "♪", new Point(c.X - 7, c.Y - 12), 18, Paint.Brush(tone, 0.84), 0);
+            return;
+        }
+
+        const double scale = 24.0 / 32;
+        var brush = sound == "hitwhistle" ? WhistleStroke : IconStroke; // V6.39 gives the whistle a light sepia
+        var pen = sound == "hitwhistle" ? WhistlePen : IconPen;
+        using (ctx.PushTransform(Matrix.CreateTranslation(-17, -16) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(c.X, c.Y)))
+        {
+            foreach (var geometry in IconGeometry[sound]) ctx.DrawGeometry(null, pen, geometry);
+            foreach (var (x, y, r, fill) in icon.Circles) ctx.DrawEllipse(fill ? brush : null, fill ? null : pen, new Point(x, y), r, r);
+        }
+    }
+
+    private void DrawToggle(DrawingContext ctx, string letter, double x, double y, IBrush? lit, double? rowHeight = null)
+    {
+        // V6.39's row buttons: 18×17 px, 4 px corners, 9 px text; the + (add) is 17×17 with 12 px text. Smaller in short rows.
+        bool add = letter == "+";
+        double row = rowHeight ?? RowHeight;
+        double w = add ? 17 : ToggleWidth, h = Math.Min(17, row - 2), size = add ? 12 : 9;
+        var rect = new Rect(x, y + (row - h) / 2, w, h);
+        ctx.DrawRectangle(lit ?? Paint.Button, ToggleBorder, rect, add ? 3 : 4, add ? 3 : 4);
+        Paint.DrawText(ctx, letter, new Point(x + (w - size * 0.62) / 2, rect.Y + (h - size * 1.35) / 2), size, lit is null ? Paint.Dim : Paint.White, 0, Paint.UiBold);
+    }
+
+    private static readonly IPen ToggleBorder = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#55556a"), 1);
+
+    private void DrawNotes(DrawingContext ctx, ArrangeModel model, LaneRow row, double y, double from, double to)
+    {
+        if (!model.Notes.TryGetValue(row.Lane, out var notes)) return;
+        bool greyed = !model.IsAudible(row.Lane);
+        var color = greyed ? ArrangeModel.MutedColor : Paint.Brighten(row.Color);
+        var fill = Paint.Brush(color);
+        var span = Paint.Brush(color, 0.45);
+        double cy = y + RowHeight / 2;
+
+        // Notes are sorted by start; slider body spans can start before the view, so look back one visible width.
+        for (int i = Sorted.LowerBound(notes, from - Axis.VisibleDuration, n => n.Time); i < notes.Count; i++)
+        {
+            var n = notes[i];
+            if (n.Time > to + 50) break;
+            if (n.EndTime < from - 50) continue; // spans end at EndTime; one-shot notes have EndTime == Time
+            double x = GridLeft + Axis.X(n.Time);
+            if (n.EndTime > n.Time)
+                ctx.DrawRectangle(span, null, new Rect(x, cy - 3, Math.Max(2, (n.EndTime - n.Time) * Axis.Zoom), 6), 3, 3);
+            else if (n.Passive)
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize - 4, fill, Paint.NoteRingPen);
+            else if (n.Hit is { } hit && selection.Contains(hit))
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, Paint.SelectedRingPen);
+            else if (model.IsProblem(n.Hit!))
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, ConflictRing);
+            else if (model.IsPreviewMuted(n.Hit!))
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.MutedFill, Paint.NoteRingPen);
+            else if (ColourByVolume && !greyed && Session is { } session)
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, VolumeFills[Math.Clamp(session.VolumeOf(n.Hit!), 0, 100)], Paint.NoteRingPen);
+            else
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, fill, Paint.NoteRingPen);
+        }
+    }
+
+    // ---------------------------------------------------------------- scrolling and zoom
+
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        var p = e.GetPosition(this);
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            // Vertical zoom, keeping the row under the mouse in place.
+            double rowUnder = (p.Y - HeaderHeight + scrollY) / RowHeight;
+            RowHeight = Math.Round(RowHeight * (e.Delta.Y > 0 ? 1.15 : 1 / 1.15));
+            ScrollY = rowUnder * RowHeight - (p.Y - HeaderHeight);
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+            DivisorWheel?.Invoke(e.Delta.Y > 0 ? 1 : -1); // finer up, coarser down
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            Axis.ZoomAt(e.Delta.Y > 0 ? 1.25 : 0.8, Math.Max(0, p.X - GridLeft));
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.Delta.X != 0)
+            Axis.Left -= (e.Delta.Y + e.Delta.X) * 120 / Axis.Zoom;
+        else
+            ScrollY -= e.Delta.Y * RowHeight * 3;
+        InvalidateVisual();
+        e.Handled = true;
+    }
+
+    /// <summary>Alt+wheel: +1 for a finer snap, -1 for a coarser one (the window owns the divisor list).</summary>
+    public event Action<int>? DivisorWheel;
+
+    public double ScrollY
+    {
+        get => scrollY;
+        set
+        {
+            scrollY = Math.Clamp(value, 0, Math.Max(0, ContentHeight - (Bounds.Height - HeaderHeight)));
+            ScrollChanged?.Invoke();
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>Lets Ctrl+Alt+wheel zoom go and follows the theme's row height again (after it's edited).</summary>
+    public void FollowThemeRowHeight()
+    {
+        rowHeight = null;
+        ScrollY = scrollY;
+    }
+
+    // ---------------------------------------------------------------- hit-testing
+
+    // Where the lane list's buttons sit, from the number column's right edge. Drawing and hit-testing both use these.
+    // How far back to look for objects that started before the view (long sliders and spinners).
+    private const double ObjectLookBack = 60000;
+
+    // The list's buttons, measured from its right edge (V6.39 keeps them there); names from the left.
+    private const double ToggleWidth = 18, SoloFromRight = 25, MuteFromRight = 48, PreviewFromRight = 71, AddFromRight = 93, IconFromRight = 111,
+        AddLaneFromRight = 26, GroupNameX = 46;
+
+    private enum ListTarget
+    {
+        Collapse,
+        Mute,
+        Solo,
+        Add,
+        Preview,
+        Name,
+    }
+
+    // x is measured from the number column's right edge, like the drawing.
+    private static ListTarget ListTargetAt(Row row, double x)
+    {
+        bool In(double fromRight) => x >= ListWidth - fromRight && x < ListWidth - fromRight + ToggleWidth;
+        return row switch
+        {
+            _ when In(MuteFromRight) => ListTarget.Mute,
+            _ when In(SoloFromRight) => ListTarget.Solo,
+            GroupRow when x < GroupNameX - NumberWidth + 2 => ListTarget.Collapse,
+            LaneRow when In(AddFromRight) => ListTarget.Add,
+            LaneRow when In(PreviewFromRight) => ListTarget.Preview,
+            _ => ListTarget.Name,
+        };
+    }
+
+    private int RowIndexAt(double y)
+    {
+        double content = y - HeaderHeight + scrollY;
+        var tops = Tops();
+        if (content < 0) return (int)Math.Floor(content / RowHeight);
+        if (content >= tops[^1]) return tops.Length - 1 + (int)Math.Floor((content - tops[^1]) / RowHeight);
+        int lo = 0, hi = tops.Length - 2; // the last row whose top is at or above the point
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (tops[mid] <= content) lo = mid;
+            else hi = mid - 1;
+        }
+
+        return lo;
+    }
+
+    private Row? RowAt(double y)
+    {
+        int i = RowIndexAt(y);
+        return Model is { } model && y >= HeaderHeight && i >= 0 && i < model.Rows.Count ? model.Rows[i] : null;
+    }
+
+    /// <summary>The editable hit nearest a grid x in a lane, within a note's width.</summary>
+    private EditHit? HitUnder(LaneRow row, double gridX)
+    {
+        if (Model?.Notes.TryGetValue(row.Lane, out var notes) != true) return null;
+        int i = Sorted.Nearest(notes!, Axis.Time(gridX), NoteSize / Axis.Zoom, n => n.Time, n => n.Hit is not null);
+        return i >= 0 ? notes![i].Hit : null;
+    }
+
+    private double SnapTime(double time) => Edits.SnapTime(time);
+
+    /// <summary>The inspector part under a point, for Pick.</summary>
+    public string PartAt(Point p)
+    {
+        if (p.Y < HeaderHeight)
+            return p.X >= GridLeft && p.Y < SectionsHeight ? "sections" : "header";
+        if (Math.Abs(p.X - (GridLeft + Axis.X(Playhead))) <= 4) return "playhead";
+        if (RowAt(p.Y) is not { } row) return "arrange";
+
+        if (p.X < NumberWidth) return row is LaneRow ? "numbers" : "grouprow";
+        if (p.X < GridLeft)
+            return ListTargetAt(row, p.X - NumberWidth) switch
+            {
+                ListTarget.Mute or ListTarget.Solo => "toggles",
+                _ => row is GroupRow ? "grouprow" : "lanelist",
+            };
+
+        if (row is LaneRow lane && HitUnder(lane, p.X - GridLeft) is not null) return "note";
+        return row is GroupRow ? "grouprow" : "lanerow";
+    }
+
+    // ---------------------------------------------------------------- editing with the mouse
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        Focus();
+        if (Model is not { } model || Session is not { } session) return;
+        var point = e.GetCurrentPoint(this);
+        var p = point.Position;
+        bool additive = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        if (p.Y < HeaderHeight)
+        {
+            if (!point.Properties.IsLeftButtonPressed) return;
+            if (p.X >= GridLeft - AddLaneFromRight && p.X < GridLeft - AddLaneFromRight + ToggleWidth && p.Y < 22)
+            {
+                AddLaneRequested?.Invoke(); // the "+" in the SAMPLE LANES title
+                return;
+            }
+
+            if (p.X >= GridLeft - SoloFromRight && p.X < GridLeft - SoloFromRight + ToggleWidth && p.Y >= RulerBottom && p.Y < RulerBottom + WaveHeight)
+            {
+                SongMuteRequested?.Invoke(); // the M on the Song audio row
+                return;
+            }
+
+            if (p.X < GridLeft) return;
+            double t = Math.Max(0, Axis.Time(p.X - GridLeft));
+            double waveBottom = RulerBottom + WaveHeight;
+            if (p.Y >= RulerBottom && Math.Abs(p.Y - waveBottom) <= 4)
+            {
+                // The line under the waveform: drag to resize it, double-click to reset.
+                if (e.ClickCount == 2) WaveHeight = DefaultWaveHeight;
+                else
+                {
+                    drag = Drag.ResizeWave;
+                    waveHeightAtStart = WaveHeight;
+                    dragStart = dragNow = p;
+                    e.Pointer.Capture(this);
+                }
+
+                ScrollY = scrollY;
+                ScrollChanged?.Invoke();
+            }
+            else if (p.Y >= waveBottom)
+                ObjectPressed(model, session, t, e.ClickCount == 2);
+            else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) SetLocators(SnapTime(t), LocatorRight ?? SnapTime(t));
+            else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) SetLocators(LocatorLeft ?? SnapTime(t), SnapTime(t));
+            else if (p.Y < SectionsHeight)
+            {
+                // The upper ruler: drag to draw a cycle range; a click inside the band toggles cycling.
+                drag = Drag.Cycle;
+                dragStart = dragNow = p;
+                e.Pointer.Capture(this);
+            }
+            else
+            {
+                // The ruler and the waveform move the playhead; a click near a bookmark flag lands exactly on it.
+                double near = 5 / Axis.Zoom;
+                var bookmark = session.NearestBookmark(t, near);
+                SeekRequested?.Invoke(p.Y < RulerBottom && bookmark is { } b ? b : t);
+            }
+
+            InvalidateVisual();
+            return;
+        }
+
+        if (RowAt(p.Y) is not { } row) return;
+        if (p.X < GridLeft)
+        {
+            if (point.Properties.IsRightButtonPressed && row is LaneRow menuLane)
+            {
+                LaneMenuRequested?.Invoke(menuLane);
+                return;
+            }
+
+            if (!point.Properties.IsLeftButtonPressed) return;
+            switch (row, ListTargetAt(row, p.X - NumberWidth))
+            {
+                case (GroupRow g, ListTarget.Collapse): model.ToggleCollapsed(g.Group); break;
+                case (GroupRow g, ListTarget.Mute): model.ToggleGroupMute(g.Group); break;
+                case (GroupRow g, ListTarget.Solo): model.ToggleGroupSolo(g.Group); break;
+                case (LaneRow l, ListTarget.Mute): model.ToggleMute(l.Lane); break;
+                case (LaneRow l, ListTarget.Solo): model.ToggleSolo(l.Lane); break;
+                case (LaneRow, ListTarget.Add): AddLaneRequested?.Invoke(); break;
+                case (LaneRow l, ListTarget.Preview): PreviewRequested?.Invoke(l.Lane); break;
+                case (LaneRow l, _) when additive:
+                    // Ctrl+click selects the lane's hits; Shift+click adds them.
+                    var laneHits = session.State.Hits.Where(h => h.Lane == l.Lane);
+                    SetSelection(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? selection.Concat(laneHits).ToList() : laneHits);
+                    break;
+                case (LaneRow l, _): PreviewRequested?.Invoke(l.Lane); break;
+            }
+
+            return;
+        }
+
+        double gridX = p.X - GridLeft;
+        var under = row is LaneRow lr ? HitUnder(lr, gridX) : null;
+
+        // Right-click deletes a hit, whatever the tool.
+        if (point.Properties.IsRightButtonPressed)
+        {
+            if (under is not null)
+            {
+                EraseHit(under);
+                NotifySelection();
+            }
+
+            return;
+        }
+
+        if (!point.Properties.IsLeftButtonPressed) return;
+        var tool = e.KeyModifiers.HasFlag(KeyModifiers.Alt) ? Tool.Draw : Tool;
+        dragStart = dragNow = p;
+        e.Pointer.Capture(this);
+
+        switch (tool)
+        {
+            case Tool.Draw when row is not LaneRow:
+                drag = Drag.None;
+                break;
+
+            case Tool.Draw when row is LaneRow lane && under is null:
+                session.BeginGesture("Draw");
+                drag = Drag.Paint;
+                paintRow = lane;
+                session.Add([session.HitAt(lane.Lane, SnapTime(Axis.Time(gridX)))]);
+                PreviewRequested?.Invoke(lane.Lane);
+                break;
+
+            case Tool.Draw or Tool.Erase:
+                // Erase strokes, and Draw strokes that start on a hit: Draw erases only in its own lane, Erase in any lane.
+                session.BeginGesture("Erase");
+                drag = Drag.Wipe;
+                wipeLane = tool == Tool.Draw ? (row as LaneRow)?.Lane : null;
+                if (under is not null) EraseHit(under);
+                break;
+
+            case Tool.Range:
+                // A press starts a new range; a click without a drag clears it (OnPointerReleased).
+                drag = Drag.Range;
+                break;
+
+            case Tool.Mute:
+                // Preview-only: osu! can't store a muted sound, so this only silences it while listening.
+                if (under is not null) model.TogglePreviewMute(under);
+                drag = Drag.None;
+                break;
+
+            // The Ramp tool works in the volume lane; in the grid it selects like Select.
+            case Tool.Select or Tool.Ramp when under is not null:
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                {
+                    if (!selection.Remove(under)) selection.Add(under);
+                }
+                else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) selection.Add(under);
+                else if (!selection.Contains(under))
+                {
+                    selection.Clear();
+                    selection.Add(under);
+                }
+
+                if (selection.Contains(under))
+                {
+                    drag = Drag.Move;
+                    dragAnchor = under;
+                    dragHits = [.. selection];
+                    session.BeginGesture("Move");
+                }
+
+                SelectionChanged?.Invoke();
+                break;
+
+            case Tool.Select or Tool.Ramp:
+                drag = Drag.Marquee;
+                marqueeBase = additive ? [.. selection] : [];
+                if (marqueeBase.Count == 0 && selection.Count > 0)
+                {
+                    selection.Clear();
+                    SelectionChanged?.Invoke();
+                }
+
+                break;
+        }
+
+        InvalidateVisual();
+    }
+
+    // ---- the tool cursor (V6.39): arrow, pen (Draw or Alt), eraser or crosshair over the grid; the arrow elsewhere
+
+    private Point? pointer;
+
+    /// <summary>Shows the cursor for the tool at the pointer; the window calls it when Alt goes down or up.</summary>
+    public void UpdateCursor(KeyModifiers modifiers)
+    {
+        bool overGrid = pointer is { } p && p.X >= GridLeft && p.Y >= HeaderHeight;
+        Cursor = ToolCursors.Get(ToolCursors.For(Tool, modifiers, overGrid));
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        pointer = null;
+        base.OnPointerExited(e);
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        pointer = e.GetPosition(this);
+        UpdateCursor(e.KeyModifiers);
+        if (drag == Drag.None || Model is not { } model || Session is not { } session) return;
+        var p = e.GetPosition(this);
+        dragNow = p;
+        double gridX = p.X - GridLeft;
+
+        switch (drag)
+        {
+            case Drag.Paint when paintRow is not null:
+                session.Add([session.HitAt(paintRow.Lane, SnapTime(Axis.Time(gridX)))]); // Add ignores a hit already there
+                break;
+
+            case Drag.Wipe:
+            {
+                var row = RowAt(p.Y) as LaneRow;
+                if (row is not null && (wipeLane is null || row.Lane == wipeLane) && HitUnder(row, gridX) is { } under) EraseHit(under);
+                break;
+            }
+
+            case Drag.Move when dragAnchor is not null:
+            {
+                // The grabbed hit snaps; the others keep their offsets to it. Rows move by whole visible lanes.
+                double offset = Edits.SnapOffset(dragAnchor.Time, Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft));
+                int rowShift = RowIndexAt(p.Y) - RowIndexAt(dragStart.Y);
+                session.ResetToGestureStart();
+                selection.Clear();
+                selection.UnionWith(session.Move(dragHits, offset, h => HitEditor.ShiftLane(model, h.Lane, rowShift)));
+                break;
+            }
+
+            case Drag.Range when Math.Abs(p.X - dragStart.X) >= DragThreshold:
+                Edits.MarkRange(Axis.Time(dragStart.X - GridLeft), Axis.Time(gridX), RowIndexAt(dragStart.Y), RowIndexAt(p.Y));
+                break;
+
+            case Drag.Marquee:
+            {
+                selection.Clear();
+                selection.UnionWith(marqueeBase);
+                selection.UnionWith(HitsIn(new Rect(dragStart, p).Normalize()));
+                break;
+            }
+
+            case Drag.ResizeWave:
+                WaveHeight = Math.Clamp(waveHeightAtStart + p.Y - dragStart.Y, 0, 200);
+                ScrollY = scrollY;
+                ScrollChanged?.Invoke();
+                break;
+
+            case Drag.Cycle when Math.Abs(p.X - dragStart.X) >= DragThreshold:
+            {
+                double a = SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))), b = SnapTime(Math.Max(0, Axis.Time(gridX)));
+                Cycle = true;
+                SetLocators(Math.Min(a, b), Math.Max(a, b));
+                break;
+            }
+        }
+
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        if (drag == Drag.None) return;
+        if (drag == Drag.Cycle && Math.Abs(dragNow.X - dragStart.X) < DragThreshold && LocatorLeft is { } l && LocatorRight is { } r)
+        {
+            // A click (no drag) inside the band toggles cycling.
+            double t = Axis.Time(dragStart.X - GridLeft);
+            if (t >= Math.Min(l, r) && t <= Math.Max(l, r))
+            {
+                Cycle = !Cycle; // raises LocatorsChanged
+            }
+        }
+
+        if (drag == Drag.Range && Math.Abs(dragNow.X - dragStart.X) < DragThreshold) Edits.ClearRange();
+
+        Session?.EndGesture();
+        drag = Drag.None;
+        dragAnchor = null;
+        paintRow = null;
+        e.Pointer.Capture(null);
+        SelectionChanged?.Invoke();
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        Session?.EndGesture();
+        drag = Drag.None;
+        base.OnPointerCaptureLost(e);
+    }
+
+    private IEnumerable<EditHit> HitsIn(Rect area)
+    {
+        if (Model is not { } model) yield break;
+        double from = Axis.Time(area.Left - GridLeft), to = Axis.Time(area.Right - GridLeft);
+        for (int i = 0; i < model.Rows.Count; i++)
+        {
+            double y = HeaderHeight + RowTop(i) - scrollY + HeightOf(model.Rows[i]) / 2;
+            if (y < area.Top || y > area.Bottom || model.Rows[i] is not LaneRow lane || !model.Notes.TryGetValue(lane.Lane, out var notes)) continue;
+            foreach (var n in notes)
+                if (n.Hit is { } hit && n.Time >= from && n.Time <= to) yield return hit;
+        }
+    }
+
+
+    /// <summary>Double-clicking an object asks to hear its hits (at their moments' volumes).</summary>
+    public event Action<IReadOnlyList<EditHit>>? HitsPreviewRequested;
+
+    /// <summary>
+    /// A click in the object strip: moves the playhead to the object (or the slider node clicked) and selects its hits;
+    /// a click on a slider's body selects the hits of all its nodes. A double-click also plays them.
+    /// </summary>
+    private void ObjectPressed(ArrangeModel model, EditSession session, double time, bool doubleClick)
+    {
+        if (model.ObjectAt(time, 6 / Axis.Zoom) is not { } o) return;
+        var node = o.Nodes.MinBy(n => Math.Abs(n.Time - time));
+        bool onNode = Math.Abs(node.Time - time) <= 7 / Axis.Zoom;
+        var keys = onNode ? [node.Key] : o.Nodes.Select(n => n.Key).ToHashSet();
+        var hits = session.State.Hits.Where(h => h.Anchor is { } k && keys.Contains(k)).ToList();
+        SetSelection(hits);
+        SeekRequested?.Invoke(onNode ? node.Time : o.Start);
+        if (doubleClick) HitsPreviewRequested?.Invoke(hits);
+    }
+    // ---------------------------------------------------------------- selection (the commands are in HitEditor)
+
+    private void SetSelection(IEnumerable<EditHit> hits) => Edits.Select(hits);
+
+    private void NotifySelection() => Edits.Notify();
+
+    private void EraseHit(EditHit hit) => Edits.Erase(hit);
+}

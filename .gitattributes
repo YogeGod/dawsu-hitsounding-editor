@@ -1,8 +1,0 @@
-* text=auto eol=lf
-*.png binary
-*.ico binary
-*.wav binary
-*.ogg binary
-*.mp3 binary
-*.exe binary
-*.dll binary

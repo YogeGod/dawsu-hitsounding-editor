@@ -1,0 +1,408 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hitsound Editor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Cascadia+Mono:wght@400&display=swap');
+  
+  :root {
+    --bg-main: #20242b;
+    --bg-transport: #282d35;
+    --bg-edit: #252a32;
+    --bg-lcd: #191e25;
+    --bg-controls: #333943;
+    --border-color: #414853;
+    --color-active: #3277bd;
+    --text-main: #e3e8ef;
+    --text-secondary: #9aa7b7;
+    --color-play: #78dba2;
+    --color-soft: #b46ef0; /* Purple */
+    --color-drum: #e88c30; /* Orange */
+    --color-normal: #3cc8b4; /* Teal */
+    --color-own: #78dba2; /* Green */
+    --color-skin: #4b8cff; /* Blue */
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    overflow: hidden;
+  }
+  
+  .lcd-font {
+    font-family: 'Cascadia Mono', Consolas, monospace;
+  }
+</style>
+</head>
+<body>
+  <div class="min-h-screen flex flex-col w-[1600px] h-[900px] mx-auto overflow-hidden bg-[#20242b] text-[#e3e8ef] text-[13px]" data-sd-id="1">
+    
+    <!-- 1. Title Bar (32px) -->
+    <div class="h-[32px] flex items-center px-4 bg-[#282d35] border-b border-[#414853] shrink-0" data-sd-id="2">
+      <div class="text-[10px] font-semibold text-[#9aa7b7] mr-6" data-sd-id="3">HITSOUND EDITOR</div>
+      <div class="text-[12px] flex-1 truncate" data-sd-id="4">Example Track [Hitsounds]</div>
+      <div class="text-[10px] font-semibold text-[#9aa7b7] ml-4" data-sd-id="5">F1 Shortcuts</div>
+    </div>
+
+    <!-- 2. Control Bar (64px) -->
+    <div class="h-[64px] flex items-center justify-between px-4 bg-[#282d35] border-b border-[#414853] shrink-0" data-sd-id="6">
+      <button id="btn-open" class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="7">
+        Open .osu…
+      </button>
+      
+      <div class="flex items-center space-x-1" data-sd-id="8">
+        <button id="btn-start" class="w-[38px] h-[36px] flex items-center justify-center bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px]" data-sd-id="9">
+          <svg width="13" height="14" viewBox="0 0 13 14" fill="#e3e8ef" data-sd-id="10"><path d="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z"></path></svg>
+        </button>
+        <button id="btn-stop" class="w-[38px] h-[36px] flex items-center justify-center bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px]" data-sd-id="11">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="#e3e8ef" data-sd-id="12"><path d="M 0,0 L 12,0 L 12,12 L 0,12 Z"></path></svg>
+        </button>
+        <button id="btn-play" class="w-[38px] h-[36px] flex items-center justify-center bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] text-[#78dba2] text-[17px]" data-sd-id="13">
+          ▶
+        </button>
+        <button id="btn-loop" class="w-[38px] h-[36px] flex items-center justify-center bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px]" data-sd-id="14">
+          <svg width="17" height="15" viewBox="0 0 17 15" fill="none" stroke="#e3e8ef" stroke-width="1.7" data-sd-id="15"><path d="M 2,5 L 2,2 L 15,2 M 12,0 L 15,2 L 12,5 M 15,8 L 15,12 L 2,12 M 5,9 L 2,12 L 5,15"></path></svg>
+        </button>
+        
+        <div class="ml-3 h-[50px] bg-[#191e25] border border-[#414853] rounded-[6px] px-3 py-1 flex items-center" data-sd-id="16">
+          <div class="flex flex-col items-center justify-center w-[96px]" data-sd-id="17">
+            <div class="text-[21px] lcd-font leading-none" data-sd-id="18">1.1.1</div>
+            <div class="text-[10px] text-[#9aa7b7] uppercase mt-0.5" data-sd-id="19">BAR · BEAT · TICK</div>
+          </div>
+          <div class="flex flex-col items-center justify-center w-[132px]" data-sd-id="20">
+            <div class="text-[21px] lcd-font leading-none" data-sd-id="21">0:00.000</div>
+            <div class="text-[10px] text-[#9aa7b7] uppercase mt-0.5" data-sd-id="22">TIME</div>
+          </div>
+          <div class="flex flex-col items-center justify-center w-[66px]" data-sd-id="23">
+            <div class="text-[21px] lcd-font leading-none" data-sd-id="24">120</div>
+            <div class="text-[10px] text-[#9aa7b7] uppercase mt-0.5" data-sd-id="25">BPM</div>
+          </div>
+          <div class="flex flex-col items-center justify-center w-[110px]" data-sd-id="26">
+            <div class="text-[21px] lcd-font leading-none" data-sd-id="27">4/4 /16</div>
+            <div class="text-[10px] text-[#9aa7b7] uppercase mt-0.5" data-sd-id="28">SIGNATURE · SNAP</div>
+          </div>
+        </div>
+      </div>
+
+      <button id="btn-save" class="bg-[#3277bd] hover:bg-[#3277bd] text-white border border-[#414853] rounded-[5px] px-[16px] py-[6px] font-semibold" data-sd-id="29">
+        Save .osu
+      </button>
+    </div>
+
+    <!-- 3. Edit Bar (76px) -->
+    <div class="h-[76px] flex flex-col bg-[#282d35] border-b border-[#414853] px-[10px] shrink-0" data-sd-id="30">
+      <!-- Row 1 (38px) -->
+      <div class="h-[38px] flex items-center justify-between" data-sd-id="31">
+        <div class="flex space-x-4" data-sd-id="32">
+          <span class="cursor-pointer hover:bg-[#333943] px-2 py-1 rounded" data-sd-id="33">File</span>
+          <span class="cursor-pointer hover:bg-[#333943] px-2 py-1 rounded" data-sd-id="34">Edit</span>
+          <span class="cursor-pointer hover:bg-[#333943] px-2 py-1 rounded" data-sd-id="35">Playback</span>
+          <span class="cursor-pointer hover:bg-[#333943] px-2 py-1 rounded" data-sd-id="36">Map</span>
+          <span class="cursor-pointer hover:bg-[#333943] px-2 py-1 rounded" data-sd-id="37">View</span>
+        </div>
+        
+        <div class="flex items-center space-x-1 ml-3" data-sd-id="38">
+          <button class="bg-[#3277bd] text-white border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="39">Select</button>
+          <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="40">Draw</button>
+          <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="41">Erase</button>
+          <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="42">Mute</button>
+          <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="43">Ramp</button>
+        </div>
+        
+        <div class="flex-1" data-sd-id="44"></div>
+
+        <div class="flex items-center space-x-2" data-sd-id="45">
+          <span data-sd-id="46">Snap</span>
+          <select class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[74px] outline-none" data-sd-id="47">
+             <option data-sd-id="48">1/4</option>
+          </select>
+          <span class="ml-2" data-sd-id="49">Zoom</span>
+          <input type="range" min="0" max="100" value="50" class="w-[110px]" data-sd-id="50">
+        </div>
+      </div>
+      <!-- Row 2 (38px) -->
+      <div class="h-[38px] flex items-center justify-between" data-sd-id="51">
+        <div class="flex items-center space-x-1" data-sd-id="52">
+          <span class="text-[10px] font-semibold text-[#9aa7b7] mr-2 ml-1" data-sd-id="53">VIEW</span>
+          <button class="bg-[#3277bd] text-white border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="54">Lane details</button>
+          <button class="bg-[#3277bd] text-white border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="55">Volume lane</button>
+          <button class="bg-[#333943] opacity-50 cursor-not-allowed border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="56">Sample browser</button>
+        </div>
+        
+        <div class="flex items-center space-x-2" data-sd-id="57">
+          <span class="text-[10px] font-semibold text-[#9aa7b7] mr-1" data-sd-id="58">SONG</span>
+          <input type="range" min="0" max="100" value="100" class="w-[96px]" data-sd-id="59">
+          <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="60">Mute</button>
+          <div class="w-px h-[20px] bg-[#414853] mx-2" data-sd-id="61"></div>
+          <span data-sd-id="62">Offset</span>
+          <input type="text" value="0" class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[60px] outline-none text-center" data-sd-id="63">
+          <span class="text-[10px] font-semibold text-[#9aa7b7]" data-sd-id="64">ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Overview Strip (24px) -->
+    <div class="h-[24px] bg-[#191e25] relative shrink-0" data-sd-id="65">
+      <!-- Mock mini bars -->
+      <div class="absolute left-[10%] top-[4px] w-[2px] h-[4px] bg-[#b46ef0]" data-sd-id="66"></div>
+      <div class="absolute left-[15%] top-[9px] w-[2px] h-[4px] bg-[#e88c30]" data-sd-id="67"></div>
+      <div class="absolute left-[20%] top-[14px] w-[2px] h-[4px] bg-[#3cc8b4]" data-sd-id="68"></div>
+      <!-- Viewport outline -->
+      <div class="absolute left-[5%] w-[30%] h-[20px] top-[2px] border border-[#e3e8ef]" data-sd-id="69"></div>
+      <!-- Playhead -->
+      <div class="absolute left-[12%] w-[2px] h-full bg-[#e3e8ef]" data-sd-id="70"></div>
+    </div>
+
+    <!-- 5. Arrange Area (flexible) -->
+    <div class="flex-1 flex relative overflow-hidden bg-[#20242b]" data-sd-id="71">
+      <!-- Left Headers (323px fixed width per UI Theme list.width) -->
+      <div class="w-[323px] flex flex-col shrink-0 border-r border-[#171b21] z-10" data-sd-id="72">
+        <!-- Header Corner -->
+        <div class="h-[48px] bg-[#282d35] border-b border-[#171b21] flex flex-col justify-center px-2" data-sd-id="73">
+          <div class="text-[18px] text-[#9aa7b7] absolute left-[10px] top-[10px]" data-sd-id="74">+</div>
+          <div class="text-[12px] text-[#9aa7b7] ml-6 mt-1" data-sd-id="75">16 lanes · 4 groups</div>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto overflow-x-hidden" data-sd-id="76">
+          <!-- Group Row: Soft -->
+          <div class="h-[30px] flex border-b border-[#171b21] relative" data-sd-id="77">
+             <div class="w-[24px] bg-[#b46ef0]" data-sd-id="78"></div>
+             <div class="flex-1 bg-[#303640] flex items-center" data-sd-id="79">
+               <span class="ml-1 text-[12px]" data-sd-id="80">▾</span>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-2 bg-[#333943]" data-sd-id="81">M</div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-1 bg-[#333943]" data-sd-id="82">S</div>
+               <span class="ml-3 text-[13px] font-bold" data-sd-id="83">Soft  (4)</span>
+             </div>
+          </div>
+          <!-- Lane Rows -->
+          <div class="h-[30px] flex border-b border-[#171b21]" data-sd-id="84">
+             <div class="w-[24px] bg-[#b46ef0] flex items-center justify-center text-[11px] lcd-font text-white" data-sd-id="85">1</div>
+             <div class="flex-1 bg-[#292e36] flex items-center" data-sd-id="86">
+               <div class="w-[10px] h-[10px] border-[2px] border-[#b46ef0] ml-2" data-sd-id="87"></div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-2 bg-[#333943]" data-sd-id="88">M</div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-1 bg-[#333943]" data-sd-id="89">S</div>
+               <span class="ml-3 text-[13px] truncate w-[140px]" data-sd-id="90">soft-hitnormal.wav</span>
+               <span class="text-[11px] text-[#9aa7b7] lcd-font ml-auto mr-2" data-sd-id="91">idx 0</span>
+             </div>
+          </div>
+          <div class="h-[30px] flex border-b border-[#171b21]" data-sd-id="92">
+             <div class="w-[24px] bg-[#b46ef0] flex items-center justify-center text-[11px] lcd-font text-white" data-sd-id="93">2</div>
+             <div class="flex-1 bg-[#262b33] flex items-center" data-sd-id="94">
+               <div class="w-[10px] h-[10px] border-[2px] border-[#b46ef0] ml-2" data-sd-id="95"></div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-2 bg-[#333943]" data-sd-id="96">M</div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-1 bg-[#333943]" data-sd-id="97">S</div>
+               <span class="ml-3 text-[13px] truncate w-[140px]" data-sd-id="98">soft-hitclap.wav</span>
+               <span class="text-[11px] text-[#9aa7b7] lcd-font ml-auto mr-2" data-sd-id="99">idx 1</span>
+             </div>
+          </div>
+
+          <!-- Group Row: Drum -->
+          <div class="h-[30px] flex border-b border-[#171b21] relative mt-1" data-sd-id="100">
+             <div class="w-[24px] bg-[#e88c30]" data-sd-id="101"></div>
+             <div class="flex-1 bg-[#303640] flex items-center" data-sd-id="102">
+               <span class="ml-1 text-[12px]" data-sd-id="103">▾</span>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-2 bg-[#333943]" data-sd-id="104">M</div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-1 bg-[#333943]" data-sd-id="105">S</div>
+               <span class="ml-3 text-[13px] font-bold" data-sd-id="106">Drum  (2)</span>
+             </div>
+          </div>
+          <div class="h-[30px] flex border-b border-[#171b21]" data-sd-id="107">
+             <div class="w-[24px] bg-[#e88c30] flex items-center justify-center text-[11px] lcd-font text-white" data-sd-id="108">3</div>
+             <div class="flex-1 bg-[#292e36] flex items-center" data-sd-id="109">
+               <div class="w-[10px] h-[10px] border-[2px] border-[#e88c30] ml-2" data-sd-id="110"></div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-2 bg-[#333943]" data-sd-id="111">M</div>
+               <div class="w-[18px] h-[18px] border border-[#414853] rounded-[3px] flex items-center justify-center text-[11px] text-[#9aa7b7] ml-1 bg-[#333943]" data-sd-id="112">S</div>
+               <span class="ml-3 text-[13px] truncate w-[140px]" data-sd-id="113">drum-hitfinish.wav</span>
+               <span class="text-[11px] text-[#9aa7b7] lcd-font ml-auto mr-2" data-sd-id="114">idx 2</span>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Timeline Canvas -->
+      <div class="flex-1 flex flex-col relative overflow-hidden" data-sd-id="115">
+        <!-- Timeline Header (48px) -->
+        <div class="h-[48px] bg-[#282d35] relative shrink-0 border-b border-[#171b21] overflow-hidden" data-sd-id="116">
+           <!-- Sections/Bookmarks -->
+           <div class="h-[20px] relative" data-sd-id="117">
+             <div class="absolute left-[100px] top-[2px] h-[16px] w-[150px] bg-[rgba(180,110,240,0.55)] rounded-[3px]" data-sd-id="118">
+                <span class="text-[11px] ml-1 text-[#e3e8ef]" data-sd-id="119">Intro</span>
+             </div>
+           </div>
+           <!-- Ruler Line -->
+           <div class="absolute top-[20px] left-0 w-full h-px bg-[#171b21]" data-sd-id="120"></div>
+           
+           <!-- Locators (L/R flags) -->
+           <div class="absolute left-[80px] top-[0px] w-[1px] h-[48px] bg-[#e3e8ef]" data-sd-id="121"></div>
+           <div class="absolute left-[80px] top-[0px] w-[12px] h-[12px] bg-[#e3e8ef] text-[#171b21] text-[10px] font-bold leading-none pt-[1px] pl-[2px]" data-sd-id="122">L</div>
+           
+           <div class="absolute left-[400px] top-[0px] w-[1px] h-[48px] bg-[#e3e8ef]" data-sd-id="123"></div>
+           <div class="absolute left-[400px] top-[0px] w-[12px] h-[12px] bg-[#e3e8ef] text-[#171b21] text-[10px] font-bold leading-none pt-[1px] pl-[2px]" data-sd-id="124">R</div>
+           
+           <!-- Cycle Band -->
+           <div class="absolute left-[81px] top-[1px] w-[319px] h-[18px] bg-[rgba(47,111,208,0.55)]" data-sd-id="125"></div>
+
+           <!-- Ruler Ticks & Labels -->
+           <!-- Bar -->
+           <div class="absolute left-[100px] top-[24px] w-[1px] h-[24px] bg-[#586372]" data-sd-id="126"></div>
+           <div class="absolute left-[103px] top-[23px] text-[12px] font-bold text-[#586372]" data-sd-id="127">1</div>
+           <!-- Beat -->
+           <div class="absolute left-[150px] top-[34px] w-[1px] h-[14px] bg-[#343d49]" data-sd-id="128"></div>
+           <!-- Beat -->
+           <div class="absolute left-[200px] top-[34px] w-[1px] h-[14px] bg-[#343d49]" data-sd-id="129"></div>
+           <div class="absolute left-[203px] top-[23px] text-[12px] text-[#343d49]" data-sd-id="130">1.3</div>
+
+           <!-- Playhead Header part -->
+           <div class="absolute left-[120px] top-[20px] w-[4px] h-[28px] bg-[#e3e8ef]" data-sd-id="131"></div>
+        </div>
+
+        <!-- Waveform (approx 24px implied from objects spacing) -->
+        <div class="h-[30px] bg-[#1f1f21] relative border-b border-[#171b21] overflow-hidden shrink-0" data-sd-id="132">
+           <!-- Mock Waveform -->
+           <div class="absolute top-[15px] left-[100px] w-[2px] h-[10px] bg-[rgba(143,183,232,0.75)] transform -translate-y-1/2" data-sd-id="133"></div>
+           <div class="absolute top-[15px] left-[102px] w-[2px] h-[16px] bg-[rgba(143,183,232,0.75)] transform -translate-y-1/2" data-sd-id="134"></div>
+           <div class="absolute top-[15px] left-[104px] w-[2px] h-[8px] bg-[rgba(143,183,232,0.75)] transform -translate-y-1/2" data-sd-id="135"></div>
+           <div class="absolute top-[15px] left-[150px] w-[2px] h-[20px] bg-[rgba(143,183,232,0.75)] transform -translate-y-1/2" data-sd-id="136"></div>
+        </div>
+
+        <!-- Object Strip (approx 24px) -->
+        <div class="h-[30px] bg-[#282d35] relative border-b border-[#171b21] shrink-0" data-sd-id="137">
+          <!-- Mock objects -->
+          <div class="absolute top-[15px] left-[100px] w-[10px] h-[10px] bg-[rgba(201,201,207,0.85)] rounded-full transform -translate-x-1/2 -translate-y-1/2" data-sd-id="138"></div>
+          
+          <!-- Slider -->
+          <div class="absolute top-[9px] left-[150px] w-[100px] h-[12px] bg-[rgba(201,201,207,0.35)] rounded-[6px]" data-sd-id="139"></div>
+          <div class="absolute top-[15px] left-[150px] w-[10px] h-[10px] bg-[rgba(201,201,207,0.85)] rounded-full transform -translate-x-1/2 -translate-y-1/2" data-sd-id="140"></div>
+          <div class="absolute top-[8px] left-[147px] text-[9px] font-bold text-[#171b21]" data-sd-id="141">H</div>
+          <div class="absolute top-[15px] left-[250px] w-[10px] h-[10px] bg-[rgba(201,201,207,0.85)] rounded-full transform -translate-x-1/2 -translate-y-1/2" data-sd-id="142"></div>
+          <div class="absolute top-[8px] left-[247px] text-[9px] font-bold text-[#171b21]" data-sd-id="143">E</div>
+        </div>
+
+        <!-- Grid Area -->
+        <div class="flex-1 relative overflow-hidden" data-sd-id="144">
+           <!-- Background Tint for Group Soft -->
+           <div class="absolute top-[0px] left-0 w-full h-[30px] bg-[rgba(180,110,240,0.12)]" data-sd-id="145"></div>
+           <div class="absolute top-[4px] left-[6px] text-[11px] font-bold text-[#b46ef0]" data-sd-id="146">Soft</div>
+           <!-- Tint for lane 1 -->
+           <div class="absolute top-[30px] left-0 w-full h-[30px] bg-[rgba(180,110,240,0.12)] border-b border-[#171b21]" data-sd-id="147"></div>
+           <!-- Tint for lane 2 -->
+           <div class="absolute top-[60px] left-0 w-full h-[30px] bg-[rgba(180,110,240,0.12)] border-b border-[#171b21]" data-sd-id="148"></div>
+
+           <!-- Background Tint for Group Drum -->
+           <div class="absolute top-[94px] left-0 w-full h-[30px] bg-[rgba(232,140,48,0.12)]" data-sd-id="149"></div>
+           <div class="absolute top-[98px] left-[6px] text-[11px] font-bold text-[#e88c30]" data-sd-id="150">Drum</div>
+           <!-- Tint for lane 3 -->
+           <div class="absolute top-[124px] left-0 w-full h-[30px] bg-[rgba(232,140,48,0.12)] border-b border-[#171b21]" data-sd-id="151"></div>
+
+           <!-- Grid Lines (Bar/Beat) -->
+           <div class="absolute top-0 left-[100px] w-[1px] h-full bg-[#586372]" data-sd-id="152"></div>
+           <div class="absolute top-0 left-[150px] w-[1px] h-full bg-[#343d49]" data-sd-id="153"></div>
+           <div class="absolute top-0 left-[200px] w-[1px] h-full bg-[#343d49]" data-sd-id="154"></div>
+           <div class="absolute top-0 left-[250px] w-[1px] h-full bg-[#343d49]" data-sd-id="155"></div>
+
+           <!-- Diamond Notes -->
+           <!-- Lane 1 (Soft Normal) -->
+           <div class="absolute top-[45px] left-[100px] w-[11px] h-[11px] bg-[#d5a0fa] border border-[rgba(255,255,255,0.5)] transform -translate-x-1/2 -translate-y-1/2 rotate-45" data-sd-id="156"></div>
+           <!-- Span for Slider on Lane 1 -->
+           <div class="absolute top-[42px] left-[150px] w-[100px] h-[6px] bg-[rgba(213,160,250,0.45)] rounded-[3px]" data-sd-id="157"></div>
+           <div class="absolute top-[45px] left-[150px] w-[11px] h-[11px] bg-[#d5a0fa] border border-[rgba(255,255,255,0.5)] transform -translate-x-1/2 -translate-y-1/2 rotate-45" data-sd-id="158"></div>
+           <div class="absolute top-[45px] left-[250px] w-[11px] h-[11px] bg-[#d5a0fa] border border-[rgba(255,255,255,0.5)] transform -translate-x-1/2 -translate-y-1/2 rotate-45" data-sd-id="159"></div>
+           
+           <!-- Lane 3 (Drum Finish) -->
+           <div class="absolute top-[139px] left-[100px] w-[11px] h-[11px] bg-[#f2b366] border border-[rgba(255,255,255,0.5)] transform -translate-x-1/2 -translate-y-1/2 rotate-45" data-sd-id="160"></div>
+
+           <!-- Playhead Main -->
+           <div class="absolute left-[120px] top-0 w-[2px] h-full bg-[#e3e8ef] z-20" data-sd-id="161"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Bottom Panel: Volume Automation (180px) -->
+    <div class="h-[180px] bg-[#282d35] border-t border-[#1c1c1e] flex flex-col shrink-0" data-sd-id="162">
+      <!-- Tab Header -->
+      <div class="border-b border-[#414853] flex justify-between px-3" data-sd-id="163">
+         <div class="flex space-x-1" data-sd-id="164">
+           <div class="px-[14px] py-[8px] text-[#e3e8ef] font-semibold border-b-2 border-[#3277bd] text-[12px]" data-sd-id="165">
+             Volume
+           </div>
+           <div class="px-[14px] py-[8px] text-[#9aa7b7] text-[12px] border-b-2 border-transparent hover:bg-[#333943] cursor-pointer" data-sd-id="166">
+             What gets saved
+           </div>
+         </div>
+         <div class="flex items-center text-[10px] font-semibold text-[#9aa7b7] uppercase mr-1" data-sd-id="167">
+           One volume per moment · shared by all lanes
+         </div>
+      </div>
+      
+      <!-- Panel Content -->
+      <div class="flex-1 flex" data-sd-id="168">
+         <!-- Left Side Controls (347px per XAML Width) -->
+         <div class="w-[347px] bg-[#282d35] p-[14px] border-r border-[#171b21] overflow-y-auto shrink-0 z-10" data-sd-id="169">
+            <div class="flex flex-col space-y-2 mt-2" data-sd-id="170">
+               <div class="flex items-center space-x-2" data-sd-id="171">
+                 <span class="font-bold text-[#e4e4e6]" data-sd-id="172">Volume</span>
+                 <span class="text-[#a4a4a9] ml-3" data-sd-id="173">Ramp</span>
+                 <select class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[110px] outline-none" data-sd-id="174">
+                   <option data-sd-id="175">Linear</option>
+                 </select>
+               </div>
+               <div class="flex items-center space-x-1.5 mt-2" data-sd-id="176">
+                 <input type="text" placeholder="0-100" class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[56px] outline-none" data-sd-id="177">
+                 <select class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[96px] outline-none" data-sd-id="178">
+                   <option data-sd-id="179">Set all</option>
+                 </select>
+                 <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="180">
+                   Apply
+                 </button>
+               </div>
+               <div class="flex items-center space-x-1.5 mt-2" data-sd-id="181">
+                 <span class="text-[#a4a4a9]" data-sd-id="182">Select</span>
+                 <input type="text" placeholder="min" class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[46px] outline-none text-center" data-sd-id="183">
+                 <span class="text-[#a4a4a9]" data-sd-id="184">to</span>
+                 <input type="text" placeholder="max" class="bg-[#191e25] border border-[#414853] rounded-[4px] h-[28px] px-2 text-[12px] w-[46px] outline-none text-center" data-sd-id="185">
+                 <button class="bg-[#333943] hover:bg-[#282d35] border border-[#414853] rounded-[5px] px-[10px] py-[4px] h-[28px] flex items-center justify-center" data-sd-id="186">
+                   Select
+                 </button>
+               </div>
+            </div>
+         </div>
+         
+         <!-- Right Side Automation View (aligns with GridLeft/323px implicitly but overlapping in C#) -->
+         <!-- Let's represent the volume bars aligning with timeline -->
+         <div class="flex-1 bg-[#1c2128] relative overflow-hidden" data-sd-id="187">
+             <!-- Horizontal guide lines -->
+             <div class="absolute bottom-[25%] left-0 w-full h-[1px] bg-[#343d49]" data-sd-id="188"></div>
+             <div class="absolute bottom-[50%] left-0 w-full h-[1px] bg-[#343d49]" data-sd-id="189"></div>
+             <div class="absolute bottom-[75%] left-0 w-full h-[1px] bg-[#343d49]" data-sd-id="190"></div>
+             <div class="absolute bottom-[100%] left-0 w-full h-[1px] bg-[#343d49]" data-sd-id="191"></div>
+
+             <!-- Volume Bar at 100px (Bar 1) -->
+             <div class="absolute bottom-[8px] left-[100px] w-[5px] h-[80px] bg-[rgba(180,110,240,0.75)] transform -translate-x-1/2" data-sd-id="192"></div>
+             <div class="absolute bottom-[90px] left-[100px] w-[5px] h-[5px] bg-[#d5a0fa] transform -translate-x-1/2" data-sd-id="193"></div>
+
+             <!-- Volume Bar at 150px (Beat 1.2) -->
+             <div class="absolute bottom-[8px] left-[150px] w-[5px] h-[60px] bg-[rgba(180,110,240,0.75)] transform -translate-x-1/2" data-sd-id="194"></div>
+             <div class="absolute bottom-[70px] left-[150px] w-[5px] h-[5px] bg-[#d5a0fa] transform -translate-x-1/2" data-sd-id="195"></div>
+
+             <!-- Playhead -->
+             <div class="absolute left-[120px] top-0 w-[2px] h-full bg-[#e3e8ef] z-20" data-sd-id="196"></div>
+         </div>
+      </div>
+    </div>
+
+    <!-- 7. Status Bar (28px) -->
+    <div class="h-[28px] bg-[#282d35] border-t border-[#414853] flex items-center justify-between px-[14px] shrink-0" data-sd-id="197">
+      <div class="text-[12px] truncate max-w-[80%]" data-sd-id="198">Ready.</div>
+      <div class="text-[12px]" data-sd-id="199"></div>
+    </div>
+
+  </div>
+
+
+</body></html>

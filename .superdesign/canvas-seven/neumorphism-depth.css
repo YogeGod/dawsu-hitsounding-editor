@@ -1,0 +1,166 @@
+/* One light source, three distinct control states: raised, pressed, recessed. */
+.neumorphism {
+  --relief-shadow: #bdc3ce;
+  --relief-highlight: #ffffff;
+}
+.neumorphism .command-row {
+  background: linear-gradient(145deg, #f1f2f6, #e7e9ef);
+  border: 1px solid #f8f9fc;
+  box-shadow: 8px 8px 15px #c4c9d3, -6px -6px 13px #ffffff,
+    inset 1px 1px 0 #ffffff, inset -1px -1px 0 #d4d8e1;
+  border-radius: 15px;
+}
+.neumorphism .utility {
+  background: linear-gradient(145deg, #eff0f5, #e8eaf0);
+  border: 1px solid #f7f8fb;
+  box-shadow: 10px 10px 20px #c0c6d1, -8px -8px 18px #ffffff,
+    inset 1px 1px 0 #ffffff, inset -1px -1px 0 #d1d6df;
+  border-radius: 19px;
+}
+.neumorphism .btn {
+  color: #4a5568;
+  background: linear-gradient(145deg, #f7f8fb, #e0e3eb);
+  border: 1px solid #f5f7fb;
+  border-radius: 9px;
+  box-shadow: 5px 5px 9px #bcc3cf, -4px -4px 8px #ffffff,
+    inset 1px 1px 0 #ffffff, inset -1px -1px 0 #d4d9e2;
+  font-weight: 500;
+  transition: box-shadow 120ms ease, transform 120ms ease, background 120ms ease;
+}
+.neumorphism .btn.active {
+  color: #ffffff;
+  background: linear-gradient(145deg, #ef7900, #ff940c);
+  border-color: #fda246;
+  box-shadow: inset 3px 3px 6px #c96800, inset -2px -2px 4px #ffb34c,
+    1px 1px 0 #ffffff;
+  text-shadow: 0 1px 1px #a45612;
+}
+.neumorphism .btn.primary {
+  color: #ffffff;
+  background: linear-gradient(145deg, #ffa42b, #f78300);
+  border-color: #ffbc66;
+  box-shadow: 5px 5px 9px #bec4cf, -4px -4px 8px #ffffff,
+    inset 1px 1px 0 #ffd18e, inset -1px -2px 0 #d66e00;
+  text-shadow: 0 1px 1px #b56008;
+}
+.neumorphism .btn:active:not(:disabled) {
+  background: #e4e7ee;
+  color: #4a5568;
+  box-shadow: inset 4px 4px 7px #b9c1ce, inset -3px -3px 6px #ffffff;
+  transform: translateY(1px);
+}
+.neumorphism .btn.active:active,
+.neumorphism .btn.primary:active {
+  background: #ed7b00;
+  color: #ffffff;
+  box-shadow: inset 4px 4px 7px #c06200, inset -3px -3px 5px #ffb34c;
+}
+.neumorphism .btn:disabled {
+  border-color: #e2e5ec;
+  background: #e9ebf0;
+  color: #9da5b2;
+  box-shadow: none;
+  opacity: .65;
+}
+.neumorphism .command-row .flex.gap-2 { gap: 10px; }
+.neumorphism .utility .transport-buttons { gap: 10px; }
+.neumorphism .transport-buttons .btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  box-shadow: 6px 6px 10px #b8c0ce, -5px -5px 10px #ffffff,
+    inset 1px 1px 0 #ffffff, inset -1px -1px 0 #d0d6e1;
+}
+.neumorphism .transport-buttons .btn.active {
+  box-shadow: inset 3px 3px 6px #c76700, inset -2px -2px 4px #ffb953,
+    1px 1px 0 #ffffff;
+}
+.neumorphism .transport-buttons .play { width: 46px; }
+.neumorphism .utility .counters {
+  border: 1px solid #dce1e9;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #e1e5ed, #edf0f6);
+  box-shadow: inset 6px 6px 11px #b8c1d0, inset -5px -5px 10px #ffffff,
+    1px 1px 0 #ffffff;
+}
+.neumorphism .counters strong { color: #3e4c62; }
+.neumorphism input:not([type=range]),
+.neumorphism select {
+  color: #46546a;
+  border: 1px solid #dde2eb;
+  background: linear-gradient(145deg, #e2e6ee, #edf0f5);
+  box-shadow: inset 3px 3px 5px #bcc5d4, inset -3px -3px 5px #ffffff,
+    1px 1px 0 #ffffff;
+  border-radius: 7px;
+}
+.neumorphism input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border: 1px solid #dce1e9;
+  border-radius: 99px;
+  background: #dfe4ec;
+  box-shadow: inset 2px 3px 4px #b6c0d0, inset -2px -2px 4px #ffffff,
+    0 1px 0 #ffffff;
+}
+.neumorphism input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 19px;
+  height: 19px;
+  border: 4px solid #edf0f5;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffa62c, #f27d00);
+  box-shadow: 3px 3px 5px #adb8c9, -2px -2px 4px #ffffff,
+    inset 0 1px 1px #ffc16b;
+}
+.neumorphism input[type=range]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 4px solid #edf0f5;
+  border-radius: 50%;
+  background: #ff8800;
+  box-shadow: 3px 3px 5px #adb8c9, -2px -2px 4px #ffffff;
+}
+.neumorphism .ms {
+  color: #5c6980;
+  border: 1px solid #f4f6fa;
+  background: linear-gradient(145deg, #f5f7fa, #dce1e9);
+  border-radius: 4px;
+  box-shadow: 2px 2px 3px #c1c9d6, -1px -1px 2px #ffffff;
+  opacity: 1;
+}
+.neumorphism .ms:active {
+  box-shadow: inset 2px 2px 3px #bac4d3, inset -1px -1px 2px #ffffff;
+}
+.neumorphism .editor-panel {
+  border: 1px solid #d3d9e4;
+  box-shadow: inset 5px 5px 9px #c2cbd8, inset -4px -4px 8px #ffffff,
+    0 1px 0 #ffffff;
+}
+.neumorphism .overview-wave {
+  padding: 2px 5px;
+  border: 1px solid #d8dfea;
+  border-radius: 6px;
+  background: #e2e6ee;
+  box-shadow: inset 2px 2px 4px #bec7d6, inset -2px -2px 4px #f9fbff;
+}
+.neumorphism .volume-controls .btn {
+  box-shadow: 3px 3px 5px #bec6d3, -2px -2px 4px #ffffff,
+    inset 1px 1px 0 #ffffff;
+}
+.neumorphism .volume-controls .btn.primary {
+  box-shadow: 3px 3px 5px #bec6d3, -2px -2px 4px #ffffff,
+    inset 1px 1px 0 #ffd18e, inset -1px -1px 0 #d66e00;
+}
+.neumorphism .tab {
+  height: 25px;
+  margin: 4px 0;
+  padding: 0 10px;
+  border-radius: 7px;
+}
+.neumorphism .active-tab {
+  border: 1px solid #d9e0ea;
+  color: #4a5568;
+  background: #e3e8ef;
+  box-shadow: inset 2px 2px 4px #c2ccda, inset -2px -2px 4px #ffffff;
+}
