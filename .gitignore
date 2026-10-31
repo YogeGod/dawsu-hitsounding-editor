@@ -12,3 +12,6 @@ testmaps/hitsound-rules-test/
 
 # Local agent handoff records
 .handoff/
+
+# Release packages
+artifacts/

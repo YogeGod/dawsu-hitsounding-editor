@@ -16,7 +16,7 @@ public class PreferencesAndHelpTests : IDisposable
         {
             SongsFolder = @"F:\osu!\Songs", AudioDevice = 3, BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
             SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, InspectorOpen = false, InspectorWidth = 300,
-            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"],
+            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true,
         }.WithRecent(@"C:\a.osu");
         prefs.Save(path);
 

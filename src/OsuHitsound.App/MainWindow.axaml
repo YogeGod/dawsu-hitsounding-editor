@@ -228,7 +228,7 @@
           <Button Name="OpenButton" Classes="flat" Content="Open…" ToolTip.Tip="Open a map (Ctrl+O)" />
           <Button Name="SaveButton" Classes="flat" Content="Save .osu" ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
           <Button Name="GenerateButton" Classes="flat" Content="Generate…" ToolTip.Tip="Generate a hitsound diff from the hits (circles where sounds have no object)" />
-          <Menu VerticalAlignment="Center" Margin="4,0,0,0">
+          <Menu Name="HeaderMenu" VerticalAlignment="Center" Margin="4,0,0,0">
             <MenuItem Header="File">
               <MenuItem Name="OpenItem" Header="Open…" />
               <MenuItem Name="ImportOszItem" Header="Import .osz…" />
@@ -239,6 +239,8 @@
               <MenuItem Name="GenerateFileItem" Header="Generate hitsound diff…" />
               <Separator />
               <MenuItem Name="PreferencesItem" Header="Preferences…" />
+              <Separator />
+              <MenuItem Name="TutorialItem" Header="Tutorial" />
             </MenuItem>
             <MenuItem Header="Edit">
               <MenuItem Name="UndoItem" Header="Undo" />
@@ -340,31 +342,33 @@
 
     <!-- 3. Selection info bar (V6.39: SELECTION · START · VOLUME · VALUE EDIT · GAMEPLAY OBJECT); song controls on the right -->
     <Border Grid.Row="2" Grid.ColumnSpan="3" Name="EditBar" Classes="info" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Margin="12,0">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0">
+        <StackPanel Name="InfoBarLeft" Orientation="Horizontal">
         <StackPanel Classes="field" MinWidth="130">
           <TextBlock Text="SELECTION" Classes="fieldLabel" />
           <TextBlock Name="InfoSelection" Text="No events" Classes="fieldValue" />
         </StackPanel>
-        <StackPanel Grid.Column="1" Classes="field" MinWidth="150">
+        <StackPanel Classes="field" MinWidth="150">
           <TextBlock Text="START · ms" Classes="fieldLabel" />
           <TextBlock Name="InfoStart" Text="—" Classes="fieldValue" />
         </StackPanel>
-        <StackPanel Grid.Column="2" Classes="field">
+        <StackPanel Classes="field">
           <TextBlock Text="VOLUME · %" Classes="fieldLabel" />
           <StackPanel Orientation="Horizontal" Spacing="4">
             <TextBox Name="VolumeValueBox" Width="60" Watermark="0-100" ToolTip.Tip="A value for the selected moments; Enter or Apply" />
             <Button Name="VolumeApplyButton" Content="Apply" Focusable="False" />
           </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Column="3" Classes="field">
+        <StackPanel Classes="field">
           <TextBlock Text="VALUE EDIT" Classes="fieldLabel" />
           <ComboBox Name="VolumeModeBox" Width="100" Focusable="False" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
         </StackPanel>
-        <StackPanel Grid.Column="4" Classes="field" MinWidth="200">
+        <StackPanel Classes="field" MinWidth="200">
           <TextBlock Text="GAMEPLAY OBJECT" Classes="fieldLabel" />
           <TextBlock Name="InfoObject" Text="—" Classes="fieldValue" TextTrimming="CharacterEllipsis" />
         </StackPanel>
-        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        </StackPanel>
+        <StackPanel Grid.Column="2" Name="SongControls" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <TextBlock Text="SONG" Classes="fieldLabel" VerticalAlignment="Center" />
           <Slider Name="SongVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" Focusable="False" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
           <ToggleButton Name="SongMuteButton" Content="Mute" ToolTip.Tip="Mute the song. Soloing a lane also silences it." />
@@ -429,8 +433,8 @@
 
     <!-- 7. Transport (V6.39: at the bottom) · time, position, tempo and signature · status -->
     <Border Grid.Row="6" Grid.ColumnSpan="3" Name="StatusBar" Classes="transportBar" BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="12,0">
-        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12,0">
+        <StackPanel Name="TransportButtons" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
             <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
           </Button>
@@ -455,7 +459,16 @@
         </Border>
         <TextBlock Grid.Column="2" Name="StatusLeft" VerticalAlignment="Center" FontSize="12" Margin="16,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource LcdCaption}" />
         <TextBlock Grid.Column="3" Name="StatusRight" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource LcdCaption}" />
+        <StackPanel Grid.Column="4" Name="GlobalVolumePanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
+                    ToolTip.Tip="Global volume: the song, hitsounds and previews together (20–100 %)">
+          <TextBlock Text="Global volume" Classes="toolLabel" />
+          <Slider Name="GlobalVolumeSlider" Width="110" Minimum="20" Maximum="100" Value="100" Focusable="False" VerticalAlignment="Center" />
+          <TextBlock Name="GlobalVolumeText" Text="100%" Classes="fieldValue" Width="36" VerticalAlignment="Center" />
+        </StackPanel>
       </Grid>
     </Border>
+
+    <!-- The tutorial: over everything, hidden until it runs -->
+    <app:TutorialOverlay Name="Tutorial" Grid.RowSpan="7" Grid.ColumnSpan="3" ZIndex="100" />
   </Grid>
 </Window>

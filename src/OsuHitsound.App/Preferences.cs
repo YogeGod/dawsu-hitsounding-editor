@@ -55,6 +55,12 @@ internal sealed record Preferences
 
     public List<string> InspectorFolded { get; init; } = [];
 
+    /// <summary>Global volume in % (20–100): the song, hitsounds and previews together.</summary>
+    public double GlobalVolume { get; init; } = 100;
+
+    /// <summary>The first-launch tutorial has been shown (File → Tutorial shows it again).</summary>
+    public bool TutorialSeen { get; init; }
+
     public double? WindowX { get; init; }
 
     public double? WindowY { get; init; }

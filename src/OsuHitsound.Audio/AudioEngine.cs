@@ -114,6 +114,27 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
+    /// <summary>The lowest global volume: below 20 % the editor gets too quiet to judge hitsounds by ear.</summary>
+    public const float MinMasterVolume = 0.2f;
+
+    /// <summary>
+    /// Global volume (20–100 %): scales the song, the hitsounds and the previews together, as BASS's global stream and
+    /// sample volumes, so the mix between them stays as it is.
+    /// </summary>
+    public float MasterVolume
+    {
+        get => masterVolume;
+        set
+        {
+            masterVolume = Math.Clamp(value, MinMasterVolume, 1);
+            int level = (int)Math.Round(masterVolume * 10000);
+            Bass.GlobalStreamVolume = level;
+            Bass.GlobalSampleVolume = level;
+        }
+    }
+
+    private float masterVolume = 1;
+
     /// <summary>Song volume 0–1; hitsound volumes are unchanged.</summary>
     public float SongVolume
     {

@@ -66,6 +66,17 @@ Pump();
 Save("04-edited.png");
 Console.WriteLine("status: " + window.FindControl<Avalonia.Controls.TextBlock>("StatusLeft")!.Text);
 
+// The tutorial: a few of its steps, to check each spotlight and arrow lands on its control.
+foreach (int step in new[] { 1, 9, 16, 22, 24, 25, 29 })
+{
+    window.ShowTutorialStepForSnapshot(step);
+    Pump();
+    Save($"08-tutorial-{step:00}.png");
+}
+
+window.CloseTutorialForSnapshot();
+Pump();
+
 // The UI inspector: change two values the way its editors do and check they show at once (the theme is in memory only).
 window.ToggleInspector();
 UiTheme.Current.Set("lane.tint", "0.5");

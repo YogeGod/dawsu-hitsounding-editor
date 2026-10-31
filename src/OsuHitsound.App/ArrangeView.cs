@@ -154,6 +154,28 @@ internal sealed class ArrangeView : Control
         return Color.FromRgb(Mix(dark.R, bright.R, k), Mix(dark.G, bright.G, k), Mix(dark.B, bright.B, k));
     }
 
+    // ---- areas the tutorial points at (this control's coordinates)
+
+    /// <summary>The lane list's title: SAMPLE LANES, the filter and the + button.</summary>
+    public Rect LaneListHeaderRect => new(0, 0, GridLeft, RulerBottom);
+
+    /// <summary>The icon and + ● M S buttons of the first visible lane, or null when no lane is in view.</summary>
+    public Rect? FirstLaneButtonsRect()
+    {
+        if (Model is not { } model) return null;
+        for (int i = Math.Max(0, RowIndexAt(HeaderHeight)); i < model.Rows.Count; i++)
+        {
+            double y = HeaderHeight + RowTop(i) - scrollY;
+            if (y > Bounds.Height) break;
+            if (model.Rows[i] is LaneRow) return new Rect(GridLeft - IconFromRight - 14, y, IconFromRight + 14, RowHeight);
+        }
+
+        return null;
+    }
+
+    /// <summary>The grid of hits, below the ruler and the object strip.</summary>
+    public Rect GridRect => new(GridLeft, HeaderHeight, Math.Max(0, Bounds.Width - GridLeft), Math.Max(0, Bounds.Height - HeaderHeight));
+
     /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
     public bool ShowIndexes { get; set; }
 

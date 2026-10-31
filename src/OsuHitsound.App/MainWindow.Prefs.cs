@@ -22,6 +22,7 @@ public partial class MainWindow
         try
         {
             audio = AudioEngine.Create(prefs.AudioDevice, prefs.BufferMs);
+            audio.MasterVolume = (float)(Math.Clamp(prefs.GlobalVolume, 20, 100) / 100);
             audioError = null;
         }
         catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException or BadImageFormatException)
@@ -64,6 +65,7 @@ public partial class MainWindow
                 SnapMode = Lanes.Edits.SnapMode, QuantizeStrength = Lanes.Edits.QuantizeStrength, ColourByVolume = Lanes.ColourByVolume,
                 InspectorOpen = InspectorToggle.IsChecked == true,
                 InspectorWidth = InspectorWidthToSave,
+                GlobalVolume = GlobalVolumeSlider.Value,
                 InspectorCards = [.. Inspector.Order], InspectorFolded = [.. Inspector.Folded],
             };
             SavePrefs();

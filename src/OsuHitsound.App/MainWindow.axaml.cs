@@ -129,6 +129,14 @@ public partial class MainWindow : Window
         foreach (var (item, speed) in new[] { (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) })
             item.Click += (_, _) => { if (audio is not null) audio.Speed = speed; UpdateStatus(); };
         SongVolumeSlider.ValueChanged += (_, e) => { if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100); };
+        // Global volume: 20–100 % (the slider can't go lower), applied to everything that plays.
+        GlobalVolumeSlider.Value = Math.Clamp(prefs.GlobalVolume, GlobalVolumeSlider.Minimum, GlobalVolumeSlider.Maximum);
+        GlobalVolumeText.Text = $"{Math.Round(GlobalVolumeSlider.Value)}%";
+        GlobalVolumeSlider.ValueChanged += (_, e) =>
+        {
+            GlobalVolumeText.Text = $"{Math.Round(e.NewValue)}%";
+            if (audio is not null) audio.MasterVolume = (float)(e.NewValue / 100);
+        };
         SongMuteButton.IsCheckedChanged += (_, _) =>
         {
             Lanes.SongMuted = SongMuteButton.IsChecked == true;
@@ -166,6 +174,7 @@ public partial class MainWindow : Window
         ColourVolumeItem.Click += (_, _) => SetColourByVolume(true);
         SetColourByVolume(prefs.ColourByVolume);
         SetupInspector();
+        SetupTutorial();
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
 
