@@ -43,6 +43,21 @@ internal sealed class VolumeLane : Control
     /// <summary>The Ramp tool (6) is active: every drag draws a ramp.</summary>
     public bool RampTool { get; set; }
 
+    /// <summary>The editing tool, for the cursor over the bars (V6.39 shows the same cursors there as over the grid).</summary>
+    public Tool Tool { get; set; } = Tool.Select;
+
+    private Point? pointer;
+
+    /// <summary>Shows the cursor for the tool at the pointer; the window calls it when Alt goes down or up.</summary>
+    public void UpdateCursor(KeyModifiers modifiers) =>
+        Cursor = ToolCursors.Get(ToolCursors.For(Tool, modifiers, pointer is { } p && p.X >= ArrangeView.GridLeft));
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        pointer = null;
+        base.OnPointerExited(e);
+    }
+
     public RampShape Shape { get; set; } = RampShape.Linear;
 
     public IReadOnlySet<MomentKey> SelectedMoments { get; set; } = new HashSet<MomentKey>();
@@ -156,6 +171,8 @@ internal sealed class VolumeLane : Control
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
+        pointer = e.GetPosition(this);
+        UpdateCursor(e.KeyModifiers);
         if (gesture == Gesture.None) return;
         bool scheduled = pending is not null;
         pending = e.GetPosition(this);

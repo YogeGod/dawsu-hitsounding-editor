@@ -127,6 +127,7 @@ internal sealed class ArrangeView : Control
         {
             tool = value;
             if (value != Tool.Range) Edits.ClearRange();
+            UpdateCursor(KeyModifiers.None);
         }
     }
 
@@ -1069,8 +1070,27 @@ internal sealed class ArrangeView : Control
         InvalidateVisual();
     }
 
+    // ---- the tool cursor (V6.39): arrow, pen (Draw or Alt), eraser or crosshair over the grid; the arrow elsewhere
+
+    private Point? pointer;
+
+    /// <summary>Shows the cursor for the tool at the pointer; the window calls it when Alt goes down or up.</summary>
+    public void UpdateCursor(KeyModifiers modifiers)
+    {
+        bool overGrid = pointer is { } p && p.X >= GridLeft && p.Y >= HeaderHeight;
+        Cursor = ToolCursors.Get(ToolCursors.For(Tool, modifiers, overGrid));
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        pointer = null;
+        base.OnPointerExited(e);
+    }
+
     protected override void OnPointerMoved(PointerEventArgs e)
     {
+        pointer = e.GetPosition(this);
+        UpdateCursor(e.KeyModifiers);
         if (drag == Drag.None || Model is not { } model || Session is not { } session) return;
         var p = e.GetPosition(this);
         dragNow = p;

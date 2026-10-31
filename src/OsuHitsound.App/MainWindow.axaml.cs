@@ -175,6 +175,7 @@ public partial class MainWindow : Window
         SetColourByVolume(prefs.ColourByVolume);
         SetupInspector();
         SetupTutorial();
+        Deactivated += (_, _) => UpdateToolCursors(KeyModifiers.None);
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
 
@@ -366,8 +367,22 @@ public partial class MainWindow : Window
         if (files.Count > 0 && files[0].TryGetLocalPath() is { } local) await Open(local);
     }
 
+    // Holding Alt shows the pen over the grid and the bars (Alt draws with any tool), as in V6.39.
+    private void UpdateToolCursors(KeyModifiers modifiers)
+    {
+        Lanes.UpdateCursor(modifiers);
+        Volume.UpdateCursor(modifiers);
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        if (e.Key is Key.LeftAlt or Key.RightAlt) UpdateToolCursors(e.KeyModifiers & ~KeyModifiers.Alt);
+        base.OnKeyUp(e);
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (e.Key is Key.LeftAlt or Key.RightAlt) UpdateToolCursors(e.KeyModifiers | KeyModifiers.Alt);
         // Typing in a text box (volume value, offset…) must not trigger editor shortcuts like 5 (Mute) or Backspace (delete hits).
         if (FocusManager?.GetFocusedElement() is TextBox)
         {
@@ -480,6 +495,8 @@ public partial class MainWindow : Window
         MuteTool.IsChecked = tool == Tool.Mute;
         RampTool.IsChecked = tool == Tool.Ramp;
         Volume.RampTool = tool == Tool.Ramp;
+        Volume.Tool = tool;
+        Volume.UpdateCursor(KeyModifiers.None);
         UpdateStatus();
     }
 
