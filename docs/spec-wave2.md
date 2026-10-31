@@ -85,7 +85,7 @@ Assign to gameplay objects, and the Objects and Cursor snap modes.
   - `[TimingPoints]` keeps only the red (uninherited) lines;
   - `[HitObjects]` is empty;
   - bookmarks are kept.
-- Encoding, BOM and line endings follow the open file.
+- (Changed while building:) it is made by the same code as Generate's hitsound diff (`HitsoundDiff.DiffText`), so `[Events]` (background, storyboard) and `[Colours]` are left out too, and it is written as UTF-8 with CRLF line endings, as osu! writes new files.
 - The filename is `Artist - Title (Creator) [Name].osu`, with Windows-invalid characters replaced the way osu! does. If the name, or the file, already exists in the folder, it is refused with a message.
 - The new diff then opens, ready for drawing and Generate.
 

@@ -85,7 +85,7 @@ public static class HitsoundDiff
     /// The diff: the source's header (Version set to "Hitsounds", BeatmapID 0), no events, its red lines, and one plain
     /// circle per time. Line endings follow the source.
     /// </summary>
-    public static string DiffText(OsuFile source, IEnumerable<int> times)
+    public static string DiffText(OsuFile source, IEnumerable<int> times, string version = Version)
     {
         var sb = new StringBuilder();
         const string nl = "\r\n";
@@ -95,7 +95,7 @@ public static class HitsoundDiff
             var text = line.Text.Trim();
             if (text.StartsWith('[') && text.EndsWith(']')) section = text[1..^1];
             if (section is "Events" or "TimingPoints" or "HitObjects" or "Colours") continue;
-            if (section == "Metadata" && text.StartsWith("Version:", StringComparison.Ordinal)) text = "Version:" + Version;
+            if (section == "Metadata" && text.StartsWith("Version:", StringComparison.Ordinal)) text = "Version:" + version;
             else if (section == "Metadata" && text.StartsWith("BeatmapID:", StringComparison.Ordinal)) text = "BeatmapID:0";
             else text = line.Text;
             sb.Append(text).Append(nl);
@@ -120,14 +120,61 @@ public static class HitsoundDiff
         return sb.ToString();
     }
 
+    /// <summary>
+    /// File → New hitsound diff (Ctrl+N): an empty difficulty next to the source, made like Generate's (same header with
+    /// this Version and BeatmapID 0, red lines only, no events or objects; bookmarks kept). Refuses a blank name, and a
+    /// name or file another difficulty in the folder already has (osu! compares names ignoring case). Returns its path.
+    /// </summary>
+    public static string CreateEmpty(OsuFile source, string sourcePath, string version)
+    {
+        version = version.Trim();
+        if (version.Length == 0) throw new ArgumentException("The difficulty needs a name.", nameof(version));
+        var folder = Path.GetDirectoryName(Path.GetFullPath(sourcePath))!;
+        var path = Path.Combine(folder, FileNameFor(source, sourcePath, version));
+        foreach (var other in Directory.EnumerateFiles(folder, "*.osu"))
+        {
+            if (string.Equals(other, path, StringComparison.OrdinalIgnoreCase)) throw new IOException($"{Path.GetFileName(path)} already exists.");
+            if (VersionOf(other) is { } taken && string.Equals(taken, version, StringComparison.OrdinalIgnoreCase))
+                throw new IOException($"The difficulty \"{taken}\" already exists in this folder.");
+        }
+
+        // CreateNew: if another program made the file since the check above, this fails instead of replacing it.
+        var bytes = Encoding.UTF8.GetBytes(DiffText(source, [], version));
+        try
+        {
+            using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
+            stream.Write(bytes);
+        }
+        catch (Exception ex) when (ex is not IOException { HResult: unchecked((int)0x80070050) }) // 0x50: the file exists (not ours)
+        {
+            if (File.Exists(path)) File.Delete(path);
+            throw;
+        }
+
+        return path;
+    }
+
+    // The [Metadata] Version of a .osu, or null when it can't be read.
+    private static string? VersionOf(string osuPath)
+    {
+        try
+        {
+            return OsuFile.Read(osuPath).Lines.FirstOrDefault(l => l.Section == "Metadata" && l.Text.StartsWith("Version:", StringComparison.Ordinal))?.Text[8..].Trim();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>"Artist - Title (Creator) [Hitsounds].osu", from the source's metadata (or its file name).</summary>
-    public static string FileNameFor(OsuFile source, string sourcePath)
+    public static string FileNameFor(OsuFile source, string sourcePath, string version = Version)
     {
         string Meta(string key) => source.Lines.FirstOrDefault(l => l.Section == "Metadata" && l.Text.StartsWith(key + ":", StringComparison.Ordinal))
             ?.Text[(key.Length + 1)..].Trim() ?? "";
         string name = Meta("Artist") is { Length: > 0 } artist && Meta("Title") is { Length: > 0 } title
-            ? $"{artist} - {title} ({Meta("Creator")}) [{Version}].osu"
-            : System.Text.RegularExpressions.Regex.Replace(Path.GetFileName(sourcePath), @"\[[^\]]*\]\.osu$", $"[{Version}].osu");
+            ? $"{artist} - {title} ({Meta("Creator")}) [{version}].osu"
+            : System.Text.RegularExpressions.Regex.Replace(Path.GetFileName(sourcePath), @"\[[^\]]*\]\.osu$", $"[{version}].osu");
         var invalid = Path.GetInvalidFileNameChars();
         return string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c));
     }

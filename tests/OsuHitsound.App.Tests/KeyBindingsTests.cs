@@ -24,6 +24,7 @@ public class KeyBindingsTests : IDisposable
                        <list name="Key" type="string"><item value="Del"/><item value="Backspace"/></list>
                     </item>
                     <item><string name="Name" value="Group"/><string name="Key" value="Ctrl+G" wide="true"/></item>
+                    <item><string name="Name" value="Repeat"/><string name="Key" value="Ctrl+K" wide="true"/></item>
                     <item><string name="Name" value="Unbound"/></item>
                  </list>
               </item>
@@ -91,6 +92,9 @@ public class KeyBindingsTests : IDisposable
         Assert.Equal("6", Keys(map, "toolRamp"));        // Cubase's Zoom Tool has 6, but this editor has no such command
         Assert.Equal("4", Keys(map, "toolErase"));       // no key in this file: built-in
         Assert.Equal("7", Keys(map, "toolRange"));       // Cubase's Range Tool
+        Assert.Equal("Ctrl+K", Keys(map, "repeat"));     // Cubase's Edit > Repeat, not the built-in Ctrl+R
+        Assert.Equal("Q", Keys(map, "quantize"));        // no MIDI > Quantize key in this file: built-in
+        Assert.Equal("Ctrl+N", Keys(map, "newDiff"));
     }
 
     [Fact]
@@ -100,6 +104,7 @@ public class KeyBindingsTests : IDisposable
         Assert.Equal("2", Keys(map, "toolDraw"));
         Assert.Equal("Space, X", Keys(map, "play"));
         Assert.Equal("", Keys(map, "toolRange"));       // osu! uses 2 for placing circles, so Range has no key here
+        Assert.Equal(("Q", "Ctrl+R", "Ctrl+N"), (Keys(map, "quantize"), Keys(map, "repeat"), Keys(map, "newDiff")));
         Assert.Equal("Ctrl+Z", Keys(map, "undo"));
     }
 

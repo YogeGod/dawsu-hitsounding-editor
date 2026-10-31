@@ -54,6 +54,8 @@ internal static class EditorCommands
     public static readonly IReadOnlyList<EditorCommand> Defaults =
     [
         new("open", "Files and help", "Open a .osu", [K(Key.O, Ctrl)]),
+        new("newDiff", "Files and help", "New hitsound diff: an empty difficulty with this map's red lines", [K(Key.N, Ctrl)]),
+        new("importOsz", "Files and help", "Import an .osz into the Songs folder", []),
         new("save", "Files and help", "Save the .osu (a backup is kept outside the mapset)", [K(Key.S, Ctrl)]),
         new("preferences", "Files and help", "Preferences", [K(Key.OemComma, Ctrl)]),
         new("help", "Files and help", "This shortcut overview", [K(Key.F1)]),
@@ -98,6 +100,9 @@ internal static class EditorCommands
         new("gridRight", "Editing", "Move to the next grid line", [K(Key.Right, Ctrl)]),
         new("laneUp", "Editing", "Move the selection to the lane above", [K(Key.Up, Ctrl)]),
         new("laneDown", "Editing", "Move the selection to the lane below", [K(Key.Down, Ctrl)]),
+        new("quantize", "Editing", "Quantize: move the selected loose hits toward the grid (last strength)", [K(Key.Q)]),
+        new("quantizeDialog", "Editing", "Quantize with a chosen strength", []),
+        new("repeat", "Editing", "Repeat: copies of the selection, a number of snap steps apart", [K(Key.R, Ctrl)]),
         new("editRange", "Editing", "Edit range: copy, move or delete the hits in the range", []),
         new("scaleByVolume", "Editing", "Scale by volume: make circles in a volume range louder or quieter", []),
 

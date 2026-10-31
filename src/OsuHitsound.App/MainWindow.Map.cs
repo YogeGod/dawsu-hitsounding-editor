@@ -72,7 +72,7 @@ public partial class MainWindow
                 new Separator(),
                 Item("Delete lane (removes its hits)", () =>
                 {
-                    session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList());
+                    session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList(), "Delete lane");
                     model.HideLane(lane);
                     ScheduleProjectSave();
                 }),
@@ -146,6 +146,7 @@ public partial class MainWindow
             Cycle = Lanes.Cycle,
             PreviewMuted = [.. model.PreviewMutedHits.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time))],
             SongOffset = audio?.SongOffset ?? 0,
+            TimeSignatures = [.. model.TimeSignatures],
         };
         try
         {
@@ -178,6 +179,7 @@ public partial class MainWindow
             if (session.State.Hits.FirstOrDefault(h => ProjectStore.KeyOf(h.Lane) == muted.Lane && Math.Abs(h.Time - muted.Time) < 0.5) is { } hit)
                 model.TogglePreviewMute(hit);
 
+        if (project.TimeSignatures.Count > 0) model.SetTimeSignatures(project.TimeSignatures);
         if (project.LocatorLeft is { } l && project.LocatorRight is { } r) Lanes.SetLocators(l, r);
         Lanes.Cycle = project.Cycle;
         if (audio is not null && project.SongOffset != 0)

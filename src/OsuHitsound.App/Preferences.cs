@@ -37,6 +37,24 @@ internal sealed record Preferences
     /// <summary>Preset name → command id → the user's keys for it (see <see cref="Keymap.Format"/>), kept apart per preset.</summary>
     public Dictionary<string, Dictionary<string, List<string>>> KeyOverrides { get; init; } = [];
 
+    /// <summary>How dragging snaps (Grid or Grid relative).</summary>
+    public SnapMode SnapMode { get; init; } = SnapMode.Grid;
+
+    /// <summary>The strength Q quantizes with, in %.</summary>
+    public double QuantizeStrength { get; init; } = 100;
+
+    /// <summary>View → Colour by Volume instead of by lane.</summary>
+    public bool ColourByVolume { get; init; }
+
+    /// <summary>The inspector on the left: shown, its width, its cards top to bottom and the folded ones.</summary>
+    public bool InspectorOpen { get; init; } = true;
+
+    public double InspectorWidth { get; init; } = 250;
+
+    public List<string> InspectorCards { get; init; } = [];
+
+    public List<string> InspectorFolded { get; init; } = [];
+
     public double? WindowX { get; init; }
 
     public double? WindowY { get; init; }

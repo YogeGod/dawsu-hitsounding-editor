@@ -142,7 +142,7 @@ internal sealed class VolumeLane : Control
             gesture = Gesture.Bar;
         }
 
-        session.BeginGesture();
+        session.BeginGesture(gesture switch { Gesture.Ramp => "Ramp", Gesture.Paint => "Paint volumes", _ => "Volume" });
         e.Pointer.Capture(this);
         last = rampStart = rampEnd = p;
         Apply(p);

@@ -115,9 +115,9 @@
     </Style>
   </Window.Styles>
 
-  <Grid Name="Root" RowDefinitions="24,56,64,20,*,160,28">
+  <Grid Name="Root" RowDefinitions="24,56,64,20,*,160,28" ColumnDefinitions="250,4,*">
     <!-- 1. File title -->
-    <Border Grid.Row="0" Name="TitleBar" Classes="chrome" BorderThickness="0,0,0,1">
+    <Border Grid.Row="0" Grid.ColumnSpan="3" Name="TitleBar" Classes="chrome" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0">
         <TextBlock Text="HITSOUND EDITOR" Classes="sectionLabel" Margin="0,0,24,0" />
         <TextBlock Grid.Column="1" Name="FileTitle" Text="No map open — Hitsounds" TextTrimming="CharacterEllipsis" FontSize="12" VerticalAlignment="Center" />
@@ -126,7 +126,7 @@
     </Border>
 
     <!-- 2. Control bar -->
-    <Border Grid.Row="1" Name="ControlBar" Classes="chrome" BorderThickness="0,0,0,1">
+    <Border Grid.Row="1" Grid.ColumnSpan="3" Name="ControlBar" Classes="chrome" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0">
         <Button Grid.Column="0" Name="OpenButton" Content="Open .osu…" VerticalAlignment="Center" ToolTip.Tip="Open a map (Ctrl+O)" />
 
@@ -157,12 +157,14 @@
     </Border>
 
     <!-- 3. Edit bar -->
-    <Border Grid.Row="2" Name="EditBar" Classes="chrome" BorderThickness="0,0,0,1">
+    <Border Grid.Row="2" Grid.ColumnSpan="3" Name="EditBar" Classes="chrome" BorderThickness="0,0,0,1">
       <Grid RowDefinitions="*,*" Margin="10,0">
       <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto">
         <Menu Grid.Column="0" VerticalAlignment="Center">
           <MenuItem Header="File">
             <MenuItem Name="OpenItem" Header="Open…" />
+            <MenuItem Name="ImportOszItem" Header="Import .osz…" />
+            <MenuItem Name="NewDiffItem" Header="New hitsound diff…" />
             <MenuItem Name="RecentItem" Header="Recent maps" />
             <MenuItem Name="SaveItem" Header="Save" />
             <Separator />
@@ -182,6 +184,8 @@
             <Separator />
             <MenuItem Name="SelectAllItem" Header="Select all" />
             <Separator />
+            <MenuItem Name="QuantizeItem" Header="Quantize…" />
+            <MenuItem Name="RepeatItem" Header="Repeat…" />
             <MenuItem Name="EditRangeItem" Header="Edit range…" />
             <MenuItem Name="ScaleVolumeItem" Header="Scale by volume…" />
           </MenuItem>
@@ -212,6 +216,12 @@
             <MenuItem Name="ZoomInItem" Header="Zoom in" />
             <MenuItem Name="ZoomOutItem" Header="Zoom out" />
             <MenuItem Name="CollapseAllItem" Header="Collapse all groups" />
+            <MenuItem Name="InspectorPanelItem" Header="Inspector panel" ToggleType="CheckBox" />
+            <MenuItem Name="TimeSignaturesItem" Header="Time signatures…" />
+            <MenuItem Header="Colour by">
+              <MenuItem Name="ColourLaneItem" Header="Lane" ToggleType="Radio" GroupName="colour" IsChecked="True" />
+              <MenuItem Name="ColourVolumeItem" Header="Volume" ToggleType="Radio" GroupName="colour" />
+            </MenuItem>
             <MenuItem Name="InspectorItem" Header="UI inspector" />
             <MenuItem Name="HelpItem" Header="Shortcuts and help" />
           </MenuItem>
@@ -227,6 +237,7 @@
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <TextBlock Text="Snap" VerticalAlignment="Center" />
           <ComboBox Name="SnapBox" Width="74" Focusable="False" />
+          <ComboBox Name="SnapModeBox" Width="112" Focusable="False" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
           <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="8,0,0,0" />
           <Slider Name="ZoomSlider" Width="110" Minimum="0" Maximum="1" Value="0.5" Focusable="False" VerticalAlignment="Center" />
         </StackPanel>
@@ -234,6 +245,7 @@
       <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
           <TextBlock Text="VIEW" Classes="sectionLabel" Margin="4,0,8,0" />
+          <ToggleButton Name="InspectorToggle" Classes="viewToggle" Content="Inspector" IsChecked="True" ToolTip.Tip="Show the inspector on the left: the selection, bookmarks and recent edits" />
           <ToggleButton Name="LaneDetailsToggle" Classes="viewToggle" Content="Lane details" IsChecked="True" ToolTip.Tip="Show each lane's file index" />
           <ToggleButton Name="VolumeToggle" Classes="viewToggle" Content="Volume lane" IsChecked="True" ToolTip.Tip="Show the bottom panel" />
           <ToggleButton Content="Sample browser" IsEnabled="False" ToolTip.Tip="Comes later" />
@@ -252,10 +264,14 @@
     </Border>
 
     <!-- 4. Overview strip -->
-    <app:OverviewStrip Grid.Row="3" Name="Overview" />
+    <app:OverviewStrip Grid.Row="3" Grid.Column="2" Name="Overview" />
+
+    <!-- Inspector (left): Selection, Bookmarks, Recent edits; the splitter resizes it -->
+    <app:InspectorPanel Grid.Row="3" Grid.RowSpan="3" Grid.Column="0" Name="Inspector" Background="{DynamicResource VolumeSide}" />
+    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="1" Name="InspectorSplitter" ResizeDirection="Columns" Background="#1c1c1e" />
 
     <!-- 5. Arrange area -->
-    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+    <Grid Grid.Row="4" Grid.Column="2" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <app:ArrangeView Name="Lanes" />
       <TextBox Name="LaneFilterBox" IsVisible="False" Width="200" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="40,8,0,0" Watermark="Filter lanes (Esc closes)" />
       <ScrollBar Grid.Column="1" Name="VScroll" Orientation="Vertical" />
@@ -263,7 +279,7 @@
     </Grid>
 
     <!-- Bottom panel: Volume | What gets saved -->
-    <Border Grid.Row="5" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="#1c1c1e" BorderThickness="0,1,0,0">
+    <Border Grid.Row="5" Grid.Column="2" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="#1c1c1e" BorderThickness="0,1,0,0">
       <DockPanel>
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,*" Margin="0,0,12,0">
@@ -304,7 +320,7 @@
     </Border>
 
     <!-- 6. Status bar -->
-    <Border Grid.Row="6" Name="StatusBar" Classes="chrome" BorderThickness="0,1,0,0">
+    <Border Grid.Row="6" Grid.ColumnSpan="3" Name="StatusBar" Classes="chrome" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="*,Auto" Margin="14,0">
         <TextBlock Name="StatusLeft" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" />
         <TextBlock Grid.Column="1" Name="StatusRight" VerticalAlignment="Center" FontSize="12" />

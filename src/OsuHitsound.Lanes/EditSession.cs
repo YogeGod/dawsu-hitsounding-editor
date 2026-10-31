@@ -34,9 +34,11 @@ public sealed class EditSession
     /// <summary>How close (ms) a hit must be to a moment to play on it. Slider nodes land on fractional times.</summary>
     public const double AnchorTolerance = 2;
 
-    private readonly List<EditState> undo = [];
-    private readonly List<EditState> redo = [];
+    // Each entry is the state on one side of a step and the step's name: undo holds the state before it, redo the state after.
+    private readonly List<(EditState State, string Label)> undo = [];
+    private readonly List<(EditState State, string Label)> redo = [];
     private EditState? gestureStart;
+    private string gestureLabel = "Edit";
     private readonly double timeOffset; // v3/v4 maps show 24 ms later than written; bookmarks are stored as written
 
     public EditSession(OsuFile file, MapFolder folder, DecompiledMap map)
@@ -72,6 +74,25 @@ public sealed class EditSession
 
     public bool IsEdited => undo.Count > 0 || gestureStart is not null;
 
+    /// <summary>The name of every undo step, oldest first: those done, then those undone (Recent edits).</summary>
+    public IReadOnlyList<string> Steps => [.. undo.Select(u => u.Label), .. redo.AsEnumerable().Reverse().Select(r => r.Label)];
+
+    /// <summary>How many of <see cref="Steps"/> are done: the state is just after step <c>Position</c> (0 = as loaded).</summary>
+    public int Position => undo.Count;
+
+    /// <summary>Undoes or redoes until <paramref name="position"/> steps are done (clamped). Ignored during a drag.</summary>
+    public void GoTo(int position)
+    {
+        if (gestureStart is not null) return;
+        position = Math.Clamp(position, 0, undo.Count + redo.Count);
+        while (undo.Count > position) StepBack();
+        while (undo.Count < position) StepForward();
+        Announce(); // once, for the whole jump
+    }
+
+    /// <summary>How many steps <see cref="Steps"/> holds, without building it.</summary>
+    public int StepCount => undo.Count + redo.Count;
+
     public event Action? Changed;
 
     /// <summary>The moment a hit at <paramref name="time"/> plays on, or null when no object is that close.</summary>
@@ -88,14 +109,14 @@ public sealed class EditSession
 
     // ---- edits; each call outside a gesture is one undo step ----
 
-    public void Add(IEnumerable<EditHit> hits) => Change(s =>
+    public void Add(IEnumerable<EditHit> hits, string label = "Add") => Change(label, s =>
     {
         var existing = s.Hits.ToHashSet();
         var added = hits.Where(existing.Add).ToList();
         return added.Count == 0 ? s : s with { Hits = s.Hits.AddRange(added) };
     });
 
-    public void Remove(IEnumerable<EditHit> hits) => Change(s =>
+    public void Remove(IEnumerable<EditHit> hits, string label = "Delete") => Change(label, s =>
     {
         var gone = hits.ToHashSet();
         return s with { Hits = s.Hits.RemoveAll(gone.Contains) };
@@ -105,12 +126,17 @@ public sealed class EditSession
     /// Moves hits by a time offset and to other lanes (laneOf maps each hit to its new lane). Each lands on the moment
     /// at its new time, or becomes a hit with no object. Returns the moved hits, to keep them selected.
     /// </summary>
-    public IReadOnlyList<EditHit> Move(IReadOnlyCollection<EditHit> hits, double offset, Func<EditHit, Lane> laneOf)
+    public IReadOnlyList<EditHit> Move(IReadOnlyCollection<EditHit> hits, double offset, Func<EditHit, Lane> laneOf, string label = "Move") =>
+        MoveEach([.. hits.Select(h => (h, laneOf(h), h.Time + offset))], label);
+
+    /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>
+    public IReadOnlyList<EditHit> MoveEach(IReadOnlyList<(EditHit Hit, Lane Lane, double Time)> moves, string label)
     {
-        var moved = hits.Select(h => HitAt(laneOf(h), h.Time + offset)).ToList();
-        Change(s =>
+        var moved = moves.Select(m => HitAt(m.Lane, m.Time)).ToList();
+        if (moved.SequenceEqual(moves.Select(m => m.Hit))) return moved.Distinct().ToList(); // nothing moves: not an edit
+        Change(label, s =>
         {
-            var gone = hits.ToHashSet();
+            var gone = moves.Select(m => m.Hit).ToHashSet();
             var kept = s.Hits.RemoveAll(gone.Contains);
             var present = kept.ToHashSet();
             return s with { Hits = kept.AddRange(moved.Where(present.Add)) };
@@ -136,11 +162,11 @@ public sealed class EditSession
         switch (operation)
         {
             case RangeOperation.Move:
-                return Move(hits, offset, h => h.Lane);
+                return Move(hits, offset, h => h.Lane, "Range move");
             case RangeOperation.Copy:
-                return Copy(hits, offset);
+                return Copy(hits, offset, "Range copy");
             default:
-                Remove(hits);
+                Remove(hits, "Range delete");
                 return [];
         }
     }
@@ -154,17 +180,17 @@ public sealed class EditSession
             .Where(k => State.Volumes[k] is var v && v >= from && v <= to)];
 
     /// <summary>Copies hits by a time offset, in their lanes (one undo step); each lands on the moment there, if any. Returns the copies.</summary>
-    public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset)
+    public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset, string label = "Copy")
     {
         var copies = hits.Select(h => HitAt(h.Lane, h.Time + offset)).Distinct().ToList();
-        Add(copies);
+        Add(copies, label);
         return copies;
     }
 
-    public void SetVolume(IEnumerable<MomentKey> keys, int volume)
+    public void SetVolume(IEnumerable<MomentKey> keys, int volume, string label = "Volume")
     {
         int v = Math.Clamp(volume, 0, 100);
-        SetVolumes(keys.Distinct().ToDictionary(k => k, _ => v));
+        SetVolumes(keys.Distinct().ToDictionary(k => k, _ => v), label);
     }
 
     /// <summary>Puts back hits from a saved project (hits with no object): not an edit, so not an undo step.</summary>
@@ -178,7 +204,7 @@ public sealed class EditSession
     }
 
     /// <summary>Sets several moments' volumes at once (ramps, paint strokes, relative edits); values are kept within 0–100.</summary>
-    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes) => Change(s =>
+    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes, string label = "Volume") => Change(label, s =>
     {
         // Only the values that differ: a drag that stays on the same value is not an edit (no redraw, no recompile).
         var changed = volumes.Select(kv => new KeyValuePair<MomentKey, int>(kv.Key, Math.Clamp(kv.Value, 0, 100)))
@@ -186,8 +212,13 @@ public sealed class EditSession
         return changed.Count == 0 ? s : s with { Volumes = s.Volumes.SetItems(changed) };
     });
 
-    /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step.</summary>
-    public void BeginGesture() => gestureStart ??= State;
+    /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step, named <paramref name="label"/>.</summary>
+    public void BeginGesture(string label = "Edit")
+    {
+        if (gestureStart is not null) return;
+        gestureStart = State;
+        gestureLabel = label;
+    }
 
     /// <summary>During a drag: go back to where the gesture began, so the next edit applies the drag's total offset.</summary>
     public void ResetToGestureStart()
@@ -199,7 +230,7 @@ public sealed class EditSession
     {
         if (gestureStart is { } start && !ReferenceEquals(start, State))
         {
-            undo.Add(start);
+            undo.Add((start, gestureLabel));
             redo.Clear();
         }
 
@@ -210,18 +241,14 @@ public sealed class EditSession
     public void Undo()
     {
         if (gestureStart is not null || undo.Count == 0) return;
-        redo.Add(State);
-        State = undo[^1];
-        undo.RemoveAt(undo.Count - 1);
+        StepBack();
         Announce();
     }
 
     public void Redo()
     {
         if (gestureStart is not null || redo.Count == 0) return;
-        undo.Add(State);
-        State = redo[^1];
-        redo.RemoveAt(redo.Count - 1);
+        StepForward();
         Announce();
     }
 
@@ -243,7 +270,7 @@ public sealed class EditSession
     public IEnumerable<double> BookmarkTimes => State.Bookmarks.Select(b => b + timeOffset);
 
     /// <summary>Adds a bookmark at a timeline time (whole ms, as osu! writes them). One undo step.</summary>
-    public void AddBookmark(double time) => Change(s =>
+    public void AddBookmark(double time) => Change("Add bookmark", s =>
     {
         int ms = (int)Math.Round(time - timeOffset);
         return s.Bookmarks.Contains(ms) ? s : s with { Bookmarks = [.. s.Bookmarks.Add(ms).Order()] };
@@ -259,19 +286,35 @@ public sealed class EditSession
         : BookmarkTimes.Where(b => b > time + 1).Cast<double?>().FirstOrDefault();
 
     /// <summary>Removes the bookmark nearest <paramref name="time"/> within <paramref name="tolerance"/> ms, if any.</summary>
-    public void RemoveBookmarkNear(double time, double tolerance) => Change(s =>
+    public void RemoveBookmarkNear(double time, double tolerance) => Change("Remove bookmark", s =>
         NearestBookmark(time, tolerance) is { } b ? s with { Bookmarks = s.Bookmarks.Remove((int)Math.Round(b - timeOffset)) } : s);
     /// <summary>Hits that have no object to play on.</summary>
     public IEnumerable<EditHit> Unanchored => State.Hits.Where(h => h.Anchor is null);
 
-    private void Change(Func<EditState, EditState> edit)
+    private void StepBack()
+    {
+        var (before, label) = undo[^1];
+        undo.RemoveAt(undo.Count - 1);
+        redo.Add((State, label));
+        State = before;
+    }
+
+    private void StepForward()
+    {
+        var (after, label) = redo[^1];
+        redo.RemoveAt(redo.Count - 1);
+        undo.Add((State, label));
+        State = after;
+    }
+
+    private void Change(string label, Func<EditState, EditState> edit)
     {
         var next = edit(State);
         if (!ReferenceEquals(next, State))
         {
             if (gestureStart is null)
             {
-                undo.Add(State);
+                undo.Add((State, label));
                 redo.Clear();
             }
 

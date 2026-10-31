@@ -19,6 +19,7 @@ internal static partial class CubaseKeyFile
     {
         ["open"] = "File|Open",
         ["save"] = "File|Save",
+        ["newDiff"] = "File|New",
         ["play"] = "Transport|StartStop",
         ["start"] = "Transport|Return to Zero",
         ["stop"] = "Transport|Stop",
@@ -41,6 +42,8 @@ internal static partial class CubaseKeyFile
         ["cut"] = "Edit|Cut",
         ["paste"] = "Edit|Paste",
         ["duplicate"] = "Edit|Duplicate",
+        ["repeat"] = "Edit|Repeat",
+        ["quantize"] = "MIDI|Quantize",
         ["selectAll"] = "Edit|Select All",
         ["deselect"] = "Edit|Select None",
         ["delete"] = "Edit|Delete",

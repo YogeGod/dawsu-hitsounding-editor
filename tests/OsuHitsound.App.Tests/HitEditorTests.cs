@@ -8,11 +8,11 @@ namespace OsuHitsound.App.Tests;
 public class HitEditorTests
 {
     // 120 BPM (500 ms beats), so a 1/4 snap step is 125 ms. Circles at 1000 (clap) and 1500.
-    private static HitEditor Editor()
+    private static HitEditor Editor(string timing = "0,500,4,2,0,100,1,0")
     {
         var text = "osu file format v14\r\n\r\n[General]\r\nAudioFilename: song.mp3\r\nSampleSet: Soft\r\n\r\n" +
                    "[Difficulty]\r\nSliderMultiplier:1.4\r\nSliderTickRate:1\r\n\r\n" +
-                   "[TimingPoints]\r\n0,500,4,2,0,100,1,0\r\n\r\n[HitObjects]\r\n256,192,1000,1,8,0:0:0:0:\r\n256,192,1500,1,0,0:0:0:0:\r\n";
+                   $"[TimingPoints]\r\n{timing.Replace("\n", "\r\n")}\r\n\r\n[HitObjects]\r\n256,192,1000,1,8,0:0:0:0:\r\n256,192,1500,1,0,0:0:0:0:\r\n";
         var file = OsuFile.Parse(Encoding.UTF8.GetBytes(text));
         var map = Decompiler.Decompile(file, new MapFolder([]));
         var session = new EditSession(file, new MapFolder([]), map);
@@ -197,5 +197,98 @@ public class HitEditorTests
         Assert.Single(e.MomentsToScale(VolumeScope.SelectedLanes, 1, 100)); // the clap lane has only the circle at 1000
         Assert.Equal(2, e.MomentsToScale(VolumeScope.All, 1, 100).Count);
         Assert.Empty(e.MomentsToScale(VolumeScope.All, 1, 99));
+    }
+
+    // ---- Quantize, Repeat and Grid relative (docs/spec-wave2.md, parts 1-3) ----
+
+    private static EditHit Loose(HitEditor e, double time)
+    {
+        var hit = Session(e).HitAt(new Lane(LaneSource.Skin, "soft-hitwhistle"), time);
+        Session(e).Add([hit]);
+        return hit;
+    }
+
+    [Fact]
+    public void Quantize_moves_only_loose_hits_by_the_strength()
+    {
+        var e = Editor();
+        var loose = Loose(e, 1260);
+        e.Select([loose, Clap(e)]);
+
+        Assert.Equal(1, e.Quantize(50));
+        Assert.Contains(e.Selected, h => h.Time == 1255);
+        Assert.Contains(e.Selected, h => h.Time == 1000 && h.Lane.Name == "soft-hitclap"); // on its circle: stays
+        Assert.Equal("Quantize", Session(e).Steps[^1]);
+    }
+
+    [Fact]
+    public void A_quantized_hit_that_lands_on_a_circle_plays_on_it()
+    {
+        var e = Editor();
+        e.Select([Loose(e, 1495)]);
+        e.Quantize(100);
+        Assert.NotNull(Assert.Single(e.Selected).Anchor);
+    }
+
+    [Fact]
+    public void Quantize_with_nothing_loose_changes_nothing()
+    {
+        var e = Editor();
+        e.Select([Clap(e)]);
+        int steps = Session(e).Steps.Count;
+        Assert.Equal(0, e.Quantize(100));
+        Assert.Equal(steps, Session(e).Steps.Count);
+    }
+
+    [Fact]
+    public void Repeat_places_copies_a_number_of_snap_steps_apart_as_one_step()
+    {
+        var e = Editor();
+        e.Select([Clap(e)]);
+        Assert.Equal(1, e.DefaultRepeatGap()); // one moment: one snap step, as Duplicate
+
+        e.Repeat(3, 4); // 4 steps of 1/4 at 120 BPM = 500 ms
+        Assert.Equal([1500.0, 2000, 2500], e.Selected.Select(h => h.Time).Order());
+        Assert.NotNull(e.Selected.Single(h => h.Time == 1500).Anchor);
+        Assert.Equal("Repeat", Session(e).Steps[^1]);
+    }
+
+    [Fact]
+    public void Repeat_counts_its_gap_on_the_grid_across_a_tempo_change()
+    {
+        var e = Editor("0,500,4,2,0,100,1,0\n2000,250,4,2,0,100,1,0"); // twice as fast from 2000
+        e.Select([Clap(e)]);
+        e.Repeat(1, 16); // 8 steps of 125 ms to 2000, then 8 of 62.5 ms
+        Assert.Equal(2500, Assert.Single(e.Selected).Time);
+    }
+
+    [Fact]
+    public void Repeat_restarts_on_a_red_lines_grid_when_a_step_would_cross_it()
+    {
+        var e = Editor("0,500,4,2,0,100,1,0\n2100,250,4,2,0,100,1,0"); // 2100 is not on the first grid
+        e.Select([Clap(e)]);
+        e.Repeat(1, 16); // 8 steps to 2000, one stopping on the red line at 2100, then 7 of 62.5 ms
+        Assert.Equal(2537.5, Assert.Single(e.Selected).Time);
+    }
+
+    [Fact]
+    public void Quantize_on_loose_hits_already_on_the_grid_is_not_an_edit()
+    {
+        var e = Editor();
+        e.Select([Loose(e, 1250)]);
+        int steps = Session(e).Steps.Count;
+        Assert.Equal(0, e.Quantize(100));
+        Assert.Equal(steps, Session(e).Steps.Count);
+    }
+
+    [Fact]
+    public void Grid_relative_keeps_a_hit_s_offset_from_its_grid_line()
+    {
+        var e = Editor();
+        Assert.Equal(240, e.SnapOffset(1010, 230)); // grid: lands on the 1250 line
+        e.SnapMode = SnapMode.GridRelative;
+        Assert.Equal(250, e.SnapOffset(1010, 240)); // relative: stays 10 ms after its line, at 1260
+        e.SnapOn = false;
+        Assert.Equal(240, e.SnapOffset(1010, 240));
     }
 }

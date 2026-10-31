@@ -92,6 +92,15 @@ public partial class MainWindow : Window
             Lanes.InvalidateVisual();
             UpdateLcd();
         };
+        Lanes.Edits.SnapMode = prefs.SnapMode;
+        Lanes.Edits.QuantizeStrength = prefs.QuantizeStrength;
+        SnapModeBox.ItemsSource = new[] { "Grid", "Grid relative" };
+        SnapModeBox.SelectedIndex = (int)prefs.SnapMode;
+        SnapModeBox.SelectionChanged += (_, _) =>
+        {
+            Lanes.Edits.SnapMode = SnapModeBox.SelectedIndex == 1 ? SnapMode.GridRelative : SnapMode.Grid;
+            UpdateStatus();
+        };
         Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Math.Clamp(SnapBox.SelectedIndex + step, 0, Divisors.Length - 1);
         SelectTool.Click += (_, _) => SetTool(Tool.Select);
         RangeTool.Click += (_, _) => SetTool(Tool.Range);
@@ -119,9 +128,9 @@ public partial class MainWindow : Window
         SaveButton.Click += (_, _) => Save();
         menuCommands =
         [
-            (OpenItem, "open"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
+            (OpenItem, "open"), (ImportOszItem, "importOsz"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
-            (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
+            (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (QuantizeItem, "quantizeDialog"), (RepeatItem, "repeat"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
         ];
         foreach (var (item, id) in menuCommands) item.Click += (_, _) => Run(id);
         ApplyKeys();
@@ -130,6 +139,11 @@ public partial class MainWindow : Window
         RecentItem.SubmenuOpened += (_, _) => FillRecent();
         ZoomSlider.ValueChanged += (_, e) => { if (!syncingScroll) Lanes.Axis.Zoom = ZoomFromSlider(e.NewValue); };
         CollapseAllItem.Click += (_, _) => CollapseAll();
+        TimeSignaturesItem.Click += async (_, _) => await EditTimeSignatures();
+        ColourLaneItem.Click += (_, _) => SetColourByVolume(false);
+        ColourVolumeItem.Click += (_, _) => SetColourByVolume(true);
+        SetColourByVolume(prefs.ColourByVolume);
+        SetupInspector();
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
 
@@ -233,6 +247,82 @@ public partial class MainWindow : Window
 
     internal ArrangeView ArrangeArea => Lanes;
 
+    /// <summary>Asks before a command switches to another map while this one has unsaved edits.</summary>
+    private async Task<bool> MayLeaveMap() =>
+        session is not { IsEdited: true }
+        || await Dialogs.Confirm(this, "Unsaved edits", "This map has edits that aren't saved. Open the other map and discard them?", "Discard and open");
+
+    /// <summary>File → Import .osz…: unpacks into a new folder in the Songs folder, then opens a difficulty from it.</summary>
+    private async Task ImportOsz()
+    {
+        if (prefs.SongsFolder is not { } songs || !Directory.Exists(songs))
+        {
+            flash = "Set the osu! Songs folder in Preferences first: the .osz is unpacked there.";
+            UpdateStatus();
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import an .osz",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("osu! beatmap archive") { Patterns = ["*.osz"] }],
+        });
+        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } osz) return;
+
+        string folder;
+        try
+        {
+            folder = await Task.Run(() => OszImport.Extract(osz, songs));
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            flash = $"Couldn't import {Path.GetFileName(osz)}: {ex.Message}";
+            UpdateStatus();
+            return;
+        }
+
+        var diffs = OszImport.Difficulties(folder);
+        string? pick = diffs.Count switch
+        {
+            0 => null,
+            1 => diffs[0],
+            _ => await Dialogs.Choose(this, "Open a difficulty", $"Imported into {folder}. Which difficulty?", [.. diffs.Select(Path.GetFileName).OfType<string>()]) is { } name
+                ? Path.Combine(folder, name) : null,
+        };
+        if (pick is not null && await MayLeaveMap()) await Open(pick);
+        flash = $"Imported into {folder}. Press F5 in osu!stable's song select to see it.";
+        UpdateStatus();
+    }
+
+    /// <summary>File → New hitsound diff… (Ctrl+N): an empty difficulty with this map's red lines, then opens it.</summary>
+    private async Task NewHitsoundDiff()
+    {
+        if (doc is null || mapPath is null)
+        {
+            flash = "Open a map first: the new difficulty takes its timing.";
+            UpdateStatus();
+            return;
+        }
+
+        if (await Dialogs.Prompt(this, "New hitsound diff", "Name of the new difficulty (red lines only, no objects). Not \"Hitsounds\": Generate writes that one.", "Timing") is not { } name) return;
+        string path;
+        try
+        {
+            path = HitsoundDiff.CreateEmpty(OsuFile.Read(mapPath), mapPath, name);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            flash = $"Couldn't make the difficulty: {ex.Message}";
+            UpdateStatus();
+            return;
+        }
+
+        if (await MayLeaveMap()) await Open(path);
+        flash = $"Made {Path.GetFileName(path)}.";
+        UpdateStatus();
+    }
+
     private async Task PickMap()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -270,6 +360,8 @@ public partial class MainWindow : Window
         switch (id)
         {
             case "open": _ = PickMap(); break;
+            case "importOsz": _ = ImportOsz(); break;
+            case "newDiff": _ = NewHitsoundDiff(); break;
             case "save": _ = Save(); break;
             case "preferences": _ = ShowPreferences(); break;
             case "help": ShowHelp(); break;
@@ -308,6 +400,9 @@ public partial class MainWindow : Window
             case "duplicate": Lanes.Edits.Duplicate(); break;
             case "selectAll": Lanes.Edits.SelectAll(); break;
             case "deselect": Lanes.Edits.Deselect(); break;
+            case "quantize": Quantize(Lanes.Edits.QuantizeStrength); break;
+            case "quantizeDialog": _ = QuantizeDialog(); break;
+            case "repeat": _ = Repeat(); break;
             case "editRange": _ = EditRange(); break;
             case "scaleByVolume": _ = ScaleByVolume(); break;
             case "delete": Lanes.Edits.DeleteSelection(); break;
@@ -408,6 +503,97 @@ public partial class MainWindow : Window
         int min = int.TryParse(VolumeMinBox.Text, out int a) ? a : 0, max = int.TryParse(VolumeMaxBox.Text, out int b) ? b : 100;
         var state = session.State;
         Lanes.Edits.SelectWhere(h => h.Anchor is { } k && state.Volumes[k] >= min && state.Volumes[k] <= max);
+    }
+
+    /// <summary>View → Time signatures…: edits the editor-only time signature changes (kept in the project, not the map).</summary>
+    private async Task EditTimeSignatures()
+    {
+        if (model is null) return;
+        if (await Dialogs.TimeSignatures(this, model.TimeSignatures) is not { } changes) return;
+        model.SetTimeSignatures(changes);
+        UpdateLcd();
+        ScheduleProjectSave();
+    }
+
+    /// <summary>The inspector on the left: its saved layout, the show/hide toggle and what its cards do.</summary>
+    private void SetupInspector()
+    {
+        Inspector.SetLayout(prefs.InspectorCards, prefs.InspectorFolded);
+        InspectorToggle.IsChecked = prefs.InspectorOpen;
+        inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
+        void Show(bool open)
+        {
+            if (!open && Root.ColumnDefinitions[0].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[0].ActualWidth;
+            Root.ColumnDefinitions[0].Width = new GridLength(open ? inspectorWidth : 0);
+            Root.ColumnDefinitions[1].Width = new GridLength(open ? 4 : 0);
+            Inspector.IsVisible = InspectorSplitter.IsVisible = open;
+        }
+
+        Show(prefs.InspectorOpen);
+        InspectorToggle.IsCheckedChanged += (_, _) =>
+        {
+            Show(InspectorToggle.IsChecked == true);
+            InspectorPanelItem.IsChecked = InspectorToggle.IsChecked == true;
+        };
+        InspectorPanelItem.IsChecked = prefs.InspectorOpen;
+        InspectorPanelItem.Click += (_, _) => InspectorToggle.IsChecked = InspectorToggle.IsChecked != true;
+        Inspector.SeekRequested += Seek;
+        Inspector.ShiftTimeRequested += ms => Lanes.Edits.Move(ms, h => h.Lane, "Shift time");
+        Inspector.VolumeRequested += v => session?.SetVolume(Lanes.SelectedMoments, v);
+        Inspector.AddBookmarkRequested += () => Run("addBookmark");
+        Inspector.RemoveBookmarkRequested += t => session?.RemoveBookmarkNear(t, 1);
+        Inspector.GoToStepRequested += p => session?.GoTo(p);
+    }
+
+    // The inspector's width while shown, kept here so hiding it before closing doesn't lose it.
+    private double inspectorWidth = 250;
+
+    /// <summary>The width to save: the panel's when shown, else the one it had.</summary>
+    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[0].ActualWidth > 0 ? Root.ColumnDefinitions[0].ActualWidth : inspectorWidth;
+
+    private void RefreshInspector() => Inspector.Refresh(session, model, Lanes.Selection, FormatTime);
+
+    /// <summary>View → Colour by: lane colours, or notes from dark (quiet) to bright (loud).</summary>
+    private void SetColourByVolume(bool byVolume)
+    {
+        Lanes.ColourByVolume = byVolume;
+        ColourLaneItem.IsChecked = !byVolume;
+        ColourVolumeItem.IsChecked = byVolume;
+        Lanes.InvalidateVisual();
+    }
+
+    /// <summary>Q: quantizes the selected loose hits; says so when there are none.</summary>
+    private void Quantize(double strength)
+    {
+        if (session is null) return;
+        if (Lanes.Edits.Quantize(strength) == 0)
+        {
+            flash = "Quantize moves selected hits that have no circle under them; none are selected.";
+            UpdateStatus();
+        }
+    }
+
+    /// <summary>Edit → Quantize…: asks for the strength, then quantizes.</summary>
+    private async Task QuantizeDialog()
+    {
+        if (session is null) return;
+        var text = await Dialogs.Prompt(this, "Quantize", "Strength (1–100 %): how far the selected loose hits move toward the grid",
+            Lanes.Edits.QuantizeStrength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (text is not null && OsuHitsound.Format.OsuNumber.TryParseDouble(text, out double strength) && double.IsFinite(strength)) Quantize(strength);
+    }
+
+    /// <summary>Ctrl+R: asks how many copies and how many snap steps apart, then repeats the selection.</summary>
+    private async Task Repeat()
+    {
+        if (session is null) return;
+        if (Lanes.Edits.Selected.Count == 0)
+        {
+            flash = "Select some hits to repeat first.";
+            UpdateStatus();
+            return;
+        }
+
+        if (await Dialogs.Repeat(this, Lanes.Edits.DefaultRepeatGap(), Lanes.Divisor) is { } r) Lanes.Edits.Repeat(r.Copies, r.Gap);
     }
 
     /// <summary>Edit → Edit range: copies, moves or deletes the hits in the range marked with the Range tool.</summary>
@@ -828,7 +1014,8 @@ public partial class MainWindow : Window
             var (bar, beat, tick) = model.BarBeatTick(t);
             LcdBar.Text = $"{bar}.{beat}.{tick}";
             LcdBpm.Text = (60000 / red.BeatLength).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-            LcdMeter.Text = $"{red.Meter}/4 /{divisor}";
+            var (n, d) = model.SignatureAt(t);
+            LcdMeter.Text = $"{n}/{d} /{divisor}";
         }
         else
         {
@@ -840,6 +1027,7 @@ public partial class MainWindow : Window
 
     private void UpdateStatus()
     {
+        RefreshInspector();
         if (model is null)
         {
             var open = EditorCommands.Get("open");
@@ -866,7 +1054,7 @@ public partial class MainWindow : Window
 
         Volume.SelectedMoments = Lanes.SelectedMoments;
         Volume.InvalidateVisual();
-        string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap 1/{Lanes.Divisor}" : ", snap off")}";
+        string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap 1/{Lanes.Divisor}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}" : ", snap off")}";
         string selection = Lanes.Selection.Count switch
         {
             0 => "",

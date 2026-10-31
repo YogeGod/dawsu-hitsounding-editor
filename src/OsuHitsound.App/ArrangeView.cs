@@ -140,6 +140,20 @@ internal sealed class ArrangeView : Control
 
     public bool SnapOn { get => Edits.SnapOn; set => Edits.SnapOn = value; }
 
+    /// <summary>View → Colour by Volume: notes go from dark (quiet) to bright (loud) instead of their lane's colour.</summary>
+    public bool ColourByVolume { get; set; }
+
+    private static readonly IBrush[] VolumeFills = [.. Enumerable.Range(0, 101).Select(v => Paint.Brush(VolumeColor(v)))];
+
+    /// <summary>The Volume colour mode's fill: one ramp for every lane, dark blue-grey at 0 % to warm white at 100 %.</summary>
+    public static Color VolumeColor(int volume)
+    {
+        double k = Math.Clamp(volume, 0, 100) / 100.0;
+        static byte Mix(byte a, byte b, double k) => (byte)Math.Round(a + (b - a) * k);
+        Color dark = Color.Parse("#2a3442"), bright = Color.Parse("#ffe9b0");
+        return Color.FromRgb(Mix(dark.R, bright.R, k), Mix(dark.G, bright.G, k), Mix(dark.B, bright.B, k));
+    }
+
     /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
     public bool ShowIndexes { get; set; } = true;
 
@@ -570,6 +584,8 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, ConflictRing);
             else if (model.IsPreviewMuted(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.MutedFill, Paint.NoteRingPen);
+            else if (ColourByVolume && !greyed && Session is { } session)
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, VolumeFills[Math.Clamp(session.VolumeOf(n.Hit!), 0, 100)], Paint.NoteRingPen);
             else
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, fill, Paint.NoteRingPen);
         }
@@ -803,7 +819,7 @@ internal sealed class ArrangeView : Control
                 break;
 
             case Tool.Draw when row is LaneRow lane && under is null:
-                session.BeginGesture();
+                session.BeginGesture("Draw");
                 drag = Drag.Paint;
                 paintRow = lane;
                 session.Add([session.HitAt(lane.Lane, SnapTime(Axis.Time(gridX)))]);
@@ -812,7 +828,7 @@ internal sealed class ArrangeView : Control
 
             case Tool.Draw or Tool.Erase:
                 // Erase strokes, and Draw strokes that start on a hit: Draw erases only in its own lane, Erase in any lane.
-                session.BeginGesture();
+                session.BeginGesture("Erase");
                 drag = Drag.Wipe;
                 wipeLane = tool == Tool.Draw ? (row as LaneRow)?.Lane : null;
                 if (under is not null) EraseHit(under);
@@ -847,7 +863,7 @@ internal sealed class ArrangeView : Control
                     drag = Drag.Move;
                     dragAnchor = under;
                     dragHits = [.. selection];
-                    session.BeginGesture();
+                    session.BeginGesture("Move");
                 }
 
                 SelectionChanged?.Invoke();
@@ -891,7 +907,7 @@ internal sealed class ArrangeView : Control
             case Drag.Move when dragAnchor is not null:
             {
                 // The grabbed hit snaps; the others keep their offsets to it. Rows move by whole visible lanes.
-                double offset = SnapTime(dragAnchor.Time + Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft)) - dragAnchor.Time;
+                double offset = Edits.SnapOffset(dragAnchor.Time, Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft));
                 int rowShift = RowIndexAt(p.Y) - RowIndexAt(dragStart.Y);
                 session.ResetToGestureStart();
                 selection.Clear();

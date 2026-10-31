@@ -12,11 +12,19 @@ public class PreferencesAndHelpTests : IDisposable
     public void Preferences_round_trip()
     {
         var path = Path.Combine(dir, "sub", "preferences.json");
-        var prefs = new Preferences { SongsFolder = @"F:\osu!\Songs", AudioDevice = 3, BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400 }.WithRecent(@"C:\a.osu");
+        var prefs = new Preferences
+        {
+            SongsFolder = @"F:\osu!\Songs", AudioDevice = 3, BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
+            SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, InspectorOpen = false, InspectorWidth = 300,
+            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"],
+        }.WithRecent(@"C:\a.osu");
         prefs.Save(path);
 
         var loaded = Preferences.Load(path);
-        Assert.Equal(prefs, loaded with { RecentMaps = prefs.RecentMaps, KeyOverrides = prefs.KeyOverrides });
+        // Lists compare by reference in a record: they're checked one by one below.
+        Assert.Equal(prefs, loaded with { RecentMaps = prefs.RecentMaps, KeyOverrides = prefs.KeyOverrides, InspectorCards = prefs.InspectorCards, InspectorFolded = prefs.InspectorFolded });
+        Assert.Equal(prefs.InspectorCards, loaded.InspectorCards);
+        Assert.Equal(prefs.InspectorFolded, loaded.InspectorFolded);
         Assert.Equal(prefs.RecentMaps, loaded.RecentMaps);
     }
 
@@ -65,7 +73,7 @@ public class PreferencesAndHelpTests : IDisposable
         var keys = EditorCommands.Defaults.SelectMany(c => c.Keys).Select(k => k.ToString()).ToList();
         Assert.Equal(keys.Count, keys.Distinct().Count());
         // The dialogs from the Edit menu have no built-in key (docs/spec-wave1.md); every other command has one.
-        string[] menuOnly = ["editRange", "scaleByVolume"];
+        string[] menuOnly = ["editRange", "scaleByVolume", "quantizeDialog", "importOsz"];
         Assert.All(EditorCommands.Defaults.Where(c => !menuOnly.Contains(c.Id)), c => Assert.NotEmpty(c.Keys));
     }
 

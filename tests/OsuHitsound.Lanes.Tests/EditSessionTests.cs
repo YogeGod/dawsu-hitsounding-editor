@@ -291,4 +291,59 @@ public class EditSessionTests
         Scale(s, s.Moments.Select(m => m.Key), 120);
         Assert.False(s.CanUndo);
     }
+
+    // ---- Recent edits (docs/spec-wave2.md, part 7) ----
+
+    [Fact]
+    public void Each_undo_step_has_a_name_and_a_gesture_is_one_named_step()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        var clap = s.State.Hits.First(h => h.Lane.Name == "soft-hitclap");
+
+        s.BeginGesture("Draw");
+        s.Add([s.HitAt(Skin("soft-hitwhistle"), 1000)]);
+        s.Add([s.HitAt(Skin("soft-hitwhistle"), 1500)]);
+        s.EndGesture();
+        s.Remove([clap]);
+        s.EditRange(1000, 2000, BothLanes, RangeOperation.Copy, 250);
+        s.Copy([clap], 2100 - clap.Time, "Paste"); // to an empty spot: a paste onto an existing hit changes nothing
+
+        Assert.Equal(["Draw", "Delete", "Range copy", "Paste"], s.Steps);
+        Assert.Equal(4, s.Position);
+    }
+
+    [Fact]
+    public void Undone_steps_stay_listed_after_the_current_point_until_a_new_edit()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        s.Remove([s.State.Hits[0]]);
+        s.SetVolume([s.Moments[1].Key], 50);
+        s.Undo();
+
+        Assert.Equal(["Delete", "Volume"], s.Steps);
+        Assert.Equal(1, s.Position);
+        s.AddBookmark(1000);
+        Assert.Equal(["Delete", "Add bookmark"], s.Steps);
+    }
+
+    [Fact]
+    public void Going_to_a_step_undoes_or_redoes_up_to_it()
+    {
+        var (s, _, _) = Load(ThreeCircles);
+        var start = s.State;
+        s.Remove([s.State.Hits[0]]);
+        var afterDelete = s.State;
+        s.SetVolume([s.Moments[1].Key], 50);
+        s.AddBookmark(1000);
+        var end = s.State;
+
+        s.GoTo(0);
+        Assert.Same(start, s.State);
+        s.GoTo(1);
+        Assert.Same(afterDelete, s.State);
+        s.GoTo(3);
+        Assert.Same(end, s.State);
+        s.GoTo(99); // clamped
+        Assert.Same(end, s.State);
+    }
 }

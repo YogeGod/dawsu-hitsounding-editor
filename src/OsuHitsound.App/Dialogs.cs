@@ -43,6 +43,67 @@ internal static class Dialogs
             return (() => { if (list.SelectedItem is string s) close(s); }, "Add");
         });
 
+    /// <summary>
+    /// The time signature dialog: one change per line as "bar n/d" (e.g. "33 7/8"). Returns the changes, or null on Cancel.
+    /// </summary>
+    public static async Task<List<TimeSignature>?> TimeSignatures(Window owner, IReadOnlyList<TimeSignature> current) =>
+        await Show<List<TimeSignature>>(owner, "Time signatures", (body, close) =>
+        {
+            var box = new TextBox
+            {
+                Text = string.Join("\n", current.Select(t => $"{t.Bar} {t.Numerator}/{t.Denominator}")),
+                AcceptsReturn = true, Width = 300, Height = 180, Watermark = "33 7/8",
+            };
+            var problem = new TextBlock { Foreground = Brushes.OrangeRed, TextWrapping = TextWrapping.Wrap, MaxWidth = 300 };
+            body.Children.AddRange([
+                new TextBlock { Text = "One change per line: bar, then beats/beat unit (e.g. 33 7/8).", TextWrapping = TextWrapping.Wrap, MaxWidth = 300 },
+                box,
+                new TextBlock { Text = "Only changes how bars are drawn in the editor. The map's timing is never touched.", TextWrapping = TextWrapping.Wrap, MaxWidth = 300, Opacity = 0.7 },
+                problem,
+            ]);
+            return (() =>
+            {
+                var changes = new List<TimeSignature>();
+                foreach (var line in (box.Text ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split([' ', '/'], StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 3 && int.TryParse(parts[0], out int bar) && int.TryParse(parts[1], out int n) && int.TryParse(parts[2], out int den)
+                        && ArrangeModel.IsValid(new TimeSignature(bar, n, den)))
+                        changes.Add(new TimeSignature(bar, n, den));
+                    else
+                    {
+                        problem.Text = $"\"{line}\" isn't a change: bar 1 or later, 1–32 beats, and a beat unit of 1, 2, 4, 8 or 16.";
+                        return;
+                    }
+                }
+
+                close(changes);
+            }, "OK");
+        });
+
+    /// <summary>The Repeat dialog: how many copies, and the gap between them in snap steps (1/<paramref name="divisor"/>).</summary>
+    public static async Task<(int Copies, int Gap)?> Repeat(Window owner, int gap, int divisor) =>
+        await Show<(int, int)?>(owner, "Repeat", (body, close) =>
+        {
+            var copies = new TextBox { Text = "1", Width = 80 };
+            var steps = new TextBox { Text = gap.ToString(CultureInfo.InvariantCulture), Width = 80 };
+            var problem = new TextBlock { Foreground = Brushes.OrangeRed };
+            body.Children.AddRange([
+                new TextBlock { Text = "Copies (1–64)" }, copies,
+                new TextBlock { Text = $"Gap in snap steps of 1/{divisor} (from one copy's start to the next)" }, steps,
+                new TextBlock { Text = "The gap is counted on the grid, so it follows tempo changes.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
+                problem,
+            ]);
+            copies.AttachedToVisualTree += (_, _) => { copies.Focus(); copies.SelectAll(); };
+            return (() =>
+            {
+                if (OsuNumber.TryParseInt(copies.Text ?? "", out int n) && n is >= 1 and <= HitEditor.MaxRepeatCopies
+                    && OsuNumber.TryParseInt(steps.Text ?? "", out int g) && g is >= 1 and <= HitEditor.MaxRepeatGap)
+                    close((n, g));
+                else problem.Text = $"Copies must be 1–{HitEditor.MaxRepeatCopies} and the gap 1–{HitEditor.MaxRepeatGap} steps.";
+            }, "Repeat");
+        });
+
     /// <summary>The Range tool's Edit range dialog: what to do and the offset (ms, defaulting to the range's length).</summary>
     public static async Task<(RangeOperation Operation, double Offset)?> EditRange(Window owner, double length) =>
         await Show<(RangeOperation, double)?>(owner, "Edit range", (body, close) =>
