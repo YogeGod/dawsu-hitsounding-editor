@@ -102,6 +102,22 @@ public partial class MainWindow : Window
             UpdateStatus();
         };
         Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Math.Clamp(SnapBox.SelectedIndex + step, 0, Divisors.Length - 1);
+        // V6.39 header and toolbar buttons.
+        GenerateButton.Click += async (_, _) => await Generate();
+        PreferencesButton.Click += (_, _) => Run("preferences");
+        HelpButton.Click += (_, _) => Run("help");
+        UndoButton.Click += (_, _) => Run("undo");
+        RedoButton.Click += (_, _) => Run("redo");
+        SnapToggle.IsCheckedChanged += (_, _) =>
+        {
+            if (Lanes.SnapOn == (SnapToggle.IsChecked == true)) return;
+            Lanes.SnapOn = SnapToggle.IsChecked == true;
+            Lanes.InvalidateVisual();
+            UpdateStatus();
+        };
+        ColourBox.ItemsSource = new[] { "Lane", "Volume" };
+        ColourBox.SelectionChanged += (_, _) => SetColourByVolume(ColourBox.SelectedIndex == 1);
+        FitButton.Click += (_, _) => FitTimeline();
         SelectTool.Click += (_, _) => SetTool(Tool.Select);
         RangeTool.Click += (_, _) => SetTool(Tool.Range);
         DrawTool.Click += (_, _) => SetTool(Tool.Draw);
@@ -113,7 +129,13 @@ public partial class MainWindow : Window
         foreach (var (item, speed) in new[] { (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) })
             item.Click += (_, _) => { if (audio is not null) audio.Speed = speed; UpdateStatus(); };
         SongVolumeSlider.ValueChanged += (_, e) => { if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100); };
-        SongMuteButton.IsCheckedChanged += (_, _) => UpdateSongMute();
+        SongMuteButton.IsCheckedChanged += (_, _) =>
+        {
+            Lanes.SongMuted = SongMuteButton.IsChecked == true;
+            Lanes.InvalidateVisual();
+            UpdateSongMute();
+        };
+        Lanes.SongMuteRequested += () => SongMuteButton.IsChecked = SongMuteButton.IsChecked != true;
         SongOffsetBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) { ApplySongOffset(); Lanes.Focus(); e.Handled = true; } };
         SongOffsetBox.LostFocus += (_, _) => ApplySongOffset();
 
@@ -537,12 +559,35 @@ public partial class MainWindow : Window
         };
         InspectorPanelItem.IsChecked = prefs.InspectorOpen;
         InspectorPanelItem.Click += (_, _) => InspectorToggle.IsChecked = InspectorToggle.IsChecked != true;
+        Inspector.CloseRequested += () => InspectorToggle.IsChecked = false;
         Inspector.SeekRequested += Seek;
         Inspector.ShiftTimeRequested += ms => Lanes.Edits.Move(ms, h => h.Lane, "Shift time");
         Inspector.VolumeRequested += v => session?.SetVolume(Lanes.SelectedMoments, v);
         Inspector.AddBookmarkRequested += () => Run("addBookmark");
         Inspector.RemoveBookmarkRequested += t => session?.RemoveBookmarkNear(t, 1);
         Inspector.GoToStepRequested += p => session?.GoTo(p);
+    }
+
+    /// <summary>The V6.39 selection bar: how many hits, where the selection starts, and the object under it.</summary>
+    private void UpdateInfoBar()
+    {
+        var selected = Lanes.Selection;
+        if (session is null || selected.Count == 0)
+        {
+            (InfoSelection.Text, InfoStart.Text, InfoObject.Text) = ("No events", "—", "—");
+            return;
+        }
+
+        InfoSelection.Text = selected.Count == 1 ? "1 event" : $"{selected.Count} events";
+        double start = selected.Min(h => h.Time);
+        InfoStart.Text = $"{Math.Round(start)}  ({FormatTime(start)})";
+        var anchors = selected.Where(h => h.Anchor is not null).Select(h => h.Anchor!.Value).Distinct().ToList();
+        InfoObject.Text = anchors.Count switch
+        {
+            0 => "none (red: no object)",
+            1 when session.MomentByKey.GetValueOrDefault(anchors[0]) is { } m => Describe(m),
+            var n => $"{n} objects",
+        };
     }
 
     // The inspector's width while shown, kept here so hiding it before closing doesn't lose it.
@@ -553,9 +598,19 @@ public partial class MainWindow : Window
 
     private void RefreshInspector() => Inspector.Refresh(session, model, Lanes.Selection, FormatTime);
 
+    /// <summary>Fit: zooms out so the whole map is in view.</summary>
+    private void FitTimeline()
+    {
+        if (Lanes.Axis.End <= 0) return;
+        Lanes.Axis.ZoomAt(Lanes.Axis.VisibleDuration / Lanes.Axis.End, 0);
+        Lanes.Axis.Left = 0;
+        Lanes.InvalidateVisual();
+    }
+
     /// <summary>View → Colour by: lane colours, or notes from dark (quiet) to bright (loud).</summary>
     private void SetColourByVolume(bool byVolume)
     {
+        if (ColourBox.SelectedIndex != (byVolume ? 1 : 0)) ColourBox.SelectedIndex = byVolume ? 1 : 0;
         Lanes.ColourByVolume = byVolume;
         ColourLaneItem.IsChecked = !byVolume;
         ColourVolumeItem.IsChecked = byVolume;
@@ -828,6 +883,10 @@ public partial class MainWindow : Window
         Avalonia.Media.IBrush B(string key) => Paint.Brush(t.Color(key));
 
         Resources["ChromeBg"] = B("control.bg");
+        Resources["HeaderBg"] = B("title.bg");
+        Resources["InfoBg"] = B("edit.bg");
+        Resources["Divider"] = B("divider");
+        Resources["PaneTitle"] = Paint.Brush(Paint.Brighten(t.Color("volume.side"), 0.06));
         Resources["ChromeBorder"] = B("chrome.border");
         Resources["ControlHover"] = Paint.Brush(Paint.Brighten(t.Color("button.bg"), 0.12));
         Resources["ButtonBg"] = B("button.bg");
@@ -866,6 +925,7 @@ public partial class MainWindow : Window
         BottomPanel.IsVisible = showVolume;
         rows[6].Height = new GridLength(t.Number("status.height"));
         HScroll.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
+        LaneFilterBox.Width = ArrangeView.GridLeft - 16;
         VolumeControlScroller.Width = ArrangeView.GridLeft;
         UpdateVolumePanelHeight();
 
@@ -1028,6 +1088,8 @@ public partial class MainWindow : Window
     private void UpdateStatus()
     {
         RefreshInspector();
+        UpdateInfoBar();
+        if (SnapToggle.IsChecked != Lanes.SnapOn) SnapToggle.IsChecked = Lanes.SnapOn;
         if (model is null)
         {
             var open = EditorCommands.Get("open");

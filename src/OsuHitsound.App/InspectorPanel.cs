@@ -76,12 +76,25 @@ internal sealed class InspectorPanel : Border
     public event Action<double>? RemoveBookmarkRequested;
     public event Action<int>? GoToStepRequested;
 
+    /// <summary>The ‹ in the pane title: the window hides the inspector.</summary>
+    public event Action? CloseRequested;
+
     /// <summary>A card was folded, unfolded or moved: the window keeps the layout in the preferences.</summary>
     public event Action? LayoutChanged;
 
     public InspectorPanel()
     {
-        Child = new ScrollViewer { Content = cards, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        var close = new Button { Content = "‹", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(8, 0) };
+        ToolTip.SetTip(close, "Hide the inspector");
+        close.Click += (_, _) => CloseRequested?.Invoke();
+        var title = new DockPanel { Background = new SolidColorBrush(Color.Parse("#303037")), Height = 32 };
+        DockPanel.SetDock(close, Dock.Right);
+        title.Children.AddRange([close, new TextBlock { Text = "Inspector", FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#bebecb")), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0) }]);
+        var scroller = new ScrollViewer { Content = cards, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        var pane = new DockPanel();
+        DockPanel.SetDock(title, Dock.Top);
+        pane.Children.AddRange([title, scroller]);
+        Child = pane;
 
         var shift = new Button { Content = "Shift" };
         shift.Click += (_, _) => { if (OsuNumber.TryParseDouble(shiftBox.Text ?? "", out double ms) && double.IsFinite(ms) && ms != 0) ShiftTimeRequested?.Invoke(ms); };

@@ -76,6 +76,9 @@ internal sealed class VolumeLane : Control
                 ctx.DrawLine(Paint.BeatPen, new Point(ArrangeView.GridLeft, y), new Point(size.Width, y));
             }
 
+            foreach (var (pct, label) in new[] { (1.0, "100"), (0.5, "50"), (0.0, "1") })
+                Paint.DrawText(ctx, label, new Point(ArrangeView.GridLeft + 4, bottom - height * pct - (pct > 0 ? 0 : 14)), 10, Paint.Dim, 0, Paint.Mono);
+
             var session = model.Session;
             var groups = model.MomentGroups;
             var moments = session.Moments;

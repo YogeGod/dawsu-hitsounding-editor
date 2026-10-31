@@ -294,11 +294,11 @@ internal sealed partial class ArrangeModel
 
     public static string GroupName(LaneGroup group) => group switch
     {
-        LaneGroup.SoftSet => "Soft set",
-        LaneGroup.NormalSet => "Normal set",
-        LaneGroup.DrumSet => "Drum set",
+        LaneGroup.SoftSet => "Soft sampleset",
+        LaneGroup.NormalSet => "Normal sampleset",
+        LaneGroup.DrumSet => "Drum sampleset",
         LaneGroup.OwnFiles => "Own files",
-        _ => "Skin (no file)",
+        _ => "Skin sounds (no file)",
     };
 
     public event Action? Changed;

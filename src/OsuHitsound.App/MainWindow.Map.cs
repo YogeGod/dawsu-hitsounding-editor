@@ -27,7 +27,6 @@ public partial class MainWindow
         {
             if (e.Key != Key.Escape) return;
             LaneFilterBox.Text = "";
-            LaneFilterBox.IsVisible = false;
             Lanes.Focus();
             e.Handled = true;
         };
@@ -37,7 +36,6 @@ public partial class MainWindow
 
     private void ShowFilter()
     {
-        LaneFilterBox.IsVisible = true;
         LaneFilterBox.Focus();
     }
 
