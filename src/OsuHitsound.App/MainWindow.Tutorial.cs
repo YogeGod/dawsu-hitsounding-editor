@@ -63,7 +63,7 @@ public partial class MainWindow
         new("Menus", "Every command lives here too: File (open, import .osz, new hitsound diff, this tutorial), Edit (quantize, repeat, range, scale by volume), Playback, Map and View.",
             () => On(HeaderMenu)),
         new("The open map", "The name of the .osu you are editing.", () => On(FileTitle)),
-        new("Preferences", "Your Songs folder, audio output and buffer, and the key commands (including importing your Cubase keys).",
+        new("Preferences", "Your Songs folder, audio output and buffer, and the key commands.",
             () => On(PreferencesButton)),
         new("Keys / F1", "A searchable list of every shortcut and mouse action. Press F1 at any time.", () => On(HelpButton)),
         new("Undo and redo", "Steps back and forward through your edits (Ctrl+Z, Ctrl+Y). The Recent edits card in the inspector lists them by name.",

@@ -12,7 +12,7 @@ A tour of the osu! hitsound editor, in the same order as the in-app tour. The ap
 
 - **Menus**: every command is also here — File (open, import .osz, new hitsound diff, the tutorial), Edit (quantize, repeat, range, scale by volume), Playback, Map and View.
 - **The open map**: the name of the `.osu` you are editing.
-- **Preferences**: your Songs folder, audio output and buffer, and the key commands (you can import your Cubase keys).
+- **Preferences**: your Songs folder, audio output and buffer, and the key commands.
 - **Keys / F1**: a searchable list of every shortcut and mouse action. Press F1 at any time.
 - **Undo and redo** (Ctrl+Z, Ctrl+Y): step back and forward through your edits. The Recent edits card in the inspector lists them by name.
 
