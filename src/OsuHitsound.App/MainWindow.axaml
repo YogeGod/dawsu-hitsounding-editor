@@ -462,8 +462,8 @@
         <StackPanel Grid.Column="4" Name="GlobalVolumePanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
                     ToolTip.Tip="Global volume: the song, hitsounds and previews together (20–100 %)">
           <TextBlock Text="Global volume" Classes="toolLabel" />
-          <Slider Name="GlobalVolumeSlider" Width="110" Minimum="20" Maximum="100" Value="100" Focusable="False" VerticalAlignment="Center" />
-          <TextBlock Name="GlobalVolumeText" Text="100%" Classes="fieldValue" Width="36" VerticalAlignment="Center" />
+          <Slider Name="GlobalVolumeSlider" Width="110" Minimum="20" Maximum="100" Value="30" Focusable="False" VerticalAlignment="Center" />
+          <TextBlock Name="GlobalVolumeText" Text="30%" Classes="fieldValue" Width="36" VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
     </Border>
