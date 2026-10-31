@@ -1,6 +1,6 @@
 # dawsu! hitsounding editor
 
-A Windows editor for dawsu! hitsounds, with sample lanes, MIDI import/export, a song waveform and a volume controller. Its interface and workflow are heavily inspired by Cubase’s MIDI Drum Editor.
+A Windows editor for dawsu! hitsounds, with sample lanes, MIDI import/export, a song waveform and a volume controller.
 
 ## Tutorial
 
@@ -24,7 +24,7 @@ Every command is also in the menus: File, Edit, Playback, Map and View.
 
 ![Map name, Preferences and Keys / F1](docs/tutorial/map-preferences-keys.png)
 
-- **Preferences**: your Songs folder, audio output and key commands (you can import your Cubase keys).
+- **Preferences**: your Songs folder, audio output and key commands.
 - **Keys / F1**: a searchable list of every shortcut and mouse action.
 
 ### Tools
