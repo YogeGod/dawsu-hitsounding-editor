@@ -1,3 +1,5 @@
+![dawsu! hitsound editor](docs/banner.png)
+
 # dawsu! hitsounding editor
 
 A Windows editor for dawsu! hitsounds, with sample lanes, a song waveform and a volume controller.
