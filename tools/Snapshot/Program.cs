@@ -31,6 +31,7 @@ window.Show();
 while (!window.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
 Pump();
 Save("01-open.png");
+SaveReadmeCrops(); // the map as opened, before the edits below
 
 var view = window.ArrangeArea;
 view.Axis.ZoomAt(0.4, 0);
@@ -110,4 +111,36 @@ void Save(string name)
 {
     window.CaptureRenderedFrame()?.Save(Path.Combine(outDir, name));
     Console.WriteLine($"saved {name}");
+}
+
+// The README tutorial's pictures: small crops around the spots of the tour steps, so each shows only its own controls.
+void SaveReadmeCrops()
+{
+    var readmeDir = Directory.CreateDirectory(Path.Combine(outDir, "readme")).FullName;
+    var full = Path.Combine(outDir, "10-readme-full.png");
+    window.CaptureRenderedFrame()?.Save(full);
+    using var frame = SkiaSharp.SKBitmap.Decode(full);
+    (string Name, int[] Steps)[] crops =
+    [
+        ("open-save-generate", [1, 2, 3]), ("menus", [4]), ("map-preferences-keys", [5, 6, 7]), ("undo-redo", [8]),
+        ("tools", [9, 10, 11, 12, 13, 14]), ("snap", [15, 16]), ("view-colour-zoom", [17, 18, 19]),
+        ("selection-bar", [20]), ("song", [21]), ("inspector", [22]), ("lanes-grid", [23, 24, 25]),
+        ("volume", [26]), ("transport-position", [27, 28]), ("global-volume", [29]),
+    ];
+    foreach (var (name, steps) in crops)
+    {
+        Rect? spot = null;
+        foreach (int step in steps)
+            if (window.TutorialSpotForSnapshot(step) is { } r) spot = spot is { } s ? s.Union(r) : r;
+        if (spot is not { } area) continue;
+        // A little room around the controls; the lanes and grid would be the whole screen, so they stop at 1200×640.
+        int left = Math.Max(0, (int)area.X - 8), top = Math.Max(0, (int)area.Y - 8);
+        int right = Math.Min(frame.Width, Math.Min((int)area.Right + 8, left + 1200));
+        int bottom = Math.Min(frame.Height, Math.Min((int)area.Bottom + 8, top + 640));
+        using var crop = new SkiaSharp.SKBitmap();
+        frame.ExtractSubset(crop, new SkiaSharp.SKRectI(left, top, right, bottom));
+        using var png = SkiaSharp.SKImage.FromBitmap(crop).Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        File.WriteAllBytes(Path.Combine(readmeDir, name + ".png"), png.ToArray());
+        Console.WriteLine($"saved readme/{name}.png ({right - left}×{bottom - top})");
+    }
 }

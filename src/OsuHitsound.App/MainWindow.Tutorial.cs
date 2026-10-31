@@ -29,6 +29,9 @@ public partial class MainWindow
 
     internal void CloseTutorialForSnapshot() => Tutorial.Close();
 
+    /// <summary>Where a step's spotlight goes, in window coordinates: the README's screenshots are cropped to it.</summary>
+    internal Rect? TutorialSpotForSnapshot(int step) => TutorialSteps()[step].Target();
+
     // A control's place on the overlay, or null when it isn't shown (the step is then centred).
     private Rect? On(Control? c) =>
         c is { IsEffectivelyVisible: true } && c.TranslatePoint(default, Tutorial) is { } p ? new Rect(p, c.Bounds.Size) : null;
