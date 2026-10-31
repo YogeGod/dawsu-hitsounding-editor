@@ -129,16 +129,32 @@ void SaveReadmeCrops()
     ];
     foreach (var (name, steps) in crops)
     {
-        Rect? spot = null;
-        foreach (int step in steps)
-            if (window.TutorialSpotForSnapshot(step) is { } r) spot = spot is { } s ? s.Union(r) : r;
-        if (spot is not { } area) continue;
-        // A little room around the controls; the lanes and grid would be the whole screen, so they stop at 1200×640.
+        // Each step's spot as the tour draws it: 6 px around the control.
+        var spots = steps.Select(window.TutorialSpotForSnapshot).OfType<Rect>().Select(r => r.Inflate(6)).ToList();
+        if (spots.Count == 0) continue;
+        var area = spots.Aggregate((a, b) => a.Union(b));
+        // Room for the outline; the lanes and grid would be the whole screen, so they stop at 1200×640.
         int left = Math.Max(0, (int)area.X - 8), top = Math.Max(0, (int)area.Y - 8);
         int right = Math.Min(frame.Width, Math.Min((int)area.Right + 8, left + 1200));
         int bottom = Math.Min(frame.Height, Math.Min((int)area.Bottom + 8, top + 640));
-        using var crop = new SkiaSharp.SKBitmap();
-        frame.ExtractSubset(crop, new SkiaSharp.SKRectI(left, top, right, bottom));
+        using var subset = new SkiaSharp.SKBitmap();
+        frame.ExtractSubset(subset, new SkiaSharp.SKRectI(left, top, right, bottom));
+        using var crop = subset.Copy();
+
+        // The tour's highlight: everything around the spots dimmed, each spot outlined in blue.
+        using (var canvas = new SkiaSharp.SKCanvas(crop))
+        using (var holes = new SkiaSharp.SKPath())
+        using (var outline = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColor.Parse("#0a84ff"), Style = SkiaSharp.SKPaintStyle.Stroke, StrokeWidth = 2.5f, IsAntialias = true })
+        {
+            var inCrop = spots.Select(s => new SkiaSharp.SKRect((float)s.Left - left, (float)s.Top - top, (float)s.Right - left, (float)s.Bottom - top)).ToList();
+            foreach (var s in inCrop) holes.AddRoundRect(s, 6, 6);
+            canvas.Save();
+            canvas.ClipPath(holes, SkiaSharp.SKClipOperation.Difference, true);
+            canvas.DrawColor(new SkiaSharp.SKColor(0, 0, 0, 158), SkiaSharp.SKBlendMode.SrcOver); // the tour's 62 % black, over the screen
+            canvas.Restore();
+            foreach (var s in inCrop) canvas.DrawRoundRect(s, 6, 6, outline);
+        }
+
         using var png = SkiaSharp.SKImage.FromBitmap(crop).Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
         File.WriteAllBytes(Path.Combine(readmeDir, name + ".png"), png.ToArray());
         Console.WriteLine($"saved readme/{name}.png ({right - left}×{bottom - top})");
