@@ -22,6 +22,12 @@ public sealed class MapFolder
         this.readBytes = readBytes;
     }
 
+    /// <summary>
+    /// This folder with more file names (files about to be written, such as Generate's mixes). It reads files the same
+    /// way, so the files already there (a storyboard .osb, say) can still be read.
+    /// </summary>
+    public MapFolder With(IEnumerable<string> moreFiles) => new(Files.Concat(moreFiles), readBytes);
+
     public static MapFolder FromDirectory(string directory)
     {
         var root = Path.GetFullPath(directory);

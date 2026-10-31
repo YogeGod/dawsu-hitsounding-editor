@@ -22,6 +22,21 @@ public class GenerateTests
     private static Lane File(string name) => new(LaneSource.BeatmapFile, name);
 
     [Fact]
+    public void Generate_works_for_a_mapset_with_a_storyboard_file()
+    {
+        // The decompiler reads every .osb in the folder; the folder Generate plans against must still be able to read it
+        // (it crashed with "This folder has no file contents").
+        var osb = Encoding.UTF8.GetBytes("[Events]\r\nSample,2000,0,\"sb-boom.wav\",70\r\n");
+        var (s, file, folder) = Load("256,192,1000,1,8,0:0:0:0:", ["Band - Song (Me).osb", "sb-boom.wav"], name => osb);
+        s.Add([s.HitAt(Skin("soft-hitwhistle"), 1500)]);
+
+        var plan = HitsoundDiff.Plan(file, @"C:\maps\x\Band - Song (Me) [Insane].osu", folder, s);
+
+        Assert.Equal(2, plan.Circles);
+        Assert.Empty(plan.Conflicts);
+    }
+
+    [Fact]
     public void Every_sound_becomes_a_circle_in_a_hitsounds_diff_with_the_red_lines_only()
     {
         var (s, file, folder) = Load("256,192,1000,1,8,0:0:0:0:");

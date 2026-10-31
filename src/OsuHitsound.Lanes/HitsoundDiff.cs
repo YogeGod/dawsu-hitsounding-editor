@@ -68,7 +68,7 @@ public static class HitsoundDiff
                 : Wish(groups[i].Layers));
 
         // 4. The final diff, compiled against the folder as it will be (with the mixes in it).
-        var withMixes = new MapFolder(folder.Files.Concat(mixer.All.Select(m => m.FileName)).Distinct(StringComparer.OrdinalIgnoreCase));
+        var withMixes = folder.With(mixer.All.Select(m => m.FileName)); // keeps reading the folder's files (its .osb)
         var final = OsuFile.Parse(diffBytes);
         var result = Compiler.Apply(final, withMixes, Wishes(final, withMixes, wishes));
         return new GeneratePlan(path, final, mixer.ToWrite, groups.Count, result.Conflicts) { Reused = mixer.Reused, Removes = mixer.Removes };

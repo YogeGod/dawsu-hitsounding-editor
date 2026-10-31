@@ -216,9 +216,10 @@ public partial class MainWindow
             UpdateStatus();
             (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot()));
         }
-        catch (IOException ex)
+        catch (Exception ex)
         {
-            flash = $"Generate stopped: {ex.Message}";
+            // Planning only reads, so any failure here leaves everything as it was: say so instead of closing the editor.
+            flash = $"Generate stopped, nothing was written: {ex.Message}";
             UpdateStatus();
             return;
         }
@@ -286,6 +287,11 @@ public partial class MainWindow
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             flash = $"Generate stopped, nothing was written: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            // Unexpected: report it rather than close the editor (the old diff, if any, has a backup in the editor's app data).
+            flash = $"Generate failed: {ex.Message}";
         }
 
         UpdateStatus();
