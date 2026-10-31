@@ -364,7 +364,7 @@ public partial class MainWindow : Window
             SuggestedStartLocation = prefs.SongsFolder is { } songs ? await StorageProvider.TryGetFolderFromPathAsync(songs) : null,
             FileTypeFilter = [new FilePickerFileType("osu! map") { Patterns = ["*.osu"] }],
         });
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } local) await Open(local);
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { } local && await MayLeaveMap()) await Open(local);
     }
 
     // Holding Alt shows the pen over the grid and the bars (Alt draws with any tool), as in V6.39.

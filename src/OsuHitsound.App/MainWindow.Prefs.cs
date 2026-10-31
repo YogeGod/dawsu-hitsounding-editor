@@ -88,7 +88,7 @@ public partial class MainWindow
             {
                 var item = new MenuItem { Header = Path.GetFileNameWithoutExtension(path) };
                 ToolTip.SetTip(item, path);
-                item.Click += (_, _) => Open(path);
+                item.Click += async (_, _) => { if (await MayLeaveMap()) await Open(path); };
                 return item;
             }).ToList();
     }
