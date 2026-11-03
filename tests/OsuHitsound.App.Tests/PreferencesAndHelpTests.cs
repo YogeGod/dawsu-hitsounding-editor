@@ -16,7 +16,7 @@ public class PreferencesAndHelpTests : IDisposable
         var prefs = new Preferences
         {
             SongsFolder = @"F:\osu!\Songs", AudioOutput = OutputKind.Asio, OutputDevice = "ASIO4ALL v2", BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
-            SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, InspectorOpen = false, InspectorWidth = 300,
+            SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, AuditionOnPlacement = false, InspectorOpen = false, InspectorWidth = 300,
             InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true, GlobalSongOffset = -25,
         }.WithRecent(@"C:\a.osu");
         prefs.Save(path);
@@ -83,8 +83,8 @@ public class PreferencesAndHelpTests : IDisposable
         Assert.Equal(EditorCommands.Defaults.Count, EditorCommands.Defaults.Select(c => c.Id).Distinct().Count());
         var keys = EditorCommands.Defaults.SelectMany(c => c.Keys).Select(k => k.ToString()).ToList();
         Assert.Equal(keys.Count, keys.Distinct().Count());
-        // The dialogs from the Edit menu have no built-in key (docs/spec-wave1.md); every other command has one.
-        string[] menuOnly = ["editRange", "scaleByVolume", "quantizeDialog", "importOsz"];
+        // These menu commands have no built-in key; users can assign one in Preferences.
+        string[] menuOnly = ["editRange", "scaleByVolume", "quantizeDialog", "importOsz", "revert"];
         Assert.All(EditorCommands.Defaults.Where(c => !menuOnly.Contains(c.Id)), c => Assert.NotEmpty(c.Keys));
     }
 

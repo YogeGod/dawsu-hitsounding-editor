@@ -88,6 +88,7 @@ internal sealed partial class ArrangeModel
     public IReadOnlySet<Lane> Silent { get; set; }
 
     public IReadOnlyDictionary<Lane, List<Note>> Notes { get; private set; } = new Dictionary<Lane, List<Note>>();
+    public bool CanReplaceSample(Lane lane) => lane.Source != LaneSource.StoryboardFile && !passive.ContainsKey(lane);
 
     /// <summary>Moments that won't save as wanted, from the last background compile.</summary>
     public IReadOnlySet<MomentKey> Conflicted { get; private set; } = new HashSet<MomentKey>();
@@ -332,6 +333,19 @@ internal sealed partial class ArrangeModel
 
     public bool IsCollapsed(LaneGroup group) => collapsed.Contains(group);
 
+    private readonly HashSet<string> collapsedFamilies = [];
+    private readonly Dictionary<string, Lane> familyParents = [];
+    private readonly HashSet<string> familiesWithChildren = [];
+    internal static string? FamilyOf(Lane lane) => lane.Sample is { } s ? $"{s.Set}:{s.Sound}" : null;
+    public IReadOnlyCollection<string> CollapsedFamilies => collapsedFamilies;
+    public bool IsFamilyCollapsed(Lane lane) => FamilyOf(lane) is { } key && collapsedFamilies.Contains(key);
+    public bool IsFamilyParent(Lane lane) => FamilyOf(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
+    public void ToggleFamily(Lane lane)
+    {
+        if (FamilyOf(lane) is not { } key) return;
+        Relayout(() => { if (!collapsedFamilies.Remove(key)) collapsedFamilies.Add(key); });
+    }
+
     public bool IsMuted(Lane lane) => muted.Contains(lane);
 
     public bool IsSoloed(Lane lane) => soloed.Contains(lane);
@@ -499,11 +513,20 @@ internal sealed partial class ArrangeModel
     {
         // Hidden lanes (deleted) stay out unless they still have hits; the filter (Ctrl+F) matches names.
         var withHits = Session.State.Hits.Select(h => h.Lane).ToHashSet();
+        var visible = laneRows.Where(r => !hidden.Contains(r.Lane) || withHits.Contains(r.Lane)).ToList();
+        familyParents.Clear(); familiesWithChildren.Clear();
+        foreach (var family in visible.Where(r => FamilyOf(r.Lane) is not null).GroupBy(r => FamilyOf(r.Lane)!))
+        {
+            var parent = family.FirstOrDefault(r => r.Lane.Sample is { Index: <= 1 }) ?? family.First();
+            familyParents[family.Key] = parent.Lane;
+            if (family.Any(r => r.Lane != parent.Lane && r.Lane.Sample is { Index: > 1 })) familiesWithChildren.Add(family.Key);
+        }
         var rows = new List<Row>();
-        foreach (var group in laneRows.Where(r => (!hidden.Contains(r.Lane) || withHits.Contains(r.Lane)) && MatchesFilter(r.Lane)).GroupBy(r => r.Group))
+        foreach (var group in visible.Where(r => MatchesFilter(r.Lane)).GroupBy(r => r.Group))
         {
             rows.Add(new GroupRow(group.Key, group.Count()));
-            if (!collapsed.Contains(group.Key)) rows.AddRange(group);
+            if (!collapsed.Contains(group.Key)) rows.AddRange(group.Where(r => Filter.Length > 0 || r.Lane.Sample is not { Index: > 1 } ||
+                !IsFamilyCollapsed(r.Lane) || FamilyOf(r.Lane) is { } key && familyParents.GetValueOrDefault(key) == r.Lane));
         }
 
         return rows;

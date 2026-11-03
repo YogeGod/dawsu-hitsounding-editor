@@ -15,6 +15,7 @@ public partial class MainWindow
 
     private void WireMapFeatures()
     {
+        Lanes.LaneLayoutChanged += ScheduleProjectSave;
         Lanes.LaneMenuRequested += ShowLaneMenu;
         // A lane's + adds a new sample file for its sound; the list header's + picks one of the mapset's files.
         Lanes.AddLaneRequested += async lane => { if (lane is null) await AddLaneDialog(); else await AddSampleTo(lane); };
@@ -239,6 +240,41 @@ public partial class MainWindow
         }
     }
 
+    private bool reverting;
+
+    private async Task RevertToLastSaved()
+    {
+        if (reverting || doc is not { } current || !Loading.IsCompleted) return;
+        reverting = true;
+        RevertItem.IsEnabled = false;
+        try
+        {
+            if (!await Dialogs.Confirm(this, "Revert to last saved",
+                "Reload this difficulty from the saved .osu? Unsaved map edits, including hits with no object, will be discarded. This clears undo history. Lane layout and playback settings are kept.",
+                "Revert")) return;
+            if (!ReferenceEquals(doc, current) || !Loading.IsCompleted) return;
+
+            double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom, scroll = Lanes.ScrollY;
+            double position = audio?.Position ?? Lanes.Playhead;
+            var reload = OpenAsync(current.Path, restoreUnanchored: false);
+            Loading = reload;
+            if (!await reload) return;
+
+            (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
+            Lanes.ScrollY = scroll;
+            Seek(Math.Clamp(position, 0, Math.Max(0, Lanes.Axis.End)));
+            SyncScrollBars();
+            SaveProject(); // remove discarded unanchored hits from the autosaved editor project too
+            flash = "Reverted to the last saved .osu. Undo history cleared.";
+            UpdateStatus();
+        }
+        finally
+        {
+            reverting = false;
+            RevertItem.IsEnabled = doc is not null;
+        }
+    }
+
     // ---------------------------------------------------------------- project file
 
     private void ScheduleProjectSave()
@@ -265,6 +301,7 @@ public partial class MainWindow
             ActiveLane = model.ActiveLane is { } active ? ProjectStore.KeyOf(active) : null,
             AddedLanes = added,
             HiddenLanes = hidden,
+            CollapsedFamilies = [.. model.CollapsedFamilies],
             LocatorLeft = Lanes.LocatorLeft,
             LocatorRight = Lanes.LocatorRight,
             Cycle = Lanes.Cycle,
@@ -284,17 +321,19 @@ public partial class MainWindow
     }
 
     /// <summary>Puts back what the project file kept for this map: lanes, hits with no object, locators, mutes, offset.</summary>
-    private void RestoreProject()
+    private void RestoreProject(bool restoreUnanchored = true)
     {
         if (model is null || session is null || mapPath is null || folder is null) return;
         if (ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) is not { } project) return;
 
         model.ApplyLaneLayout(project, lane => lane.Source != LaneSource.BeatmapFile || folder.Find(lane.Name) is not null);
+        foreach (string family in project.CollapsedFamilies)
+            if (model.LaneRows.FirstOrDefault(r => ArrangeModel.FamilyOf(r.Lane) == family) is { } row && !model.IsFamilyCollapsed(row.Lane)) model.ToggleFamily(row.Lane);
         foreach (var lane in project.AddedLanes.Select(ProjectStore.LaneOf).OfType<Lane>())
             if (folder.Find(lane.Name) is { } f) audio?.LoadLane(lane, folder.ReadBytes(f));
 
         // Hits with no object: only those that still have no object (the map may have changed since).
-        session.Restore(project.Unanchored
+        if (restoreUnanchored) session.Restore(project.Unanchored
             .Select(h => ProjectStore.LaneOf(h.Lane) is { } lane ? session.HitAt(lane, h.Time) : null)
             .OfType<EditHit>()
             .Where(h => h.Anchor is null));

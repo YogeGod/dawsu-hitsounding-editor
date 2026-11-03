@@ -49,6 +49,9 @@ internal sealed record Preferences
     /// <summary>View → Colour by Volume instead of by lane.</summary>
     public bool ColourByVolume { get; init; }
 
+    /// <summary>Audition each newly drawn note, including notes painted while dragging.</summary>
+    public bool AuditionOnPlacement { get; init; } = true;
+
     /// <summary>The inspector on the left: shown, its width, its cards top to bottom and the folded ones.</summary>
     public bool InspectorOpen { get; init; } = true;
 

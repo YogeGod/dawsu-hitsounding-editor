@@ -33,6 +33,7 @@ public sealed record ProjectData
     public List<string> AddedLanes { get; init; } = [];
 
     public List<string> HiddenLanes { get; init; } = [];
+    public List<string> CollapsedFamilies { get; init; } = [];
 
     public double? LocatorLeft { get; init; }
 

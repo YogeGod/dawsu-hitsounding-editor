@@ -204,7 +204,18 @@ internal sealed class ArrangeView : Control
     /// <summary>The moments the selected hits play on.</summary>
     public IReadOnlySet<MomentKey> SelectedMoments => Edits.SelectedMoments;
 
-    public event Action<Lane>? PreviewRequested;
+    public bool AuditionOnPlacement { get; set; } = true;
+    public event Action<EditHit>? PlacementPreviewRequested;
+    public event Action? LaneLayoutChanged;
+
+    internal void PlaceHit(Lane lane, double time)
+    {
+        if (Session is not { } session) return;
+        var before = session.State;
+        var hit = session.HitAt(lane, time);
+        session.Add([hit]);
+        if (AuditionOnPlacement && !ReferenceEquals(before, session.State)) PlacementPreviewRequested?.Invoke(hit);
+    }
     public event Action<Lane>? LaneListPreviewRequested;
 
     public event Action<double>? SeekRequested;
@@ -704,7 +715,9 @@ internal sealed class ArrangeView : Control
                     ctx.DrawLine(TreePen, new Point(TreeX, cy), new Point(TreeX + 10, cy));
                 }
                 else if (!last) ctx.DrawLine(TreePen, new Point(TreeX, y + RowHeight * 0.6), new Point(TreeX, y + RowHeight));
-                ctx.DrawEllipse(DisclosureDot, null, new Point(DisclosureX + indent, cy), 1.2, 1.2);
+                if (model.IsFamilyParent(lane.Lane))
+                    Paint.DrawText(ctx, model.IsFamilyCollapsed(lane.Lane) ? "▸" : "▾", new Point(DisclosureX + indent - 4, cy - 8), 11, Paint.Text, 0);
+                else ctx.DrawEllipse(DisclosureDot, null, new Point(DisclosureX + indent, cy), 1.2, 1.2);
 
                 bool silent = lane.Lane.Missing || model.Silent.Contains(lane.Lane);
                 string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.NameOf(lane.Lane);
@@ -1116,6 +1129,19 @@ internal sealed class ArrangeView : Control
         if (row is LaneRow touched && point.Properties.IsLeftButtonPressed) model.SetActive(touched.Lane);
         if (p.X < GridLeft)
         {
+            if (point.Properties.IsLeftButtonPressed && row is LaneRow family && model.IsFamilyParent(family.Lane))
+            {
+                int rowIndex = RowIndexAt(p.Y);
+                bool first = rowIndex == 0 || model.Rows[rowIndex - 1] is not LaneRow;
+                double disclosure = DisclosureX + (first ? 0 : ChildIndent);
+                if (Math.Abs(p.X - disclosure) <= 7)
+                {
+                    model.ToggleFamily(family.Lane);
+                    ScrollChanged?.Invoke();
+                    LaneLayoutChanged?.Invoke();
+                    return;
+                }
+            }
             if (point.Properties.IsLeftButtonPressed && OnLaneGrip(row, p))
             {
                 drag = Drag.Layout;
@@ -1184,8 +1210,7 @@ internal sealed class ArrangeView : Control
                 session.BeginGesture("Draw");
                 drag = Drag.Paint;
                 paintRow = lane;
-                session.Add([session.HitAt(lane.Lane, SnapTime(Axis.Time(gridX)))]);
-                PreviewRequested?.Invoke(lane.Lane);
+                PlaceHit(lane.Lane, SnapTime(Axis.Time(gridX)));
                 break;
 
             case Tool.Draw or Tool.Erase:
@@ -1288,7 +1313,7 @@ internal sealed class ArrangeView : Control
                 UpdateLaneDrop(p);
                 break;
             case Drag.Paint when paintRow is not null:
-                session.Add([session.HitAt(paintRow.Lane, SnapTime(Axis.Time(gridX)))]); // Add ignores a hit already there
+                PlaceHit(paintRow.Lane, SnapTime(Axis.Time(gridX)));
                 break;
 
             case Drag.Wipe:

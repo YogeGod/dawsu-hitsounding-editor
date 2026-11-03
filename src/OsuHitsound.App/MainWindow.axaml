@@ -236,6 +236,7 @@
               <MenuItem Name="NewDiffItem" Header="New hitsound diff…" />
               <MenuItem Name="RecentItem" Header="Recent maps" />
               <MenuItem Name="SaveItem" Header="Save" />
+              <MenuItem Name="RevertItem" Header="Revert to last saved…" IsEnabled="False" />
               <Separator />
               <MenuItem Name="GenerateFileItem" Header="Generate hitsound diff…" />
               <Separator />
@@ -330,6 +331,8 @@
           <ComboBox Name="SnapModeBox" Width="120" Focusable="False" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
           <ComboBox Name="SnapBox" Width="70" Focusable="False" ToolTip.Tip="Beat snap divisor (Shift+1–9, or Alt+wheel)" />
           <ToggleButton Name="TripletSnapToggle" Content="Triplets" ToolTip.Tip="Alt+wheel: on cycles 1/1, 1/3, 1/6, 1/12; off cycles 1/1, 1/2, 1/4, 1/8, 1/16. The drop-down and Shift+number shortcuts still offer all divisors." />
+          <ToggleButton Name="AuditionPlacementButton" Content="Audition" Height="28" MinHeight="28" Padding="6,0" FontSize="11" Margin="6,0,0,0"
+                        ToolTip.Tip="Play a sample whenever you draw a new note, including while painting. Saved for all projects." />
         </StackPanel>
         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <ToggleButton Name="InspectorToggle" Classes="viewToggle" Content="‹ Inspector" IsChecked="True" ToolTip.Tip="Show the inspector on the left: the selection, bookmarks and recent edits" />

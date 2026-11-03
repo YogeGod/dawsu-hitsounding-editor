@@ -110,6 +110,45 @@ public class MixerAndLaneTests
     }
 
     [Fact]
+    public void Passive_slider_samples_are_not_offered_as_editable_channel_assignments()
+    {
+        var file = OsuFile.Parse(Encoding.UTF8.GetBytes("osu file format v14\n[General]\nSampleSet: Soft\n[Difficulty]\nSliderMultiplier:1.4\nSliderTickRate:1\n[TimingPoints]\n0,500,4,2,0,100,1,0\n[HitObjects]\n256,192,1000,2,2,B|356:192,1,560\n"));
+        var folder = new MapFolder([]);
+        var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
+        var model = new ArrangeModel(session, file, new HashSet<Lane>());
+        Assert.NotEmpty(model.Map.Passive);
+        Assert.All(model.Map.Passive, p => Assert.False(model.CanReplaceSample(p.Lane)));
+        Assert.True(model.CanReplaceSample(new Lane(LaneSource.Skin, "soft-hitclap")));
+    }
+
+    [Fact]
+    public void Numbered_sample_families_collapse_without_changing_notes_or_playback_and_search_reveals_matches()
+    {
+        var model = Model();
+        var parent = model.LaneRows.First(r => r.Lane.Name == "soft-hitclap").Lane;
+        var child = model.LaneRows.First(r => r.Lane.Name == "soft-hitclap2.wav").Lane;
+        model.Session.Add([model.Session.HitAt(child, 1000)]);
+        var before = model.Session.State;
+        Assert.True(model.IsFamilyParent(parent));
+        model.ToggleFamily(parent);
+        Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Lane == child);
+        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == parent);
+        Assert.Same(before, model.Session.State);
+        Assert.True(model.IsAudible(child));
+        model.SetFilter("hitclap2");
+        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == child);
+        model.SetFilter("");
+        model.ToggleFamily(parent);
+        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == child);
+        model.Session.Remove(model.Session.State.Hits.Where(h => h.Lane == parent).ToList());
+        model.HideLane(parent);
+        var extra = new Lane(LaneSource.BeatmapFile, "soft-hitclap3.wav"); model.AddLane(extra);
+        model.ToggleFamily(child);
+        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == child); // replacing/hiding the base must not hide the whole family
+        Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Lane == extra);
+    }
+
+    [Fact]
     public void Lanes_can_be_renamed_moved_added_hidden_and_filtered()
     {
         var model = Model();

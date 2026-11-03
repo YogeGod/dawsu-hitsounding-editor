@@ -50,7 +50,20 @@ internal static class InspectorText
 /// </summary>
 internal sealed class InspectorPanel : Border
 {
-    public const string SelectionCard = "selection", BookmarksCard = "bookmarks", RecentCard = "recent";
+    public const string SelectionCard = "selection", BookmarksCard = "bookmarks", RecentCard = "recent", ChannelCard = "channel";
+
+    private readonly TextBlock channelName = new() { Text = "No lane selected", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock sampleFile = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.7 };
+    private readonly ComboBox channelSample = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MaxDropDownHeight = 280, Foreground = Brushes.Gainsboro };
+    private readonly Button replaceSample = new() { Content = "Browse sample…" };
+    private readonly Button previewSample = new() { Content = "Preview" };
+    public FileBrowserPanel Browser { get; } = new();
+    private Lane? channelLane;
+    private List<Lane> channelChoices = [];
+    private (ArrangeModel? Model, int Count, object? Order) channelFrom;
+    public event Action<Lane, Lane>? ChannelSampleRequested;
+    public event Action<Lane>? BrowseChannelSampleRequested;
+    public event Action<Lane>? PreviewChannelRequested;
 
     private readonly StackPanel cards = new() { Spacing = 6, Margin = new Thickness(6) };
     private readonly Dictionary<string, (Border Card, Control Body)> byId = [];
@@ -96,6 +109,16 @@ internal sealed class InspectorPanel : Border
         pane.Children.AddRange([title, scroller]);
         Child = pane;
 
+        channelSample.SelectionChanged += (_, _) =>
+        {
+            if (!filling && channelLane is { } lane && channelSample.SelectedIndex is >= 0 and var i && i < channelChoices.Count && channelChoices[i] != lane)
+                ChannelSampleRequested?.Invoke(lane, channelChoices[i]);
+        };
+        replaceSample.Click += (_, _) => { if (channelLane is { } lane) BrowseChannelSampleRequested?.Invoke(lane); };
+        previewSample.Click += (_, _) => { if (channelLane is { } lane) PreviewChannelRequested?.Invoke(lane); };
+        AddCard(ChannelCard, "Channel", Stack(channelName, sampleFile, channelSample, Row(null, replaceSample, previewSample)));
+        AddCard("browser", "File browser", Browser);
+
         var shift = new Button { Content = "Shift" };
         shift.Click += (_, _) => { if (OsuNumber.TryParseDouble(shiftBox.Text ?? "", out double ms) && double.IsFinite(ms) && ms != 0) ShiftTimeRequested?.Invoke(ms); };
         var setVolume = new Button { Content = "Set" };
@@ -136,6 +159,25 @@ internal sealed class InspectorPanel : Border
         filling = true;
         try
         {
+            var active = model?.ActiveLane;
+            var source = (model, model?.LaneRows.Count ?? 0, (object?)session?.State.LaneOrder);
+            bool changed = source != channelFrom;
+            if (changed)
+            {
+                channelFrom = source;
+                channelChoices = model is null ? [] : model.LaneRows.Select(r => r.Lane).Where(l => l.Source != LaneSource.StoryboardFile).Distinct().ToList();
+                channelSample.ItemsSource = channelChoices.Select(l => l.Source == LaneSource.Skin ? $"Default: {l.Name}" : l.Name).ToList();
+            }
+            if (active != channelLane || changed)
+            {
+                channelLane = active;
+                channelSample.SelectedIndex = active is null ? -1 : channelChoices.IndexOf(active);
+            }
+            channelName.Text = active is null ? "No lane selected" : model!.NameOf(active);
+            sampleFile.Text = active is null ? "Select a lane to choose its sample." : active.Source == LaneSource.Skin ? "Default hitsound" : $"Sample: {active.Name}";
+            previewSample.IsEnabled = active is not null;
+            channelSample.IsEnabled = replaceSample.IsEnabled = active is not null && model!.CanReplaceSample(active);
+            if (active is not null && !model!.CanReplaceSample(active)) sampleFile.Text += " (read-only; preview available)";
             selectionText.Text = InspectorText.Selection(session, model, selected, time);
             var from = (session, session?.Position ?? 0, session?.StepCount ?? 0, (object?)session?.State.Bookmarks, model);
             if (from == listsFrom) return;
@@ -157,7 +199,7 @@ internal sealed class InspectorPanel : Border
     {
         var grip = new TextBlock { Text = "⠿", Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0) };
         ToolTip.SetTip(grip, "Drag to move this card");
-        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, FontWeight = FontWeight.SemiBold };
+        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro, FontWeight = FontWeight.SemiBold };
         header.Click += (_, _) => { body.IsVisible = !body.IsVisible; LayoutChanged?.Invoke(); };
         var top = new DockPanel();
         DockPanel.SetDock(grip, Dock.Right);

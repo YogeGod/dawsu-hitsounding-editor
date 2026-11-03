@@ -14,7 +14,16 @@ The editor also has a built-in tour: **File → Tutorial**.
 
 - **Open…** (Ctrl+O): open a `.osu` from your Songs folder, or drag a `.osu` or `.osz` onto the window. Each sample file in the mapset becomes a lane you can draw in.
 - **Save .osu** (Ctrl+S): write your hitsounds back into the map. A backup of the old file is kept outside the mapset.
+- **File → Revert to last saved…**: reload the saved `.osu` after confirmation, discarding unsaved hits and bookmarks and clearing undo history. Lane layout, playback settings, playhead and timeline view are kept. You can assign a shortcut in Preferences → Keys.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready to copy into the other difficulties with **Map → Copy hitsounds…** (see [Copy hitsounds](#copy-hitsounds)).
+
+Opening a difficulty automatically creates a separate working mapset in the **osu! Songs folder configured in Preferences**, then edits that copy. Later opens reuse it without overwriting your work. Copied beatmap IDs are cleared; the source mapset is kept intact. The map title's tooltip shows the opened path.
+
+The **Audition** toggle beside the snap controls switches sample playback on/off when drawing or painting new notes. Its state is saved globally. Lane preview buttons and normal playback remain available.
+
+In the inspector, **Channel** follows the active lane. Choose an existing sample or **Browse sample…** to replace that lane's sample; its notes move to the replacement and can be undone. Imported audio gets a fresh sample index, keeping existing shared files intact. **File browser** switches between sample browsing/auditioning and map/difficulty browsing. Select a lane before using a sample. Its folder controls let you browse external sample libraries too.
+
+Click a base sound's disclosure arrow to fold or unfold its numbered sample lanes above index 1. Folded notes still play and export normally; the folded state is saved with the project. Searching the lane list reveals matching numbered lanes even while the family is folded.
 
 Generate reuses unchanged mixed samples and continues new filenames after its last generated index. It skips occupied numbers without jumping past unrelated high indexes. Existing sample files keep their names.
 

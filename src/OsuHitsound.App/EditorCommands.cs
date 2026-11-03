@@ -58,6 +58,7 @@ internal static class EditorCommands
         new("importOsz", "Files and help", "Import an .osz into the Songs folder", []),
         new("openFolder", "Files and help", "Open the map's folder in Explorer", [K(Key.O, Ctrl | Shift)]),
         new("save", "Files and help", "Save the .osu (a backup is kept outside the mapset)", [K(Key.S, Ctrl)]),
+        new("revert", "Files and help", "Revert to the last saved .osu and discard unsaved edits", []),
         new("preferences", "Files and help", "Preferences", [K(Key.OemComma, Ctrl)]),
         new("help", "Files and help", "This shortcut overview", [K(Key.F1)]),
         new("inspector", "Files and help", "UI inspector", [K(Key.I, Ctrl | Shift)]),

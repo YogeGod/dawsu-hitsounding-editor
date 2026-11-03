@@ -55,13 +55,22 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
+        if (usePreferences && prefs.SongsFolder is null) prefs = prefs with { SongsFolder = Preferences.FindSongsFolder() };
         ArrangeView.NamesCollapsed = prefs.LaneNamesCollapsed;
         skin = NewSkin();
         if (startAudio) StartAudio();
         ApplyWindowPlacement();
 
         Lanes.Axis.Changed += OnAxisChanged;
-        Lanes.PreviewRequested += lane => audio?.Preview(lane);
+        Lanes.AuditionOnPlacement = prefs.AuditionOnPlacement;
+        AuditionPlacementButton.IsChecked = prefs.AuditionOnPlacement;
+        AuditionPlacementButton.IsCheckedChanged += (_, _) =>
+        {
+            Lanes.AuditionOnPlacement = AuditionPlacementButton.IsChecked == true;
+            prefs = prefs with { AuditionOnPlacement = Lanes.AuditionOnPlacement };
+            SavePrefs();
+        };
+        Lanes.PlacementPreviewRequested += hit => audio?.Preview(hit.Lane, (session?.VolumeOf(hit) ?? 100) / 100f);
         Lanes.LaneListPreviewRequested += lane =>
         {
             if (audio is null || doc is null) return;
@@ -204,7 +213,7 @@ public partial class MainWindow : Window
         SaveButton.Click += (_, _) => Save();
         menuCommands =
         [
-            (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
+            (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
             (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (QuantizeItem, "quantizeDialog"), (RepeatItem, "repeat"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
         ];
@@ -293,7 +302,7 @@ public partial class MainWindow : Window
     /// <summary>Opens a map: reading and decoding run off the UI thread. Errors are shown in the status bar, never thrown.</summary>
     public Task Open(string path) => Loading = OpenAsync(path);
 
-    private async Task OpenAsync(string path)
+    private async Task<bool> OpenAsync(string path, bool restoreUnanchored = true)
     {
         // The current map's project first: a save still waiting for its timer must not be lost or land on the new map.
         SaveProject();
@@ -306,9 +315,20 @@ public partial class MainWindow : Window
             var opened = await Task.Run(() =>
             {
                 _ = skinSounds.Value; // read the default sounds here too, the first time
-                return MapDocument.Load(path);
+                var loadPath = path;
+                if (usePreferences)
+                {
+                    string songs = prefs.SongsFolder ?? Preferences.FindSongsFolder() ??
+                        throw new IOException("Set your osu! Songs folder in Preferences so the editor can create its working mapset.");
+                    loadPath = MapsetWorkspace.Prepare(path, songs);
+                    string projects = ProjectStore.DefaultRoot();
+                    if (!string.Equals(Path.GetFullPath(path), loadPath, StringComparison.OrdinalIgnoreCase) &&
+                        !File.Exists(ProjectStore.PathFor(projects, loadPath)) && ProjectStore.Load(projects, path) is { } previousProject)
+                        ProjectStore.Save(projects, loadPath, previousProject);
+                }
+                return MapDocument.Load(loadPath);
             });
-            if (number != loadNumber) return;
+            if (number != loadNumber) return false;
             var (full, file, mapFolder, map, editing) = (opened.Path, opened.File, opened.Folder, opened.Map, opened.Session);
 
             compileCancel?.Cancel();
@@ -324,7 +344,7 @@ public partial class MainWindow : Window
             LoadWaveform();
             mapSongOffset = 0; // a map without a project has none of its own
             ApplyOffsets();
-            RestoreProject();
+            RestoreProject(restoreUnanchored);
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             UpdateActiveLaneText();
@@ -338,18 +358,23 @@ public partial class MainWindow : Window
             Overview.Attach(model, Lanes.Axis, Lanes.Axis.End);
             Volume.Attach(model, Lanes.Axis);
             FileTitle.Text = $"{Path.GetFileName(full)} — Hitsounds";
+            ToolTip.SetTip(FileTitle, full);
+            Inspector.Browser.SetRoots(Path.GetDirectoryName(full), prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : Path.GetDirectoryName(full)));
             Title = $"{Path.GetFileNameWithoutExtension(full)} — osu! Hitsound Editor";
             UpdateLoop();
             SyncScrollBars();
             UpdateLcd();
             UpdateStatus();
             ScheduleCompile();
+            RevertItem.IsEnabled = true;
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException)
         {
-            if (number != loadNumber) return;
+            if (number != loadNumber) return false;
             flash = $"Couldn't open {Path.GetFileName(path)}: {ex.Message}";
             UpdateStatus();
+            return false;
         }
     }
 
@@ -515,6 +540,7 @@ public partial class MainWindow : Window
             case "openFolder": OpenMapFolder(); break;
             case "newDiff": _ = NewHitsoundDiff(); break;
             case "save": _ = Save(); break;
+            case "revert": _ = RevertToLastSaved(); break;
             case "preferences": _ = ShowPreferences(); break;
             case "help": ShowHelp(); break;
             case "inspector": ToggleInspector(); break;
@@ -638,7 +664,11 @@ public partial class MainWindow : Window
     }
 
     // The controller bar names the active lane, as in V6.39.
-    private void UpdateActiveLaneText() => ActiveLaneText.Text = model?.ActiveLane is { } lane ? model.NameOf(lane) : "";
+    private void UpdateActiveLaneText()
+    {
+        ActiveLaneText.Text = model?.ActiveLane is { } lane ? model.NameOf(lane) : "";
+        RefreshInspector();
+    }
 
     private void UpdateSongMute()
     {
@@ -716,6 +746,30 @@ public partial class MainWindow : Window
     /// <summary>The inspector on the left: its saved layout, the show/hide toggle and what its cards do.</summary>
     private void SetupInspector()
     {
+        Inspector.Browser.OpenMapRequested += async path => await OpenDropped(path);
+        Inspector.Browser.SampleRequested += path =>
+        {
+            if (model?.ActiveLane is { } lane) AssignChannelFile(lane, path);
+            else { flash = "Select a lane before choosing its sample."; UpdateStatus(); }
+        };
+        Inspector.Browser.PreviewRequested += path =>
+        {
+            try
+            {
+                if (audio is null) throw new IOException("Audio output is unavailable.");
+                audio.Pause();
+                audio.PreviewMix(File.ReadAllBytes(path));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { flash = ex.Message; UpdateStatus(); }
+        };
+        Inspector.Browser.SetRoots(null, prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : null));
+        Inspector.ChannelSampleRequested += AssignChannelChoice;
+        Inspector.BrowseChannelSampleRequested += async lane => await BrowseChannelSample(lane);
+        Inspector.PreviewChannelRequested += lane =>
+        {
+            try { if (doc is not null) audio?.Preview(doc.LanePreviewAt(lane, Lanes.Playhead), doc.Folder); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { flash = ex.Message; UpdateStatus(); }
+        };
         Inspector.SetLayout(prefs.InspectorCards, prefs.InspectorFolded);
         InspectorToggle.IsChecked = prefs.InspectorOpen;
         inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
