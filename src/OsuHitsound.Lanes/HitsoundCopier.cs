@@ -47,6 +47,18 @@ public sealed record HitsoundCopyOptions
     /// <summary>Skip a storyboard sample whenever a target hit point is within the leniency.</summary>
     public bool IgnoreWheneverHitsound { get; init; }
 
+    /// <summary>
+    /// Overwrite only defined: a source hit with no target hit point goes onto a target slider tick within the leniency,
+    /// as a new mixed sample (a green line switches the tick to its index and reverts 5 ms later).
+    /// </summary>
+    public bool CopyToSliderTicks { get; init; }
+
+    /// <summary>Overwrite only defined: a source hit with no hit point or tick goes onto the slide of a slider there, as a new mixed sample.</summary>
+    public bool CopyToSliderSlides { get; init; }
+
+    /// <summary>The first custom index new mixed samples may use (higher ones when it's taken).</summary>
+    public int StartIndex { get; init; } = 100;
+
     /// <summary>Mute target slider (and spinner) ends the source has nothing for, filtered by snap and length.</summary>
     public bool MuteSliderEnds { get; init; }
 
@@ -77,36 +89,92 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
     /// <summary>Slider bodies to set (by the target object's place in [HitObjects]): the slider's own sound flags and sets.</summary>
     public IReadOnlyList<(int Object, HitSound Sound, SampleSet Normal, SampleSet Addition)> Bodies { get; init; } = [];
 
-    /// <summary>Writes what the compiler doesn't (slider bodies, storyboard samples) into a compiled copy of the target.</summary>
+    /// <summary>New mixed samples for slider ticks and slides (written into the mapset before the .osu).</summary>
+    public IReadOnlyList<MixFile> Mixes { get; init; } = [];
+
+    /// <summary>Green lines for those samples: at a tick or inside a slide; ticks get the old settings back 5 ms later.</summary>
+    public IReadOnlyList<(double Time, SampleSet Set, int Index, int Volume, bool Revert)> GreenLines { get; init; } = [];
+
+    /// <summary>Sliders whose own sample set becomes auto, so the green lines decide their ticks and slide.</summary>
+    public IReadOnlyList<int> AutoSliders { get; init; } = [];
+
+    /// <summary>Writes what the compiler doesn't (slider bodies, tick and slide samples, storyboard samples) into a compiled copy.</summary>
     public void ApplyExtras(OsuFile file)
     {
         foreach (var (index, sound, normal, addition) in Bodies)
+            SetBody(file.HitObjects[index], s => s with { NormalSet = normal, AdditionSet = addition }, sound);
+        foreach (var index in AutoSliders)
+            SetBody(file.HitObjects[index], s => s with { NormalSet = SampleSet.None }, null);
+
+        foreach (var (time, set, index, volume, revert) in GreenLines)
         {
-            var slider = file.HitObjects[index];
-            try
-            {
-                // Write out every node's sound and sets first: a slider without edge fields plays its own on the nodes.
-                var sounds = slider.NodeSounds;
-                var sets = slider.NodeSets;
-                slider.SetNodeSound(sounds.Length - 1, sounds[^1]);
-                slider.SetNodeSet(0, sets[0].Normal, sets[0].Addition);
-                slider.HitSound = sound;
-                slider.HitSample = (slider.HitSample ?? default) with { NormalSet = normal, AdditionSet = addition };
-            }
-            catch (Exception ex) when (ex is FormatException or InvalidOperationException or ArgumentException)
-            {
-                // A line that can't be rewritten safely keeps its body sounds.
-            }
+            var timing = new TimingPointIndex(file.TimingPoints);
+            // The settings in force just after the tick, to give back 5 ms later (read before the new line goes in).
+            string? back = revert && timing.PointAt(time + 5) is { } after ? LineLike(after, time + 5, after.SampleSet ?? SampleSet.None, after.SampleIndex ?? 0, after.Volume ?? 100) : null;
+            if ((timing.PointAt(time) ?? file.TimingPoints.FirstOrDefault()) is not { } now) continue;
+            file.InsertTimingPoint(LineLike(now, time, set, index, volume));
+            if (back is not null) file.InsertTimingPoint(back);
         }
 
         if (ClearSamples)
             foreach (var sample in Storyboard.SampleLines(file).ToList()) file.RemoveLine(sample.Line);
         foreach (var (text, time) in SamplesToAdd) file.InsertStoryboardSample(text, time);
     }
+
+    // A green line at `time` with these sounds, keeping the slider velocity, meter and effects of `like`.
+    private static string LineLike(TimingPoint like, double time, SampleSet set, int index, int volume) =>
+        TimingPoint.FormatLine(time, like.Uninherited ? "-100" : like.BeatLengthText, like.Meter, set, index, volume, false, like.Effects);
+
+    // A slider's own sound flags and sets, with its node sounds written out first (a slider without edge fields plays its
+    // own on the nodes). A line that can't be rewritten safely is left as it is.
+    private static void SetBody(HitObject slider, Func<HitSample, HitSample> sets, HitSound? sound)
+    {
+        try
+        {
+            var nodeSounds = slider.NodeSounds;
+            var nodeSets = slider.NodeSets;
+            slider.SetNodeSound(nodeSounds.Length - 1, nodeSounds[^1]);
+            slider.SetNodeSet(0, nodeSets[0].Normal, nodeSets[0].Addition);
+            if (sound is { } s) slider.HitSound = s;
+            slider.HitSample = sets(slider.HitSample ?? default);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidOperationException or ArgumentException)
+        {
+        }
+    }
+}
+
+/// <summary>
+/// Custom indexes for Copy hitsounds' new tick and slide samples: from the start index up, skipping every index the
+/// mapset's difficulties and files use, and one per mix (equal mixes share a file, across all the targets).
+/// </summary>
+public sealed class CustomSampleIndexes(MapFolder folder, int start)
+{
+    private readonly HashSet<int> used = [.. HitsoundDiff.IndexesUsed(folder, except: null), .. folder.Files.Select(HitsoundDiff.IndexOf).OfType<int>()];
+    private readonly Dictionary<string, (MixFile Mix, int Index)> mixes = [];
+    private int next = Math.Max(start, 2);
+
+    /// <summary>The sample for these sounds as a slider tick or slide in a sample set: a new file name and index, or the one given before.</summary>
+    public (MixFile Mix, int Index) For(IEnumerable<Lane> lanes, string role, SampleSet set)
+    {
+        var layers = MixPlanner.Normalize(lanes.Select(l => (l, 100)));
+        string key = $"{HitsoundRules.SampleName(set, role)}|{MixFile.SignatureOf(layers)}";
+        if (mixes.TryGetValue(key, out var found)) return found;
+        while (used.Contains(next)) next++;
+        used.Add(next);
+        return mixes[key] = (new MixFile($"{HitsoundRules.SampleName(set, role)}{next}.wav", layers), next++);
+    }
 }
 
 /// <summary>One target of <see cref="HitsoundCopier.CopyTo"/>: what changed, the backup, or why it wasn't written.</summary>
-public sealed record HitsoundCopyTarget(string Path, int Matched, int Changed, int Conflicts, string? Backup, string? Error, int Muted = 0);
+public sealed record HitsoundCopyTarget(string Path, int Matched, int Changed, int Conflicts, string? Backup, string? Error, int Muted = 0)
+{
+    /// <summary>New tick and slide sample files written into the mapset.</summary>
+    public int Generated { get; init; }
+
+    /// <summary>Source hits put onto slider ticks and slides.</summary>
+    public int OnTicksAndSlides { get; init; }
+}
 
 /// <summary>
 /// Copy hitsounds: Mapping Tools' Hitsound Copier on the editor's lanes. Each source hit point goes to the nearest
@@ -118,7 +186,9 @@ public static class HitsoundCopier
 {
     private static readonly string[] HitSoundNames = ["hitnormal", "hitwhistle", "hitfinish", "hitclap"];
 
-    public static HitsoundCopyPlan Plan(OsuFile source, MapFolder sourceFolder, OsuFile target, MapFolder targetFolder, HitsoundCopyOptions options)
+    /// <param name="indexes">Hands out the custom indexes for new tick and slide samples; without it those aren't made.</param>
+    public static HitsoundCopyPlan Plan(OsuFile source, MapFolder sourceFolder, OsuFile target, MapFolder targetFolder, HitsoundCopyOptions options,
+        CustomSampleIndexes? indexes = null)
     {
         if (!double.IsFinite(options.Leniency) || options.Leniency < 0)
             throw new ArgumentOutOfRangeException(nameof(options), options.Leniency, "The leniency must be a number of milliseconds, 0 or more.");
@@ -133,6 +203,7 @@ public static class HitsoundCopier
         var targets = to.Moments.OrderBy(m => m.Time).ToArray();
         var times = targets.Select(m => m.Time - to.Settings.TimeOffset).ToArray();
         var matched = new Dictionary<int, Moment>();
+        var unmatched = new List<Moment>();
         int matches = 0;
         if (options.CopyHitsounds)
             foreach (var s in from.Moments)
@@ -143,6 +214,7 @@ public static class HitsoundCopier
                     matched[i] = s;
                     matches++;
                 }
+                else unmatched.Add(s);
             }
 
         var wanted = new Dictionary<MomentKey, WantedSound>();
@@ -201,6 +273,8 @@ public static class HitsoundCopier
             }
 
         var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted) { Bodies = Bodies(targets, matched, objectIndex, options) };
+        if (indexes is not null && options is { Mode: CopyMode.OverwriteOnlyDefined, CopyHitsounds: true } && (options.CopyToSliderTicks || options.CopyToSliderSlides))
+            plan = TicksAndSlides(plan, unmatched, from.Settings.TimeOffset, to, objectIndex, options, indexes);
         if (!options.CopyStoryboardedSamples) return plan;
 
         // Storyboard samples (Mapping Tools): Overwrite everything clears the target's first; a sample is skipped when a
@@ -225,6 +299,53 @@ public static class HitsoundCopier
         }
 
         return plan with { SamplesToAdd = add, ClearSamples = clear };
+    }
+
+    /// <summary>
+    /// Copy to slider ticks / slides (Mapping Tools' smart mode): a source hit no target hit point matched goes onto a
+    /// target slider tick within the leniency (each tick once), else onto the slide of a slider at that time, as a new
+    /// mixed sample on its own index. Ticks are done first, as in MT, so a slide never takes a tick's time.
+    /// </summary>
+    private static HitsoundCopyPlan TicksAndSlides(HitsoundCopyPlan plan, List<Moment> unmatched, double sourceOffset, DecompiledMap to,
+        Dictionary<HitObject, int> objectIndex, HitsoundCopyOptions options, CustomSampleIndexes indexes)
+    {
+        double offset = to.Settings.TimeOffset;
+        var ticks = to.Passive.Where(p => p is { Kind: PassiveKind.SliderTick, Object: not null }).Select(p => (Time: p.Time - offset, Slider: p.Object!)).OrderBy(t => t.Time).ToList();
+        var slides = to.Passive.Where(p => p is { Kind: PassiveKind.SliderSlide, Object: not null }).Select(p => (Start: p.Time - offset, End: p.EndTime - offset, Slider: p.Object!)).ToList();
+        var taken = new HashSet<int>();
+        var mixes = new List<MixFile>();
+        var lines = new List<(double, SampleSet, int, int, bool)>();
+        var auto = new HashSet<int>();
+        var later = new List<(Moment Hit, double Time)>();
+
+        void Add(Moment hit, double at, HitObject slider, string role, bool revert)
+        {
+            var set = hit.Hits.Select(h => h.Lane.Sample).FirstOrDefault(s => s?.Sound == "hitnormal")?.Set ?? SampleSet.Normal;
+            var (mix, index) = indexes.For(hit.Hits.Select(h => h.Lane), role, set);
+            if (mix.Layers.Count == 0) return;
+            if (!mixes.Contains(mix)) mixes.Add(mix);
+            // On a whole millisecond, as osu!'s editor writes them (a tick's time is computed: 999.9999…); sounds read
+            // timing points 5 ms after their time, so the line still covers the tick.
+            lines.Add((Math.Round(at), set, index, hit.Volume, revert));
+            auto.Add(objectIndex[slider]);
+        }
+
+        foreach (var hit in unmatched)
+        {
+            double time = hit.Time - sourceOffset;
+            if (options.CopyToSliderTicks && ticks.FirstOrDefault(t => Math.Abs(t.Time - time) <= options.Leniency && !taken.Contains((int)t.Time)) is { Slider: not null } tick)
+            {
+                taken.Add((int)tick.Time);
+                Add(hit, tick.Time, tick.Slider, "slidertick", revert: true);
+            }
+            else if (options.CopyToSliderSlides) later.Add((hit, time));
+        }
+
+        foreach (var (hit, time) in later)
+            if (!taken.Contains((int)time) && slides.FirstOrDefault(s => s.Start < time && s.End > time) is { Slider: not null } slide)
+                Add(hit, time, slide.Slider, "sliderslide", revert: false);
+
+        return plan with { Mixes = mixes, GreenLines = lines, AutoSliders = [.. auto] };
     }
 
     /// <summary>
@@ -289,17 +410,44 @@ public static class HitsoundCopier
     /// Copies into each target .osu and saves it like Save .osu: refused when it changed on disk, with a backup outside
     /// the mapset, and only when something changes. A target that can't be read or written is reported, not thrown.
     /// </summary>
-    public static IReadOnlyList<HitsoundCopyTarget> CopyTo(OsuFile source, MapFolder sourceFolder, IEnumerable<string> targetPaths, HitsoundCopyOptions options, string backupRoot)
+    /// <param name="render">Mixes a new tick or slide sample into WAV bytes (null when it can't); without it none are made.</param>
+    public static IReadOnlyList<HitsoundCopyTarget> CopyTo(OsuFile source, MapFolder sourceFolder, IEnumerable<string> targetPaths, HitsoundCopyOptions options, string backupRoot,
+        Func<MixFile, byte[]?>? render = null)
     {
         var results = new List<HitsoundCopyTarget>();
+        CustomSampleIndexes? indexes = null;
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in targetPaths)
         {
             try
             {
                 var doc = MapDocument.Load(path);
-                var plan = Plan(source, sourceFolder, doc.File, doc.Folder, options);
+                if (render is not null) indexes ??= new CustomSampleIndexes(doc.Folder, options.StartIndex); // one set of indexes for the mapset
+                var plan = Plan(source, sourceFolder, doc.File, doc.Folder, options, indexes);
+
+                // New tick and slide samples go into the mapset first. If one can't be made, this target gets none of them
+                // (a green line to a missing file would play the skin, and the sliders would lose their own sample set).
+                int generated = 0;
+                if (render is not null && plan.Mixes.Count > 0)
+                {
+                    var dir = Path.GetDirectoryName(doc.Path)!;
+                    var made = plan.Mixes.Where(m => written.Contains(m.FileName) || File.Exists(Path.Combine(dir, m.FileName)))
+                        .ToDictionary(m => m, _ => (byte[]?)null);
+                    foreach (var mix in plan.Mixes.Where(m => !made.ContainsKey(m))) made[mix] = render(mix);
+                    if (made.Any(kv => kv.Value is null && !written.Contains(kv.Key.FileName) && !File.Exists(Path.Combine(dir, kv.Key.FileName))))
+                        plan = plan with { Mixes = [], GreenLines = [], AutoSliders = [] };
+                    else
+                        foreach (var (mix, bytes) in made.Where(kv => kv.Value is not null))
+                        {
+                            SafeFile.WriteAllBytes(Path.Combine(dir, mix.FileName), bytes!);
+                            written.Add(mix.FileName);
+                            generated++;
+                        }
+                }
+
                 var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot, alsoEdit: plan.ApplyExtras);
-                results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null, plan.Muted));
+                results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null, plan.Muted)
+                    { Generated = generated, OnTicksAndSlides = plan.GreenLines.Count });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException)
             {

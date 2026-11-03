@@ -354,6 +354,7 @@ public partial class MainWindow
 
         bool fromOpen = string.Equals(sourcePath, document.Path, StringComparison.OrdinalIgnoreCase);
         var state = session.State;
+        var skinSounds = skin.Value;
         flash = "Copying hitsounds…";
         UpdateStatus();
         IReadOnlyList<HitsoundCopyTarget> results;
@@ -365,7 +366,24 @@ public partial class MainWindow
                 var (source, folder) = fromOpen
                     ? (document.Compile(state).File, document.Folder)
                     : (OsuFile.Read(sourcePath), MapFolder.FromDirectory(Path.GetDirectoryName(sourcePath)!));
-                return HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot());
+                // New tick and slide samples are mixed from the source's files (and the default sounds), as Generate mixes.
+                var decoded = new Dictionary<Lane, float[]?>();
+                byte[]? Render(MixFile mix)
+                {
+                    var layers = mix.Layers.Select(l =>
+                    {
+                        if (!decoded.TryGetValue(l.Lane, out var stereo))
+                        {
+                            var bytes = l.Lane.Source == LaneSource.Skin ? skinSounds.GetValueOrDefault(l.Lane.Name) : folder.Find(l.Lane.Name) is { } f ? folder.ReadBytes(f) : null;
+                            decoded[l.Lane] = stereo = bytes is null ? null : SampleMixer.Decode(bytes);
+                        }
+
+                        return (Stereo: stereo, Gain: l.Volume / 100f);
+                    }).Where(l => l.Stereo is not null).Select(l => (l.Stereo!, l.Gain)).ToList();
+                    return layers.Count == 0 ? null : SampleMixer.Mix(layers);
+                }
+
+                return HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), Render);
             });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
@@ -381,6 +399,7 @@ public partial class MainWindow
         flash = $"Copied hitsounds into {written} of {results.Count} difficult{(results.Count == 1 ? "y" : "ies")} " +
                 $"({results.Sum(r => r.Matched)} hits matched, {results.Sum(r => r.Changed)} hit points changed)." +
                 (results.Sum(r => r.Muted) is > 0 and var mutedEnds ? $" {mutedEnds} slider ends muted." : "") +
+                (results.Sum(r => r.OnTicksAndSlides) is > 0 and var onSliders ? $" {onSliders} hits put on slider ticks and slides ({results.Sum(r => r.Generated)} new samples)." : "") +
                 (conflicts > 0 ? $" {conflicts} couldn't be saved as copied and kept their old sounds." : "") +
                 (failed.Count > 0 ? $" Not written: {string.Join("; ", failed.Select(f => $"{Path.GetFileName(f.Path)} ({f.Error})"))}." : "") +
                 " Backups are in the editor's backups folder.";

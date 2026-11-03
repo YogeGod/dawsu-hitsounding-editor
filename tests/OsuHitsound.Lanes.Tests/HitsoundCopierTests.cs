@@ -194,6 +194,77 @@ public class HitsoundCopierTests
         Assert.Single(Body(defined, PassiveKind.SliderWhistle));
     }
 
+    private static readonly HitsoundCopyOptions OntoSliders = new() { Mode = CopyMode.OverwriteOnlyDefined, CopyBodyHitsounds = false, CopyToSliderTicks = true, CopyToSliderSlides = true };
+
+    private static (HitsoundCopyPlan Plan, OsuFile After) CopyOnto(OsuFile source, OsuFile target, HitsoundCopyOptions options, MapFolder? folder = null)
+    {
+        var plan = HitsoundCopier.Plan(source, NoFiles, target, folder ?? NoFiles, options, new CustomSampleIndexes(folder ?? NoFiles, options.StartIndex));
+        var copy = OsuFile.Parse(target.ToBytes());
+        Compiler.Apply(copy, folder ?? NoFiles, plan.Wanted);
+        plan.ApplyExtras(copy);
+        return (plan, OsuFile.Parse(copy.ToBytes()));
+    }
+
+    [Fact]
+    public void A_hit_on_a_slider_body_goes_onto_its_slide_without_a_revert_line()
+    {
+        // MT: a hit at 500 in the source; the target has a one-beat slider from 0 to 1000 and no hit point near 500.
+        var (plan, after) = CopyOnto(Circles((500, 0)), Sliders("256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:"), OntoSliders with { CopyToSliderTicks = false });
+
+        Assert.Equal(["normal-sliderslide100.wav"], plan.Mixes.Select(m => m.FileName));
+        var line = Assert.Single(after.TimingPoints, p => p.Time == 500);
+        Assert.Equal(100, line.SampleIndex);
+        Assert.DoesNotContain(after.TimingPoints, p => p.Time == 505);
+    }
+
+    [Fact]
+    public void A_hit_near_a_slider_tick_goes_onto_the_tick_and_the_old_settings_come_back_5_ms_later()
+    {
+        // A two-beat slider (0 to 2000) has a tick at 1000; the source hit is at 1003, within the 5 ms leniency.
+        var target = Sliders("256,192,0,2,0,L|396:192,1,280,0|0,0:0|0:0,0:0:0:0:");
+
+        var (plan, after) = CopyOnto(Circles((1003, 8)), target, OntoSliders);
+
+        Assert.Equal(["normal-slidertick100.wav"], plan.Mixes.Select(m => m.FileName));
+        Assert.Equal(100, Assert.Single(after.TimingPoints, p => p.Time == 1000).SampleIndex);
+        Assert.Equal(0, Assert.Single(after.TimingPoints, p => p.Time == 1005).SampleIndex);
+        Assert.Equal(SampleSet.None, after.HitObjects[0].HitSample!.Value.NormalSet); // auto: the green lines decide
+    }
+
+    [Fact]
+    public void New_samples_skip_indexes_the_mapset_already_uses_and_equal_mixes_share_one()
+    {
+        var folder = new MapFolder(["normal-hitnormal100.wav"]);
+        var target = Sliders("256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:", "256,192,2000,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:");
+
+        var (plan, _) = CopyOnto(Circles((500, 2), (2500, 2)), target, OntoSliders with { CopyToSliderTicks = false }, folder);
+
+        Assert.Equal(["normal-sliderslide101.wav"], plan.Mixes.Select(m => m.FileName));
+        Assert.Equal(2, plan.GreenLines.Count);
+    }
+
+    [Fact]
+    public void Copying_onto_sliders_writes_the_new_sample_into_the_mapset()
+    {
+        var dir = Directory.CreateTempSubdirectory("hse-copy-").FullName;
+        try
+        {
+            var target = Path.Combine(dir, "Band - Song (Me) [Insane].osu");
+            File.WriteAllBytes(target, Sliders("256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:").ToBytes());
+
+            var result = Assert.Single(HitsoundCopier.CopyTo(Circles((500, 0)), NoFiles, [target], OntoSliders with { CopyToSliderTicks = false },
+                Path.Combine(dir, "backups"), render: _ => [1, 2, 3]));
+
+            Assert.Equal(1, result.Generated);
+            Assert.Equal([1, 2, 3], File.ReadAllBytes(Path.Combine(dir, "normal-sliderslide100.wav")));
+            Assert.Contains(OsuFile.Read(target).TimingPoints, p => p.Time == 500 && p.SampleIndex == 100);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // A map with storyboard sample lines in [Events], and circles.
     private static OsuFile WithSamples(string[] samples, params (int Time, string Sample)[] circles) => OsuFile.Parse(Encoding.UTF8.GetBytes(
         "osu file format v14\r\n\r\n[General]\r\nSampleSet: Normal\r\n\r\n[Events]\r\n//Storyboard Sound Samples\r\n" +

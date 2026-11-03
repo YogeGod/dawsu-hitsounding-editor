@@ -184,6 +184,19 @@ internal static class Dialogs
             storyboardOptions.Children.AddRange([satisfied, whenever]);
             storyboard.IsCheckedChanged += (_, _) => storyboardOptions.IsEnabled = storyboard.IsChecked == true;
 
+            // Copy to slider ticks / slides (Overwrite only defined): new mixed samples from the start index up.
+            var ticks = Option("Copy to slider ticks", defaults.CopyToSliderTicks, "A source hit with no target hit point goes onto a slider tick within the leniency, as a new mixed sample.");
+            var slides = Option("Copy to slider slides", defaults.CopyToSliderSlides, "A source hit with no hit point or tick goes onto the slide of a slider there, as a new mixed sample.");
+            var startIndex = new TextBox { Text = defaults.StartIndex.ToString(CultureInfo.InvariantCulture), Width = 80 };
+            var startRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            startRow.Children.AddRange([new TextBlock { Text = "Start index", VerticalAlignment = VerticalAlignment.Center }, startIndex]);
+            ToolTip.SetTip(startRow, "The first custom index the new samples use; taken ones are skipped.");
+            var onSliders = new StackPanel { Spacing = 2 };
+            onSliders.Children.AddRange([ticks, slides, startRow]);
+            void OnlyDefinedOptions() => onSliders.IsEnabled = mode.SelectedIndex == 1;
+            mode.SelectionChanged += (_, _) => OnlyDefinedOptions();
+            OnlyDefinedOptions();
+
             // Mute slider ends (Mapping Tools' filter): snaps in priority order, the muted ones, length, index and set.
             var mute = Option("Mute slider ends", defaults.MuteSliderEnds, "Target slider ends the source has nothing for, with no additions, play a hitnormal at 5 % when they pass the filter below.");
             static string List(IEnumerable<int> divisors) => string.Join(", ", divisors);
@@ -233,7 +246,7 @@ internal static class Dialogs
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
-                hitsounds, bodySounds, sets, volumes, keep5, storyboard, storyboardOptions, mute, muteGrid,
+                hitsounds, bodySounds, sets, volumes, keep5, onSliders, storyboard, storyboardOptions, mute, muteGrid,
                 new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);
@@ -245,6 +258,7 @@ internal static class Dialogs
                 else if (Divisors(snaps.Text) is not { } beatDivisors || Divisors(mutedSnaps.Text) is not { } muted) problem.Text = "Snaps are whole numbers 1–64 (1 = a beat, 4 = 1/4), separated by commas.";
                 else if (!OsuNumber.TryParseDouble(minLength.Text ?? "", out double beats) || !double.IsFinite(beats) || beats < 0) problem.Text = "The minimum length is a number of beats, 0 or more.";
                 else if (!string.IsNullOrWhiteSpace(mutedIndex.Text) && !(OsuNumber.TryParseInt(mutedIndex.Text, out int ix) && ix >= 0)) problem.Text = "The muted index is a whole number, 0 or more (or blank).";
+                else if (!OsuNumber.TryParseInt(startIndex.Text ?? "", out int start) || start < 2) problem.Text = "The start index is a whole number, 2 or more.";
                 else
                     close((difficulties[Math.Max(0, source.SelectedIndex)].Path, chosen, defaults with
                     {
@@ -255,6 +269,9 @@ internal static class Dialogs
                         CopySampleSets = sets.IsChecked == true,
                         CopyVolumes = volumes.IsChecked == true,
                         AlwaysPreserve5Volume = keep5.IsChecked == true,
+                        CopyToSliderTicks = ticks.IsChecked == true,
+                        CopyToSliderSlides = slides.IsChecked == true,
+                        StartIndex = start,
                         CopyStoryboardedSamples = storyboard.IsChecked == true,
                         IgnoreHitsoundSatisfiedSamples = satisfied.IsChecked == true,
                         IgnoreWheneverHitsound = whenever.IsChecked == true,
