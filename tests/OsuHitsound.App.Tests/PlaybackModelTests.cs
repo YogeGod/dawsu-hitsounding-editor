@@ -50,11 +50,40 @@ public class PlaybackModelTests
             ["drum-hitnormal2.wav", "drum-hitclap2.wav", "drum-hitclap3.ogg"]);
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
 
-        Assert.Equal([LaneGroup.DrumSet, LaneGroup.Skin], model.Rows.OfType<GroupRow>().Select(g => g.Group));
+        // The default sounds sit in their own set's group: no separate skin group.
+        Assert.Equal([LaneGroup.SoftSet, LaneGroup.NormalSet, LaneGroup.DrumSet], model.Rows.OfType<GroupRow>().Select(g => g.Group));
         Assert.Equal(Enumerable.Range(1, model.LaneRows.Count), model.LaneRows.Select(r => r.Number));
         Assert.Equal(3, model.LaneRows.Single(r => r.Lane.Name == "drum-hitclap3.ogg").Index);
         Assert.All(model.LaneRows.Where(r => r.Lane.Source == LaneSource.Skin), r => Assert.Equal(0, r.Index));
         Assert.Equal(12, model.LaneRows.Count(r => r.Lane.Source == LaneSource.Skin)); // every skin sound can be drawn
+    }
+
+    [Fact]
+    public void Each_sampleset_group_starts_with_its_default_sounds_in_osu_order()
+    {
+        // A whistle and a clap from index 3 files, plus the hitnormal from index 2: files sit under their default sound.
+        var (map, file) = Load("0,500,4,3,3,100,1,0\n1500,500,4,3,2,100,0,0", "256,192,1000,1,10,0:0:0:0:\n256,192,1500,1,0,0:0:0:0:",
+            ["drum-hitclap3.ogg", "drum-hitwhistle3.wav", "drum-hitnormal2.wav", "drum-hitnormal3.wav"]);
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
+
+        Assert.Equal(["drum-hitnormal", "drum-hitnormal2.wav", "drum-hitnormal3.wav", "drum-hitwhistle", "drum-hitwhistle3.wav", "drum-hitfinish", "drum-hitclap", "drum-hitclap3.ogg"],
+            model.LaneRows.Where(r => r.Group == LaneGroup.DrumSet).Select(r => r.Lane.Name));
+        Assert.Equal(LaneGroup.SoftSet, ArrangeModel.DisplayGroup(new Lane(LaneSource.Skin, "soft-hitclap")));
+        Assert.Equal(LaneGroup.Skin, new Lane(LaneSource.Skin, "soft-hitclap").Group); // the map's own grouping is unchanged
+    }
+
+    [Fact]
+    public void The_built_in_default_sounds_fill_in_what_lazer_does_not_have()
+    {
+        var bundled = DefaultSkin.Bundled();
+        Assert.Equal(12, bundled.Count);
+        Assert.All(bundled.Values, wav => Assert.Equal("RIFF"u8.ToArray(), wav[..4]));
+
+        var lazerClap = new byte[] { 1, 2, 3 };
+        var merged = DefaultSkin.WithFallback(new Dictionary<string, byte[]> { ["soft-hitclap"] = lazerClap, ["soft-slidertick"] = lazerClap });
+        Assert.Same(lazerClap, merged["soft-hitclap"]); // lazer's own sound wins
+        Assert.Equal(bundled["drum-hitnormal"], merged["drum-hitnormal"]);
+        Assert.Equal(13, merged.Count);
     }
 
     [Fact]
@@ -64,10 +93,11 @@ public class PlaybackModelTests
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
         int before = model.Rows.Count;
 
-        model.ToggleCollapsed(LaneGroup.Skin);
+        model.ToggleCollapsed(LaneGroup.SoftSet);
 
-        Assert.Single(model.Rows);
-        Assert.True(before > 1);
+        Assert.Contains(model.Rows.OfType<GroupRow>(), g => g.Group == LaneGroup.SoftSet);
+        Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Group == LaneGroup.SoftSet);
+        Assert.Equal(before - 4, model.Rows.Count);
     }
 
     [Fact]
@@ -75,7 +105,7 @@ public class PlaybackModelTests
     {
         var (map, file) = Load("0,500,4,2,0,100,1,0", "256,192,1000,1,8,0:0:0:0:");
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
-        var (normal, clap) = (model.LaneRows[0].Lane, model.LaneRows[1].Lane);
+        var (normal, clap) = (model.LaneRows.Single(r => r.Lane.Name == "soft-hitnormal").Lane, model.LaneRows.Single(r => r.Lane.Name == "soft-hitclap").Lane);
 
         model.ToggleSolo(clap);
         Assert.False(model.IsAudible(normal));
@@ -84,7 +114,7 @@ public class PlaybackModelTests
         model.ToggleMute(clap);
         Assert.False(model.IsAudible(clap));
 
-        model.ToggleGroupSolo(LaneGroup.Skin);
+        model.ToggleGroupSolo(LaneGroup.SoftSet);
         Assert.True(model.IsAudible(normal));
     }
 

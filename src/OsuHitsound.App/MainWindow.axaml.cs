@@ -212,6 +212,26 @@ public partial class MainWindow : Window
 
         UpdateStatus();
         if (path is not null) Open(path);
+        else Loading = ShowDefaultLanes();
+    }
+
+    /// <summary>Before a map is opened: the default lanes in their sampleset groups, to listen to; the grid stays empty.</summary>
+    private async Task ShowDefaultLanes()
+    {
+        int number = loadNumber;
+        var file = OsuFile.Parse("osu file format v14\r\n\r\n[General]\r\nSampleSet: Normal\r\n\r\n[TimingPoints]\r\n0,500,4,1,0,100,1,0\r\n"u8.ToArray());
+        var folder = new MapFolder([]);
+        var map = Decompiler.Decompile(file, folder);
+        var placeholder = new EditSession(file, folder, map);
+        var skinSounds = skin;
+        await Task.Run(() => _ = skinSounds.Value); // reading lazer's sounds can take a moment
+        if (number != loadNumber || doc is not null) return; // a map was opened meanwhile
+
+        audio?.Load(map with { Lanes = placeholder.Lanes }, folder, skin.Value);
+        var preview = new ArrangeModel(placeholder, file, audio?.SilentLanes ?? new HashSet<Lane>());
+        if (audio is not null) audio.IsAudible = preview.IsAudible;
+        Lanes.IsPreview = true;
+        Lanes.SetModel(preview);
     }
 
     private int loadNumber; // a newer Open makes an older one still loading drop its result
@@ -256,6 +276,7 @@ public partial class MainWindow : Window
             model.PreviewMutesChanged += ScheduleProjectSave;
             model.Changed += UpdateSongMute; // soloing a lane silences the song
 
+            Lanes.IsPreview = false;
             Lanes.SetModel(model);
             Lanes.Axis.End = Math.Max(audio?.Length ?? 0, model.LastTime);
             Lanes.Axis.Left = map.Moments.Count > 0 ? map.Moments[0].Time - 500 : 0;
@@ -1195,15 +1216,16 @@ public partial class MainWindow : Window
         return $"{where} at {FormatTime(m.Time)}";
     }
 
+    // lazer's default sounds when it's installed; the built-in ones fill in whatever it doesn't have.
     private static IReadOnlyDictionary<string, byte[]> LoadSkin(string? preferred)
     {
         try
         {
-            return DefaultSkin.FindLazerResources(preferred) is { } dll ? DefaultSkin.LoadSamples(dll) : new Dictionary<string, byte[]>();
+            return DefaultSkin.WithFallback(DefaultSkin.FindLazerResources(preferred) is { } dll ? DefaultSkin.LoadSamples(dll) : []);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException or ArgumentException or OverflowException)
         {
-            return new Dictionary<string, byte[]>();
+            return DefaultSkin.Bundled();
         }
     }
 }

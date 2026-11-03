@@ -180,6 +180,9 @@ internal sealed class ArrangeView : Control
     /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
     public bool ShowIndexes { get; set; }
 
+    /// <summary>Before a map is opened: the default lanes are shown to listen to, and the grid can't be drawn in.</summary>
+    public bool IsPreview { get; set; }
+
     public IReadOnlyCollection<EditHit> Selection => selection;
 
     /// <summary>The moments the selected hits play on.</summary>
@@ -347,6 +350,8 @@ internal sealed class ArrangeView : Control
 
         DrawHeader(ctx, model, lines, size.Width, gridWidth);
         ctx.DrawLine(Paint.DividerPen, new Point(GridLeft - 0.5, 0), new Point(GridLeft - 0.5, size.Height));
+        if (IsPreview)
+            Paint.DrawText(ctx, "Open a map to start drawing (Ctrl+O). Click a lane's ● to hear its sound.", new Point(GridLeft + 20, HeaderHeight + 20), Paint.BaseSize, Paint.Dim, 0);
     }
 
     /// <summary>The design's conflict marking: red 135° stripes down the whole column of a moment that won't save.</summary>
@@ -891,6 +896,8 @@ internal sealed class ArrangeView : Control
         var point = e.GetCurrentPoint(this);
         var p = point.Position;
         bool additive = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        // Before a map is opened only the lane list's buttons work: there is nothing to draw on yet.
+        if (IsPreview && (p.Y < HeaderHeight || p.X >= GridLeft || !point.Properties.IsLeftButtonPressed)) return;
 
         if (p.Y < HeaderHeight)
         {

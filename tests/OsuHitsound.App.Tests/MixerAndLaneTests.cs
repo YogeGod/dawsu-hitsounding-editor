@@ -55,13 +55,13 @@ public class MixerAndLaneTests
     public void Lanes_can_be_renamed_moved_added_hidden_and_filtered()
     {
         var model = Model();
-        var skin = model.LaneRows.Where(r => r.Group == LaneGroup.Skin).Select(r => r.Lane).ToList();
+        var skin = model.LaneRows.Where(r => r.Group == LaneGroup.SoftSet && r.Lane.Source == LaneSource.Skin).Select(r => r.Lane).ToList();
 
         model.RenameLane(skin[0], "Big clap");
         Assert.Equal("Big clap", model.NameOf(skin[0]));
 
         model.MoveLane(skin[1], -1);
-        Assert.Equal(skin[1], model.LaneRows.First(r => r.Group == LaneGroup.Skin).Lane);
+        Assert.Equal(skin[1], model.LaneRows.First(r => r.Group == LaneGroup.SoftSet).Lane);
 
         var boom = new Lane(LaneSource.BeatmapFile, "boom.wav");
         model.AddLane(boom);
@@ -89,5 +89,19 @@ public class MixerAndLaneTests
 
         Assert.Equal("renamed", fresh.NameOf(lane));
         Assert.Equal(model.LaneRows.Select(r => r.Lane), fresh.LaneRows.Select(r => r.Lane));
+    }
+
+    [Fact]
+    public void A_lane_order_from_a_version_1_project_is_ignored_but_its_names_are_kept()
+    {
+        var model = Model();
+        var lane = model.LaneRows[1].Lane;
+        var defaultOrder = model.LaneRows.Select(r => r.Lane).ToList();
+        var reversed = defaultOrder.Select(ProjectStore.KeyOf).Reverse().ToList();
+
+        model.ApplyLaneLayout(new ProjectData { Version = 1, LaneOrder = reversed, LaneNames = new() { [ProjectStore.KeyOf(lane)] = "kept" } }, _ => true);
+
+        Assert.Equal(defaultOrder, model.LaneRows.Select(r => r.Lane));
+        Assert.Equal("kept", model.NameOf(lane));
     }
 }

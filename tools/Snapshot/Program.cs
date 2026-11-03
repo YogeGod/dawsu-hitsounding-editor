@@ -22,6 +22,15 @@ AppBuilder.Configure<App>()
     .WithInterFont()
     .SetupWithoutStarting();
 
+// Before a map is opened: the default lanes in their sampleset groups.
+var empty = new MainWindow(null, startAudio: false, showInspector: false, usePreferences: false) { Width = 1920, Height = 1080 };
+empty.Show();
+while (!empty.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
+for (int i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
+AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+empty.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "00-no-map.png"));
+empty.Close();
+
 var window = new MainWindow(args[0], startAudio: false, showInspector: false, usePreferences: false)
 {
     Width = args.Length > 2 ? int.Parse(args[2]) : 1920,

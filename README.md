@@ -78,7 +78,7 @@ Shift or set the volume of the selection, add bookmarks, and click any entry und
 
 ![Sample lanes and the grid](docs/tutorial/lanes-grid.png)
 
-- **Sample lanes**: one lane per sample, grouped by sampleset. Use the filter to find one, and **+** to add a lane for another sample file.
+- **Sample lanes**: grouped by sampleset. Each group starts with osu!'s default sounds (hitnormal, whistle, finish, clap), with the map's own sample files under the sound they replace. The default sounds are built in, so they play even without osu! installed. Use the filter to find a lane, and **+** to add a lane for another sample file.
 - **Lane buttons**: **+** adds a lane, **●** plays the sample, **M** mutes the lane and **S** solos it.
 - **The grid**: your hitsounds in time, left to right. Red-striped columns can't be saved as drawn yet.
 
@@ -122,3 +122,7 @@ dotnet test OsuHitsoundEditor.slnx
 | `tests/` | Automated tests |
 | `tools/` | Screenshot and round-trip tools |
 | `docs/` | Design notes and the tutorial's screenshots |
+
+## Credits
+
+The built-in default hitsounds are from [osu!](https://github.com/ppy/osu-resources) by ppy and contributors, used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Audio playback uses [BASS](https://www.un4seen.com), free for non-commercial use.

@@ -16,7 +16,10 @@ public sealed record ProjectHit(string Lane, double Time);
 /// </summary>
 public sealed record ProjectData
 {
-    public int Version { get; init; } = 1;
+    /// <summary>2 since the lane list puts the default sounds inside each sampleset; a version 1 lane order is ignored.</summary>
+    public int Version { get; init; } = CurrentVersion;
+
+    public const int CurrentVersion = 2;
 
     public List<ProjectHit> Unanchored { get; init; } = [];
 

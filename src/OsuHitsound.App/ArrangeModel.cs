@@ -54,13 +54,13 @@ internal sealed partial class ArrangeModel
         Map = session.Map;
         Silent = silent;
 
-        // Lanes the map uses come first in each group; the other drawable lanes (unused files, skin sounds) follow.
-        var used = Map.Lanes.ToHashSet();
+        // In each sampleset group, as in V6.39: hitnormal, whistle, finish, clap (then slider sounds), each starting with
+        // the default sound and followed by the map's numbered files. Other files keep their place at the end.
         int number = 1;
-        foreach (var group in session.Lanes.GroupBy(l => l.Group).OrderBy(g => g.Key))
+        foreach (var group in session.Lanes.GroupBy(DisplayGroup).OrderBy(g => g.Key))
         {
             int i = 0;
-            foreach (var lane in group.OrderBy(l => used.Contains(l) ? 0 : 1))
+            foreach (var lane in group.OrderBy(SoundOrder).ThenBy(l => l.Sample?.Index ?? int.MaxValue))
                 laneRows.Add(new LaneRow(group.Key, lane, number++, i++, IndexOf(lane)));
         }
 
@@ -125,7 +125,7 @@ internal sealed partial class ArrangeModel
         {
             if (!notes.TryGetValue(hit.Lane, out var list)) notes[hit.Lane] = list = [];
             list.Add(new Note(hit.Time, hit.Time, hit.Lane, hit));
-            if (hit.Anchor is { } key) groups.TryAdd(key, hit.Lane.Group);
+            if (hit.Anchor is { } key) groups.TryAdd(key, DisplayGroup(hit.Lane));
         }
 
         foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
@@ -285,6 +285,21 @@ internal sealed partial class ArrangeModel
     });
 
     public static Color GroupColor(LaneGroup group) => ColorsOf(group)[0];
+
+    /// <summary>A lane's group in the lane list: a default (skin) sound sits in its own sampleset's group.</summary>
+    public static LaneGroup DisplayGroup(Lane lane) => lane.Source == LaneSource.Skin && lane.Sample is { Set: var set } ? set switch
+    {
+        SampleSet.Soft => LaneGroup.SoftSet,
+        SampleSet.Drum => LaneGroup.DrumSet,
+        _ => LaneGroup.NormalSet,
+    } : lane.Group;
+
+    // osu!'s order of the hit sounds; slider sounds next, then files that don't follow the sample naming.
+    private static int SoundOrder(Lane lane) => lane.Sample is { Sound: var sound }
+        ? Array.IndexOf(HitSounds, sound) is >= 0 and var i ? i : HitSounds.Length
+        : HitSounds.Length + 1;
+
+    private static readonly string[] HitSounds = ["hitnormal", "hitwhistle", "hitfinish", "hitclap"];
 
     public static Color ShadeOf(LaneGroup group, int shade)
     {
@@ -509,9 +524,10 @@ internal sealed partial class ArrangeModel
         hidden.Remove(lane);
         if (laneRows.Any(r => r.Lane == lane)) return;
         added.Add(lane);
-        int last = laneRows.FindLastIndex(r => r.Group <= lane.Group);
-        int shade = laneRows.Count(r => r.Group == lane.Group);
-        laneRows.Insert(last + 1, new LaneRow(lane.Group, lane, 0, shade, IndexOf(lane)));
+        var group = DisplayGroup(lane);
+        int last = laneRows.FindLastIndex(r => r.Group <= group);
+        int shade = laneRows.Count(r => r.Group == group);
+        laneRows.Insert(last + 1, new LaneRow(group, lane, 0, shade, IndexOf(lane)));
     });
 
     /// <summary>Hides a lane after its hits were deleted (the file is kept); undoing brings its hits, and the lane, back.</summary>
@@ -547,7 +563,9 @@ internal sealed partial class ArrangeModel
             foreach (var (key, name) in project.LaneNames)
                 if (ProjectStore.LaneOf(key) is { } lane) names[lane] = name;
             foreach (var lane in project.HiddenLanes.Select(ProjectStore.LaneOf).OfType<Lane>()) hidden.Add(lane);
-            var order = project.LaneOrder.Select((k, i) => (k, i)).ToDictionary(x => x.k, x => x.i);
+            // A version 1 order is the old alphabetical layout, saved whether or not lanes were moved: it's dropped.
+            var saved = project.Version >= 2 ? project.LaneOrder : [];
+            var order = saved.Select((k, i) => (k, i)).ToDictionary(x => x.k, x => x.i);
             var sorted = laneRows.OrderBy(r => r.Group).ThenBy(r => order.TryGetValue(ProjectStore.KeyOf(r.Lane), out int i) ? i : int.MaxValue).ToList();
             laneRows.Clear();
             laneRows.AddRange(sorted);

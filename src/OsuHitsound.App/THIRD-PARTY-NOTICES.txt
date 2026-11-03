@@ -1,0 +1,14 @@
+osu! Hitsound Editor - third-party notices
+
+Default hitsounds
+  The 12 classic default hitsounds built into this program (normal, soft and drum
+  hitnormal, hitwhistle, hitfinish and hitclap) are unmodified recordings from osu!
+  Copyright ppy and contributors to the upstream project.
+  Source: https://github.com/ppy/osu-resources (osu.Game.Resources/Skins/Legacy)
+  Licence: Creative Commons Attribution-NonCommercial 4.0 International
+           https://creativecommons.org/licenses/by-nc/4.0/
+  They keep their own noncommercial licence.
+
+Audio playback
+  BASS, BASS_FX, BASSmix and BASSWASAPI by Un4seen Developments (https://www.un4seen.com),
+  free for non-commercial use.

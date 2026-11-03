@@ -40,7 +40,7 @@ internal sealed class OverviewStrip : Control
         if (marksWidth != size.Width)
         {
             marks = [.. model.Map.Moments
-                .SelectMany(m => m.Hits.Select(h => ((int)(m.Time * scale), Array.IndexOf(Groups, h.Lane.Group))))
+                .SelectMany(m => m.Hits.Select(h => ((int)(m.Time * scale), Array.IndexOf(Groups, ArrangeModel.DisplayGroup(h.Lane)))))
                 .Distinct()];
             marksWidth = size.Width;
         }

@@ -205,7 +205,7 @@ internal static class Dialogs
             }
 
             var songs = PathRow(general, "osu! Songs folder (Open starts here)", prefs.SongsFolder, "Not found yet", filePattern: null);
-            var lazer = PathRow(general, "Default sounds: lazer's osu.Game.Resources.dll", prefs.LazerResources, "Blank: the usual lazer install", "osu.Game.Resources.dll");
+            var lazer = PathRow(general, "Default sounds: lazer's osu.Game.Resources.dll", prefs.LazerResources, "Blank: the usual lazer install, else the built-in sounds", "osu.Game.Resources.dll");
 
             general.Children.Add(new TextBlock { Text = "Audio output", FontWeight = FontWeight.SemiBold });
             var device = new ComboBox { ItemsSource = devices.Select(d => d.Name).ToList(), Width = 380 };

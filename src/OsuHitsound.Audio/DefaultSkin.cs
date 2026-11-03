@@ -5,11 +5,37 @@ namespace OsuHitsound.Audio;
 
 /// <summary>
 /// osu!'s classic default hitsounds, read from the osu!lazer install (osu.Game.Resources.dll, "Skins/Legacy"). The
-/// file is only read as data: its embedded resources are copied out and no code from it is loaded or run.
+/// file is only read as data: its embedded resources are copied out and no code from it is loaded or run. The 12 hit
+/// sounds are also built into this library (<see cref="Bundled"/>), for when lazer isn't installed.
 /// </summary>
 public static class DefaultSkin
 {
     private const string Prefix = "osu.Game.Resources.Skins.Legacy.";
+    private const string BundledPrefix = "DefaultSamples.";
+
+    /// <summary>The built-in hit sounds (normal/soft/drum × hitnormal/whistle/finish/clap; no slider sounds).</summary>
+    public static Dictionary<string, byte[]> Bundled()
+    {
+        var samples = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var assembly = typeof(DefaultSkin).Assembly;
+        foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(BundledPrefix, StringComparison.Ordinal)))
+        {
+            using var stream = assembly.GetManifestResourceStream(name)!;
+            using var copy = new MemoryStream();
+            stream.CopyTo(copy);
+            samples[Path.GetFileNameWithoutExtension(name[BundledPrefix.Length..])] = copy.ToArray();
+        }
+
+        return samples;
+    }
+
+    /// <summary>lazer's sounds where it has them, the built-in ones for the rest.</summary>
+    public static Dictionary<string, byte[]> WithFallback(IReadOnlyDictionary<string, byte[]> lazer)
+    {
+        var samples = Bundled();
+        foreach (var (name, data) in lazer) samples[name] = data;
+        return samples;
+    }
 
     /// <summary>Where osu!lazer keeps its resources on Windows, or null when lazer isn't installed.</summary>
     public static string? FindLazerResources(string? preferred = null)

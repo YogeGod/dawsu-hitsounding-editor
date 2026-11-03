@@ -150,7 +150,8 @@ public class HitEditorTests
         int normal = RowOf(e, "soft-hitnormal"), clap = RowOf(e, "soft-hitclap");
 
         e.MarkRange(900, 1600, clap, normal);
-        Assert.Equal(["soft-hitclap", "soft-hitnormal"], e.Range!.Lanes.Select(l => l.Name).Order());
+        // Every lane between the two, both ends included: the defaults run hitnormal, whistle, finish, clap.
+        Assert.Equal(["soft-hitclap", "soft-hitfinish", "soft-hitnormal", "soft-hitwhistle"], e.Range!.Lanes.Select(l => l.Name).Order());
 
         e.MarkRange(900, 1600, clap, clap);
         Assert.Equal("soft-hitclap", Assert.Single(e.Range!.Lanes).Name);

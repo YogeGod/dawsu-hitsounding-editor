@@ -21,4 +21,9 @@
     <InternalsVisibleTo Include="OsuHitsound.Audio.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- osu!'s classic default hitsounds (CC BY-NC 4.0, see DefaultSamples/README.md): played when osu!lazer isn't installed. -->
+    <EmbeddedResource Include="DefaultSamples\*.wav" LogicalName="DefaultSamples.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
