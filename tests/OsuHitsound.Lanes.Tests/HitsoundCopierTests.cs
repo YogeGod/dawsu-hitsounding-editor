@@ -103,6 +103,53 @@ public class HitsoundCopierTests
         Assert.Equal(60, after.Moments[0].Volume);
     }
 
+    // One-beat (140 px) and half-beat (70 px) sliders at 1000 ms a beat.
+    private static OsuFile Sliders(params string[] sliders) => Map("0,1000,4,1,0,100,1,0", sliders);
+
+    private static Moment Tail(DecompiledMap map, int sliderStart) => map.Moments.Single(m => m.Position == HitPosition.SliderTail && (int)m.Object.Time == sliderStart);
+
+    [Fact]
+    public void Muting_sets_eligible_slider_ends_to_the_muted_sample_set_at_five_percent()
+    {
+        // MT: two one-beat sliders, every snap muted, no minimum length, the muted set Drum.
+        var target = Sliders("256,192,100,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:", "256,192,2100,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:");
+        var options = new HitsoundCopyOptions { CopyHitsounds = false, MuteSliderEnds = true, BeatDivisors = [1], MutedDivisors = [1], MinLength = 0, MutedSampleSet = SampleSet.Drum };
+
+        var (plan, after) = Copy(Circles(), target, options);
+
+        Assert.Equal(2, plan.Muted);
+        foreach (int start in new[] { 100, 2100 })
+        {
+            Assert.Equal(["drum-hitnormal"], Sounds(Tail(after, start)));
+            Assert.Equal(5, Tail(after, start).Volume);
+        }
+    }
+
+    [Fact]
+    public void With_the_default_filters_a_whole_beat_end_keeps_its_sound_and_a_half_beat_end_is_muted()
+    {
+        var target = Sliders("256,192,1000,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:", "256,192,3000,2,0,L|326:192,1,70,0|0,0:0|0:0,0:0:0:0:");
+
+        var (plan, after) = Copy(Circles(), target, new HitsoundCopyOptions { Mode = CopyMode.OverwriteOnlyDefined, MuteSliderEnds = true });
+
+        Assert.Equal(1, plan.Muted);
+        Assert.Equal(100, Tail(after, 1000).Volume); // ends on beat 2
+        Assert.Equal(5, Tail(after, 3000).Volume);   // ends half a beat after beat 3
+    }
+
+    [Fact]
+    public void An_end_with_an_addition_or_with_a_copied_hit_is_not_muted()
+    {
+        var target = Sliders("256,192,3000,2,0,L|326:192,1,70,0|8,0:0|0:0,0:0:0:0:", "256,192,5000,2,0,L|326:192,1,70,0|0,0:0|0:0,0:0:0:0:");
+        var source = Circles((5500, 2)); // a whistle on the second slider's end
+
+        var (plan, after) = Copy(source, target, new HitsoundCopyOptions { Mode = CopyMode.OverwriteOnlyDefined, MuteSliderEnds = true });
+
+        Assert.Equal(0, plan.Muted);
+        Assert.Contains("normal-hitclap", Sounds(Tail(after, 3000)));
+        Assert.Contains("normal-hitwhistle", Sounds(Tail(after, 5000)));
+    }
+
     [Fact]
     public void Copying_into_a_mapset_writes_each_target_with_a_backup()
     {

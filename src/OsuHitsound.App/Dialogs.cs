@@ -174,6 +174,45 @@ internal static class Dialogs
             var sets = Option("Copy sample sets and indexes", defaults.CopySampleSets, "Off: the targets keep their own sample sets and custom indexes.");
             var volumes = Option("Copy volumes", defaults.CopyVolumes, "Off: the targets keep their own volumes.");
             var keep5 = Option("Always keep 5 % volumes", defaults.AlwaysPreserve5Volume, "Hit points the target has at 5 % (muted on purpose) stay at 5 %.");
+
+            // Mute slider ends (Mapping Tools' filter): snaps in priority order, the muted ones, length, index and set.
+            var mute = Option("Mute slider ends", defaults.MuteSliderEnds, "Target slider ends the source has nothing for, with no additions, play a hitnormal at 5 % when they pass the filter below.");
+            static string List(IEnumerable<int> divisors) => string.Join(", ", divisors);
+            var snaps = new TextBox { Text = List(defaults.BeatDivisors), Width = 200 };
+            var mutedSnaps = new TextBox { Text = List(defaults.MutedDivisors), Width = 200 };
+            var minLength = new TextBox { Text = defaults.MinLength.ToString(CultureInfo.InvariantCulture), Width = 80 };
+            var mutedIndex = new TextBox { Text = "", Width = 80, Watermark = "keep" };
+            (SampleSet Set, string Name)[] mutedSets = [(SampleSet.None, "Keep"), (SampleSet.Normal, "Normal"), (SampleSet.Soft, "Soft"), (SampleSet.Drum, "Drum")];
+            var mutedSet = new ComboBox { ItemsSource = mutedSets.Select(s => s.Name).ToList(), SelectedIndex = 0, Width = 120 };
+            var muteGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"), Margin = new Thickness(22, 2, 0, 0) };
+            void Row(int r, string label, Control control, string tip)
+            {
+                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 10, 2) };
+                ToolTip.SetTip(text, tip);
+                Grid.SetRow(text, r);
+                Grid.SetRow(control, r);
+                Grid.SetColumn(control, 1);
+                muteGrid.Children.AddRange([text, control]);
+            }
+
+            Row(0, "Snaps (1/n), first wins", snaps, "An end snaps to the nearest of these; the first one (in this order) its time falls on decides.");
+            Row(1, "Muted snaps", mutedSnaps, "Ends whose deciding snap is one of these are muted.");
+            Row(2, "Minimum length (beats)", minLength, "Shorter sliders keep their end.");
+            Row(3, "Muted index", mutedIndex, "The custom index muted ends play from; blank keeps theirs.");
+            Row(4, "Muted sample set", mutedSet, "The sample set muted ends play in.");
+            muteGrid.IsEnabled = mute.IsChecked == true;
+            mute.IsCheckedChanged += (_, _) => muteGrid.IsEnabled = mute.IsChecked == true;
+
+            static int[]? Divisors(string? text)
+            {
+                var parts = (text ?? "").Split([',', ' '], StringSplitOptions.RemoveEmptyEntries);
+                var list = new List<int>();
+                foreach (var p in parts)
+                    if (OsuNumber.TryParseInt(p, out int d) && d is >= 1 and <= 64) list.Add(d);
+                    else return null;
+                return list.Count > 0 ? [.. list] : null;
+            }
+
             var problem = new TextBlock { Foreground = Brushes.OrangeRed };
             var leniencyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             leniencyRow.Children.AddRange([leniency, new TextBlock { Text = "ms", VerticalAlignment = VerticalAlignment.Center }]);
@@ -185,7 +224,7 @@ internal static class Dialogs
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
-                hitsounds, sets, volumes, keep5,
+                hitsounds, sets, volumes, keep5, mute, muteGrid,
                 new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);
@@ -194,6 +233,9 @@ internal static class Dialogs
                 var chosen = boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Path).ToList();
                 if (chosen.Count == 0) problem.Text = "Tick at least one difficulty to copy into.";
                 else if (!OsuNumber.TryParseDouble(leniency.Text ?? "", out double ms) || !double.IsFinite(ms) || ms < 0) problem.Text = "The leniency must be a number of milliseconds, 0 or more.";
+                else if (Divisors(snaps.Text) is not { } beatDivisors || Divisors(mutedSnaps.Text) is not { } muted) problem.Text = "Snaps are whole numbers 1–64 (1 = a beat, 4 = 1/4), separated by commas.";
+                else if (!OsuNumber.TryParseDouble(minLength.Text ?? "", out double beats) || !double.IsFinite(beats) || beats < 0) problem.Text = "The minimum length is a number of beats, 0 or more.";
+                else if (!string.IsNullOrWhiteSpace(mutedIndex.Text) && !(OsuNumber.TryParseInt(mutedIndex.Text, out int ix) && ix >= 0)) problem.Text = "The muted index is a whole number, 0 or more (or blank).";
                 else
                     close((difficulties[Math.Max(0, source.SelectedIndex)].Path, chosen, defaults with
                     {
@@ -203,6 +245,12 @@ internal static class Dialogs
                         CopySampleSets = sets.IsChecked == true,
                         CopyVolumes = volumes.IsChecked == true,
                         AlwaysPreserve5Volume = keep5.IsChecked == true,
+                        MuteSliderEnds = mute.IsChecked == true,
+                        BeatDivisors = beatDivisors,
+                        MutedDivisors = muted,
+                        MinLength = beats,
+                        MutedIndex = OsuNumber.TryParseInt(mutedIndex.Text ?? "", out int index) ? index : -1,
+                        MutedSampleSet = mutedSets[Math.Max(0, mutedSet.SelectedIndex)].Set,
                     }));
             }, "Copy");
         });

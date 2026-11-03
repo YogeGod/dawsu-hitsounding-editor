@@ -34,13 +34,31 @@ public sealed record HitsoundCopyOptions
 
     /// <summary>With volumes copied, target hit points at 5 % stay at 5 % (they're muted on purpose).</summary>
     public bool AlwaysPreserve5Volume { get; init; } = true;
+
+    /// <summary>Mute target slider (and spinner) ends the source has nothing for, filtered by snap and length.</summary>
+    public bool MuteSliderEnds { get; init; }
+
+    /// <summary>Beat divisors in priority order: an end snaps to the nearest, and the first it falls on decides.</summary>
+    public IReadOnlyList<int> BeatDivisors { get; init; } = [1, 4, 3, 8, 6, 16, 12];
+
+    /// <summary>The divisors whose ends are muted.</summary>
+    public IReadOnlyList<int> MutedDivisors { get; init; } = [4, 3, 8, 6, 16, 12];
+
+    /// <summary>Only sliders at least this long (in beats) get their end muted.</summary>
+    public double MinLength { get; init; } = 0.5;
+
+    /// <summary>The custom index muted ends play from; -1 keeps theirs.</summary>
+    public int MutedIndex { get; init; } = -1;
+
+    /// <summary>The sample set muted ends play in; None keeps theirs.</summary>
+    public SampleSet MutedSampleSet { get; init; } = SampleSet.None;
 }
 
 /// <summary>What <see cref="HitsoundCopier.Plan"/> found: the target's new sounds per hit point, and counts for the summary.</summary>
-public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound> Wanted, int Matched, int Changed);
+public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound> Wanted, int Matched, int Changed, int Muted = 0);
 
 /// <summary>One target of <see cref="HitsoundCopier.CopyTo"/>: what changed, the backup, or why it wasn't written.</summary>
-public sealed record HitsoundCopyTarget(string Path, int Matched, int Changed, int Conflicts, string? Backup, string? Error);
+public sealed record HitsoundCopyTarget(string Path, int Matched, int Changed, int Conflicts, string? Backup, string? Error, int Muted = 0);
 
 /// <summary>
 /// Copy hitsounds: Mapping Tools' Hitsound Copier on the editor's lanes. Each source hit point goes to the nearest
@@ -114,7 +132,54 @@ public static class HitsoundCopier
             if (!Same(wish, m)) wanted[new MomentKey(objectIndex[m.Object], m.Node)] = wish;
         }
 
-        return new HitsoundCopyPlan(wanted, matches, wanted.Count);
+        int muted = 0;
+        if (options.MuteSliderEnds)
+            for (int i = 0; i < targets.Length; i++)
+            {
+                var m = targets[i];
+                var key = new MomentKey(objectIndex[m.Object], m.Node);
+                var now = wanted.GetValueOrDefault(key) ?? Compiler.AsWanted(m);
+                if (matched.ContainsKey(i) || !IsMutable(m, now, times[i], targetTiming, options)) continue;
+
+                // A hitnormal at 5 %, in the muted sample set and index when they're set.
+                var normal = now.Lanes.Select(l => l.Sample).FirstOrDefault(s => s?.Sound == "hitnormal");
+                var state = Decompiler.PointState(targetTiming.SamplePointAt(times[i]), to.Settings);
+                var set = options.MutedSampleSet is > SampleSet.None and <= SampleSet.Drum ? options.MutedSampleSet : normal?.Set ?? state.Set;
+                int index = options.MutedIndex >= 0 ? options.MutedIndex : normal?.Index ?? state.Index;
+                var mute = new WantedSound([Decompiler.ResolveLane(targetFolder, set, "hitnormal", index)], 5);
+                muted++;
+                if (Same(mute, m)) wanted.Remove(key);
+                else wanted[key] = mute;
+            }
+
+        return new HitsoundCopyPlan(wanted, matches, wanted.Count, muted);
+    }
+
+    /// <summary>
+    /// Mapping Tools' slider-end filter: the end of a slider without repeats (or a spinner's end), with no additions, at
+    /// least the minimum length, whose time snaps first to one of the muted divisors.
+    /// </summary>
+    private static bool IsMutable(Moment m, WantedSound now, double time, TimingPointIndex timing, HitsoundCopyOptions options)
+    {
+        bool end = m.Position == HitPosition.SliderTail && m.Node == 1 || m.Position == HitPosition.SpinnerEnd;
+        if (!end || now.Lanes.Any(l => l.Sample?.Sound is "hitwhistle" or "hitfinish" or "hitclap")) return false;
+        if (timing.RedLineAt(time - 1) is not { BeatLength: > 0 and var beat } red) return false;
+        if (time - m.Object.Time < options.MinLength * beat - 1e-6) return false;
+
+        int[] all = [.. options.BeatDivisors.Concat(options.MutedDivisors).Where(d => d > 0)];
+        if (all.Length == 0) return false;
+        // Snap to the nearest grid line of any divisor (the first divisor wins a tie), then see which divisors it is on.
+        double snapped = all.Select(d => red.Time + Math.Round((time - red.Time) / (beat / d)) * (beat / d))
+            .OrderBy(t => Math.Abs(t - time)).First();
+        double beats = (snapped - red.Time) / beat;
+        var first = all.FirstOrDefault(d => OnDivisor(beats, d));
+        return first != 0 && options.MutedDivisors.Contains(first);
+    }
+
+    private static bool OnDivisor(double beats, int divisor)
+    {
+        double steps = beats * divisor;
+        return Math.Abs(steps - Math.Round(steps)) < 1e-6;
     }
 
     /// <summary>
@@ -131,7 +196,7 @@ public static class HitsoundCopier
                 var doc = MapDocument.Load(path);
                 var plan = Plan(source, sourceFolder, doc.File, doc.Folder, options);
                 var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot);
-                results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null));
+                results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null, plan.Muted));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException)
             {

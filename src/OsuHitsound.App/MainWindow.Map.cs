@@ -380,6 +380,7 @@ public partial class MainWindow
         var failed = results.Where(r => r.Error is not null).ToList();
         flash = $"Copied hitsounds into {written} of {results.Count} difficult{(results.Count == 1 ? "y" : "ies")} " +
                 $"({results.Sum(r => r.Matched)} hits matched, {results.Sum(r => r.Changed)} hit points changed)." +
+                (results.Sum(r => r.Muted) is > 0 and var mutedEnds ? $" {mutedEnds} slider ends muted." : "") +
                 (conflicts > 0 ? $" {conflicts} couldn't be saved as copied and kept their old sounds." : "") +
                 (failed.Count > 0 ? $" Not written: {string.Join("; ", failed.Select(f => $"{Path.GetFileName(f.Path)} ({f.Error})"))}." : "") +
                 " Backups are in the editor's backups folder.";
