@@ -56,7 +56,7 @@ Undo and redo with Ctrl+Z and Ctrl+Y. Pick a tool with its button or number key:
 
 - **Inspector, Info, Controller**: show or hide those panels.
 - **Colour**: colour hits by lane, or by volume (quiet hits dark, loud hits bright).
-- **Zoom** (also Ctrl+wheel), and **Fit** to see the whole map.
+- **Zoom** in time (also Ctrl+wheel), Ctrl+Shift+wheel to make the rows taller or shorter, and **Fit** to see the whole map.
 
 ### Selection and song
 
@@ -80,7 +80,10 @@ Shift or set the volume of the selection, add bookmarks, and click any entry und
 
 - **Sample lanes**: grouped by sampleset. Each group starts with osu!'s default sounds (hitnormal, whistle, finish, clap), with the map's own sample files under the sound they replace. The default sounds are built in, so they play even without osu! installed. Use the filter to find a lane; the **+** above the list adds a lane for a sample file already in the mapset.
 - **Lane buttons**: **+** picks an audio file and copies it into the mapset as a new sample for that sound (e.g. `drum-hitclap5.wav`, using a number no difficulty uses yet), **●** plays the sample, **M** mutes the lane and **S** solos it. The **Song audio** row has **M** and **S** too: solo the song to hear it without hitsounds.
+- **Song audio**: the song's waveform, coloured by frequency: blue for lows (kicks, bass), purple for mids (snares, vocals) and yellow for highs (hi-hats, cymbals), so you can see where each drum hits. The colours can be changed in the UI inspector (Ctrl+Shift+I).
 - **The grid**: your hitsounds in time, left to right. Red-striped columns can't be saved as drawn yet.
+
+![The song waveform, coloured by frequency](docs/tutorial/waveform.png)
 
 ### Volume
 
@@ -129,4 +132,4 @@ dotnet test OsuHitsoundEditor.slnx
 
 ## Credits
 
-The built-in default hitsounds are from [osu!](https://github.com/ppy/osu-resources) by ppy and contributors, used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Audio playback uses [BASS](https://www.un4seen.com), free for non-commercial use.
+The built-in default hitsounds are from [osu!](https://github.com/ppy/osu-resources) by ppy and contributors, used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Audio playback uses [BASS](https://www.un4seen.com), free for non-commercial use. The waveform's frequency colours follow [osu-framework](https://github.com/ppy/osu-framework)'s Waveform (MIT).

@@ -53,7 +53,7 @@ internal sealed class ArrangeView : Control
     private static readonly IPen RangePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#e0a030"), 1);
     private static readonly IBrush RangeFill = Paint.Brush(Color.Parse("#e0a030"), 0.18);
 
-    private double? rowHeight; // set by Ctrl+Alt+wheel; null follows the theme
+    private double? rowHeight; // set by Ctrl+Shift+wheel; null follows the theme
     private double scrollY;
     private HashSet<EditHit> selection => Edits.Selected;
 
@@ -90,7 +90,7 @@ internal sealed class ArrangeView : Control
         };
     }
 
-    /// <summary>Row height in px (vertical zoom, Ctrl+Alt+wheel). Design G's compact rows are 22 px.</summary>
+    /// <summary>Row height in px (vertical zoom, Ctrl+Shift+wheel). Design G's compact rows are 22 px.</summary>
     public double RowHeight
     {
         get => rowHeight ?? Theme_.Number("row.height");
@@ -177,6 +177,9 @@ internal sealed class ArrangeView : Control
 
     /// <summary>The grid of hits, below the ruler and the object strip.</summary>
     public Rect GridRect => new(GridLeft, HeaderHeight, Math.Max(0, Bounds.Width - GridLeft), Math.Max(0, Bounds.Height - HeaderHeight));
+
+    /// <summary>The song waveform strip under the ruler.</summary>
+    public Rect WaveRect => new(GridLeft, RulerBottom, Math.Max(0, Bounds.Width - GridLeft), WaveHeight);
 
     /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
     public bool ShowIndexes { get; set; }
@@ -444,7 +447,7 @@ internal sealed class ArrangeView : Control
     private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
         SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
 
-    private static readonly IBrush WaveFill = Paint.Brush(Color.Parse("#8fb7e8"), 0.75), StripBg = Paint.Brush("#1f1f21"),
+    private static readonly IBrush StripBg = Paint.Brush("#1f1f21"),
         ObjectFill = Paint.Brush(Color.Parse("#c9c9cf"), 0.85), SliderBody = Paint.Brush(Color.Parse("#c9c9cf"), 0.35),
         SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.45), BookmarkFill = Paint.Brush("#4cc3d1");
     private static readonly IPen ObjectConflictPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
@@ -452,12 +455,16 @@ internal sealed class ArrangeView : Control
     /// <summary>The song's waveform (set when decoding finishes) and its offset, so it lines up with the song as heard.</summary>
     public Audio.Waveform? Wave { get; set; }
 
-    private StreamGeometry? waveGeometry;
+    // Loudness, then the low, mid and high bands drawn over it, shortest on top.
+    private StreamGeometry[]? waveGeometry;
     private (double, double, double, double, double, double, Audio.Waveform?) waveKey;
 
     public double SongOffset { get; set; }
 
-    /// <summary>The waveform lane: one vertical line per pixel, the loudest peak in that pixel's time slice.</summary>
+    /// <summary>
+    /// The waveform lane: one vertical line per pixel, the loudest peak in that pixel's time slice. Over it, each frequency
+    /// band's share of that height in its own colour (low: kicks, mid: snares, high: hi-hats), the shortest on top.
+    /// </summary>
     private void DrawWaveform(DrawingContext ctx, double width)
     {
         double top = RulerBottom, h = WaveHeight;
@@ -470,27 +477,46 @@ internal sealed class ArrangeView : Control
         if (waveGeometry is null || !waveKey.Equals(key))
         {
             double mid = top + h / 2, half = h / 2 - 2, msPerPixel = 1 / Axis.Zoom;
-            var geometry = new StreamGeometry();
-            using (var g = geometry.Open())
+            // [0] the loudness; then [1 + rank·3 + band]: per column the bands tallest first (rank 0) to shortest (rank 2),
+            // so a shorter band is drawn over a taller one and every band stays visible.
+            var layers = new StreamGeometry[10];
+            var open = new StreamGeometryContext[10];
+            for (int i = 0; i < layers.Length; i++) open[i] = (layers[i] = new StreamGeometry()).Open();
+            void Bar(StreamGeometryContext g, double x, double a)
             {
-                for (double x = GridLeft; x < width; x++)
-                {
-                    double t = Axis.Time(x - GridLeft) - SongOffset;
-                    float peak = wave.Max(t, t + msPerPixel);
-                    if (peak <= 0.002f) continue;
-                    double a = Math.Max(0.5, peak * half);
-                    g.BeginFigure(new Point(x, mid - a), true);
-                    g.LineTo(new Point(x + 1, mid - a));
-                    g.LineTo(new Point(x + 1, mid + a));
-                    g.LineTo(new Point(x, mid + a));
-                    g.EndFigure(true);
-                }
+                g.BeginFigure(new Point(x, mid - a), true);
+                g.LineTo(new Point(x + 1, mid - a));
+                g.LineTo(new Point(x + 1, mid + a));
+                g.LineTo(new Point(x, mid + a));
+                g.EndFigure(true);
             }
 
-            (waveGeometry, waveKey) = (geometry, key);
+            Span<int> order = stackalloc int[3];
+            for (double x = GridLeft; x < width; x++)
+            {
+                double t = Axis.Time(x - GridLeft) - SongOffset;
+                float peak = wave.Max(t, t + msPerPixel);
+                if (peak <= 0.002f) continue;
+                Bar(open[0], x, Math.Max(0.5, peak * half));
+                var (low, mids, high) = wave.Bands(t, t + msPerPixel);
+                float[] bands = [low, mids, high];
+                (order[0], order[1], order[2]) = (0, 1, 2);
+                order.Sort((a, b) => bands[b].CompareTo(bands[a]));
+                for (int rank = 0; rank < 3; rank++)
+                    if (peak * bands[order[rank]] > 0.002f) Bar(open[1 + rank * 3 + order[rank]], x, Math.Max(0.5, peak * bands[order[rank]] * half));
+            }
+
+            foreach (var g in open) g.Dispose();
+            (waveGeometry, waveKey) = (layers, key);
         }
 
-        ctx.DrawGeometry(WaveFill, null, waveGeometry);
+        // Without bands (none decoded) the loudness alone is drawn, brighter.
+        double opacity = Theme_.Number("wave.opacity");
+        bool banded = wave.Low is not null;
+        ctx.DrawGeometry(Paint.Brush(Theme_.Color("wave.base"), banded ? opacity * 0.35 : opacity), null, waveGeometry[0]);
+        if (!banded) return;
+        IBrush[] colours = [Paint.Brush(Theme_.Color("wave.low"), opacity), Paint.Brush(Theme_.Color("wave.mid"), opacity), Paint.Brush(Theme_.Color("wave.high"), opacity)];
+        for (int i = 1; i < waveGeometry.Length; i++) ctx.DrawGeometry(colours[(i - 1) % 3], null, waveGeometry[i]);
     }
 
     /// <summary>
@@ -762,17 +788,17 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         var p = e.GetPosition(this);
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
-            // Vertical zoom, keeping the row under the mouse in place.
+            // Vertical zoom (Ctrl+Shift+wheel), keeping the row under the mouse in place.
             double rowUnder = (p.Y - HeaderHeight + scrollY) / RowHeight;
             RowHeight = Math.Round(RowHeight * (e.Delta.Y > 0 ? 1.15 : 1 / 1.15));
             ScrollY = rowUnder * RowHeight - (p.Y - HeaderHeight);
         }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) // Ctrl+wheel and Ctrl+Alt+wheel: zoom in time
+            Axis.ZoomAt(e.Delta.Y > 0 ? 1.25 : 0.8, Math.Max(0, p.X - GridLeft));
         else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
             DivisorWheel?.Invoke(e.Delta.Y > 0 ? 1 : -1); // finer up, coarser down
-        else if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            Axis.ZoomAt(e.Delta.Y > 0 ? 1.25 : 0.8, Math.Max(0, p.X - GridLeft));
         else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.Delta.X != 0)
             Axis.Left -= (e.Delta.Y + e.Delta.X) * 120 / Axis.Zoom;
         else
@@ -795,7 +821,7 @@ internal sealed class ArrangeView : Control
         }
     }
 
-    /// <summary>Lets Ctrl+Alt+wheel zoom go and follows the theme's row height again (after it's edited).</summary>
+    /// <summary>Lets Ctrl+Shift+wheel zoom go and follows the theme's row height again (after it's edited).</summary>
     public void FollowThemeRowHeight()
     {
         rowHeight = null;
@@ -874,7 +900,7 @@ internal sealed class ArrangeView : Control
     public string PartAt(Point p)
     {
         if (p.Y < HeaderHeight)
-            return p.X >= GridLeft && p.Y < SectionsHeight ? "sections" : "header";
+            return p.X >= GridLeft && p.Y < SectionsHeight ? "sections" : p.X >= GridLeft && p.Y >= RulerBottom && p.Y < RulerBottom + WaveHeight ? "waveform" : "header";
         if (Math.Abs(p.X - (GridLeft + Axis.X(Playhead))) <= 4) return "playhead";
         if (RowAt(p.Y) is not { } row) return "arrange";
 

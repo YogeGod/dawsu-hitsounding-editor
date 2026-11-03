@@ -60,6 +60,9 @@ internal sealed class UiTheme
             C("header.bg", "Background", "#2f2f31"), C("ruler.bar", "Bar numbers", "#e4e4e6"), C("ruler.beat", "Beat numbers", "#a4a4a9"),
             N("ruler.fontSize", "Font size", 11, 8, 20), N("header.sections", "Sections row height", 18, 0, 40)]),
         new("sections", "Grid", "Song sections", [C("section.fill", "Fill", "#8a6d1e"), N("section.opacity", "Opacity", 0.55, 0, 1)]),
+        new("waveform", "Grid", "Song waveform", [
+            C("wave.base", "Loudness", "#8fb7e8"), C("wave.low", "Low: kicks, bass", "#4f8dff"), C("wave.mid", "Mid: snares, vocals", "#c27bff"),
+            C("wave.high", "High: hi-hats, cymbals", "#ffd166"), N("wave.opacity", "Opacity", 0.85, 0, 1)]),
         new("lanelist", "Grid", "Lane list", [
             N("list.width", "Width", 300, 160, 600), C("lane.text", "Name text", "#e4e4e6"), C("lane.dim", "Index text", "#a4a4a9"),
             N("lane.fontSize", "Font size", 12, 8, 22), C("lane.missing", "Missing / no sound", "#ff9a92")]),

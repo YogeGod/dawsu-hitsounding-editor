@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using OsuHitsound.App;
+using OsuHitsound.Audio;
 
 if (args.Length < 2)
 {
@@ -38,6 +39,11 @@ var window = new MainWindow(args[0], startAudio: false, showInspector: false, us
 };
 window.Show();
 while (!window.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
+// There's no audio output here, so decode the song's waveform directly ("no sound" device: decoding only).
+if (window.ArrangeArea.Model?.Map.Settings.AudioFilename is { Length: > 0 } songName
+    && Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[0]))!, songName) is var songPath && File.Exists(songPath)
+    && ManagedBass.Bass.Init(0))
+    window.ArrangeArea.Wave = Waveform.Decode(File.ReadAllBytes(songPath));
 Pump();
 Save("01-open.png");
 SaveReadmeCrops(); // the map as opened, before the edits below
@@ -133,8 +139,8 @@ void SaveReadmeCrops()
     [
         ("open-save-generate", [1, 2, 3]), ("menus", [4]), ("map-preferences-keys", [5, 6, 7]), ("undo-redo", [8]),
         ("tools", [9, 10, 11, 12, 13, 14]), ("snap", [15, 16]), ("view-colour-zoom", [17, 18, 19]),
-        ("selection-bar", [20]), ("song", [21]), ("inspector", [22]), ("lanes-grid", [23, 24, 25]),
-        ("volume", [26]), ("transport-position", [27, 28]), ("speed", [29]), ("global-volume", [30]),
+        ("selection-bar", [20]), ("song", [21]), ("inspector", [22]), ("lanes-grid", [23, 24, 25]), ("waveform", [26]),
+        ("volume", [27]), ("transport-position", [28, 29]), ("speed", [30]), ("global-volume", [31]),
     ];
     foreach (var (name, steps) in crops)
     {

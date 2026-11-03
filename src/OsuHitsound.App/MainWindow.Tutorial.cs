@@ -97,6 +97,8 @@ public partial class MainWindow
             () => InLanes(Lanes.FirstLaneButtonsRect())),
         new("The grid", "Your hitsounds: one row per sample, in time from left to right. Red-striped columns are sounds that can't be saved as drawn yet.",
             () => InLanes(Lanes.GridRect)),
+        new("Song waveform", "The song, coloured by frequency: blue for lows (kicks, bass), purple for mids (snares, vocals), yellow for highs (hi-hats, cymbals), so you can see where each drum hits. M and S on its left mute or solo the song.",
+            () => InLanes(Lanes.WaveRect)),
         new("Volume controller", "One bar per circle or slider end: drag a bar to change its volume, Alt-drag to paint, Shift-drag for a ramp. osu! has one volume per object, so it's shared by all lanes on it.",
             () => On(BottomPanel)),
         new("Transport", "Go to the start, stop, play (Space) and Cycle between the L and R markers (L). Ctrl+click the ruler sets L, Alt+click sets R.",

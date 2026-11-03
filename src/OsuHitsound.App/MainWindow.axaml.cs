@@ -963,7 +963,7 @@ public partial class MainWindow : Window
 
     private void OnThemeChanged()
     {
-        // A new row height in the theme replaces a Ctrl+Alt+wheel zoom.
+        // A new row height in the theme replaces a Ctrl+Shift+wheel zoom.
         double rowHeight = UiTheme.Current.Number("row.height");
         if (rowHeight != lastRowHeight) Lanes.FollowThemeRowHeight();
         lastRowHeight = rowHeight;
