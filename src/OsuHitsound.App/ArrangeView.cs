@@ -314,19 +314,7 @@ internal sealed class ArrangeView : Control
             {
                 DrawConflictColumns(ctx, model, from, to, size.Height);
 
-                // Snap lines only when they are at least 6 px apart.
-                if (SnapOn && lines.Count > 0 && Axis.Zoom * lines[0].BeatLength / Divisor >= 6)
-                    foreach (var (t, fraction) in model.SubLines(from, to, Divisor))
-                    {
-                        double x = GridLeft + Axis.X(t);
-                        ctx.DrawLine(Paint.SnapPen(fraction), new Point(x, HeaderHeight), new Point(x, size.Height));
-                    }
-
-                foreach (var line in lines)
-                {
-                    double x = GridLeft + Axis.X(line.Time);
-                    ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, HeaderHeight), new Point(x, size.Height));
-                }
+                DrawGridLines(ctx, model, lines, from, to, HeaderHeight, size.Height);
 
                 var range = Edits.Range;
                 double rangeLeft = range is null ? 0 : GridLeft + Axis.X(range.Start), rangeRight = range is null ? 0 : GridLeft + Axis.X(range.End);
@@ -436,12 +424,35 @@ internal sealed class ArrangeView : Control
             DrawBookmarks(ctx);
             DrawWaveform(ctx, width);
             DrawObjects(ctx, model, width);
+            // The grid runs on through the waveform and the objects, faded so it doesn't fight them, so hits line up
+            // with what's above them.
+            using (ctx.PushOpacity(StripGridOpacity))
+                DrawGridLines(ctx, model, lines, Axis.Time(0), Axis.Time(gridWidth), RulerBottom, HeaderHeight);
 
             double px = GridLeft + Axis.X(Playhead);
             ctx.FillRectangle(Paint.White, new Rect(px - 2, rulerTop, 4, RulerHeight));
         }
 
         ctx.DrawLine(Paint.DividerPen, new Point(0, HeaderHeight - 0.5), new Point(width, HeaderHeight - 0.5));
+    }
+
+    private const double StripGridOpacity = 0.35; // the grid lines over the waveform and objects
+
+    /// <summary>Bar, beat and (with snap on, when at least 6 px apart) snap lines between two heights.</summary>
+    private void DrawGridLines(DrawingContext ctx, ArrangeModel model, List<GridLine> lines, double from, double to, double top, double bottom)
+    {
+        if (SnapOn && lines.Count > 0 && Axis.Zoom * lines[0].BeatLength / Divisor >= 6)
+            foreach (var (t, fraction) in model.SubLines(from, to, Divisor))
+            {
+                double x = GridLeft + Axis.X(t);
+                ctx.DrawLine(Paint.SnapPen(fraction), new Point(x, top), new Point(x, bottom));
+            }
+
+        foreach (var line in lines)
+        {
+            double x = GridLeft + Axis.X(line.Time);
+            ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, top), new Point(x, bottom));
+        }
     }
 
     private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
