@@ -114,6 +114,19 @@ Pump();
 var helpWindow = window.OwnedWindows.OfType<HelpWindow>().First();
 helpWindow.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "07-help.png"));
 
+// Map → Copy hitsounds…, on the map's own mapset (for the README).
+var mapDir = Path.GetDirectoryName(Path.GetFullPath(args[0]))!;
+var difficulties = Directory.GetFiles(mapDir, "*.osu").Select(p => (p, OsuHitsound.Lanes.HitsoundDiff.VersionOf(p) ?? Path.GetFileNameWithoutExtension(p))).OrderBy(d => d.Item2).ToList();
+_ = Dialogs.CopyHitsounds(window, difficulties, Path.GetFullPath(args[0]));
+Pump();
+if (window.OwnedWindows.OfType<Window>().LastOrDefault(w => w.Title == "Copy hitsounds") is { } copyDialog)
+{
+    Pump();
+    copyDialog.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "readme", "copy-hitsounds.png"));
+    Console.WriteLine("saved readme/copy-hitsounds.png");
+    copyDialog.Close();
+}
+
 // The lane list with its names hidden (the header's collapse button), then back.
 window.ToggleLaneNamesForSnapshot();
 Pump();

@@ -30,3 +30,8 @@ Audio output
   NAudio (https://github.com/naudio/NAudio), Copyright (c) Mark Heath and contributors,
   licensed under the MIT Licence (the permission notice above applies), sends the sound
   to the device through WASAPI, ASIO, DirectSound or MME.
+
+Copy hitsounds
+  Map > Copy hitsounds follows the behaviour and options of the Hitsound Copier in
+  Mapping Tools (https://github.com/OliBomby/Mapping_Tools), Copyright (c) OliBomby
+  and contributors, licensed under the MIT Licence (the permission notice above applies).
