@@ -11,6 +11,12 @@
     <PackageReference Include="ppy.ManagedBass" Version="2022.1216.0" />
     <PackageReference Include="ppy.ManagedBass.Fx" Version="2022.1216.0" />
     <PackageReference Include="ppy.osu.Framework.NativeLibs" Version="2025.806.0-nativelibs" />
+    <!-- NAudio (MIT) sends the mixed stream to the device: WASAPI, ASIO, DirectSound or MME. BASS only decodes. -->
+    <PackageReference Include="NAudio.Core" Version="3.3.0" />
+    <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
+    <PackageReference Include="NAudio.WinMM" Version="3.3.0" />
+    <PackageReference Include="NAudio.Asio" Version="3.3.0" />
+    <PackageReference Include="NAudio.Dmo" Version="3.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +25,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OsuHitsound.Audio.Tests" />
+    <InternalsVisibleTo Include="OsuHitsound.App.Tests" />
   </ItemGroup>
 
   <ItemGroup>

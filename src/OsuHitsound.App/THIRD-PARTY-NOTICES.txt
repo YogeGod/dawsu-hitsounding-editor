@@ -9,8 +9,8 @@ Default hitsounds
            https://creativecommons.org/licenses/by-nc/4.0/
   They keep their own noncommercial licence.
 
-Audio playback
-  BASS, BASS_FX, BASSmix and BASSWASAPI by Un4seen Developments (https://www.un4seen.com),
+Audio decoding
+  BASS and BASS_FX by Un4seen Developments (https://www.un4seen.com) read the song and samples,
   free for non-commercial use.
 
 Waveform colours
@@ -25,3 +25,8 @@ Waveform colours
     The above copyright notice and this permission notice shall be included in all copies or
     substantial portions of the Software.
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+Audio output
+  NAudio (https://github.com/naudio/NAudio), Copyright (c) Mark Heath and contributors,
+  licensed under the MIT Licence (the permission notice above applies), sends the sound
+  to the device through WASAPI, ASIO, DirectSound or MME.

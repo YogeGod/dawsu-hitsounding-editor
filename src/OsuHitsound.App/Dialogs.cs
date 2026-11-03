@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using OsuHitsound.Audio;
 using OsuHitsound.Format;
 using OsuHitsound.Lanes;
 
@@ -180,7 +181,7 @@ internal static class Dialogs
         });
 
     /// <summary>The preferences form; the edited copy on OK, null on Cancel.</summary>
-    public static async Task<Preferences?> EditPreferences(Window owner, Preferences prefs, IReadOnlyList<(int Device, string Name)> devices) =>
+    public static async Task<Preferences?> EditPreferences(Window owner, Preferences prefs, Func<OutputKind, IReadOnlyList<(string Id, string Name)>> devices, Func<bool> showAsioPanel) =>
         await Show<Preferences>(owner, "Preferences", (body, close) =>
         {
             var general = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
@@ -207,14 +208,31 @@ internal static class Dialogs
             var songs = PathRow(general, "osu! Songs folder (Open starts here)", prefs.SongsFolder, "Not found yet", filePattern: null);
             var lazer = PathRow(general, "Default sounds: lazer's osu.Game.Resources.dll", prefs.LazerResources, "Blank: the usual lazer install, else the built-in sounds", "osu.Game.Resources.dll");
 
+            // Audio output: the kind, then that kind's devices (refilled when the kind changes).
             general.Children.Add(new TextBlock { Text = "Audio output", FontWeight = FontWeight.SemiBold });
-            var device = new ComboBox { ItemsSource = devices.Select(d => d.Name).ToList(), Width = 380 };
-            device.SelectedIndex = Math.Max(0, devices.ToList().FindIndex(d => d.Device == prefs.AudioDevice));
-            general.Children.Add(device);
+            var kinds = Enum.GetValues<OutputKind>();
+            var kind = new ComboBox { ItemsSource = kinds.Select(AudioOutputs.Name).ToList(), Width = 380, SelectedIndex = Array.IndexOf(kinds, prefs.AudioOutput) };
+            var device = new ComboBox { Width = 380 };
+            var asioPanel = new Button { Content = "ASIO control panelâ€¦" };
+            ToolTip.SetTip(asioPanel, "The ASIO driver's own settings (buffer size, outputs). Works once ASIO is the output in use.");
+            IReadOnlyList<(string Id, string Name)> shown = [];
+            void FillDevices(string? select)
+            {
+                var k = kinds[Math.Max(0, kind.SelectedIndex)];
+                shown = devices(k);
+                device.ItemsSource = shown.Count == 0 ? ["(none found)"] : shown.Select(d => d.Name).ToList();
+                device.SelectedIndex = Math.Max(0, shown.ToList().FindIndex(d => d.Id == (select ?? "")));
+                asioPanel.IsVisible = k == OutputKind.Asio;
+            }
+
+            kind.SelectionChanged += (_, _) => FillDevices(null);
+            asioPanel.Click += (_, _) => showAsioPanel();
+            FillDevices(prefs.OutputDevice);
+            general.Children.AddRange([kind, device, asioPanel]);
 
             var bufferText = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 460 };
-            var buffer = new Slider { Minimum = 20, Maximum = 500, Value = prefs.BufferMs, Width = 380, TickFrequency = 10, IsSnapToTickEnabled = true };
-            void ShowBuffer() => bufferText.Text = $"Buffer: {buffer.Value:0} ms. Hitsounds lag the music by about this much, so keep it small; raise it only if playback crackles.";
+            var buffer = new Slider { Minimum = 10, Maximum = 500, Value = prefs.BufferMs, Width = 380, TickFrequency = 10, IsSnapToTickEnabled = true };
+            void ShowBuffer() => bufferText.Text = $"Buffer: {buffer.Value:0} ms. Hitsounds and the song always stay in step; a small buffer makes playing, stopping and previews react sooner. Raise it only if playback crackles.";
             buffer.ValueChanged += (_, _) => ShowBuffer();
             ShowBuffer();
             general.Children.Add(bufferText);
@@ -232,7 +250,8 @@ internal static class Dialogs
             {
                 SongsFolder = Blank(songs.Text),
                 LazerResources = Blank(lazer.Text),
-                AudioDevice = devices[Math.Max(0, device.SelectedIndex)].Device,
+                AudioOutput = kinds[Math.Max(0, kind.SelectedIndex)],
+                OutputDevice = shown.Count > 0 && device.SelectedIndex >= 0 && shown[device.SelectedIndex].Id is { Length: > 0 } id ? id : null,
                 BufferMs = (int)buffer.Value,
             }), "OK");
         });

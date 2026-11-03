@@ -21,7 +21,8 @@ public partial class MainWindow
     {
         try
         {
-            audio = AudioEngine.Create(prefs.AudioDevice, prefs.BufferMs);
+            audio = AudioEngine.Create(prefs.AudioOutput, prefs.OutputDevice, prefs.BufferMs);
+            if (audio.Fallback is { } why) flash = why;
             audio.MasterVolume = (float)(Math.Clamp(prefs.GlobalVolume, 20, 100) / 100);
             audioError = null;
         }
@@ -128,11 +129,11 @@ public partial class MainWindow
 
     private async Task ShowPreferences()
     {
-        var devices = audio is null && audioError is not null ? [(-1, "System default")] : AudioEngine.Devices();
-        if (await Dialogs.EditPreferences(this, prefs with { SongsFolder = prefs.SongsFolder ?? Preferences.FindSongsFolder() }, devices) is not { } edited)
+        if (await Dialogs.EditPreferences(this, prefs with { SongsFolder = prefs.SongsFolder ?? Preferences.FindSongsFolder() }, AudioEngine.Devices,
+                () => audio?.ShowAsioControlPanel() == true) is not { } edited)
             return;
 
-        bool audioChanged = edited.AudioDevice != prefs.AudioDevice || edited.BufferMs != prefs.BufferMs;
+        bool audioChanged = edited.AudioOutput != prefs.AudioOutput || edited.OutputDevice != prefs.OutputDevice || edited.BufferMs != prefs.BufferMs;
         bool skinChanged = edited.LazerResources != prefs.LazerResources;
         // The dialog doesn't show the global volume: keep the slider's, which restarting the audio below uses.
         prefs = edited with { GlobalVolume = GlobalVolumeSlider.Value };

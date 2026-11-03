@@ -1,3 +1,4 @@
+using OsuHitsound.Audio;
 using OsuHitsound.App;
 
 namespace OsuHitsound.App.Tests;
@@ -14,7 +15,7 @@ public class PreferencesAndHelpTests : IDisposable
         var path = Path.Combine(dir, "sub", "preferences.json");
         var prefs = new Preferences
         {
-            SongsFolder = @"F:\osu!\Songs", AudioDevice = 3, BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
+            SongsFolder = @"F:\osu!\Songs", AudioOutput = OutputKind.Asio, OutputDevice = "ASIO4ALL v2", BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
             SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, InspectorOpen = false, InspectorWidth = 300,
             InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true,
         }.WithRecent(@"C:\a.osu");
@@ -31,7 +32,7 @@ public class PreferencesAndHelpTests : IDisposable
     [Fact]
     public void A_missing_or_broken_file_gives_defaults()
     {
-        Assert.Equal(-1, Preferences.Load(Path.Combine(dir, "none.json")).AudioDevice);
+        Assert.Equal(OutputKind.WasapiShared, Preferences.Load(Path.Combine(dir, "none.json")).AudioOutput);
         var broken = Path.Combine(dir, "broken.json");
         File.WriteAllText(broken, "{ not json");
         var loaded = Preferences.Load(broken);

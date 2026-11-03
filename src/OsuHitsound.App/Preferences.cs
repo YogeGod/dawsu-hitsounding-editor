@@ -16,8 +16,11 @@ internal sealed record Preferences
     /// <summary>Where Open starts; null until found or chosen.</summary>
     public string? SongsFolder { get; init; }
 
-    /// <summary>BASS output device number; -1 is the system default.</summary>
-    public int AudioDevice { get; init; } = -1;
+    /// <summary>How the sound reaches the speakers: WASAPI shared (the default), WASAPI exclusive, ASIO, DirectSound or MME.</summary>
+    public OutputKind AudioOutput { get; init; } = OutputKind.WasapiShared;
+
+    /// <summary>The device for <see cref="AudioOutput"/> (an id from AudioEngine.Devices); null is the system default.</summary>
+    public string? OutputDevice { get; init; }
 
     /// <summary>Playback buffer in ms: smaller reacts faster, larger is safer against crackles.</summary>
     public int BufferMs { get; init; } = AudioEngine.DefaultBufferMs;

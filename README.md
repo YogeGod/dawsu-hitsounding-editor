@@ -26,7 +26,7 @@ Every command is also in the menus: File, Edit, Playback, Map and View.
 
 ![Map name, Preferences and Keys / F1](docs/tutorial/map-preferences-keys.png)
 
-- **Preferences**: your Songs folder, audio output and key commands.
+- **Preferences**: your Songs folder, the audio output (WASAPI shared or exclusive, ASIO, DirectSound or MME) and its device, and key commands. Hitsounds are mixed with the song sample-accurately, so they stay in time on every output; if an output can't start (an ASIO device that isn't connected, say), the editor uses WASAPI shared and tells you why.
 - **Keys / F1**: a searchable list of every shortcut and mouse action.
 
 ### Tools
@@ -132,4 +132,4 @@ dotnet test OsuHitsoundEditor.slnx
 
 ## Credits
 
-The built-in default hitsounds are from [osu!](https://github.com/ppy/osu-resources) by ppy and contributors, used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Audio playback uses [BASS](https://www.un4seen.com), free for non-commercial use. The waveform's frequency colours follow [osu-framework](https://github.com/ppy/osu-framework)'s Waveform (MIT).
+The built-in default hitsounds are from [osu!](https://github.com/ppy/osu-resources) by ppy and contributors, used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Songs and samples are decoded with [BASS](https://www.un4seen.com) (free for non-commercial use), and the sound goes out through [NAudio](https://github.com/naudio/NAudio) (MIT). The waveform's frequency colours follow [osu-framework](https://github.com/ppy/osu-framework)'s Waveform (MIT).
