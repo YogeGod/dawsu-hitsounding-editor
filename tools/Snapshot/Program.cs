@@ -79,6 +79,8 @@ view.SetLocators(first.Moment.Time + 200, first.Moment.Time + 1400);
 view.Cycle = true;
 session.AddBookmark(first.Moment.Time + 800);
 Pump();
+model.SetActive(model.LaneRows.First(r => r.Group == OsuHitsound.Lanes.LaneGroup.NormalSet).Lane); // the lane touched last: highlighted
+Pump();
 Save("04-edited.png");
 Console.WriteLine("status: " + window.FindControl<Avalonia.Controls.TextBlock>("StatusLeft")!.Text);
 
@@ -112,6 +114,11 @@ Pump();
 var helpWindow = window.OwnedWindows.OfType<HelpWindow>().First();
 helpWindow.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "07-help.png"));
 
+// The lane list with its names hidden (the header's collapse button), then back.
+window.ToggleLaneNamesForSnapshot();
+Pump();
+Save("11-names-collapsed.png");
+window.ToggleLaneNamesForSnapshot();
 window.Close();
 return 0;
 

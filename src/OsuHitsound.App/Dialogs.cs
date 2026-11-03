@@ -213,7 +213,7 @@ internal static class Dialogs
             var kinds = Enum.GetValues<OutputKind>();
             var kind = new ComboBox { ItemsSource = kinds.Select(AudioOutputs.Name).ToList(), Width = 380, SelectedIndex = Array.IndexOf(kinds, prefs.AudioOutput) };
             var device = new ComboBox { Width = 380 };
-            var asioPanel = new Button { Content = "ASIO control panelâ€¦" };
+            var asioPanel = new Button { Content = "ASIO control panel…" };
             ToolTip.SetTip(asioPanel, "The ASIO driver's own settings (buffer size, outputs). Works once ASIO is the output in use.");
             IReadOnlyList<(string Id, string Name)> shown = [];
             void FillDevices(string? select)

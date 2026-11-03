@@ -27,6 +27,9 @@ public sealed record ProjectData
 
     public List<string> LaneOrder { get; init; } = [];
 
+    /// <summary>The lane last touched (the lane list's highlighted one), or null.</summary>
+    public string? ActiveLane { get; init; }
+
     public List<string> AddedLanes { get; init; } = [];
 
     public List<string> HiddenLanes { get; init; } = [];

@@ -64,6 +64,9 @@ internal sealed record Preferences
     /// <summary>The first-launch tutorial has been shown (File → Tutorial shows it again).</summary>
     public bool TutorialSeen { get; init; }
 
+    /// <summary>The lane list's ‹: names hidden, only the icons and buttons shown.</summary>
+    public bool LaneNamesCollapsed { get; init; }
+
     public double? WindowX { get; init; }
 
     public double? WindowY { get; init; }

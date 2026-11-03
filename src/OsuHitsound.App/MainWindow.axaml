@@ -400,7 +400,7 @@
     <Border Grid.Row="5" Grid.Column="2" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Background="{DynamicResource PaneTitle}">
-        <Grid ColumnDefinitions="Auto,Auto,*" Margin="8,0,12,0">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0,12,0">
         <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <TextBlock Text="Controller" Classes="toolLabel" Margin="0,0,6,0" />
           <RadioButton Name="VolumeTab" Classes="tab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="False" />
@@ -410,7 +410,8 @@
           <TextBlock Text="Ramp" Classes="toolLabel" />
           <ComboBox Name="RampShapeBox" Width="110" Focusable="False" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
         </StackPanel>
-        <TextBlock Grid.Column="2" Text="Drag bars · Alt = paint · Shift = ramp · one volume per moment, shared by all lanes" Classes="fieldLabel" HorizontalAlignment="Right" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="2" Name="ActiveLaneText" Classes="fieldLabel" VerticalAlignment="Center" Margin="16,0,0,0" ToolTip.Tip="The active lane: the one touched last (highlighted in the lane list)" />
+        <TextBlock Grid.Column="3" Text="Drag bars · Alt = paint · Shift = ramp · one volume per moment, shared by all lanes" Classes="fieldLabel" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </Grid>
         </Border>
         <Panel>
@@ -437,6 +438,17 @@
     <Border Grid.Row="6" Grid.ColumnSpan="3" Name="StatusBar" Classes="transportBar" BorderThickness="0,1,0,0">
       <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="12,0">
         <StackPanel Name="TransportButtons" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <!-- V6.39's locator boxes: L◀ / R◀ go to a locator; the boxes show and set it in ms (Enter). -->
+          <StackPanel Name="LocatorPanel" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+            <StackPanel Orientation="Horizontal" Spacing="3">
+              <Button Name="GoLeftButton" Content="L ◀" FontSize="11" Padding="5,0" Height="20" MinHeight="20" Focusable="False" ToolTip.Tip="Go to the left locator (Ctrl+click the ruler sets it)" />
+              <TextBox Name="LeftLocatorBox" Width="74" Height="20" MinHeight="20" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="L · ms" ToolTip.Tip="Left locator in ms: type a time and press Enter" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="3">
+              <Button Name="GoRightButton" Content="R ◀" FontSize="11" Padding="5,0" Height="20" MinHeight="20" Focusable="False" ToolTip.Tip="Go to the right locator (Alt+click the ruler sets it)" />
+              <TextBox Name="RightLocatorBox" Width="74" Height="20" MinHeight="20" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="R · ms" ToolTip.Tip="Right locator in ms: type a time and press Enter" />
+            </StackPanel>
+          </StackPanel>
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
             <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
           </Button>

@@ -18,6 +18,8 @@ public partial class MainWindow
         Lanes.LaneMenuRequested += ShowLaneMenu;
         // A lane's + adds a new sample file for its sound; the list header's + picks one of the mapset's files.
         Lanes.AddLaneRequested += async lane => { if (lane is null) await AddLaneDialog(); else await AddSampleTo(lane); };
+        Lanes.RemoveLaneRequested += async () => await DeleteActiveLane();
+        Lanes.CollapseNamesRequested += ToggleLaneNames;
         // Samples dropped into the folder (File → Open map folder) show up when the editor is back in front.
         Activated += (_, _) => RefreshFolder();
         AddLaneItem.Click += async (_, _) => await AddLaneDialog();
@@ -72,16 +74,49 @@ public partial class MainWindow
                 Item("Move up", () => { model.MoveLane(lane, -1); ScheduleProjectSave(); }),
                 Item("Move down", () => { model.MoveLane(lane, 1); ScheduleProjectSave(); }),
                 new Separator(),
-                Item("Delete lane (removes its hits)", () =>
-                {
-                    session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList(), "Delete lane");
-                    model.HideLane(lane);
-                    ScheduleProjectSave();
-                }),
+                Item("Delete lane (removes its hits)", () => DeleteLane(lane)),
                 Item("Add lane…", async () => await AddLaneDialog(lane)),
             },
         };
         menu.Open(Lanes);
+    }
+
+    /// <summary>Deletes a lane: its hits go (Undo brings them and the lane back); the sample file stays in the mapset.</summary>
+    private void DeleteLane(Lane lane)
+    {
+        if (model is null || session is null) return;
+        session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList(), "Delete lane");
+        model.HideLane(lane);
+        ScheduleProjectSave();
+    }
+
+    /// <summary>The − above the lane list: deletes the active lane, asking first when it has hits.</summary>
+    private async Task DeleteActiveLane()
+    {
+        if (model is null || session is null) return;
+        if (model.ActiveLane is not { } lane)
+        {
+            flash = "Click a lane first: − deletes the highlighted lane.";
+            UpdateStatus();
+            return;
+        }
+
+        int hits = session.State.Hits.Count(h => h.Lane == lane);
+        if (hits > 0 && !await Dialogs.Confirm(this, "Delete lane",
+                $"Delete {model.NameOf(lane)} and its {hits} hit{(hits == 1 ? "" : "s")}? Undo brings them back; the sample file stays in the mapset.", "Delete"))
+            return;
+        DeleteLane(lane);
+    }
+
+    /// <summary>The ‹ above the lane list: hides or shows the lane names (remembered in the preferences).</summary>
+    internal void ToggleLaneNamesForSnapshot() => ToggleLaneNames();
+
+    private void ToggleLaneNames()
+    {
+        ArrangeView.NamesCollapsed = !ArrangeView.NamesCollapsed;
+        prefs = prefs with { LaneNamesCollapsed = ArrangeView.NamesCollapsed };
+        SavePrefs();
+        ApplyTheme(); // the list's width changes everything to its right
     }
 
     /// <summary>Lists the mapset's audio files that have no lane yet; the chosen one gets a lane (rule 5: mapset files only).</summary>
@@ -226,6 +261,7 @@ public partial class MainWindow
             Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time))],
             LaneNames = names,
             LaneOrder = order,
+            ActiveLane = model.ActiveLane is { } active ? ProjectStore.KeyOf(active) : null,
             AddedLanes = added,
             HiddenLanes = hidden,
             LocatorLeft = Lanes.LocatorLeft,

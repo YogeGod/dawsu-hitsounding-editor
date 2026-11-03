@@ -54,6 +54,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
+        ArrangeView.NamesCollapsed = prefs.LaneNamesCollapsed;
         skin = NewSkin();
         if (startAudio) StartAudio();
         ApplyWindowPlacement();
@@ -162,6 +163,16 @@ public partial class MainWindow : Window
             UpdateSongMute();
         };
         Lanes.SongMuteRequested += () => SongMuteButton.IsChecked = SongMuteButton.IsChecked != true;
+        // The locator boxes (V6.39): L◀ / R◀ jump to a locator; a typed time in ms sets it on Enter.
+        GoLeftButton.Click += (_, _) => { if (Lanes.LocatorLeft is { } at) Seek(at); };
+        GoRightButton.Click += (_, _) => { if (Lanes.LocatorRight is { } at) Seek(at); };
+        foreach (var box in new[] { LeftLocatorBox, RightLocatorBox })
+        {
+            box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { ApplyLocatorBoxes(); Lanes.Focus(); e.Handled = true; } };
+            box.LostFocus += (_, _) => ApplyLocatorBoxes();
+        }
+
+        Lanes.LocatorsChanged += ShowLocators;
         SongOffsetBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) { ApplySongOffset(); Lanes.Focus(); e.Handled = true; } };
         SongOffsetBox.LostFocus += (_, _) => ApplySongOffset();
 
@@ -296,6 +307,8 @@ public partial class MainWindow : Window
             LoadWaveform();
             RestoreProject();
             model.PreviewMutesChanged += UpdateCues;
+            model.Changed += UpdateActiveLaneText;
+            UpdateActiveLaneText();
             model.PreviewMutesChanged += ScheduleProjectSave;
             model.Changed += UpdateSongMute; // soloing a lane silences the song
 
@@ -574,6 +587,32 @@ public partial class MainWindow : Window
         audio.SetCues(session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h => HitScheduler.HitCue(h.Time, h.Lane, session.VolumeOf(h)))
             .Concat(HitScheduler.PassiveCues(session.Map)));
     }
+
+    /// <summary>Sets the locators from their boxes; a box that isn't a number goes back to the locator as it was.</summary>
+    private void ApplyLocatorBoxes()
+    {
+        static double? Parse(string? text) => OsuNumber.TryParseDouble(text ?? "", out double ms) && double.IsFinite(ms) ? Math.Max(0, ms) : null;
+        double? left = Parse(LeftLocatorBox.Text) ?? Lanes.LocatorLeft, right = Parse(RightLocatorBox.Text) ?? Lanes.LocatorRight;
+        if (left is null && right is null)
+        {
+            ShowLocators();
+            return;
+        }
+
+        double l = left ?? right!.Value, r = right ?? l;
+        if (l == Lanes.LocatorLeft && r == Lanes.LocatorRight) ShowLocators();
+        else Lanes.SetLocators(l, r); // shows them again through LocatorsChanged
+    }
+
+    private void ShowLocators()
+    {
+        static string Ms(double? t) => t is { } v ? Math.Round(v).ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+        LeftLocatorBox.Text = Ms(Lanes.LocatorLeft);
+        RightLocatorBox.Text = Ms(Lanes.LocatorRight);
+    }
+
+    // The controller bar names the active lane, as in V6.39.
+    private void UpdateActiveLaneText() => ActiveLaneText.Text = model?.ActiveLane is { } lane ? model.NameOf(lane) : "";
 
     private void UpdateSongMute()
     {

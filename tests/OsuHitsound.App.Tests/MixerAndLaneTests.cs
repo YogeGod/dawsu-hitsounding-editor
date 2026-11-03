@@ -92,6 +92,40 @@ public class MixerAndLaneTests
     }
 
     [Fact]
+    public void Row_zoom_keeps_the_point_under_the_mouse_even_past_short_group_rows()
+    {
+        // A group row (18 px, it doesn't grow), three lanes, another group row, three lanes; rows 22 px → 44 px.
+        var model = Model();
+        var rows = model.Rows;
+        Assert.True(rows.Count >= 4);
+
+        // The mouse 5 px into the fourth row (the content above it: what the old rows add up to), no scroll yet.
+        double Height(Row r, double h) => r is GroupRow ? Math.Min(ArrangeView.GroupRowHeight, h) : h;
+        double before = rows.Take(3).Sum(r => Height(r, 22)) + 5;
+        double scroll = ArrangeView.ScrollKeepingPoint(rows, 22, 44, 0, before);
+
+        // After the zoom the same row is under the mouse, the same fraction into it.
+        double after = rows.Take(3).Sum(r => Height(r, 44)) + 5 * Height(rows[3], 44) / Height(rows[3], 22);
+        Assert.Equal(after - before, scroll, 6);
+    }
+
+    [Fact]
+    public void The_active_lane_is_kept_in_the_project_and_cleared_when_deleted()
+    {
+        var model = Model();
+        var lane = model.LaneRows[2].Lane;
+        model.SetActive(lane);
+        Assert.Equal(lane, model.ActiveLane);
+
+        var fresh = Model();
+        fresh.ApplyLaneLayout(new ProjectData { ActiveLane = ProjectStore.KeyOf(lane) }, _ => true);
+        Assert.Equal(lane, fresh.ActiveLane);
+
+        model.HideLane(lane);
+        Assert.Null(model.ActiveLane);
+    }
+
+    [Fact]
     public void A_lane_order_from_a_version_1_project_is_ignored_but_its_names_are_kept()
     {
         var model = Model();

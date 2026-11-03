@@ -31,7 +31,12 @@ internal sealed class ArrangeView : Control
 
     /// <summary>The column of drag handles (⠿) left of the lane names; the lane list's own width is themable.</summary>
     public const double NumberWidth = 24;
-    public static double ListWidth => Theme_.Number("list.width");
+    public static double ListWidth => NamesCollapsed ? Math.Min(CollapsedListWidth, Theme_.Number("list.width")) : Theme_.Number("list.width");
+
+    /// <summary>The lane list's ‹: only the sound icons and buttons are shown, the names hidden.</summary>
+    public static bool NamesCollapsed { get; set; }
+
+    private const double CollapsedListWidth = 150;
     public static double GridLeft => NumberWidth + ListWidth;
     public static double SectionsHeight => Theme_.Number("header.sections");
     public const double RulerHeight = 24;
@@ -202,6 +207,12 @@ internal sealed class ArrangeView : Control
     /// <summary>A "+" was clicked: a lane's (that lane), or the one above the lane list (null).</summary>
     public event Action<Lane?>? AddLaneRequested;
 
+    /// <summary>The "−" above the lane list: delete the active lane.</summary>
+    public event Action? RemoveLaneRequested;
+
+    /// <summary>The "‹" above the lane list: collapse or expand the lane names.</summary>
+    public event Action? CollapseNamesRequested;
+
     /// <summary>The L and R cycle locators changed, or cycling was switched on or off from the ruler.</summary>
     public event Action? LocatorsChanged;
 
@@ -241,7 +252,24 @@ internal sealed class ArrangeView : Control
     /// <summary>Group rows ("Soft sampleset") are compact, as in V6.39; lane rows are <see cref="RowHeight"/>.</summary>
     public const double GroupRowHeight = 18;
 
-    private double HeightOf(Row row) => row is GroupRow ? Math.Min(GroupRowHeight, RowHeight) : RowHeight;
+    private double HeightOf(Row row) => HeightOf(row, RowHeight);
+
+    private static double HeightOf(Row row, double rowHeight) => row is GroupRow ? Math.Min(GroupRowHeight, rowHeight) : rowHeight;
+
+    /// <summary>
+    /// The scroll after the row height changes that keeps the point <paramref name="y"/> px below the header on the same
+    /// row, the same fraction into it (group rows don't grow with the lanes, so a plain ratio would drift).
+    /// </summary>
+    internal static double ScrollKeepingPoint(IReadOnlyList<Row> rows, double oldHeight, double newHeight, double scrollY, double y)
+    {
+        if (rows.Count == 0) return scrollY;
+        double content = y + scrollY, top = 0;
+        int i = 0;
+        for (; i < rows.Count - 1 && top + HeightOf(rows[i], oldHeight) <= content; i++) top += HeightOf(rows[i], oldHeight);
+        double into = Math.Clamp((content - top) / HeightOf(rows[i], oldHeight), 0, 1), newTop = 0;
+        for (int j = 0; j < i; j++) newTop += HeightOf(rows[j], newHeight);
+        return newTop + into * HeightOf(rows[i], newHeight) - y;
+    }
 
     private double[] rowTops = [0];
     private (IReadOnlyList<Row>? Rows, double Height) rowTopsFor;
@@ -382,7 +410,10 @@ internal sealed class ArrangeView : Control
         ctx.FillRectangle(Paint.Chrome2, new Rect(0, 0, width, HeaderHeight));
         ctx.FillRectangle(TitleBand, new Rect(0, 0, GridLeft, RulerBottom));
         Paint.DrawText(ctx, "SAMPLE LANES", new Point(10, 6), 8, Paint.Dim, ListWidth - 60, Paint.UiBold);
-        DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, -((RowHeight - 18) / 2) + 2, null);
+        double headerY = -((RowHeight - 18) / 2) + 2;
+        DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, headerY, null);
+        DrawToggle(ctx, "−", GridLeft - RemoveLaneFromRight, headerY, null);
+        DrawToggle(ctx, NamesCollapsed ? "›" : "‹", GridLeft - CollapseFromRight, headerY, null);
         // The waveform and the objects strip are rows of the list, as in V6.39.
         ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom - 0.5), new Point(GridLeft, RulerBottom - 0.5));
         if (WaveHeight >= 14)
@@ -641,6 +672,12 @@ internal sealed class ArrangeView : Control
                 // sound icon, + (add a lane), ● (hear it), M and S at the right edge.
                 ctx.FillRectangle(Paint.LaneHeadA, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 ctx.FillRectangle(Tint(sound, 0.10), new Rect(0, y, NumberWidth + ListWidth, RowHeight));
+                if (lane.Lane == model.ActiveLane)
+                {
+                    // V6.39's active lane: a brighter row with a blue bar at its left edge.
+                    ctx.FillRectangle(ActiveFill, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
+                    ctx.FillRectangle(ActiveBar, new Rect(0, y, 3, RowHeight));
+                }
                 // Positions measured on V6.39 (list's left edge = 0): the first lane of a group has its grip at 17, a faint
                 // disclosure dot at 36, the sample dot at 49 and the name at 55; the lanes under it shift 18 px right, with
                 // the tree line at 21 (down to the row's middle for the last one, then across to 31).
@@ -661,8 +698,10 @@ internal sealed class ArrangeView : Control
                 if (silent) name += lane.Lane.Missing ? "  (missing)" : "  (no sound)";
                 if (ShowIndexes && lane.Index is { } idx) name += $"  · idx {idx}";
                 ctx.DrawEllipse(silent ? MissingDot : LoadedDot, null, new Point(DotX + indent, cy), 2.5, 2.5);
-                Paint.DrawText(ctx, name, new Point(NameX + indent, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, silent ? Paint.MissingText : Paint.Text,
-                    GridLeft - IconFromRight - 14 - NameX - indent, first ? Paint.UiBold : Paint.Ui);
+                double nameWidth = GridLeft - IconFromRight - 14 - NameX - indent;
+                if (nameWidth > 12) // collapsed (‹): no room for names, the icon says which sound it is
+                    Paint.DrawText(ctx, name, new Point(NameX + indent, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, silent ? Paint.MissingText : Paint.Text,
+                        nameWidth, first ? Paint.UiBold : Paint.Ui);
                 DrawSoundIcon(ctx, lane.Lane.Sample?.Sound, new Point(NumberWidth + ListWidth - IconFromRight, cy), IconTone);
                 DrawToggle(ctx, "+", NumberWidth + ListWidth - AddFromRight, y, AddFill);
                 DrawToggle(ctx, "●", NumberWidth + ListWidth - PreviewFromRight, y, null);
@@ -691,7 +730,8 @@ internal sealed class ArrangeView : Control
 
     private static readonly IPen TreePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#5a5a68"), 1);
     private static readonly Color IconTone = Color.Parse("#c9c9d6");
-    private static readonly IBrush AddFill = Paint.Brush("#324761"); // V6.39 .addLayer: #324761 with a #526b8d border
+    private static readonly IBrush ActiveFill = Paint.Brush(Colors.White, 0.07), ActiveBar = Paint.Brush("#0a84ff");
+    private static readonly IBrush AddFill =Paint.Brush("#324761"); // V6.39 .addLayer: #324761 with a #526b8d border
 
     /// <summary>The song is muted (drawn on the Song audio row's M); clicking that M raises <see cref="SongMuteRequested"/>.</summary>
     public bool SongMuted { get; set; }
@@ -801,10 +841,11 @@ internal sealed class ArrangeView : Control
         var p = e.GetPosition(this);
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
-            // Vertical zoom (Ctrl+Shift+wheel), keeping the row under the mouse in place.
-            double rowUnder = (p.Y - HeaderHeight + scrollY) / RowHeight;
+            // Vertical zoom (Ctrl+Shift+wheel), keeping the point under the mouse in place: the same row, the same
+            // fraction into it (group rows don't grow with the lanes, so a plain ratio would drift).
+            double old = RowHeight;
             RowHeight = Math.Round(RowHeight * (e.Delta.Y > 0 ? 1.15 : 1 / 1.15));
-            ScrollY = rowUnder * RowHeight - (p.Y - HeaderHeight);
+            ScrollY = ScrollKeepingPoint(Model?.Rows ?? [], old, RowHeight, scrollY, p.Y - HeaderHeight);
         }
         else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) // Ctrl+wheel and Ctrl+Alt+wheel: zoom in time
             Axis.ZoomAt(e.Delta.Y > 0 ? 1.25 : 0.8, Math.Max(0, p.X - GridLeft));
@@ -847,7 +888,7 @@ internal sealed class ArrangeView : Control
 
     // The list's buttons, measured from its right edge (V6.39 keeps them there); names from the left.
     private const double ToggleWidth = 18, SoloFromRight = 25, MuteFromRight = 48, PreviewFromRight = 71, AddFromRight = 93, IconFromRight = 111,
-        AddLaneFromRight = 26, GroupNameX = 46;
+        AddLaneFromRight = 70, RemoveLaneFromRight = 48, CollapseFromRight = 26, GroupNameX = 46;
 
     private enum ListTarget
     {
@@ -937,14 +978,29 @@ internal sealed class ArrangeView : Control
         var p = point.Position;
         bool additive = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         // Before a map is opened only the lane list's buttons work: there is nothing to draw on yet.
-        if (IsPreview && (p.Y < HeaderHeight || p.X >= GridLeft || !point.Properties.IsLeftButtonPressed)) return;
+        // (The + − ‹ above the list still work.)
+        if (IsPreview && ((p.Y < HeaderHeight && !(p.Y < 22 && p.X < GridLeft)) || p.X >= GridLeft || !point.Properties.IsLeftButtonPressed)) return;
 
         if (p.Y < HeaderHeight)
         {
             if (!point.Properties.IsLeftButtonPressed) return;
-            if (p.X >= GridLeft - AddLaneFromRight && p.X < GridLeft - AddLaneFromRight + ToggleWidth && p.Y < 22)
+            // The + − ‹ in the SAMPLE LANES title.
+            bool On(double fromRight) => p.X >= GridLeft - fromRight && p.X < GridLeft - fromRight + ToggleWidth && p.Y < 22;
+            if (On(AddLaneFromRight))
             {
-                AddLaneRequested?.Invoke(null); // the "+" in the SAMPLE LANES title
+                AddLaneRequested?.Invoke(null);
+                return;
+            }
+
+            if (On(RemoveLaneFromRight))
+            {
+                RemoveLaneRequested?.Invoke();
+                return;
+            }
+
+            if (On(CollapseFromRight))
+            {
+                CollapseNamesRequested?.Invoke();
                 return;
             }
 
@@ -1006,6 +1062,8 @@ internal sealed class ArrangeView : Control
         }
 
         if (RowAt(p.Y) is not { } row) return;
+        // The lane touched last is the active one (its name clicked, or a hit drawn, picked or moved in it).
+        if (row is LaneRow touched && point.Properties.IsLeftButtonPressed) model.SetActive(touched.Lane);
         if (p.X < GridLeft)
         {
             if (point.Properties.IsRightButtonPressed && row is LaneRow menuLane)

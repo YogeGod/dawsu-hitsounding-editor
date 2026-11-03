@@ -318,6 +318,16 @@ internal sealed partial class ArrangeModel
 
     public event Action? Changed;
 
+    /// <summary>The lane touched last (its name clicked, or a hit drawn, picked or moved in it): the header's − deletes it.</summary>
+    public Lane? ActiveLane { get; private set; }
+
+    public void SetActive(Lane? lane)
+    {
+        if (ActiveLane == lane) return;
+        ActiveLane = lane;
+        Changed?.Invoke();
+    }
+
     public bool IsCollapsed(LaneGroup group) => collapsed.Contains(group);
 
     public bool IsMuted(Lane lane) => muted.Contains(lane);
@@ -545,7 +555,11 @@ internal sealed partial class ArrangeModel
     });
 
     /// <summary>Hides a lane after its hits were deleted (the file is kept); undoing brings its hits, and the lane, back.</summary>
-    public void HideLane(Lane lane) => Relayout(() => hidden.Add(lane));
+    public void HideLane(Lane lane) => Relayout(() =>
+    {
+        hidden.Add(lane);
+        if (ActiveLane == lane) ActiveLane = null;
+    });
 
     /// <summary>Whether any lane is hidden: only then can an edit (undo) make a lane reappear.</summary>
     public bool HasHiddenLanes => hidden.Count > 0;
@@ -583,6 +597,7 @@ internal sealed partial class ArrangeModel
             var sorted = laneRows.OrderBy(r => r.Group).ThenBy(r => order.TryGetValue(ProjectStore.KeyOf(r.Lane), out int i) ? i : int.MaxValue).ToList();
             laneRows.Clear();
             laneRows.AddRange(sorted);
+            if (project.ActiveLane is { } activeKey && ProjectStore.LaneOf(activeKey) is { } active && laneRows.Any(r => r.Lane == active)) ActiveLane = active;
         });
     }
 
