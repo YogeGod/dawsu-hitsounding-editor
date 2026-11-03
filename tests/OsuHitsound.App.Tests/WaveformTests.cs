@@ -35,12 +35,30 @@ public class WaveformTests
     [InlineData(5000, 2)]   // a hi-hat: high
     public void A_tone_shows_in_its_own_frequency_band(double hz, int band)
     {
-        var wave = Waveform.FromSamples(Tone(hz, 44100, 1), channels: 1, sampleRate: 44100);
-        var (low, mid, high) = wave.Bands(400, 600); // the middle of the tone, away from its edges
+        // 3 s, so the tone's abrupt start and end (whose slices spread energy over every band) are a tiny share of the
+        // slices, as in real audio: each band is scaled to the song, ignoring only its loudest 0.5 %.
+        var wave = Waveform.FromSamples(Tone(hz, 44100, 3), channels: 1, sampleRate: 44100);
+        var (low, mid, high) = wave.Bands(1400, 1600); // the middle of the tone, away from its edges
         float[] bands = [low, mid, high];
 
         Assert.Equal(band, Array.IndexOf(bands, bands.Max()));
         Assert.True(bands[band] > 0.5f);
+    }
+
+    [Theory]
+    [InlineData(44100)] // 220.5 frames per 5 ms slice: a rounded slice length drifted the waveform later
+    [InlineData(48000)]
+    public void A_click_two_minutes_in_is_drawn_at_its_own_time(int rate)
+    {
+        var samples = new float[rate * 121];
+        int at = rate * 120; // exactly 120 000 ms
+        for (int i = 0; i < 64; i++) samples[at + i] = 1;
+
+        var wave = Waveform.FromSamples(samples, channels: 1, sampleRate: rate);
+
+        Assert.Equal(1, wave.Max(119_999, 120_001));
+        Assert.Equal(0, wave.Max(119_900, 119_990)); // nothing before it
+        Assert.Equal(121_000, wave.Duration, 0);
     }
 
     [Fact]

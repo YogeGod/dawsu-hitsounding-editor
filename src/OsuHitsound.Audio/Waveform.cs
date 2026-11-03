@@ -80,13 +80,22 @@ public sealed record Waveform(float[] Peaks, int PeaksPerSecond, float[]? Low = 
         private const int Window = 1024;
         private static readonly float[] Hann = [.. Enumerable.Range(0, Window).Select(i => (float)(0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (Window - 1))))];
 
-        private readonly int framesPerPeak = Math.Max(1, sampleRate / peaksPerSecond);
+        // Frames per slice, not rounded: at 44.1 kHz a 5 ms slice is 220.5 frames. A whole number here (220) made every
+        // slice 4.989 ms while it's drawn as 5, so the waveform drifted later through the song (~275 ms after 2 minutes).
+        private readonly double framesPerPeak = Math.Max(1.0, (double)sampleRate / peaksPerSecond);
         private readonly List<float> peaks = [], low = [], mid = [], high = [];
         private readonly float[] ring = new float[Window]; // the last 1024 mono frames
         private readonly Complex[] fft = new Complex[Window];
         private long frame;
         private float current;
-        private int inPeak, analysed;
+        private bool inPeak;
+        private int analysed;
+
+        // Slice i covers frames [Start(i), Start(i + 1)): exact positions, so slices stay on the song's time.
+        private long Start(int slice) => (long)Math.Floor(slice * framesPerPeak);
+
+        // Slice i's window is centred on its middle and ready once half a window has followed that.
+        private bool WindowReady(int slice) => frame >= (long)Math.Floor((slice + 0.5) * framesPerPeak) + Window / 2;
 
         /// <summary>Adds interleaved frames: each one's loudest channel for the peaks, their average for the bands.</summary>
         public void AddFrames(ReadOnlySpan<float> interleaved, int channels)
@@ -110,25 +119,25 @@ public sealed record Waveform(float[] Peaks, int PeaksPerSecond, float[]? Low = 
             ring[(int)(frame % Window)] = mono;
             frame++;
             current = Math.Max(current, peak);
-            if (++inPeak == framesPerPeak)
+            inPeak = true;
+            if (frame >= Start(peaks.Count + 1))
             {
                 peaks.Add(Math.Min(current, 1));
-                (current, inPeak) = (0, 0);
+                (current, inPeak) = (0, false);
             }
 
-            // Slice i is centred on frame i·n + n/2; its window is ready once half a window has followed the centre.
-            while (analysed < peaks.Count && frame >= (long)analysed * framesPerPeak + framesPerPeak / 2 + Window / 2) Analyse();
+            while (analysed < peaks.Count && WindowReady(analysed)) Analyse();
         }
 
         public Waveform Finish()
         {
-            if (inPeak > 0) peaks.Add(Math.Min(current, 1));
+            if (inPeak) peaks.Add(Math.Min(current, 1));
             // Pad with silence so the last slices get their windows too.
             while (analysed < peaks.Count)
             {
                 ring[(int)(frame % Window)] = 0;
                 frame++;
-                if (frame >= (long)analysed * framesPerPeak + framesPerPeak / 2 + Window / 2) Analyse();
+                if (WindowReady(analysed)) Analyse();
             }
 
             return new Waveform([.. peaks], peaksPerSecond, Normalise(low), Normalise(mid), Normalise(high));
