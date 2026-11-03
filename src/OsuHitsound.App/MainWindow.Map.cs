@@ -269,7 +269,7 @@ public partial class MainWindow
             LocatorRight = Lanes.LocatorRight,
             Cycle = Lanes.Cycle,
             PreviewMuted = [.. model.PreviewMutedHits.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time))],
-            SongOffset = audio?.SongOffset ?? 0,
+            SongOffset = mapSongOffset,
             TimeSignatures = [.. model.TimeSignatures],
         };
         try
@@ -306,12 +306,8 @@ public partial class MainWindow
         if (project.TimeSignatures.Count > 0) model.SetTimeSignatures(project.TimeSignatures);
         if (project.LocatorLeft is { } l && project.LocatorRight is { } r) Lanes.SetLocators(l, r);
         Lanes.Cycle = project.Cycle;
-        if (audio is not null && project.SongOffset != 0)
-        {
-            audio.SongOffset = project.SongOffset;
-            Lanes.SongOffset = audio.SongOffset;
-            SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
+        mapSongOffset = double.IsFinite(project.SongOffset) ? Math.Clamp(project.SongOffset, -10000, 10000) : 0;
+        ApplyOffsets();
 
         SyncScrollBars();
     }

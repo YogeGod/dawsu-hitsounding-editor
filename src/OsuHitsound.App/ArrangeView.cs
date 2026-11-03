@@ -58,6 +58,7 @@ internal sealed class ArrangeView : Control
     private static readonly IPen RangePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#e0a030"), 1);
     private static readonly IBrush RangeFill = Paint.Brush(Color.Parse("#e0a030"), 0.18);
     private static readonly IBrush HoverFill = Paint.Brush(Colors.White, 0.06);
+    private static readonly IPen LaneDropPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#0a84ff"), 2);
 
     private double? rowHeight; // set by Ctrl+Shift+wheel; null follows the theme
     private double scrollY;
@@ -74,6 +75,7 @@ internal sealed class ArrangeView : Control
         Wipe,
         Cycle,
         ResizeWave,
+        Layout,
     }
 
     private Drag drag;
@@ -85,6 +87,9 @@ internal sealed class ArrangeView : Control
     private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
     private HashSet<EditHit> marqueeBase = [];
     private bool seekOnClick;
+    private Row? draggedRow, dropRow;
+    private bool layoutMoved, dropAfter;
+    private double? laneDropY;
 
     public ArrangeView()
     {
@@ -371,6 +376,8 @@ internal sealed class ArrangeView : Control
                 double px = GridLeft + Axis.X(Playhead);
                 ctx.DrawLine(Paint.PlayheadPen, new Point(px, HeaderHeight), new Point(px, size.Height));
             }
+            if (drag == Drag.Layout && laneDropY is { } dropY)
+                ctx.DrawLine(LaneDropPen, new Point(0, dropY), new Point(size.Width, dropY));
         }
 
         DrawHeader(ctx, model, lines, size.Width, gridWidth);
@@ -920,6 +927,43 @@ internal sealed class ArrangeView : Control
         };
     }
 
+    private bool OnLaneGrip(Row row, Point p)
+    {
+        if (p.X >= GridLeft) return false;
+        int i = RowIndexAt(p.Y);
+        bool first = i == 0 || Model?.Rows.ElementAtOrDefault(i - 1) is not LaneRow;
+        double x = row is GroupRow ? 12 : GripX + (first ? 0 : ChildIndent);
+        return p.X >= x - 4 && p.X < x + 14;
+    }
+
+    private void UpdateLaneDrop(Point p)
+    {
+        dropRow = null;
+        laneDropY = null;
+        if (!layoutMoved || Model is not { } model || p.X < 0 || p.X >= GridLeft || p.Y < HeaderHeight || p.Y >= Bounds.Height || model.Rows.Count == 0) return;
+        int i = Math.Clamp(RowIndexAt(p.Y), 0, model.Rows.Count - 1);
+        var target = model.Rows[i];
+        if (draggedRow is LaneRow lane)
+        {
+            if (target is not LaneRow other || other.Group != lane.Group) return;
+            double top = HeaderHeight + RowTop(i) - scrollY;
+            dropAfter = p.Y >= top + RowHeight / 2;
+            laneDropY = top + (dropAfter ? RowHeight : 0);
+        }
+        else if (draggedRow is GroupRow group)
+        {
+            if (target.Group == group.Group) return;
+            int first = i, last = i + 1;
+            while (first > 0 && model.Rows[first - 1].Group == target.Group) first--;
+            while (last < model.Rows.Count && model.Rows[last].Group == target.Group) last++;
+            double top = HeaderHeight + RowTop(first) - scrollY, bottom = HeaderHeight + RowTop(last) - scrollY;
+            dropAfter = p.Y >= (top + bottom) / 2;
+            laneDropY = dropAfter ? bottom : top;
+        }
+        else return;
+        dropRow = target;
+    }
+
     private int RowIndexAt(double y)
     {
         double content = y - HeaderHeight + scrollY;
@@ -1071,6 +1115,17 @@ internal sealed class ArrangeView : Control
         if (row is LaneRow touched && point.Properties.IsLeftButtonPressed) model.SetActive(touched.Lane);
         if (p.X < GridLeft)
         {
+            if (point.Properties.IsLeftButtonPressed && OnLaneGrip(row, p))
+            {
+                drag = Drag.Layout;
+                draggedRow = row;
+                dropRow = null;
+                laneDropY = null;
+                layoutMoved = false;
+                dragStart = dragNow = p;
+                e.Pointer.Capture(this);
+                return;
+            }
             if (point.Properties.IsRightButtonPressed && row is LaneRow menuLane)
             {
                 LaneMenuRequested?.Invoke(menuLane);
@@ -1225,6 +1280,12 @@ internal sealed class ArrangeView : Control
 
         switch (drag)
         {
+            case Drag.Layout:
+                layoutMoved |= Math.Abs(p.Y - dragStart.Y) >= DragThreshold || Math.Abs(p.X - dragStart.X) >= DragThreshold;
+                if (p.Y < HeaderHeight + 12) ScrollY -= RowHeight;
+                else if (p.Y > Bounds.Height - 12) ScrollY += RowHeight;
+                UpdateLaneDrop(p);
+                break;
             case Drag.Paint when paintRow is not null:
                 session.Add([session.HitAt(paintRow.Lane, SnapTime(Axis.Time(gridX)))]); // Add ignores a hit already there
                 break;
@@ -1282,6 +1343,14 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (drag == Drag.None) return;
+        if (drag == Drag.Layout && Model is { } layout)
+        {
+            UpdateLaneDrop(e.GetPosition(this));
+            if (draggedRow is LaneRow lane && dropRow is LaneRow target) layout.MoveLaneTo(lane.Lane, target.Lane, dropAfter);
+            else if (draggedRow is GroupRow folder && dropRow is { } destination) layout.MoveFolderTo(folder.Group, destination.Group, dropAfter);
+            draggedRow = dropRow = null;
+            laneDropY = null;
+        }
         if (drag == Drag.Marquee && seekOnClick)
         {
             var released = e.GetPosition(this);
@@ -1313,6 +1382,9 @@ internal sealed class ArrangeView : Control
     {
         Session?.EndGesture();
         drag = Drag.None;
+        draggedRow = dropRow = null;
+        laneDropY = null;
+        InvalidateVisual();
         base.OnPointerCaptureLost(e);
     }
 

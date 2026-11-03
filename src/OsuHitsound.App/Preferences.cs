@@ -64,6 +64,12 @@ internal sealed record Preferences
     /// <summary>The first-launch tutorial has been shown (File → Tutorial shows it again).</summary>
     public bool TutorialSeen { get; init; }
 
+    /// <summary>
+    /// Song offset (ms) for every map, added to each map's own Offset: maps are timed against osu!'s audio clock, which
+    /// runs about 17 ms ahead of the raw audio played here (measured on a stable map; a lazer map needed 8 ms more).
+    /// </summary>
+    public double GlobalSongOffset { get; init; } = -17;
+
     /// <summary>The lane list's ‹: names hidden, only the icons and buttons shown.</summary>
     public bool LaneNamesCollapsed { get; init; }
 

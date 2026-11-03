@@ -395,6 +395,16 @@ internal static class Dialogs
             general.Children.Add(bufferText);
             general.Children.Add(buffer);
 
+            // Song offset for all maps: added to each map's own Offset (top right).
+            general.Children.Add(new TextBlock { Text = "Song offset for all maps (ms)", FontWeight = FontWeight.SemiBold });
+            var globalOffset = new TextBox { Text = prefs.GlobalSongOffset.ToString(CultureInfo.InvariantCulture), Width = 100 };
+            general.Children.Add(globalOffset);
+            general.Children.Add(new TextBlock
+            {
+                Text = "Maps are timed against osu!'s own audio clock, so the song is played and drawn this much earlier (negative) everywhere. Each map's Offset box adds to it. -17 suits most maps; lazer exports may need about -8 more.",
+                TextWrapping = TextWrapping.Wrap, MaxWidth = 460, Opacity = 0.7,
+            });
+
             var keys = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
             var editedKeys = KeysPage(keys, prefs, body, PathRow);
 
@@ -410,6 +420,7 @@ internal static class Dialogs
                 AudioOutput = kinds[Math.Max(0, kind.SelectedIndex)],
                 OutputDevice = shown.Count > 0 && device.SelectedIndex >= 0 && shown[device.SelectedIndex].Id is { Length: > 0 } id ? id : null,
                 BufferMs = (int)buffer.Value,
+                GlobalSongOffset = OsuNumber.TryParseDouble(globalOffset.Text ?? "", out double offset) && double.IsFinite(offset) ? Math.Clamp(offset, -1000, 1000) : prefs.GlobalSongOffset,
             }), "OK");
         });
 

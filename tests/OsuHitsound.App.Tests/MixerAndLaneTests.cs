@@ -138,4 +138,75 @@ public class MixerAndLaneTests
         Assert.Equal(defaultOrder, model.LaneRows.Select(r => r.Lane));
         Assert.Equal("kept", model.NameOf(lane));
     }
+
+    [Fact]
+    public void Folder_moves_include_filtered_and_hidden_lanes_and_survive_reopening()
+    {
+        var model = Model();
+        var before = model.LaneRows.Select(r => r.Lane).ToList();
+        var soft = model.LaneRows.Where(r => r.Group == LaneGroup.SoftSet).Select(r => r.Lane).ToList();
+        model.HideLane(soft[0]);
+        model.SetFilter("clap");
+        model.ToggleCollapsed(LaneGroup.SoftSet);
+        model.MoveFolderTo(LaneGroup.SoftSet, LaneGroup.DrumSet, true);
+
+        Assert.Equal(soft, model.LaneRows.Where(r => r.Group == LaneGroup.SoftSet).Select(r => r.Lane));
+        Assert.Equal(LaneGroup.SoftSet, model.LaneRows.Last().Group);
+        Assert.Equal(before.OrderBy(l => l.Name), model.LaneRows.Select(r => r.Lane).OrderBy(l => l.Name));
+        var (names, order, added, hidden) = model.LaneLayout();
+        var fresh = Model();
+        fresh.ApplyLaneLayout(new ProjectData { LaneNames = names, LaneOrder = order, AddedLanes = added, HiddenLanes = hidden }, _ => true);
+        Assert.Equal(model.LaneRows.Select(r => r.Lane), fresh.LaneRows.Select(r => r.Lane));
+    }
+
+    [Fact]
+    public void Layout_and_note_edits_share_chronological_undo_and_redo()
+    {
+        var model = Model();
+        var session = model.Session;
+        var before = model.LaneRows.Select(r => r.Lane).ToList();
+        var hit = session.State.Hits[0];
+        model.MoveLaneTo(before[0], before[1], true);
+        var reordered = model.LaneRows.Select(r => r.Lane).ToList();
+        Assert.False(session.IsEdited); // layout is saved in the project, not the beatmap
+        session.Remove([hit]);
+        model.MoveFolderTo(LaneGroup.SoftSet, LaneGroup.DrumSet, true);
+        Assert.Equal(3, session.Position);
+
+        session.Undo();
+        Assert.Equal(reordered, model.LaneRows.Select(r => r.Lane));
+        Assert.DoesNotContain(hit, session.State.Hits);
+        session.Undo();
+        Assert.Contains(hit, session.State.Hits);
+        Assert.False(session.IsEdited);
+        session.Undo();
+        Assert.Equal(before, model.LaneRows.Select(r => r.Lane));
+        session.Redo(); session.Redo(); session.Redo();
+        Assert.Equal(LaneGroup.SoftSet, model.LaneRows.Last().Group);
+        Assert.DoesNotContain(hit, session.State.Hits);
+    }
+
+    [Fact]
+    public void Invalid_or_unchanged_layout_moves_do_not_add_history_or_change_notes()
+    {
+        var model = Model();
+        var session = model.Session;
+        var first = model.LaneRows[0].Lane;
+        var second = model.LaneRows[1].Lane;
+        var other = model.LaneRows.First(r => r.Group == LaneGroup.DrumSet).Lane;
+        var hits = session.State.Hits;
+        model.MoveLaneTo(first, first, true);
+        model.MoveLaneTo(first, second, false);
+        model.MoveLaneTo(first, other, true);
+        model.MoveFolderTo(LaneGroup.SoftSet, LaneGroup.SoftSet, true);
+        Assert.Equal(0, session.StepCount);
+        Assert.Same(hits, session.State.Hits);
+        model.MoveLaneTo(first, second, true);
+        Assert.Equal(1, session.StepCount);
+        Assert.Same(hits, session.State.Hits);
+        session.GoTo(0);
+        Assert.Equal(first, model.LaneRows[0].Lane);
+        session.GoTo(1);
+        Assert.Equal(first, model.LaneRows[1].Lane);
+    }
 }

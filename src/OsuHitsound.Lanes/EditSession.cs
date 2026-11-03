@@ -14,7 +14,10 @@ public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor);
 /// The editable state: every placed hit, the volume of each moment (one per object or node in osu!), and the editor
 /// bookmarks (ms as written in the .osu, sorted).
 /// </summary>
-public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks);
+public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks)
+{
+    public ImmutableList<Lane> LaneOrder { get; init; } = [];
+}
 
 /// <summary>What a range edit does with the hits in a time range.</summary>
 public enum RangeOperation
@@ -72,7 +75,24 @@ public sealed class EditSession
 
     public bool CanRedo => redo.Count > 0;
 
-    public bool IsEdited => undo.Count > 0 || gestureStart is not null;
+    public bool IsEdited => undo.Any(u => MapChanged(u.State, State)) || gestureStart is { } start && MapChanged(start, State);
+
+    private static bool MapChanged(EditState a, EditState b) =>
+        !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks);
+
+    /// <summary>Seeds the editor-only layout on load or after adding lanes, without creating an edit.</summary>
+    public void RestoreLaneOrder(IEnumerable<Lane> lanes)
+    {
+        State = State with { LaneOrder = [.. lanes] };
+        announced = State;
+    }
+
+    /// <summary>A visual reorder in the same chronological undo history as note edits.</summary>
+    public void SetLaneOrder(IEnumerable<Lane> lanes, string label)
+    {
+        var next = lanes.Distinct().ToImmutableList();
+        Change(label, s => s.LaneOrder.SequenceEqual(next) ? s : s with { LaneOrder = next });
+    }
 
     /// <summary>The name of every undo step, oldest first: those done, then those undone (Recent edits).</summary>
     public IReadOnlyList<string> Steps => [.. undo.Select(u => u.Label), .. redo.AsEnumerable().Reverse().Select(r => r.Label)];

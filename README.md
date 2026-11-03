@@ -51,6 +51,7 @@ Undo and redo with Ctrl+Z and Ctrl+Y. Pick a tool with its button or number key:
 - **Snap** (J): when on, hits land on the beat grid.
 - **Grid / Grid relative**: put moved hits on grid lines, or move them by whole steps and keep their offset.
 - **1/4, 1/8…**: how fine the grid is (Shift+1–9).
+- **Triplets**: filters Alt+wheel to 1/1, 1/3, 1/6 and 1/12. With it off, Alt+wheel cycles 1/1, 1/2, 1/4, 1/8 and 1/16. The drop-down and Shift+number shortcuts still offer all divisions.
 
 ![View toggles, colour and zoom](docs/tutorial/view-colour-zoom.png)
 
@@ -68,6 +69,8 @@ Shows what's selected. Type a volume and press **Apply**: *Relative* adds it to 
 
 The song's volume, mute and offset (in ms). These are for listening only and aren't saved into the map.
 
+The Offset box is remembered for each map. **Preferences → Song offset for all maps (ms)** adds a global adjustment (default −17 ms). Both adjustments apply to song playback and its waveform.
+
 ### Inspector
 
 ![The inspector](docs/tutorial/inspector.png)
@@ -75,6 +78,8 @@ The song's volume, mute and offset (in ms). These are for listening only and are
 Shift or set the volume of the selection, add bookmarks, and click any entry under **Recent edits** to go back to it. Click a card's title to fold it; drag ⠿ to reorder cards.
 
 ### Lanes and the grid
+
+Drag a dotted lane grip to reorder that lane inside its folder. Drag a folder grip to move it with all its lanes. Layouts are remembered per map; Ctrl+Z and Ctrl+Y undo and redo layout moves alongside note edits.
 
 ![Sample lanes and the grid](docs/tutorial/lanes-grid.png)
 

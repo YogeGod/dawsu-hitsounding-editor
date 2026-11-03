@@ -307,6 +307,8 @@ public partial class MainWindow : Window
             editing.Changed += OnEdited;
             Remember(full);
             LoadWaveform();
+            mapSongOffset = 0; // a map without a project has none of its own
+            ApplyOffsets();
             RestoreProject();
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
@@ -629,20 +631,37 @@ public partial class MainWindow : Window
         if (audio is not null) audio.SongMuted = SongMuteButton.IsChecked == true || (model is { AnySoloed: true, SongSoloed: false });
     }
 
+    // The map's own song offset (the Offset box, saved with the map). What plays and is drawn adds the one for all maps
+    // (Preferences): maps are timed for osu!'s own audio clock, about 17 ms ahead of the raw audio here.
+    private double mapSongOffset;
+
+    private double SongOffsetInForce => EffectiveSongOffset(mapSongOffset, prefs.GlobalSongOffset);
+
+    internal static double EffectiveSongOffset(double map, double global) => Math.Clamp(
+        (double.IsFinite(map) ? Math.Clamp(map, -10000, 10000) : 0) +
+        (double.IsFinite(global) ? Math.Clamp(global, -1000, 1000) : 0), -10000, 10000);
+
+    /// <summary>Puts the map's offset plus the one for all maps on the song and its waveform, and shows the map's in its box.</summary>
+    private void ApplyOffsets()
+    {
+        if (audio is not null) audio.SongOffset = SongOffsetInForce;
+        Lanes.SongOffset = SongOffsetInForce;
+        SongOffsetBox.Text = mapSongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Lanes.InvalidateVisual();
+    }
+
     private void ApplySongOffset()
     {
-        if (audio is null) return;
-        if (!OsuNumber.TryParseDouble(SongOffsetBox.Text ?? "", out double offset))
+        if (!OsuNumber.TryParseDouble(SongOffsetBox.Text ?? "", out double offset) || !double.IsFinite(offset))
         {
-            SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SongOffsetBox.Text = mapSongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return;
         }
 
-        audio.SongOffset = offset;
-        Lanes.SongOffset = audio.SongOffset;
+        if (Math.Clamp(offset, -10000, 10000) == mapSongOffset) return;
+        mapSongOffset = Math.Clamp(offset, -10000, 10000);
+        ApplyOffsets();
         ScheduleProjectSave();
-        Lanes.InvalidateVisual();
-        SongOffsetBox.Text = audio.SongOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>The value box: Relative moves every selected moment's volume by the value; Set all gives them the value.</summary>
@@ -837,7 +856,7 @@ public partial class MainWindow : Window
     {
         waveCancel?.Cancel();
         Lanes.Wave = null;
-        Lanes.SongOffset = audio?.SongOffset ?? 0;
+        Lanes.SongOffset = SongOffsetInForce;
         if (audio?.SongBytes is not { } song) return;
         var cancel = waveCancel = new CancellationTokenSource();
         _ = Task.Run(() =>

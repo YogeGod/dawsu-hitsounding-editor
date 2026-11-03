@@ -74,6 +74,8 @@ internal sealed partial class ArrangeModel
         passive = Map.Passive.GroupBy(p => p.Lane).ToDictionary(g => g.Key, g => g.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList());
         RebuildNotes();
         Objects = BuildObjects(session, Map.Settings.TimeOffset);
+        session.RestoreLaneOrder(laneRows.Select(r => r.Lane));
+        session.Changed += RestoreHistoryOrder;
     }
 
     // The map's read-only sounds never change, so their notes are built once.
@@ -531,12 +533,49 @@ internal sealed partial class ArrangeModel
     });
 
     /// <summary>Moves a lane up (-1) or down (+1) within its group.</summary>
-    public void MoveLane(Lane lane, int direction) => Relayout(() =>
+    public void MoveLane(Lane lane, int direction)
     {
         int i = laneRows.FindIndex(r => r.Lane == lane), j = i + direction;
         if (i < 0 || j < 0 || j >= laneRows.Count || laneRows[j].Group != laneRows[i].Group) return;
-        (laneRows[i], laneRows[j]) = (laneRows[j], laneRows[i]);
-    });
+        MoveLaneTo(lane, laneRows[j].Lane, direction > 0);
+    }
+
+    public void MoveLaneTo(Lane lane, Lane target, bool after)
+    {
+        var source = laneRows.FirstOrDefault(r => r.Lane == lane);
+        var destination = laneRows.FirstOrDefault(r => r.Lane == target);
+        if (source is null || destination is null || source.Group != destination.Group || lane == target) return;
+        var order = laneRows.Select(r => r.Lane).ToList();
+        order.Remove(lane);
+        order.Insert(order.IndexOf(target) + (after ? 1 : 0), lane);
+        Session.SetLaneOrder(order, "Move lane");
+    }
+
+    public void MoveFolderTo(LaneGroup folder, LaneGroup target, bool after)
+    {
+        var groups = laneRows.Select(r => r.Group).Distinct().ToList();
+        if (folder == target || !groups.Contains(folder) || !groups.Contains(target)) return;
+        groups.Remove(folder);
+        groups.Insert(groups.IndexOf(target) + (after ? 1 : 0), folder);
+        Session.SetLaneOrder(groups.SelectMany(g => laneRows.Where(r => r.Group == g).Select(r => r.Lane)), "Move folder");
+    }
+
+    private void RestoreHistoryOrder()
+    {
+        var order = Session.State.LaneOrder;
+        if (!laneRows.Select(r => r.Lane).SequenceEqual(order)) Relayout(() => OrderRows(order));
+    }
+
+    private void OrderRows(IEnumerable<Lane> order)
+    {
+        var ordered = order.DistinctBy(ProjectStore.KeyOf).ToList();
+        var ranks = ordered.Select((lane, i) => (Key: ProjectStore.KeyOf(lane), i)).ToDictionary(x => x.Key, x => x.i);
+        var groups = ordered.Select(DisplayGroup).Distinct().Select((group, i) => (group, i)).ToDictionary(x => x.group, x => x.i);
+        var sorted = laneRows.GroupBy(r => r.Group).OrderBy(g => groups.GetValueOrDefault(g.Key, int.MaxValue))
+            .SelectMany(g => g.OrderBy(r => ranks.GetValueOrDefault(ProjectStore.KeyOf(r.Lane), int.MaxValue))).ToList();
+        laneRows.Clear();
+        laneRows.AddRange(sorted);
+    }
 
     /// <summary>
     /// Adds a lane (a sample file in the mapset) under its sound in its group (after the last lane of that sound with a
@@ -549,9 +588,11 @@ internal sealed partial class ArrangeModel
         added.Add(lane);
         var group = DisplayGroup(lane);
         var place = (SoundOrder(lane), lane.Sample?.Index ?? int.MaxValue);
-        int last = laneRows.FindLastIndex(r => r.Group < group || r.Group == group && (SoundOrder(r.Lane), r.Lane.Sample?.Index ?? int.MaxValue).CompareTo(place) <= 0);
+        int last = laneRows.FindLastIndex(r => r.Group == group && (SoundOrder(r.Lane), r.Lane.Sample?.Index ?? int.MaxValue).CompareTo(place) <= 0);
+        if (last < 0) last = laneRows.FindIndex(r => r.Group == group) is >= 0 and var first ? first - 1 : laneRows.Count - 1;
         int shade = laneRows.Count(r => r.Group == group);
         laneRows.Insert(last + 1, new LaneRow(group, lane, 0, shade, IndexOf(lane)));
+        Session.RestoreLaneOrder(laneRows.Select(r => r.Lane));
     });
 
     /// <summary>Hides a lane after its hits were deleted (the file is kept); undoing brings its hits, and the lane, back.</summary>
@@ -593,10 +634,8 @@ internal sealed partial class ArrangeModel
             foreach (var lane in project.HiddenLanes.Select(ProjectStore.LaneOf).OfType<Lane>()) hidden.Add(lane);
             // A version 1 order is the old alphabetical layout, saved whether or not lanes were moved: it's dropped.
             var saved = project.Version >= 2 ? project.LaneOrder : [];
-            var order = saved.Select((k, i) => (k, i)).ToDictionary(x => x.k, x => x.i);
-            var sorted = laneRows.OrderBy(r => r.Group).ThenBy(r => order.TryGetValue(ProjectStore.KeyOf(r.Lane), out int i) ? i : int.MaxValue).ToList();
-            laneRows.Clear();
-            laneRows.AddRange(sorted);
+            OrderRows(saved.Select(ProjectStore.LaneOf).OfType<Lane>());
+            Session.RestoreLaneOrder(laneRows.Select(r => r.Lane));
             if (project.ActiveLane is { } activeKey && ProjectStore.LaneOf(activeKey) is { } active && laneRows.Any(r => r.Lane == active)) ActiveLane = active;
         });
     }

@@ -141,12 +141,13 @@ public partial class MainWindow
         ApplyKeys();
         if (skinChanged) skin = NewSkin();
         if (audioChanged || skinChanged) RestartAudio();
+        else ApplyOffsets(); // the offset for all maps may have changed
     }
 
     /// <summary>Starts the audio output again with the current preferences and reloads the open map's sounds; edits are kept.</summary>
     private void RestartAudio()
     {
-        var (speed, offset) = (audio?.Speed ?? 1, audio?.SongOffset ?? 0);
+        var speed = audio?.Speed ?? 1;
         if (audio is { IsPlaying: true }) StopPlaying();
         audio?.Dispose();
         StartAudio();
@@ -158,11 +159,12 @@ public partial class MainWindow
             audio.IsAudible = model.IsAudible;
             model.Silent = audio.SilentLanes; // which lanes have no sound may differ with other default sounds
             Lanes.InvalidateVisual();
-            (audio.Speed, audio.SongOffset, audio.SongVolume) = (speed, offset, (float)(SongVolumeSlider.Value / 100));
+            (audio.Speed, audio.SongVolume) = (speed, (float)(SongVolumeSlider.Value / 100));
             UpdateSongMute();
             UpdateCues();
         }
 
+        ApplyOffsets(); // the waveform follows preferences even when no audio device could start
         flash = audio is null ? $"No sound: {audioError}" : "Audio output restarted.";
         UpdateStatus();
     }

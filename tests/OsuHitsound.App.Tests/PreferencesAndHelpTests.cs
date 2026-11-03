@@ -17,7 +17,7 @@ public class PreferencesAndHelpTests : IDisposable
         {
             SongsFolder = @"F:\osu!\Songs", AudioOutput = OutputKind.Asio, OutputDevice = "ASIO4ALL v2", BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
             SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, InspectorOpen = false, InspectorWidth = 300,
-            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true,
+            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true, GlobalSongOffset = -25,
         }.WithRecent(@"C:\a.osu");
         prefs.Save(path);
 
@@ -28,6 +28,16 @@ public class PreferencesAndHelpTests : IDisposable
         Assert.Equal(prefs.InspectorFolded, loaded.InspectorFolded);
         Assert.Equal(prefs.RecentMaps, loaded.RecentMaps);
     }
+
+    [Theory]
+    [InlineData(-8, -17, -25)]
+    [InlineData(0, -17, -17)]
+    [InlineData(10000, 1000, 10000)]
+    [InlineData(0, 1e300, 1000)]
+    [InlineData(double.NaN, -17, -17)]
+    [InlineData(8, double.PositiveInfinity, 8)]
+    public void Global_and_map_offsets_are_combined_without_nonfinite_or_out_of_range_values(double map, double global, double expected) =>
+        Assert.Equal(expected, MainWindow.EffectiveSongOffset(map, global));
 
     [Fact]
     public void A_missing_or_broken_file_gives_defaults()
