@@ -171,7 +171,7 @@ internal static class Dialogs
             }
 
             var hitsounds = Option("Copy hitsounds", defaults.CopyHitsounds, "What each circle and slider node plays: the sounds and their sample sets.");
-            var body = Option("Copy slider-body sounds", defaults.CopyBodyHitsounds, "A matched slider takes the source slider's body sounds: its slide sample set and whistle loop.");
+            var bodySounds = Option("Copy slider-body sounds", defaults.CopyBodyHitsounds, "A matched slider takes the source slider's body sounds: its slide sample set and whistle loop.");
             var sets = Option("Copy sample sets and indexes", defaults.CopySampleSets, "Off: the targets keep their own sample sets and custom indexes.");
             var volumes = Option("Copy volumes", defaults.CopyVolumes, "Off: the targets keep their own volumes.");
             var keep5 = Option("Always keep 5 % volumes", defaults.AlwaysPreserve5Volume, "Hit points the target has at 5 % (muted on purpose) stay at 5 %.");
@@ -233,7 +233,7 @@ internal static class Dialogs
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
-                hitsounds, body, sets, volumes, keep5, storyboard, storyboardOptions, mute, muteGrid,
+                hitsounds, bodySounds, sets, volumes, keep5, storyboard, storyboardOptions, mute, muteGrid,
                 new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);
@@ -251,7 +251,7 @@ internal static class Dialogs
                         Mode = mode.SelectedIndex == 1 ? CopyMode.OverwriteOnlyDefined : CopyMode.OverwriteEverything,
                         Leniency = ms,
                         CopyHitsounds = hitsounds.IsChecked == true,
-                        CopyBodyHitsounds = body.IsChecked == true,
+                        CopyBodyHitsounds = bodySounds.IsChecked == true,
                         CopySampleSets = sets.IsChecked == true,
                         CopyVolumes = volumes.IsChecked == true,
                         AlwaysPreserve5Volume = keep5.IsChecked == true,
