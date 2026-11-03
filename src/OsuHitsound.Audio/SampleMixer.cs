@@ -14,6 +14,7 @@ public static class SampleMixer
     /// <summary>Render a planned mix only when every required sample can be decoded.</summary>
     public static byte[] Mix(MixFile mix, Func<Lane, float[]?> decode)
     {
+        if (mix.SilenceFor is not null) return Mix([]);
         var layers = new List<(float[] Stereo, float Gain)>();
         foreach (var (lane, volume) in mix.Layers)
         {

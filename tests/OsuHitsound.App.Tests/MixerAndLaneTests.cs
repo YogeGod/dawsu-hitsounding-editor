@@ -9,6 +9,28 @@ namespace OsuHitsound.App.Tests;
 public class MixerAndLaneTests
 {
     [Fact]
+    public void Export_auditions_replace_previous_voices_and_can_be_stopped()
+    {
+        var mixer = new PlaybackMixer();
+        mixer.Audition(Enumerable.Repeat(0.2f, 100).ToArray());
+        mixer.Audition(Enumerable.Repeat(0.3f, 100).ToArray());
+        var output = new float[2];
+        mixer.Read(output);
+        Assert.Equal(0.3f, output[0], 5);
+        mixer.Audition(null);
+        mixer.Read(output);
+        Assert.Equal(0f, output[0]);
+    }
+
+    [Fact]
+    public void Addition_companion_is_silent_and_never_shorter_than_25_ms()
+    {
+        var blank = SampleMixer.Mix(new MixFile("soft-hitnormal2.wav", []) { SilenceFor = "mix" }, _ => throw new Exception("No input is needed"));
+        Assert.True(blank.Length >= 44 + SampleMixer.Rate * .025 * 4);
+        Assert.All(blank.Skip(44), b => Assert.Equal(0, b));
+    }
+
+    [Fact]
     public void Mixing_sums_layers_and_preserves_float_headroom_when_the_sum_exceeds_full_scale()
     {
         var a = new float[SampleMixer.Rate * 2]; // 1 s stereo

@@ -89,10 +89,10 @@ public sealed class MapDocument
     /// opened), with what the last Generate for that diff recorded. Returns the folder it planned against.
     /// </summary>
     /// <exception cref="IOException">A difficulty or storyboard in the folder couldn't be read.</exception>
-    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null)
+    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null)
     {
         var current = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
         var previous = GenerateManifest.Load(manifestRoot, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path)!, HitsoundDiff.FileNameFor(File, Path)));
-        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin), current);
+        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin, mergeSettings), current);
     }
 }

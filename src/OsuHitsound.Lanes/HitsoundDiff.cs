@@ -8,8 +8,13 @@ namespace OsuHitsound.Lanes;
 public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volume)> Layers)
 {
     public IReadOnlyList<(Lane Lane, int Volume, double Duration)> Loops { get; init; } = [];
+    public string? DestinationSlot { get; init; }
+    public string? SilenceFor { get; init; }
     /// <summary>What the mix contains, as text: equal signatures make equal files.</summary>
-    public string Signature => SignatureOf(Layers, Loops);
+    public string Signature => SilenceFor is { } parent ? parent + "|silent-normal" :
+        SignatureOf(Layers, Loops) + SlotSuffix(DestinationSlot);
+
+    internal static string SlotSuffix(string? slot) => slot is null or "soft-hitnormal" ? "" : "|slot:" + slot;
 
     public static string SignatureOf(IEnumerable<(Lane Lane, int Volume)> layers, IEnumerable<(Lane Lane, int Volume, double Duration)>? loops = null)
     {
@@ -25,6 +30,7 @@ public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volu
 /// </summary>
 public sealed record GeneratePlan(string OsuPath, OsuFile Diff, IReadOnlyList<MixFile> Mixes, int Circles, IReadOnlyList<Conflict> Conflicts)
 {
+    public IReadOnlyList<MergeCombination> MergeCombinations { get; init; } = [];
     public int LastMixIndex { get; init; }
     public IReadOnlyDictionary<string, string?> InputHashes { get; init; } = new Dictionary<string, string?>();
 
@@ -47,8 +53,9 @@ public static class HitsoundDiff
     internal const string GeneratedIndexMarker = "//dawsu-generated-index:";
 
     public static GeneratePlan Plan(OsuFile source, string sourcePath, MapFolder folder, EditSession session, GenerateManifest? previous = null,
-        IReadOnlyDictionary<string, byte[]>? skin = null)
+        IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null)
     {
+        mergeSettings?.Validate();
         double offset = session.Map.Settings.TimeOffset;
 
         var silentLoops = new Dictionary<Lane, bool>();
@@ -66,14 +73,15 @@ public static class HitsoundDiff
         }
 
         // 1. Every placed sound, grouped by its time as written (whole ms) with its volume.
-        var placed = session.State.Hits.Select(h => (h.Time, h.Lane, Volume: session.VolumeOf(h), Duration: 0.0));
+        var placed = session.State.Hits.Select(h => (h.Time, h.Lane, Volume: session.VolumeOf(h), Duration: 0.0,
+            Slider: h.Lane.Sample?.Sound is "slidertick" or "sliderslide" or "sliderwhistle"));
         var passive = session.Map.Passive.Where(p => p.Kind is PassiveKind.SliderTick or PassiveKind.SliderSlide or PassiveKind.SliderWhistle)
             .Where(p => p.Kind == PassiveKind.SliderTick || !IsEmptyLoop(p.Lane))
-            .Select(p => (p.Time, p.Lane, p.Volume, Duration: Math.Max(0, p.EndTime - p.Time)));
+            .Select(p => (p.Time, p.Lane, p.Volume, Duration: Math.Max(0, p.EndTime - p.Time), Slider: true));
         var groups = placed.Concat(passive)
-            .GroupBy(h => (int)Math.Round(h.Time - offset))
-            .OrderBy(g => g.Key)
-            .Select(g => (Time: g.Key, Layers: g.Where(h => h.Duration == 0).Select(h => (h.Lane, h.Volume)).ToList(),
+            .GroupBy(h => (Time: (int)Math.Round(h.Time - offset), h.Slider))
+            .OrderBy(g => g.Key.Time).ThenByDescending(g => g.Key.Slider)
+            .Select(g => (g.Key.Time, g.Key.Slider, Layers: g.Where(h => h.Duration == 0).Select(h => (h.Lane, h.Volume)).ToList(),
                 Loops: g.Where(h => h.Duration > 0).Select(h => (h.Lane, h.Volume, h.Duration)).ToList()))
             .ToList();
 
@@ -88,6 +96,33 @@ public static class HitsoundDiff
                 || groups[i].Layers.Select(l => l.Volume).Distinct().Count() > 1
                 || groups[i].Layers.Select(l => l.Lane).Distinct().Count() != groups[i].Layers.Count) needsMix.Add(i);
 
+        var fingerprints = new Dictionary<Lane, string>();
+        string Fingerprint(Lane lane)
+        {
+            if (fingerprints.TryGetValue(lane, out var known)) return known;
+            byte[]? bytes = null;
+            try { bytes = lane.Source == LaneSource.Skin ? skin?.GetValueOrDefault(lane.Name) : folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null; }
+            catch (InvalidOperationException) { }
+            return fingerprints[lane] = bytes is null ? "unknown" : GenerateManifest.Hash(bytes);
+        }
+        var combinations = groups.Select(g => new MergeCombination(g.Layers, g.Loops)).ToList();
+        var candidates = Enumerable.Range(0, groups.Count)
+            .Where(i => !groups[i].Slider && (combinations[i].AdditionSlots.Count() >= 2 ||
+                needsMix.Contains(i) && groups[i].Layers.Count + groups[i].Loops.Count > 1)).ToList();
+        foreach (int i in candidates)
+            combinations[i] = combinations[i] with { Fingerprints = combinations[i].Layers.Select(l => l.Lane).Concat(combinations[i].Loops.Select(l => l.Lane))
+                .Distinct().ToDictionary(l => l, Fingerprint) };
+        var destinations = new Dictionary<string, string>();
+        if (mergeSettings is not null)
+            foreach (int i in candidates)
+            {
+                var slot = mergeSettings.Destination(combinations[i]) ??
+                    throw new InvalidOperationException("Choose a destination for every new layer combination before generating.");
+                destinations[MixFile.SignatureOf(MixPlanner.Normalize(groups[i].Layers, includeMissing: true),
+                    groups[i].Loops.Select(l => (l.Lane, Math.Max(l.Volume, HitsoundRules.StableMinimumVolume), l.Duration)))] = slot;
+                needsMix.Add(i);
+            }
+
         var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(sourcePath))!, FileNameFor(source, sourcePath));
 
         // 3. Mix files ("fusing") for the moments that need one; see MixPlanner for reuse and fresh indexes.
@@ -95,18 +130,27 @@ public static class HitsoundDiff
         var looped = groups.Select(g => g.Loops.Select(l => (l.Lane, Volume: Math.Max(l.Volume, HitsoundRules.StableMinimumVolume), l.Duration)).ToList()).ToList();
         var mixer = new MixPlanner(folder, previous, Path.GetFileName(path), needsMix.Select(i => layered[i]), skin,
             needsMix.Where(i => looped[i].Count > 0).Select(i => ((IReadOnlyList<(Lane Lane, int Volume)>)layered[i], (IReadOnlyList<(Lane Lane, int Volume, double Duration)>)looped[i])),
-            groups.SelectMany(g => g.Layers.Select(l => l.Lane).Concat(g.Loops.Select(l => l.Lane))));
+            groups.SelectMany(g => g.Layers.Select(l => l.Lane).Concat(g.Loops.Select(l => l.Lane))), destinations);
         var wishes = new List<WantedSound>();
         for (int i = 0; i < groups.Count; i++)
-            wishes.Add(needsMix.Contains(i) && (layered[i].Count > 0 || looped[i].Count > 0)
-                ? new WantedSound([new Lane(LaneSource.BeatmapFile, mixer.MixFor(layered[i], looped[i]).FileName)], 100)
-                : Wish(groups[i].Layers));
+        {
+            if (!needsMix.Contains(i) || layered[i].Count + looped[i].Count == 0) { wishes.Add(Wish(groups[i].Layers)); continue; }
+            var mix = mixer.MixFor(layered[i], looped[i]);
+            var lanes = new List<Lane> { new(LaneSource.BeatmapFile, mix.FileName) };
+            if (mix.DestinationSlot is { } slot && !slot.EndsWith("-hitnormal", StringComparison.Ordinal))
+            {
+                var sample = HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(mix.FileName))!.Value;
+                lanes.Add(new Lane(LaneSource.BeatmapFile, $"{HitsoundRules.SampleName(sample.Set, "hitnormal")}{sample.Index}.wav"));
+            }
+            wishes.Add(new WantedSound(lanes, 100));
+        }
 
         // 4. The final diff, compiled against the folder as it will be (with the mixes in it).
         var withMixes = folder.With(mixer.All.Select(m => m.FileName)); // keeps reading the folder's files (its .osb)
         var final = OsuFile.Parse(Encoding.UTF8.GetBytes(DiffText(source, groups.Select(g => g.Time), lastGeneratedIndex: mixer.LastIndex)));
         var result = Compiler.Apply(final, withMixes, Wishes(final, withMixes, wishes));
-        return new GeneratePlan(path, final, mixer.ToWrite, groups.Count, result.Conflicts) { Reused = mixer.Reused, Removes = mixer.Removes, LastMixIndex = mixer.LastIndex, InputHashes = mixer.InputHashes };
+        return new GeneratePlan(path, final, mixer.ToWrite, groups.Count, result.Conflicts) { Reused = mixer.Reused, Removes = mixer.Removes, LastMixIndex = mixer.LastIndex, InputHashes = mixer.InputHashes,
+            MergeCombinations = candidates.Select(i => combinations[i]).DistinctBy(c => c.Key).ToList() };
     }
 
     private static WantedSound Wish(List<(Lane Lane, int Volume)> layers) =>

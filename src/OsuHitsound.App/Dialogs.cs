@@ -12,7 +12,7 @@ using OsuHitsound.Lanes;
 namespace OsuHitsound.App;
 
 /// <summary>Small modal dialogs: confirm, a text prompt, and picking one item from a list.</summary>
-internal static class Dialogs
+internal static partial class Dialogs
 {
     public static async Task<bool> Confirm(Window owner, string title, string text, string ok = "OK", string cancel = "Cancel") =>
         await Show<bool>(owner, title, (body, close) =>
@@ -640,7 +640,7 @@ internal static class Dialogs
         return () => edited with { CubaseKeyFile = Blank(file.Text) };
     }
 
-    private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build, string cancelText = "Cancel")
+    private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build, string cancelText = "Cancel", bool scroll = false)
     {
         var window = new Window
         {
@@ -666,8 +666,22 @@ internal static class Dialogs
         cancel.Click += (_, _) => window.Close();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
         buttons.Children.AddRange([okButton, cancel]);
-        body.Children.Add(buttons);
-        window.Content = body;
+        if (scroll)
+        {
+            double available = (owner.Screens.ScreenFromWindow(owner)?.WorkingArea.Height ?? 900) / owner.RenderScaling;
+            window.MaxHeight = Math.Max(240, available - 60);
+            var layout = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Margin = new Thickness(16) };
+            body.Margin = new Thickness(0, 0, 0, 12);
+            layout.Children.Add(new ScrollViewer { Content = body, MaxHeight = Math.Max(120, available - 180), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
+            Grid.SetRow(buttons, 1);
+            layout.Children.Add(buttons);
+            window.Content = layout;
+        }
+        else
+        {
+            body.Children.Add(buttons);
+            window.Content = body;
+        }
         window.Closed += (_, _) => result.TrySetResult(default);
         _ = window.ShowDialog(owner);
         return result.Task;

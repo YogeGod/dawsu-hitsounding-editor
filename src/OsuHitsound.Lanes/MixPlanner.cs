@@ -16,6 +16,7 @@ public sealed class MixPlanner
     private readonly HashSet<int> used;
     private readonly Dictionary<string, string?> inputHashes = [];
     private long next;
+    private readonly IReadOnlyDictionary<string, string> destinations;
 
     public int LastIndex { get; private set; }
 
@@ -27,8 +28,11 @@ public sealed class MixPlanner
     public MixPlanner(MapFolder folder, GenerateManifest? previous, string replacedFile, IEnumerable<IReadOnlyList<(Lane Lane, int Volume)>> needed,
         IReadOnlyDictionary<string, byte[]>? skin = null,
         IEnumerable<(IReadOnlyList<(Lane Lane, int Volume)> Layers, IReadOnlyList<(Lane Lane, int Volume, double Duration)> Loops)>? loopNeeded = null,
-        IEnumerable<Lane>? liveLanes = null)
+        IEnumerable<Lane>? liveLanes = null, IReadOnlyDictionary<string, string>? destinations = null)
     {
+        this.destinations = destinations ?? new Dictionary<string, string>();
+        if (this.destinations.Values.Any(slot => !ExportMergeSettings.Slots.Contains(slot)))
+            throw new ArgumentException("Unknown destination hitsound slot.", nameof(destinations));
         var required = needed.Where(l => l.Count > 0).ToList();
         var fingerprints = new Dictionary<Lane, string?>();
         string? Fingerprint(Lane lane)
@@ -46,8 +50,11 @@ public sealed class MixPlanner
         void AddFingerprint(IReadOnlyList<(Lane Lane, int Volume)> layers, IReadOnlyList<(Lane Lane, int Volume, double Duration)> loops)
         {
             var signature = MixFile.SignatureOf(layers, loops);
+            var slot = this.destinations.GetValueOrDefault(signature);
+            signature += MixFile.SlotSuffix(slot);
             var hashes = layers.Select(l => Fingerprint(l.Lane)).Concat(loops.Select(l => Fingerprint(l.Lane))).ToList();
             inputHashes[signature] = hashes.Any(h => h is null) ? null : GenerateManifest.Hash(System.Text.Encoding.UTF8.GetBytes("mix-v2;" + string.Join(";", hashes)));
+            if (slot is not null && !slot.EndsWith("-hitnormal", StringComparison.Ordinal)) inputHashes[signature + "|silent-normal"] = "blank-v1";
         }
         foreach (var layers in required) AddFingerprint(layers, []);
         foreach (var (layers, loops) in loopNeeded ?? []) AddFingerprint(layers, loops);
@@ -61,6 +68,17 @@ public sealed class MixPlanner
             .Select(l => folder.Find(l.Name) ?? l.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         reused = ours.Where(m => m.InputHash is not null && inputHashes.GetValueOrDefault(m.Signature) == m.InputHash)
             .ToDictionary(m => m.Signature, m => m.FileName);
+        // An addition and its silent normal are an indivisible pair at one index.
+        foreach (var (signature, name) in reused.ToList())
+            if (inputHashes.ContainsKey(signature + "|silent-normal"))
+            {
+                var sample = OsuHitsound.Format.HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(name))!.Value;
+                string normal = $"{OsuHitsound.Format.HitsoundRules.SampleName(sample.Set, "hitnormal")}{sample.Index}.wav";
+                if (reused.GetValueOrDefault(signature + "|silent-normal") != normal)
+                { reused.Remove(signature); reused.Remove(signature + "|silent-normal"); }
+            }
+        foreach (string signature in reused.Keys.Where(k => k.EndsWith("|silent-normal", StringComparison.Ordinal)).ToList())
+            if (!reused.ContainsKey(signature[..^"|silent-normal".Length])) reused.Remove(signature);
         removable = ours.Where(m => !reused.ContainsValue(m.FileName) && !liveFiles.Contains(m.FileName) && !(HitsoundDiff.IndexOf(m.FileName) is { } n && usedByOthers.Contains(n)))
             .Select(m => m.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         previousMixes = previous?.Mixes ?? [];
@@ -88,6 +106,8 @@ public sealed class MixPlanner
     {
         loops ??= [];
         string signature = MixFile.SignatureOf(layers, loops);
+        var slot = destinations.GetValueOrDefault(signature);
+        signature += MixFile.SlotSuffix(slot);
         if (!mixes.TryGetValue(signature, out var mix))
         {
             string? file = reused.GetValueOrDefault(signature);
@@ -97,10 +117,16 @@ public sealed class MixPlanner
                 if (next > int.MaxValue) throw new IOException("No sample index is available after the last generated index.");
                 LastIndex = (int)next++;
                 used.Add(LastIndex);
-                file = $"soft-hitnormal{LastIndex}.wav";
+                file = $"{slot ?? "soft-hitnormal"}{LastIndex}.wav";
             }
 
-            mixes[signature] = mix = new MixFile(file, layers) { Loops = loops };
+            mixes[signature] = mix = new MixFile(file, layers) { Loops = loops, DestinationSlot = slot };
+            if (slot is not null && !slot.EndsWith("-hitnormal", StringComparison.Ordinal))
+            {
+                var sample = OsuHitsound.Format.HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(file))!.Value;
+                string normal = $"{OsuHitsound.Format.HitsoundRules.SampleName(sample.Set, "hitnormal")}{sample.Index}.wav";
+                mixes[signature + "|silent-normal"] = new MixFile(normal, []) { SilenceFor = signature };
+            }
         }
         return mix;
     }

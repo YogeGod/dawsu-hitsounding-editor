@@ -437,6 +437,38 @@ public partial class MainWindow
             return;
         }
 
+        ExportMergeSettings? mergeSettings = null;
+        if (plan.MergeCombinations.Count > 0)
+        {
+            var previewDecoded = new Dictionary<Lane, float[]?>();
+            void Preview(MixFile mix)
+            {
+                if (audio is null) throw new IOException("Audio output is unavailable. Check Preferences → Audio output.");
+                float[]? Decode(Lane lane)
+                {
+                    if (previewDecoded.TryGetValue(lane, out var cached)) return cached;
+                    var bytes = lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name)
+                        : fresh.Find(lane.Name) is { } file ? fresh.ReadBytes(file) : null;
+                    return previewDecoded[lane] = bytes is null ? null : SampleMixer.Decode(bytes);
+                }
+                audio.Pause();
+                audio.PreviewMix(SampleMixer.Mix(mix, Decode));
+            }
+            try { mergeSettings = await Dialogs.MergePriorities(this, plan.MergeCombinations, Preview); }
+            finally { if (previewDecoded.Count > 0) audio?.StopAudition(); }
+            if (mergeSettings is null) return;
+            try
+            {
+                (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, mergeSettings));
+            }
+            catch (Exception ex)
+            {
+                flash = $"Generate stopped, nothing was written: {ex.Message}";
+                UpdateStatus();
+                return;
+            }
+        }
+
         bool exists = File.Exists(plan.OsuPath);
         string summary =
             $"Write {Path.GetFileName(plan.OsuPath)}{(exists ? " (replacing the existing one; a backup is kept in the editor's app data)" : "")} " +
@@ -451,7 +483,11 @@ public partial class MainWindow
                 : "") +
             (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
             "Your opened map is not changed.";
-        if (!await Dialogs.Confirm(this, "Generate hitsound diff", summary, "Generate")) return;
+        if (mergeSettings is null)
+        {
+            if (!await Dialogs.Confirm(this, "Generate hitsound diff", summary, "Generate")) return;
+        }
+        else if (await Dialogs.ConfirmMergeGenerate(this, summary, mergeSettings) != true) return;
 
         var skinSounds = skin.Value;
         try

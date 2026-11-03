@@ -220,6 +220,16 @@ public sealed class PlaybackMixer : ISampleProvider
             if (sounds.TryGetValue(lane, out var data)) AddVoice(new Voice(data, 0, volume));
     }
 
+    /// <summary>Export auditions replace the previous audition so comparing inputs never stacks old sounds.</summary>
+    public void Audition(float[]? stereo)
+    {
+        lock (gate)
+        {
+            voices.Clear();
+            if (stereo is not null) AddVoice(new Voice(stereo, 0, 1));
+        }
+    }
+
     // Must hold the gate. Playback (re)starts at a time: the song is placed on the next block, a cue right at the time plays.
     private void StartAt(double time)
     {

@@ -219,6 +219,15 @@ public sealed class AudioEngine : IDisposable
     /// <summary>Plays one lane's sample now, e.g. when its name is clicked.</summary>
     public void Preview(Lane lane, float volume = 1) => mixer.Preview(lane, volume);
 
+    /// <summary>Auditions the exact WAV produced by the export renderer, without adding it to the map.</summary>
+    public void PreviewMix(byte[] wav)
+    {
+        var stereo = SampleMixer.Decode(wav) ?? throw new IOException("The rendered preview could not be decoded.");
+        mixer.Audition(stereo);
+    }
+
+    public void StopAudition() => mixer.Audition(null);
+
     /// <summary>Auditions a resolved map lane, loading an unused custom index on demand.</summary>
     public void Preview(Lane lane, MapFolder folder)
     {

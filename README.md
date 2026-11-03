@@ -18,6 +18,8 @@ The editor also has a built-in tour: **File → Tutorial**.
 
 Generate reuses unchanged mixed samples and continues new filenames after its last generated index. It skips occupied numbers without jumping past unrelated high indexes. Existing sample files keep their names.
 
+When layers overlap, Generate offers a separate **export priority** list. The highest-priority participating addition automatically chooses the output slot, including combinations of different additions; loaded combination rules override that choice. All input sounds and their relative volumes are retained. Slider ticks and slide/whistle loops remain as separate timed hits in the generated difficulty and never enter the regular merge combinations. **Save merge preset…** and **Load preset…** explicitly reuse priorities and overrides; presets are not loaded automatically. New or changed combinations follow the priority order. Cancelling before Generate writes nothing to the mapset. This workflow applies to Generate, not Copy hitsounds.
+
 Slider ticks and slide or whistle segments are rendered into timed samples in the generated difficulty. Generate stops and names the sample if a required sound cannot be read or decoded.
 
 You can also import an `.osz`, reopen a recent map, or open the map's folder (**File → Open map folder**, Ctrl+Shift+O) from the **File** menu. Sample files you put in that folder show up as lanes as soon as you switch back to the editor.
