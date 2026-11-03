@@ -22,6 +22,7 @@ public class HitsoundCopierTests
         var plan = HitsoundCopier.Plan(source, NoFiles, target, NoFiles, options);
         var copy = OsuFile.Parse(target.ToBytes());
         Compiler.Apply(copy, NoFiles, plan.Wanted);
+        plan.ApplyExtras(copy);
         return (plan, Decompiler.Decompile(copy, NoFiles));
     }
 
@@ -150,6 +151,49 @@ public class HitsoundCopierTests
         Assert.Contains("normal-hitwhistle", Sounds(Tail(after, 5000)));
     }
 
+    private static string[] Body(DecompiledMap map, PassiveKind kind) =>
+        [.. map.Passive.Where(p => p.Kind == kind).Select(p => p.Lane.Name)];
+
+    [Fact]
+    public void A_matched_slider_takes_the_source_sliders_body_sounds()
+    {
+        // The source slider's body: a whistle loop, in Soft.
+        var source = Sliders("256,192,1000,2,2,L|396:192,1,140,0|0,0:0|0:0,2:0:0:0:");
+        var target = Sliders("256,192,1000,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:");
+
+        var (_, after) = Copy(source, target, new HitsoundCopyOptions());
+
+        Assert.Equal(["soft-sliderslide"], Body(after, PassiveKind.SliderSlide));
+        Assert.Single(Body(after, PassiveKind.SliderWhistle));
+    }
+
+    [Fact]
+    public void A_slider_without_edge_fields_keeps_its_node_sounds_when_its_body_changes()
+    {
+        // The target slider has no edge fields: its own clap plays on both nodes. The source has claps on the nodes too,
+        // and a whistle loop on its body.
+        var source = Sliders("256,192,1000,2,2,L|396:192,1,140,8|8,0:0|0:0,0:0:0:0:");
+        var target = Sliders("256,192,1000,2,8,L|396:192,1,140");
+
+        var (_, after) = Copy(source, target, new HitsoundCopyOptions());
+
+        Assert.Single(Body(after, PassiveKind.SliderWhistle));
+        Assert.All(after.Moments, m => Assert.Contains("normal-hitclap", Sounds(m)));
+        Assert.All(after.Moments, m => Assert.DoesNotContain("normal-hitwhistle", Sounds(m)));
+    }
+
+    [Fact]
+    public void Overwrite_everything_clears_the_body_of_a_slider_the_source_has_nothing_for()
+    {
+        var target = Sliders("256,192,5000,2,2,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:");
+
+        var (_, everything) = Copy(Circles(), target, new HitsoundCopyOptions());
+        var (_, defined) = Copy(Circles(), target, new HitsoundCopyOptions { Mode = CopyMode.OverwriteOnlyDefined });
+
+        Assert.Empty(Body(everything, PassiveKind.SliderWhistle));
+        Assert.Single(Body(defined, PassiveKind.SliderWhistle));
+    }
+
     // A map with storyboard sample lines in [Events], and circles.
     private static OsuFile WithSamples(string[] samples, params (int Time, string Sample)[] circles) => OsuFile.Parse(Encoding.UTF8.GetBytes(
         "osu file format v14\r\n\r\n[General]\r\nSampleSet: Normal\r\n\r\n[Events]\r\n//Storyboard Sound Samples\r\n" +
@@ -164,7 +208,7 @@ public class HitsoundCopierTests
         var plan = HitsoundCopier.Plan(source, folder ?? NoFiles, target, folder ?? NoFiles, options with { CopyStoryboardedSamples = true });
         var copy = OsuFile.Parse(target.ToBytes());
         Compiler.Apply(copy, folder ?? NoFiles, plan.Wanted);
-        plan.ApplySamples(copy);
+        plan.ApplyExtras(copy);
         return OsuFile.Parse(copy.ToBytes());
     }
 

@@ -26,6 +26,9 @@ public sealed record HitsoundCopyOptions
     /// <summary>Copy what each hit point plays (the sounds and their sample sets).</summary>
     public bool CopyHitsounds { get; init; } = true;
 
+    /// <summary>Copy a slider's body sounds (its own sample sets and whistle loop) from the matched source slider.</summary>
+    public bool CopyBodyHitsounds { get; init; } = true;
+
     /// <summary>Copy sample sets and custom indexes (otherwise the target's are kept).</summary>
     public bool CopySampleSets { get; init; } = true;
 
@@ -71,9 +74,31 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
 
     public bool ClearSamples { get; init; }
 
-    /// <summary>Writes the storyboard part of the plan into a (compiled) copy of the target.</summary>
-    public void ApplySamples(OsuFile file)
+    /// <summary>Slider bodies to set (by the target object's place in [HitObjects]): the slider's own sound flags and sets.</summary>
+    public IReadOnlyList<(int Object, HitSound Sound, SampleSet Normal, SampleSet Addition)> Bodies { get; init; } = [];
+
+    /// <summary>Writes what the compiler doesn't (slider bodies, storyboard samples) into a compiled copy of the target.</summary>
+    public void ApplyExtras(OsuFile file)
     {
+        foreach (var (index, sound, normal, addition) in Bodies)
+        {
+            var slider = file.HitObjects[index];
+            try
+            {
+                // Write out every node's sound and sets first: a slider without edge fields plays its own on the nodes.
+                var sounds = slider.NodeSounds;
+                var sets = slider.NodeSets;
+                slider.SetNodeSound(sounds.Length - 1, sounds[^1]);
+                slider.SetNodeSet(0, sets[0].Normal, sets[0].Addition);
+                slider.HitSound = sound;
+                slider.HitSample = (slider.HitSample ?? default) with { NormalSet = normal, AdditionSet = addition };
+            }
+            catch (Exception ex) when (ex is FormatException or InvalidOperationException or ArgumentException)
+            {
+                // A line that can't be rewritten safely keeps its body sounds.
+            }
+        }
+
         if (ClearSamples)
             foreach (var sample in Storyboard.SampleLines(file).ToList()) file.RemoveLine(sample.Line);
         foreach (var (text, time) in SamplesToAdd) file.InsertStoryboardSample(text, time);
@@ -175,7 +200,7 @@ public static class HitsoundCopier
                 else wanted[key] = mute;
             }
 
-        var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted);
+        var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted) { Bodies = Bodies(targets, matched, objectIndex, options) };
         if (!options.CopyStoryboardedSamples) return plan;
 
         // Storyboard samples (Mapping Tools): Overwrite everything clears the target's first; a sample is skipped when a
@@ -200,6 +225,29 @@ public static class HitsoundCopier
         }
 
         return plan with { SamplesToAdd = add, ClearSamples = clear };
+    }
+
+    /// <summary>
+    /// Slider bodies (Mapping Tools): a target slider whose head matched a source slider head takes that slider's own
+    /// sound flags and sets; with Overwrite everything, the other sliders lose theirs (MT clears every object's hitsounds).
+    /// </summary>
+    private static List<(int, HitSound, SampleSet, SampleSet)> Bodies(Moment[] targets, Dictionary<int, Moment> matched, Dictionary<HitObject, int> objectIndex, HitsoundCopyOptions options)
+    {
+        var bodies = new List<(int, HitSound, SampleSet, SampleSet)>();
+        if (!options.CopyHitsounds) return bodies;
+        for (int i = 0; i < targets.Length; i++)
+        {
+            var m = targets[i];
+            if (m.Position != HitPosition.SliderHead) continue;
+            var own = m.Object.HitSample ?? default;
+            (HitSound, SampleSet, SampleSet)? body = matched.TryGetValue(i, out var s)
+                ? options.CopyBodyHitsounds && s.Position == HitPosition.SliderHead ? (s.Object.HitSound, (s.Object.HitSample ?? default).NormalSet, (s.Object.HitSample ?? default).AdditionSet) : null
+                : options.Mode == CopyMode.OverwriteEverything ? (HitSound.None, SampleSet.None, SampleSet.None) : null;
+            if (body is var (sound, normal, addition) && (sound != m.Object.HitSound || normal != own.NormalSet || addition != own.AdditionSet))
+                bodies.Add((objectIndex[m.Object], sound, normal, addition));
+        }
+
+        return bodies;
     }
 
     // A sample file as osu! finds it: the mapset's file with that name, or with that name and another extension.
@@ -250,7 +298,7 @@ public static class HitsoundCopier
             {
                 var doc = MapDocument.Load(path);
                 var plan = Plan(source, sourceFolder, doc.File, doc.Folder, options);
-                var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot, alsoEdit: plan.ApplySamples);
+                var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot, alsoEdit: plan.ApplyExtras);
                 results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null, plan.Muted));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException)
