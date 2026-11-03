@@ -24,6 +24,7 @@ public partial class MainWindow
         Activated += (_, _) => RefreshFolder();
         AddLaneItem.Click += async (_, _) => await AddLaneDialog();
         GenerateItem.Click += async (_, _) => await Generate();
+        CopyHitsoundsItem.Click += async (_, _) => await CopyHitsounds();
         LaneFilterBox.TextChanged += (_, _) =>
         {
             model?.SetFilter(LaneFilterBox.Text ?? "");
@@ -321,6 +322,70 @@ public partial class MainWindow
     /// Writes the [Hitsounds] diff: plans it, shows what will be written, renders the mixes into the mapset (fresh
     /// names only), backs up an existing [Hitsounds] diff to the editor's app data, then writes the .osu.
     /// </summary>
+    /// <summary>
+    /// Map → Copy hitsounds (Mapping Tools' Hitsound Copier): from one difficulty into others of the mapset. The open map
+    /// as the source copies what you see, unsaved edits included; as a target it must have none, and it's reloaded after.
+    /// </summary>
+    private async Task CopyHitsounds()
+    {
+        if (doc is not { } document || session is null || mapPath is null)
+        {
+            flash = "Open a map first: Copy hitsounds copies between the difficulties of its mapset.";
+            UpdateStatus();
+            return;
+        }
+
+        var dir = Path.GetDirectoryName(document.Path)!;
+        var difficulties = document.Folder.Files
+            .Where(f => !f.Contains('/') && f.EndsWith(".osu", StringComparison.OrdinalIgnoreCase))
+            .Select(f => Path.Combine(dir, f))
+            .Select(p => (Path: p, Name: HitsoundDiff.VersionOf(p) ?? Path.GetFileNameWithoutExtension(p)))
+            .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (await Dialogs.CopyHitsounds(this, difficulties, document.Path) is not var (sourcePath, targets, options)) return;
+
+        bool openIsTarget = targets.Any(t => string.Equals(t, document.Path, StringComparison.OrdinalIgnoreCase));
+        if (openIsTarget && session.IsEdited)
+        {
+            flash = "This map is one of the targets and has unsaved edits: save them (Ctrl+S) or undo them first.";
+            UpdateStatus();
+            return;
+        }
+
+        bool fromOpen = string.Equals(sourcePath, document.Path, StringComparison.OrdinalIgnoreCase);
+        var state = session.State;
+        flash = "Copying hitsounds…";
+        UpdateStatus();
+        IReadOnlyList<HitsoundCopyTarget> results;
+        try
+        {
+            results = await Task.Run(() =>
+            {
+                // The open map's source is what you see, unsaved edits included.
+                var (source, folder) = fromOpen
+                    ? (document.Compile(state).File, document.Folder)
+                    : (OsuFile.Read(sourcePath), MapFolder.FromDirectory(Path.GetDirectoryName(sourcePath)!));
+                return HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot());
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        {
+            flash = $"Couldn't read the source: {ex.Message}";
+            UpdateStatus();
+            return;
+        }
+
+        if (openIsTarget) await Open(mapPath); // show what was written
+        int written = results.Count(r => r.Backup is not null), conflicts = results.Sum(r => r.Conflicts);
+        var failed = results.Where(r => r.Error is not null).ToList();
+        flash = $"Copied hitsounds into {written} of {results.Count} difficult{(results.Count == 1 ? "y" : "ies")} " +
+                $"({results.Sum(r => r.Matched)} hits matched, {results.Sum(r => r.Changed)} hit points changed)." +
+                (conflicts > 0 ? $" {conflicts} couldn't be saved as copied and kept their old sounds." : "") +
+                (failed.Count > 0 ? $" Not written: {string.Join("; ", failed.Select(f => $"{Path.GetFileName(f.Path)} ({f.Error})"))}." : "") +
+                " Backups are in the editor's backups folder.";
+        UpdateStatus();
+    }
+
     private async Task Generate()
     {
         if (doc is not { } document || session is null || mapPath is null) return;

@@ -283,6 +283,7 @@
               <MenuItem Name="FilterLanesItem" Header="Filter lanes" />
               <Separator />
               <MenuItem Name="GenerateItem" Header="Generate hitsound diff…" />
+              <MenuItem Name="CopyHitsoundsItem" Header="Copy hitsounds…" />
             </MenuItem>
             <MenuItem Header="View">
               <MenuItem Name="ZoomInItem" Header="Zoom in" />

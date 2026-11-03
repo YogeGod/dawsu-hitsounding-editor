@@ -154,8 +154,8 @@ public static class HitsoundDiff
         return path;
     }
 
-    // The [Metadata] Version of a .osu, or null when it can't be read.
-    private static string? VersionOf(string osuPath)
+    /// <summary>A .osu's difficulty name ([Metadata] Version), or null when it can't be read.</summary>
+    public static string? VersionOf(string osuPath)
     {
         try
         {

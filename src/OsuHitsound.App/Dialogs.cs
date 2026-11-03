@@ -129,6 +129,85 @@ internal static class Dialogs
         });
 
     /// <summary>
+    /// Map → Copy hitsounds: the source difficulty, the targets (the mapset's other difficulties) and Mapping Tools'
+    /// Hitsound Copier options. Returns the choice, or null on Cancel.
+    /// </summary>
+    public static async Task<(string Source, IReadOnlyList<string> Targets, HitsoundCopyOptions Options)?> CopyHitsounds(
+        Window owner, IReadOnlyList<(string Path, string Name)> difficulties, string openMap) =>
+        await Show<(string, IReadOnlyList<string>, HitsoundCopyOptions)?>(owner, "Copy hitsounds", (body, close) =>
+        {
+            var defaults = new HitsoundCopyOptions();
+            var source = new ComboBox
+            {
+                ItemsSource = difficulties.Select(d => d.Name).ToList(), Width = 360,
+                SelectedIndex = Math.Max(0, difficulties.ToList().FindIndex(d => string.Equals(d.Path, openMap, StringComparison.OrdinalIgnoreCase))),
+            };
+            var targets = new StackPanel { Spacing = 2 };
+            var boxes = new List<(CheckBox Box, string Path)>();
+            void FillTargets()
+            {
+                targets.Children.Clear();
+                boxes.Clear();
+                foreach (var (path, name) in difficulties.Where((_, i) => i != source.SelectedIndex))
+                {
+                    var box = new CheckBox { Content = name, IsChecked = true };
+                    boxes.Add((box, path));
+                    targets.Children.Add(box);
+                }
+
+                if (boxes.Count == 0) targets.Children.Add(new TextBlock { Text = "This mapset has no other difficulty to copy into.", Opacity = 0.7 });
+            }
+
+            source.SelectionChanged += (_, _) => FillTargets();
+            FillTargets();
+
+            var mode = new ComboBox { ItemsSource = new[] { "Overwrite everything", "Overwrite only defined" }, SelectedIndex = 0, Width = 360 };
+            var leniency = new TextBox { Text = defaults.Leniency.ToString(CultureInfo.InvariantCulture), Width = 80 };
+            CheckBox Option(string text, bool on, string tip)
+            {
+                var box = new CheckBox { Content = text, IsChecked = on };
+                ToolTip.SetTip(box, tip);
+                return box;
+            }
+
+            var hitsounds = Option("Copy hitsounds", defaults.CopyHitsounds, "What each circle and slider node plays: the sounds and their sample sets.");
+            var sets = Option("Copy sample sets and indexes", defaults.CopySampleSets, "Off: the targets keep their own sample sets and custom indexes.");
+            var volumes = Option("Copy volumes", defaults.CopyVolumes, "Off: the targets keep their own volumes.");
+            var keep5 = Option("Always keep 5 % volumes", defaults.AlwaysPreserve5Volume, "Hit points the target has at 5 % (muted on purpose) stay at 5 %.");
+            var problem = new TextBlock { Foreground = Brushes.OrangeRed };
+            var leniencyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            leniencyRow.Children.AddRange([leniency, new TextBlock { Text = "ms", VerticalAlignment = VerticalAlignment.Center }]);
+
+            body.Children.AddRange([
+                new TextBlock { Text = "Copy from", FontWeight = FontWeight.SemiBold }, source,
+                new TextBlock { Text = "Copy into", FontWeight = FontWeight.SemiBold },
+                new ScrollViewer { Content = targets, MaxHeight = 180 },
+                new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
+                new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
+                new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
+                hitsounds, sets, volumes, keep5,
+                new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
+                problem,
+            ]);
+            return (() =>
+            {
+                var chosen = boxes.Where(b => b.Box.IsChecked == true).Select(b => b.Path).ToList();
+                if (chosen.Count == 0) problem.Text = "Tick at least one difficulty to copy into.";
+                else if (!OsuNumber.TryParseDouble(leniency.Text ?? "", out double ms) || !double.IsFinite(ms) || ms < 0) problem.Text = "The leniency must be a number of milliseconds, 0 or more.";
+                else
+                    close((difficulties[Math.Max(0, source.SelectedIndex)].Path, chosen, defaults with
+                    {
+                        Mode = mode.SelectedIndex == 1 ? CopyMode.OverwriteOnlyDefined : CopyMode.OverwriteEverything,
+                        Leniency = ms,
+                        CopyHitsounds = hitsounds.IsChecked == true,
+                        CopySampleSets = sets.IsChecked == true,
+                        CopyVolumes = volumes.IsChecked == true,
+                        AlwaysPreserve5Volume = keep5.IsChecked == true,
+                    }));
+            }, "Copy");
+        });
+
+    /// <summary>
     /// The Scale by volume dialog. <paramref name="count"/> says how many circles and slider ends a choice changes, for
     /// the live preview. Returns the choice, or null on Cancel.
     /// </summary>
