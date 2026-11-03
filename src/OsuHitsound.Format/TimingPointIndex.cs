@@ -41,6 +41,17 @@ public sealed class TimingPointIndex
     /// <summary>The last point at or before <paramref name="time"/> itself, with no leniency (null before the first).</summary>
     public TimingPoint? PointAt(double time) => AtOrBefore(all, time, fallBackToFirst: false);
 
+    /// <summary>Distinct, readable timing-point times strictly inside an interval, in order.</summary>
+    public IEnumerable<double> TimesBetween(double from, double to)
+    {
+        for (int i = UpperBound(all, from); i < all.Length && all[i].Time < to;)
+        {
+            double time = all[i].Time;
+            yield return time;
+            do { i++; } while (i < all.Length && all[i].Time == time);
+        }
+    }
+
     /// <summary>Slider velocity multiplier at <paramref name="time"/> (red lines reset it to 1) and whether ticks are on (NaN green lines turn them off).</summary>
     public (double Velocity, bool Ticks) SliderVelocityAt(double time)
     {
@@ -63,6 +74,11 @@ public sealed class TimingPointIndex
     private static TimingPoint? AtOrBefore((double Time, TimingPoint Point)[] points, double time, bool fallBackToFirst = true)
     {
         if (points.Length == 0 || (!fallBackToFirst && points[0].Time > time)) return null;
+        return points[Math.Max(UpperBound(points, time) - 1, 0)].Point;
+    }
+
+    private static int UpperBound((double Time, TimingPoint Point)[] points, double time)
+    {
         int lo = 0, hi = points.Length;
         while (lo < hi)
         {
@@ -71,6 +87,6 @@ public sealed class TimingPointIndex
             else hi = mid;
         }
 
-        return points[Math.Max(lo - 1, 0)].Point;
+        return lo;
     }
 }

@@ -218,7 +218,7 @@ public class HitsoundCopierTests
     }
 
     [Fact]
-    public void A_hit_near_a_slider_tick_goes_onto_the_tick_and_the_old_settings_come_back_5_ms_later()
+    public void A_hit_near_a_slider_tick_goes_onto_the_tick_and_the_old_settings_come_back_after_lookup()
     {
         // A two-beat slider (0 to 2000) has a tick at 1000; the source hit is at 1003, within the 5 ms leniency.
         var target = Sliders("256,192,0,2,0,L|396:192,1,280,0|0,0:0|0:0,0:0:0:0:");
@@ -226,9 +226,75 @@ public class HitsoundCopierTests
         var (plan, after) = CopyOnto(Circles((1003, 8)), target, OntoSliders);
 
         Assert.Equal(["normal-slidertick100.wav"], plan.Mixes.Select(m => m.FileName));
-        Assert.Equal(100, Assert.Single(after.TimingPoints, p => p.Time == 1000).SampleIndex);
-        Assert.Equal(0, Assert.Single(after.TimingPoints, p => p.Time == 1005).SampleIndex);
+        double tick = Assert.Single(Decompiler.Decompile(target, NoFiles).Passive, p => p.Kind == PassiveKind.SliderTick).Time;
+        var timing = new TimingPointIndex(after.TimingPoints);
+        Assert.Equal(100, timing.SamplePointAt(tick)!.SampleIndex);
+        Assert.Equal(0, timing.PointAt(Math.Floor(tick + HitsoundRules.ControlPointLeniency) + 1)!.SampleIndex);
         Assert.Equal(SampleSet.None, after.HitObjects[0].HitSample!.Value.NormalSet); // auto: the green lines decide
+    }
+
+    [Fact]
+    public void An_original_green_line_inside_the_lookup_window_does_not_hide_the_copied_tick()
+    {
+        var target = Map("0,1000,4,1,0,25,1,0\n1003,-50,4,1,2,40,0,0", "256,192,0,2,0,L|396:192,1,280,0|0,0:0|0:0,0:0:0:0:");
+        var (plan, after) = CopyOnto(Circles((1000, 8)), target, OntoSliders with { CopyVolumes = false });
+        var decoded = Decompiler.Decompile(after, new MapFolder(plan.Mixes.Select(m => m.FileName)));
+
+        Assert.Equal("normal-slidertick100.wav", Assert.Single(decoded.Passive, p => p.Kind == PassiveKind.SliderTick).Lane.Name);
+        var restored = new TimingPointIndex(after.TimingPoints).PointAt(1010)!;
+        Assert.Equal(2, restored.SampleIndex);
+        Assert.Equal(40, restored.Volume);
+        Assert.Equal(-50, restored.BeatLength);
+    }
+
+    [Theory]
+    [InlineData(1, 200)]
+    [InlineData(1.4, 280)]
+    public void Copied_ticks_resolve_the_generated_sample_at_integer_and_fractional_times(double multiplier, int length)
+    {
+        var target = Sliders($"256,192,0,2,0,L|396:192,1,{length},0|0,0:0|0:0,0:0:0:0:");
+        target = OsuFile.Parse(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(target.ToBytes()).Replace("SliderMultiplier:1.4", $"SliderMultiplier:{multiplier.ToString(System.Globalization.CultureInfo.InvariantCulture)}")));
+        var (plan, after) = CopyOnto(Circles((1003, 8)), target, OntoSliders);
+        var decoded = Decompiler.Decompile(after, new MapFolder(plan.Mixes.Select(m => m.FileName)));
+
+        Assert.Equal("normal-slidertick100.wav", Assert.Single(decoded.Passive, p => p.Kind == PassiveKind.SliderTick).Lane.Name);
+    }
+
+    [Fact]
+    public void Copying_a_tick_keeps_the_sliders_bank_and_earlier_sounds()
+    {
+        var target = Sliders("256,192,0,2,0,L|396:192,1,420,0|0,0:0|0:0,2:0:0:0:");
+        var (plan, after) = CopyOnto(Circles((2000, 8)), target, OntoSliders);
+        var decoded = Decompiler.Decompile(after, new MapFolder(plan.Mixes.Select(m => m.FileName)));
+
+        Assert.Equal(SampleSet.Soft, after.HitObjects[0].HitSample!.Value.NormalSet);
+        Assert.Equal("soft-slidertick", decoded.Passive.First(p => p.Kind == PassiveKind.SliderTick).Lane.Name);
+        Assert.Equal("soft-sliderslide", decoded.Passive.First(p => p.Kind == PassiveKind.SliderSlide).Lane.Name);
+        Assert.Equal("soft-slidertick100.wav", decoded.Passive.Last(p => p.Kind == PassiveKind.SliderTick).Lane.Name);
+    }
+
+    [Theory]
+    [InlineData(false, 25, 80, 25)]
+    [InlineData(true, 5, 80, 5)]
+    [InlineData(true, 25, 80, 80)]
+    public void Slider_mix_timing_respects_volume_options(bool copyVolumes, int targetVolume, int sourceVolume, int expected)
+    {
+        var source = Map($"0,1000,4,1,0,{sourceVolume},1,0", "256,192,500,1,8,0:0:0:0:");
+        var target = Map($"0,1000,4,1,0,{targetVolume},1,0", "256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:");
+        var (_, after) = CopyOnto(source, target, OntoSliders with { CopyToSliderTicks = false, CopyVolumes = copyVolumes });
+
+        Assert.Equal(expected, new TimingPointIndex(after.TimingPoints).PointAt(500)!.Volume);
+        if (!copyVolumes) Assert.Equal(targetVolume, Decompiler.Decompile(after, NoFiles).Moments.Last().Volume);
+    }
+
+    [Fact]
+    public void Slider_mixes_do_not_change_indexes_when_sample_set_copying_is_disabled()
+    {
+        var target = Sliders("256,192,0,2,0,L|396:192,1,280,0|0,0:0|0:0,0:0:0:0:");
+        var (plan, after) = CopyOnto(Circles((1000, 8)), target, OntoSliders with { CopySampleSets = false });
+
+        Assert.Empty(plan.Mixes);
+        Assert.Equal(target.ToBytes(), after.ToBytes());
     }
 
     [Fact]

@@ -18,6 +18,7 @@ public partial class MainWindow : Window
 {
     // Beat snap divisors, as in osu!'s editor plus 1/5, 1/7 and 1/9.
     private static readonly int[] Divisors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16];
+    private static readonly int[] StraightDivisors = [1, 2, 4, 8, 16], TripletDivisors = [1, 3, 6, 12];
 
     private AudioEngine? audio;
     private string? audioError;
@@ -102,7 +103,8 @@ public partial class MainWindow : Window
             Lanes.Edits.SnapMode = SnapModeBox.SelectedIndex == 1 ? SnapMode.GridRelative : SnapMode.Grid;
             UpdateStatus();
         };
-        Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Math.Clamp(SnapBox.SelectedIndex + step, 0, Divisors.Length - 1);
+        Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(Divisors,
+            NextWheelDivisor(Lanes.Divisor, step, TripletSnapToggle.IsChecked == true));
         // V6.39 header and toolbar buttons.
         GenerateButton.Click += async (_, _) => await Generate();
         PreferencesButton.Click += (_, _) => Run("preferences");
@@ -335,6 +337,13 @@ public partial class MainWindow : Window
     }
 
     internal ArrangeView ArrangeArea => Lanes;
+
+    internal static int NextWheelDivisor(int current, int direction, bool triplets)
+    {
+        var choices = triplets ? TripletDivisors : StraightDivisors;
+        return direction > 0 ? choices.FirstOrDefault(d => d > current, choices[^1])
+            : direction < 0 ? choices.LastOrDefault(d => d < current, choices[0]) : current;
+    }
 
     /// <summary>Asks before a command switches to another map while this one has unsaved edits.</summary>
     private async Task<bool> MayLeaveMap() =>
@@ -1042,6 +1051,7 @@ public partial class MainWindow : Window
         FileTitle.FontSize = t.Number("title.fontSize");
         StatusLeft.Foreground = StatusRight.Foreground = B("status.text");
         StatusLeft.FontSize = StatusRight.FontSize = t.Number("status.fontSize");
+        PlaybackOptionsPanel.Orientation = t.Number("status.height") >= 44 ? Avalonia.Layout.Orientation.Vertical : Avalonia.Layout.Orientation.Horizontal;
 
         OpenButton.Content = t.Get("label.open");
         SaveButton.Content = t.Get("label.save");

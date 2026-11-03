@@ -159,14 +159,30 @@ public static class Decompiler
                     new HitSample(sets[node].Normal, sets[node].Addition, 0, 0, null), objectLevel: false);
             }
 
-            // Slide and whistle are evaluated once, at start + 6 ms, with the slider's own banks. Ticks read the timing
-            // point in force at each tick, so a green line inside the slider changes the ticks after it (stable, heard
-            // in the test maps 2026-10-30).
+            // The initial body sample reads start + 6 ms. Later green lines split the preview into loop segments,
+            // including the custom slide samples written by Copy hitsounds. Ticks use their own +5 ms lookup.
             double end = start + spans * timingResult.SpanDuration;
             var body = Settle(start + 1, sample, objectLevel: false);
-            AddPassive(PassiveKind.SliderSlide, start, end, Resolve(body.Normal, "sliderslide", body.Index), body.Volume, slider);
+            AddBody(PassiveKind.SliderSlide, "sliderslide", addition: false);
             if (slider.HitSound.HasFlag(HitSound.Whistle))
-                AddPassive(PassiveKind.SliderWhistle, start, end, Resolve(body.Addition, "sliderwhistle", body.Index), body.Volume, slider);
+                AddBody(PassiveKind.SliderWhistle, "sliderwhistle", addition: true);
+
+            void AddBody(PassiveKind kind, string role, bool addition)
+            {
+                double segmentStart = start;
+                var lane = Resolve(addition ? body.Addition : body.Normal, role, body.Index);
+                int volume = body.Volume;
+                foreach (double time in timing.TimesBetween(start + 1 + HitsoundRules.ControlPointLeniency, end))
+                {
+                    var next = SettlePoint(timing.PointAt(time), sample, objectLevel: false);
+                    var nextLane = Resolve(addition ? next.Addition : next.Normal, role, next.Index);
+                    if (nextLane == lane && next.Volume == volume) continue;
+                    AddPassive(kind, segmentStart, time, lane, volume, slider);
+                    (segmentStart, lane, volume) = (time, nextLane, next.Volume);
+                }
+
+                AddPassive(kind, segmentStart, end, lane, volume, slider);
+            }
 
             foreach (double t in timingResult.TickTimes)
             {
@@ -204,9 +220,11 @@ public static class Decompiler
         /// Banks, index and volume after inheritance from the timing point for a sound at <paramref name="time"/>. Only
         /// circles and spinners (<paramref name="objectLevel"/>) may set their own index and volume.
         /// </summary>
-        private Settled Settle(double time, HitSample sample, bool objectLevel)
+        private Settled Settle(double time, HitSample sample, bool objectLevel) =>
+            SettlePoint(timing.SamplePointAt(time), sample, objectLevel);
+
+        private Settled SettlePoint(TimingPoint? point, HitSample sample, bool objectLevel)
         {
-            var point = timing.SamplePointAt(time);
             var (pointSet, pointIndex, pointVolume) = PointState(point, settings);
 
             var normal = DecodeSet(sample.NormalSet, pointSet);

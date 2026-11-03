@@ -189,14 +189,14 @@ public class DecompilerTests
     }
 
     [Fact]
-    public void Slider_body_is_read_once_at_start_plus_6ms()
+    public void Slider_body_starts_with_the_6ms_lookup_and_previews_later_changes()
     {
-        // The green line at 1006 is too late for the body (start + 6 = 1006 counts, 1007 doesn't).
-        var map = Decompile("0,500,4,2,0,100,1,0\n1007,-100,4,3,0,30,0,0", "100,100,1000,2,2,L|240:100,1,140");
+        var map = Decompile("0,500,4,1,0,100,1,0\n1006,-100,4,2,0,100,0,0\n1200,-100,4,3,0,30,0,0", "100,100,1000,2,2,L|240:100,1,140");
 
-        var slide = map.Passive.Single(p => p.Kind == PassiveKind.SliderSlide);
-        Assert.Equal(("soft-sliderslide", 100, 1000.0, 1500.0), (slide.Lane.Name, slide.Volume, slide.Time, Math.Round(slide.EndTime, 6)));
-        Assert.Equal("soft-sliderwhistle", map.Passive.Single(p => p.Kind == PassiveKind.SliderWhistle).Lane.Name);
+        var slides = map.Passive.Where(p => p.Kind == PassiveKind.SliderSlide).ToList();
+        Assert.Equal(("soft-sliderslide", 100, 1000.0, 1200.0), (slides[0].Lane.Name, slides[0].Volume, slides[0].Time, slides[0].EndTime));
+        Assert.Equal(("drum-sliderslide", 30, 1200.0, 1500.0), (slides[1].Lane.Name, slides[1].Volume, slides[1].Time, Math.Round(slides[1].EndTime, 6)));
+        Assert.Equal(["soft-sliderwhistle", "drum-sliderwhistle"], map.Passive.Where(p => p.Kind == PassiveKind.SliderWhistle).Select(p => p.Lane.Name));
     }
 
     [Theory]

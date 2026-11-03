@@ -311,7 +311,30 @@ public sealed class PlaybackMixer : ISampleProvider
         }
 
         MixVoices(block, n);
+        MixLoops(block, n, start, msPerFrame);
         timeline = end;
+    }
+
+    // Render loop intervals directly: pause, seek, cycling, live mute/solo and cue replacement leave no stale voices.
+    private void MixLoops(Span<float> block, int n, double start, double msPerFrame)
+    {
+        foreach (var cue in scheduler.LoopsBetween(start, start + n * msPerFrame))
+        {
+            if (!IsAudible(cue.Lane) || !sounds.TryGetValue(cue.Lane, out var data) || data.Length < 2) continue;
+            int from = (int)Math.Clamp(Math.Round((cue.Time - start) / msPerFrame), 0, n);
+            int to = (int)Math.Clamp(Math.Ceiling((cue.EndTime!.Value - start) / msPerFrame - 1e-7), 0, n);
+            double elapsed = Math.Round((start - cue.Time) / msPerFrame);
+            if (!double.IsFinite(elapsed)) continue;
+            int frames = data.Length / 2;
+            int f = (int)((elapsed + from) % frames);
+            if (f < 0) f += frames;
+            for (int i = from; i < to; i++)
+            {
+                block[i * 2] += data[f * 2] * cue.Volume;
+                block[i * 2 + 1] += data[f * 2 + 1] * cue.Volume;
+                if (++f == frames) f = 0;
+            }
+        }
     }
 
     private void MixVoices(Span<float> block, int n)

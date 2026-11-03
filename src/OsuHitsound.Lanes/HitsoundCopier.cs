@@ -49,7 +49,7 @@ public sealed record HitsoundCopyOptions
 
     /// <summary>
     /// Overwrite only defined: a source hit with no target hit point goes onto a target slider tick within the leniency,
-    /// as a new mixed sample (a green line switches the tick to its index and reverts 5 ms later).
+    /// as a new mixed sample (a green line switches the tick to its index and reverts after its 5 ms lookup).
     /// </summary>
     public bool CopyToSliderTicks { get; init; }
 
@@ -92,25 +92,20 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
     /// <summary>New mixed samples for slider ticks and slides (written into the mapset before the .osu).</summary>
     public IReadOnlyList<MixFile> Mixes { get; init; } = [];
 
-    /// <summary>Green lines for those samples: at a tick or inside a slide; ticks get the old settings back 5 ms later.</summary>
+    /// <summary>Green lines for those samples: at a tick or inside a slide; ticks get the old settings back after lookup.</summary>
     public IReadOnlyList<(double Time, SampleSet Set, int Index, int Volume, bool Revert)> GreenLines { get; init; } = [];
-
-    /// <summary>Sliders whose own sample set becomes auto, so the green lines decide their ticks and slide.</summary>
-    public IReadOnlyList<int> AutoSliders { get; init; } = [];
 
     /// <summary>Writes what the compiler doesn't (slider bodies, tick and slide samples, storyboard samples) into a compiled copy.</summary>
     public void ApplyExtras(OsuFile file)
     {
         foreach (var (index, sound, normal, addition) in Bodies)
             SetBody(file.HitObjects[index], s => s with { NormalSet = normal, AdditionSet = addition }, sound);
-        foreach (var index in AutoSliders)
-            SetBody(file.HitObjects[index], s => s with { NormalSet = SampleSet.None }, null);
-
-        foreach (var (time, set, index, volume, revert) in GreenLines)
+        foreach (var (time, set, index, volume, revert) in GreenLines.OrderBy(l => l.Time))
         {
             var timing = new TimingPointIndex(file.TimingPoints);
-            // The settings in force just after the tick, to give back 5 ms later (read before the new line goes in).
-            string? back = revert && timing.PointAt(time + 5) is { } after ? LineLike(after, time + 5, after.SampleSet ?? SampleSet.None, after.SampleIndex ?? 0, after.Volume ?? 100) : null;
+            // Tick switches cover their +5 ms lookup for one millisecond, including exact lookup boundaries.
+            double restore = time + 1;
+            string? back = revert && timing.PointAt(restore) is { } after ? LineLike(after, restore, after.SampleSet ?? SampleSet.None, after.SampleIndex ?? 0, after.Volume ?? 100) : null;
             if ((timing.PointAt(time) ?? file.TimingPoints.FirstOrDefault()) is not { } now) continue;
             file.InsertTimingPoint(LineLike(now, time, set, index, volume));
             if (back is not null) file.InsertTimingPoint(back);
@@ -273,8 +268,9 @@ public static class HitsoundCopier
             }
 
         var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted) { Bodies = Bodies(targets, matched, objectIndex, options) };
-        if (indexes is not null && options is { Mode: CopyMode.OverwriteOnlyDefined, CopyHitsounds: true } && (options.CopyToSliderTicks || options.CopyToSliderSlides))
-            plan = TicksAndSlides(plan, unmatched, from.Settings.TimeOffset, to, objectIndex, options, indexes);
+        // A generated sample needs its own index; keeping target indexes means no tick/slide reassignment.
+        if (indexes is not null && options is { Mode: CopyMode.OverwriteOnlyDefined, CopyHitsounds: true, CopySampleSets: true } && (options.CopyToSliderTicks || options.CopyToSliderSlides))
+            plan = TicksAndSlides(plan, unmatched, from.Settings.TimeOffset, to, targetTiming, objectIndex, options, indexes);
         if (!options.CopyStoryboardedSamples) return plan;
 
         // Storyboard samples (Mapping Tools): Overwrite everything clears the target's first; a sample is skipped when a
@@ -307,7 +303,7 @@ public static class HitsoundCopier
     /// mixed sample on its own index. Ticks are done first, as in MT, so a slide never takes a tick's time.
     /// </summary>
     private static HitsoundCopyPlan TicksAndSlides(HitsoundCopyPlan plan, List<Moment> unmatched, double sourceOffset, DecompiledMap to,
-        Dictionary<HitObject, int> objectIndex, HitsoundCopyOptions options, CustomSampleIndexes indexes)
+        TimingPointIndex timing, Dictionary<HitObject, int> objectIndex, HitsoundCopyOptions options, CustomSampleIndexes indexes)
     {
         double offset = to.Settings.TimeOffset;
         var ticks = to.Passive.Where(p => p is { Kind: PassiveKind.SliderTick, Object: not null }).Select(p => (Time: p.Time - offset, Slider: p.Object!)).OrderBy(t => t.Time).ToList();
@@ -315,19 +311,22 @@ public static class HitsoundCopier
         var taken = new HashSet<int>();
         var mixes = new List<MixFile>();
         var lines = new List<(double, SampleSet, int, int, bool)>();
-        var auto = new HashSet<int>();
+        var bodySets = plan.Bodies.ToDictionary(b => b.Object, b => b.Normal);
         var later = new List<(Moment Hit, double Time)>();
 
         void Add(Moment hit, double at, HitObject slider, string role, bool revert)
         {
-            var set = hit.Hits.Select(h => h.Lane.Sample).FirstOrDefault(s => s?.Sound == "hitnormal")?.Set ?? SampleSet.Normal;
+            var state = Decompiler.PointState(revert ? timing.SamplePointAt(at) : timing.PointAt(at), to.Settings);
+            // Put the mix in the bank this slider already reads. Making the whole slider auto would change earlier sounds.
+            var ownSet = bodySets.GetValueOrDefault(objectIndex[slider], (slider.HitSample ?? default).NormalSet);
+            var set = Decompiler.DecodeSet(ownSet, state.Set);
             var (mix, index) = indexes.For(hit.Hits.Select(h => h.Lane), role, set);
             if (mix.Layers.Count == 0) return;
             if (!mixes.Contains(mix)) mixes.Add(mix);
-            // On a whole millisecond, as osu!'s editor writes them (a tick's time is computed: 999.9999…); sounds read
-            // timing points 5 ms after their time, so the line still covers the tick.
-            lines.Add((Math.Round(at), set, index, hit.Volume, revert));
-            auto.Add(objectIndex[slider]);
+            // Switch at the last whole millisecond before the tick's lookup, after any intervening original green line.
+            double when = revert ? Math.Floor(at + HitsoundRules.ControlPointLeniency) : Math.Round(at);
+            int volume = !options.CopyVolumes || options.AlwaysPreserve5Volume && state.Volume == 5 ? state.Volume : hit.Volume;
+            lines.Add((when, state.Set, index, volume, revert));
         }
 
         foreach (var hit in unmatched)
@@ -345,7 +344,7 @@ public static class HitsoundCopier
             if (!taken.Contains((int)time) && slides.FirstOrDefault(s => s.Start < time && s.End > time) is { Slider: not null } slide)
                 Add(hit, time, slide.Slider, "sliderslide", revert: false);
 
-        return plan with { Mixes = mixes, GreenLines = lines, AutoSliders = [.. auto] };
+        return plan with { Mixes = mixes, GreenLines = lines };
     }
 
     /// <summary>
@@ -435,7 +434,7 @@ public static class HitsoundCopier
                         .ToDictionary(m => m, _ => (byte[]?)null);
                     foreach (var mix in plan.Mixes.Where(m => !made.ContainsKey(m))) made[mix] = render(mix);
                     if (made.Any(kv => kv.Value is null && !written.Contains(kv.Key.FileName) && !File.Exists(Path.Combine(dir, kv.Key.FileName))))
-                        plan = plan with { Mixes = [], GreenLines = [], AutoSliders = [] };
+                        plan = plan with { Mixes = [], GreenLines = [] };
                     else
                         foreach (var (mix, bytes) in made.Where(kv => kv.Value is not null))
                         {

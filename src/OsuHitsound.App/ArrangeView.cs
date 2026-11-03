@@ -57,6 +57,7 @@ internal sealed class ArrangeView : Control
     private static readonly IBrush MarqueeFill = Paint.Brush(Color.Parse("#2f6fd0"), 0.15);
     private static readonly IPen RangePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#e0a030"), 1);
     private static readonly IBrush RangeFill = Paint.Brush(Color.Parse("#e0a030"), 0.18);
+    private static readonly IBrush HoverFill = Paint.Brush(Colors.White, 0.06);
 
     private double? rowHeight; // set by Ctrl+Shift+wheel; null follows the theme
     private double scrollY;
@@ -83,6 +84,7 @@ internal sealed class ArrangeView : Control
     private double waveHeightAtStart;
     private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
     private HashSet<EditHit> marqueeBase = [];
+    private bool seekOnClick;
 
     public ArrangeView()
     {
@@ -345,12 +347,15 @@ internal sealed class ArrangeView : Control
                 DrawGridLines(ctx, model, lines, from, to, HeaderHeight, size.Height);
 
                 var range = Edits.Range;
+                var hoveredLane = HoveredLane;
                 double rangeLeft = range is null ? 0 : GridLeft + Axis.X(range.Start), rangeRight = range is null ? 0 : GridLeft + Axis.X(range.End);
                 for (int i = first; i < model.Rows.Count; i++)
                 {
                     double y = HeaderHeight + RowTop(i) - scrollY;
                     if (y > size.Height) break;
                     if (model.Rows[i] is not LaneRow lane) continue;
+                    if (lane.Lane == hoveredLane)
+                        ctx.FillRectangle(HoverFill, new Rect(GridLeft, y, gridWidth, RowHeight));
                     // The range is shaded under the notes, one box per lane row it covers.
                     if (range is not null && range.Lanes.Contains(lane.Lane))
                         ctx.DrawRectangle(RangeFill, RangePen, new Rect(rangeLeft, y, Math.Max(1, rangeRight - rangeLeft), RowHeight));
@@ -1054,7 +1059,7 @@ internal sealed class ArrangeView : Control
                 // The ruler and the waveform move the playhead; a click near a bookmark flag lands exactly on it.
                 double near = 5 / Axis.Zoom;
                 var bookmark = session.NearestBookmark(t, near);
-                SeekRequested?.Invoke(p.Y < RulerBottom && bookmark is { } b ? b : t);
+                SeekRequested?.Invoke(p.Y < RulerBottom && bookmark is { } b ? b : SnapTime(t));
             }
 
             InvalidateVisual();
@@ -1172,6 +1177,7 @@ internal sealed class ArrangeView : Control
 
             case Tool.Select or Tool.Ramp:
                 drag = Drag.Marquee;
+                seekOnClick = tool == Tool.Select && !additive;
                 marqueeBase = additive ? [.. selection] : [];
                 if (marqueeBase.Count == 0 && selection.Count > 0)
                 {
@@ -1189,6 +1195,9 @@ internal sealed class ArrangeView : Control
 
     private Point? pointer;
 
+    internal Lane? HoveredLane => pointer is { } p && p.X >= GridLeft && p.X < Bounds.Width && p.Y < Bounds.Height
+        ? (RowAt(p.Y) as LaneRow)?.Lane : null;
+
     /// <summary>Shows the cursor for the tool at the pointer; the window calls it when Alt goes down or up.</summary>
     public void UpdateCursor(KeyModifiers modifiers)
     {
@@ -1199,12 +1208,15 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerExited(PointerEventArgs e)
     {
         pointer = null;
+        InvalidateVisual();
         base.OnPointerExited(e);
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
+        var previousHover = HoveredLane;
         pointer = e.GetPosition(this);
+        if (previousHover != HoveredLane) InvalidateVisual();
         UpdateCursor(e.KeyModifiers);
         if (drag == Drag.None || Model is not { } model || Session is not { } session) return;
         var p = e.GetPosition(this);
@@ -1241,6 +1253,8 @@ internal sealed class ArrangeView : Control
 
             case Drag.Marquee:
             {
+                if (Math.Abs(p.X - dragStart.X) >= DragThreshold || Math.Abs(p.Y - dragStart.Y) >= DragThreshold)
+                    seekOnClick = false;
                 selection.Clear();
                 selection.UnionWith(marqueeBase);
                 selection.UnionWith(HitsIn(new Rect(dragStart, p).Normalize()));
@@ -1268,6 +1282,12 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (drag == Drag.None) return;
+        if (drag == Drag.Marquee && seekOnClick)
+        {
+            var released = e.GetPosition(this);
+            if (Math.Abs(released.X - dragStart.X) < DragThreshold && Math.Abs(released.Y - dragStart.Y) < DragThreshold)
+                SeekRequested?.Invoke(SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))));
+        }
         if (drag == Drag.Cycle && Math.Abs(dragNow.X - dragStart.X) < DragThreshold && LocatorLeft is { } l && LocatorRight is { } r)
         {
             // A click (no drag) inside the band toggles cycling.

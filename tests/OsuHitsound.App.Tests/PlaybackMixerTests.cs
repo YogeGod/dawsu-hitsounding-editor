@@ -52,6 +52,84 @@ public class PlaybackMixerTests
 
     private static int[] Clicks(float[] left) => [.. left.Select((v, i) => (v, i)).Where(x => x.v > 0.9f).Select(x => x.i)];
 
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Slider_samples_loop_until_the_segment_end_at_each_speed(double speed)
+    {
+        var mixer = Mixer(new Cue(20, Clap, 0.5f, 60));
+        mixer.SetSound(Clap, [0.5f, 0.5f]); // one-frame loop, longer than the sample
+        mixer.Speed = speed;
+        mixer.Play();
+        var left = Render(mixer, 150);
+        int from = (int)Math.Round(20 / speed * Rate / 1000), to = (int)Math.Ceiling(60 / speed * Rate / 1000);
+
+        Assert.All(left[..from], v => Assert.Equal(0, v));
+        Assert.All(left[from..to], v => Assert.Equal(0.25f, v));
+        Assert.All(left[to..], v => Assert.Equal(0, v));
+    }
+
+    [Fact]
+    public void Slider_samples_resume_after_seeking_but_stop_on_pause_and_respect_mutes()
+    {
+        var mixer = Mixer(new Cue(0, Clap, 1, 100));
+        mixer.SetSound(Clap, [0.5f, 0.5f]);
+        mixer.Seek(50);
+        mixer.Play();
+        Assert.All(Render(mixer, 10), v => Assert.Equal(0.5f, v));
+        mixer.Pause();
+        Assert.All(Render(mixer, 10), v => Assert.Equal(0, v));
+        mixer.Play();
+        mixer.IsAudible = _ => false;
+        Assert.All(Render(mixer, 10), v => Assert.Equal(0, v));
+        mixer.IsAudible = _ => true;
+        Assert.All(Render(mixer, 10), v => Assert.Equal(0.5f, v));
+    }
+
+    [Fact]
+    public void Slider_sample_changes_replace_the_loop_and_cycles_restart_it()
+    {
+        var second = new Lane(LaneSource.BeatmapFile, "soft-sliderslide100.wav");
+        var mixer = Mixer(new Cue(0, Clap, 1, 50), new Cue(50, second, 1, 100));
+        mixer.SetSound(Clap, [0.25f, 0.25f]);
+        mixer.SetSound(second, [0.5f, 0.5f]);
+        mixer.Loop = (0, 100);
+        mixer.Play();
+        var left = Render(mixer, 200);
+
+        Assert.All(left[..2205], v => Assert.Equal(0.25f, v));
+        Assert.All(left[2205..4410], v => Assert.Equal(0.5f, v));
+        Assert.Equal(left[..4410], left[4410..]);
+    }
+
+    [Fact]
+    public void Slider_loops_keep_sample_phase_across_audio_blocks_and_stop_when_cues_are_replaced()
+    {
+        var mixer = Mixer(new Cue(0, Clap, 1, 100));
+        mixer.Play();
+        var block = new float[1000]; // 500 frames, not a multiple of the three-frame sample
+        mixer.Read(block);
+        mixer.Read(block);
+        Assert.Equal(0, block[0]);
+        Assert.Equal(1, block[2]);
+        Assert.Equal(0, block[4]);
+
+        mixer.SetCues(new HitScheduler([]));
+        mixer.Read(block);
+        Assert.All(block, v => Assert.Equal(0, v));
+    }
+
+    [Theory]
+    [InlineData(-1e20)]
+    [InlineData(double.NegativeInfinity)]
+    public void Extreme_loop_start_times_cannot_overflow_a_sample_index(double start)
+    {
+        var mixer = Mixer(new Cue(start, Clap, 1, 100));
+        mixer.Play();
+        Assert.All(Render(mixer, 10), v => Assert.True(float.IsFinite(v)));
+    }
+
     [Fact]
     public void A_hit_starts_on_its_exact_sample()
     {

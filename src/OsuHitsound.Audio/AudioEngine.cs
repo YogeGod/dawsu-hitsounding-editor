@@ -178,7 +178,7 @@ public sealed class AudioEngine : IDisposable
         scheduler = new HitScheduler(map);
         mixer.SetCues(scheduler);
         songLength = song?.LengthMs ?? 0;
-        cueLength = scheduler.Cues.Count > 0 ? scheduler.Cues[^1].Time + 1000 : 0;
+        cueLength = scheduler.Cues.Count > 0 ? scheduler.EndTime + 1000 : 0;
         UpdateLength();
         mixer.Seek(0);
     }
@@ -212,7 +212,7 @@ public sealed class AudioEngine : IDisposable
         if (scheduler is null) return; // nothing loaded
         scheduler = new HitScheduler(cues);
         mixer.SetCues(scheduler);
-        cueLength = scheduler.Cues.Count > 0 ? scheduler.Cues[^1].Time + 1000 : 0;
+        cueLength = scheduler.Cues.Count > 0 ? scheduler.EndTime + 1000 : 0;
         UpdateLength();
     }
 

@@ -120,6 +120,8 @@ One bar per circle or slider end. Drag a bar to change its volume, Alt-drag to p
 
 Each target is saved with a backup, like **Save .osu**, and only the lines that change are rewritten. A slider body's index and volume follow the target's own green lines.
 
+The editor previews slider-slide and whistle loops, including sample and volume changes inside a slider. Tick copies keep the slider's sample bank, and **Copy volumes** and **Always keep 5 % volumes** also apply to generated samples. Copying to ticks or slides requires **Copy sample sets and indexes**, since each generated sample needs a new index.
+
 ## Download
 
 Download the newest **C# editor preview** from [Releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases), extract the whole ZIP, and run `OsuHitsoundEditor.exe`. Keep the extracted files together.

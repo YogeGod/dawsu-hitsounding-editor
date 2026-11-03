@@ -32,15 +32,42 @@ public class PlaybackModelTests
     }
 
     [Fact]
-    public void Scheduler_plays_ticks_and_never_below_stables_minimum_but_skips_slider_slides()
+    public void Scheduler_plays_ticks_and_looped_slides_at_stables_minimum_volume()
     {
         // A two-beat slider (280 px at 140 px/beat) has one tick halfway; the timing point's volume is 5 %.
         var (map, _) = Load("0,500,4,2,0,5,1,0", "100,100,1000,2,0,L|380:100,1,280");
         var cues = new HitScheduler(map).Cues;
 
         Assert.Contains(cues, c => c.Lane.Name == "soft-slidertick" && Math.Abs(c.Time - 1500) < 0.01);
-        Assert.DoesNotContain(cues, c => c.Lane.Name.Contains("sliderslide"));
+        Assert.Contains(cues, c => c.Lane.Name == "soft-sliderslide" && c.EndTime > c.Time);
         Assert.All(cues, c => Assert.Equal(0.08f, c.Volume));
+    }
+
+    [Fact]
+    public void Copied_slide_samples_are_decompiled_and_scheduled_after_reopening()
+    {
+        var (_, source) = Load("0,1000,4,1,0,80,1,0", "256,192,500,1,8,0:0:0:0:");
+        var (_, target) = Load("0,1000,4,1,0,25,1,0", "256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,2:0:0:0:");
+        var folder = new MapFolder([]);
+        var options = new HitsoundCopyOptions { Mode = CopyMode.OverwriteOnlyDefined, CopyToSliderSlides = true, CopyBodyHitsounds = false };
+        var plan = HitsoundCopier.Plan(source, folder, target, folder, options, new CustomSampleIndexes(folder, 100));
+        Compiler.Apply(target, folder, plan.Wanted);
+        plan.ApplyExtras(target);
+        var reopened = Decompiler.Decompile(OsuFile.Parse(target.ToBytes()), new MapFolder(plan.Mixes.Select(m => m.FileName)));
+
+        var copied = Assert.Single(new HitScheduler(reopened).Cues, c => c.Lane.Name == "soft-sliderslide100.wav");
+        Assert.Equal(500, copied.Time);
+        Assert.Equal(1000, copied.EndTime!.Value, 6);
+        Assert.Equal(0.8f, copied.Volume);
+
+        var mixer = new PlaybackMixer { Length = 2000 };
+        mixer.SetCues(new HitScheduler(reopened));
+        mixer.SetSound(copied.Lane, [0.5f, 0.5f]);
+        mixer.Seek(500);
+        mixer.Play();
+        var audio = new float[882];
+        mixer.Read(audio);
+        Assert.All(audio, value => Assert.Equal(0.4f, value));
     }
 
     [Fact]
