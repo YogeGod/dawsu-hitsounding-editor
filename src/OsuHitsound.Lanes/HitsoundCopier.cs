@@ -35,6 +35,15 @@ public sealed record HitsoundCopyOptions
     /// <summary>With volumes copied, target hit points at 5 % stay at 5 % (they're muted on purpose).</summary>
     public bool AlwaysPreserve5Volume { get; init; } = true;
 
+    /// <summary>Copy the source's storyboard samples (its own [Events] Sample lines) into the targets.</summary>
+    public bool CopyStoryboardedSamples { get; init; }
+
+    /// <summary>Skip a storyboard sample when a target hit point within the leniency already plays that file.</summary>
+    public bool IgnoreHitsoundSatisfiedSamples { get; init; } = true;
+
+    /// <summary>Skip a storyboard sample whenever a target hit point is within the leniency.</summary>
+    public bool IgnoreWheneverHitsound { get; init; }
+
     /// <summary>Mute target slider (and spinner) ends the source has nothing for, filtered by snap and length.</summary>
     public bool MuteSliderEnds { get; init; }
 
@@ -55,7 +64,21 @@ public sealed record HitsoundCopyOptions
 }
 
 /// <summary>What <see cref="HitsoundCopier.Plan"/> found: the target's new sounds per hit point, and counts for the summary.</summary>
-public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound> Wanted, int Matched, int Changed, int Muted = 0);
+public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound> Wanted, int Matched, int Changed, int Muted = 0)
+{
+    /// <summary>Storyboard sample lines to add (in time order), after removing the target's own when <see cref="ClearSamples"/>.</summary>
+    public IReadOnlyList<(string Text, double Time)> SamplesToAdd { get; init; } = [];
+
+    public bool ClearSamples { get; init; }
+
+    /// <summary>Writes the storyboard part of the plan into a (compiled) copy of the target.</summary>
+    public void ApplySamples(OsuFile file)
+    {
+        if (ClearSamples)
+            foreach (var sample in Storyboard.SampleLines(file).ToList()) file.RemoveLine(sample.Line);
+        foreach (var (text, time) in SamplesToAdd) file.InsertStoryboardSample(text, time);
+    }
+}
 
 /// <summary>One target of <see cref="HitsoundCopier.CopyTo"/>: what changed, the backup, or why it wasn't written.</summary>
 public sealed record HitsoundCopyTarget(string Path, int Matched, int Changed, int Conflicts, string? Backup, string? Error, int Muted = 0);
@@ -152,7 +175,39 @@ public static class HitsoundCopier
                 else wanted[key] = mute;
             }
 
-        return new HitsoundCopyPlan(wanted, matches, wanted.Count, muted);
+        var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted);
+        if (!options.CopyStoryboardedSamples) return plan;
+
+        // Storyboard samples (Mapping Tools): Overwrite everything clears the target's first; a sample is skipped when a
+        // hit point within the leniency already plays its file (or, stricter, whenever there's one), and never doubled.
+        bool clear = options.Mode == CopyMode.OverwriteEverything;
+        var existing = clear ? [] : Storyboard.SampleLines(target).Select(s => (s.Time, s.Layer, s.Path.ToLowerInvariant(), s.Volume)).ToHashSet();
+        var add = new List<(string Text, double Time)>();
+        foreach (var s in Storyboard.SampleLines(source))
+        {
+            var near = targets.Where((_, i) => Math.Abs(times[i] - s.Time) <= options.Leniency).ToList();
+            if (options.IgnoreWheneverHitsound && near.Count > 0) continue;
+            if (options.IgnoreHitsoundSatisfiedSamples)
+            {
+                var file = Canonical(targetFolder, s.Path);
+                bool playing = near.Any(m => (wanted.GetValueOrDefault(new MomentKey(objectIndex[m.Object], m.Node)) ?? Compiler.AsWanted(m)).Lanes
+                    .Any(l => l.Source == LaneSource.BeatmapFile && Canonical(targetFolder, l.Name) == file));
+                if (playing) continue;
+            }
+
+            if (!existing.Add((s.Time, s.Layer, s.Path.ToLowerInvariant(), s.Volume))) continue;
+            add.Add(($"Sample,{s.Time.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)},{s.Layer},{s.PathField},{s.Volume}", s.Time));
+        }
+
+        return plan with { SamplesToAdd = add, ClearSamples = clear };
+    }
+
+    // A sample file as osu! finds it: the mapset's file with that name, or with that name and another extension.
+    private static string Canonical(MapFolder folder, string path)
+    {
+        var found = folder.Find(path) ?? folder.Files.FirstOrDefault(f => string.Equals(
+            Path.ChangeExtension(f, null), Path.ChangeExtension(path.Replace('\\', '/'), null), StringComparison.OrdinalIgnoreCase));
+        return (found ?? path).Replace('\\', '/').ToLowerInvariant();
     }
 
     /// <summary>
@@ -195,7 +250,7 @@ public static class HitsoundCopier
             {
                 var doc = MapDocument.Load(path);
                 var plan = Plan(source, sourceFolder, doc.File, doc.Folder, options);
-                var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot);
+                var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot, alsoEdit: plan.ApplySamples);
                 results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null, plan.Muted));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException)

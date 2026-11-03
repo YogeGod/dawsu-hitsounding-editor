@@ -150,6 +150,79 @@ public class HitsoundCopierTests
         Assert.Contains("normal-hitwhistle", Sounds(Tail(after, 5000)));
     }
 
+    // A map with storyboard sample lines in [Events], and circles.
+    private static OsuFile WithSamples(string[] samples, params (int Time, string Sample)[] circles) => OsuFile.Parse(Encoding.UTF8.GetBytes(
+        "osu file format v14\r\n\r\n[General]\r\nSampleSet: Normal\r\n\r\n[Events]\r\n//Storyboard Sound Samples\r\n" +
+        string.Concat(samples.Select(s => s + "\r\n")) + "\r\n[TimingPoints]\r\n0,500,4,1,0,100,1,0\r\n\r\n[HitObjects]\r\n" +
+        string.Concat(circles.Select(c => $"256,192,{c.Time},1,{c.Sample}\r\n"))));
+
+    private static List<string> SampleLines(OsuFile file) =>
+        [.. file.Lines.Where(l => l.Section == "Events" && l.Text.StartsWith("Sample,", StringComparison.Ordinal)).Select(l => l.Text)];
+
+    private static OsuFile CopySamples(OsuFile source, OsuFile target, HitsoundCopyOptions options, MapFolder? folder = null)
+    {
+        var plan = HitsoundCopier.Plan(source, folder ?? NoFiles, target, folder ?? NoFiles, options with { CopyStoryboardedSamples = true });
+        var copy = OsuFile.Parse(target.ToBytes());
+        Compiler.Apply(copy, folder ?? NoFiles, plan.Wanted);
+        plan.ApplySamples(copy);
+        return OsuFile.Parse(copy.ToBytes());
+    }
+
+    [Fact]
+    public void A_storyboard_sample_is_copied_at_its_time()
+    {
+        var after = CopySamples(WithSamples(["Sample,100,3,\"sample.wav\",80"]), WithSamples([]), new HitsoundCopyOptions { CopyHitsounds = false, IgnoreHitsoundSatisfiedSamples = false });
+
+        Assert.Equal(["Sample,100,3,\"sample.wav\",80"], SampleLines(after));
+    }
+
+    [Fact]
+    public void A_storyboard_sample_at_a_hit_is_skipped_when_asked()
+    {
+        var options = new HitsoundCopyOptions { CopyHitsounds = false, IgnoreHitsoundSatisfiedSamples = false, IgnoreWheneverHitsound = true };
+
+        var after = CopySamples(WithSamples(["Sample,1000,3,\"sample.wav\",80"]), WithSamples([], (1000, "2,0:0:0:0:")), options);
+
+        Assert.Empty(SampleLines(after));
+    }
+
+    [Fact]
+    public void A_repeated_storyboard_sample_is_added_once()
+    {
+        var source = WithSamples(["Sample,100,3,\"sample.wav\",80", "Sample,100,3,\"sample.wav\",80"]);
+
+        var after = CopySamples(source, WithSamples([]), new HitsoundCopyOptions { CopyHitsounds = false, IgnoreHitsoundSatisfiedSamples = false });
+
+        Assert.Single(SampleLines(after));
+    }
+
+    [Fact]
+    public void A_storyboard_sample_a_hitsound_already_plays_is_skipped()
+    {
+        // The target's circle plays normal-hitclap.wav (index 1) where the source has it as a storyboard sample. (Only
+        // defined: Overwrite everything would give the circle the source's index 0, and then the file isn't played.)
+        var folder = new MapFolder(["normal-hitclap.wav"]);
+        var target = WithSamples([], (1000, "8,0:0:1:0:"));
+        var source = WithSamples(["Sample,1000,3,\"normal-hitclap.ogg\",100"]); // another extension: the same sample
+
+        var after = CopySamples(source, target, new HitsoundCopyOptions { Mode = CopyMode.OverwriteOnlyDefined, CopyHitsounds = false }, folder);
+
+        Assert.Empty(SampleLines(after));
+    }
+
+    [Theory]
+    [InlineData(CopyMode.OverwriteEverything, 1)]
+    [InlineData(CopyMode.OverwriteOnlyDefined, 2)]
+    public void Overwrite_everything_replaces_the_targets_storyboard_samples(CopyMode mode, int count)
+    {
+        var target = WithSamples(["Sample,500,3,\"old.wav\",100"]);
+
+        var after = CopySamples(WithSamples(["Sample,100,3,\"new.wav\",100"]), target, new HitsoundCopyOptions { Mode = mode, CopyHitsounds = false, IgnoreHitsoundSatisfiedSamples = false });
+
+        Assert.Equal(count, SampleLines(after).Count);
+        Assert.Equal("Sample,100,3,\"new.wav\",100", SampleLines(after)[0]); // in time order
+    }
+
     [Fact]
     public void Copying_into_a_mapset_writes_each_target_with_a_backup()
     {

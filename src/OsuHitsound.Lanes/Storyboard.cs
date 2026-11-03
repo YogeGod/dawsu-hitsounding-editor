@@ -5,7 +5,7 @@ namespace OsuHitsound.Lanes;
 
 /// <summary>
 /// Storyboard Sample lines (<c>Sample,time,layer,"path",volume</c>) from a map's [Events] and from the mapset's .osb.
-/// .osb [Variables] are substituted to read paths; nothing here writes.
+/// .osb [Variables] are substituted to read paths. Copy hitsounds writes them through OsuFile.InsertStoryboardSample.
 /// </summary>
 internal static class Storyboard
 {
@@ -36,6 +36,23 @@ internal static class Storyboard
 
             int volume = fields.Count > 4 && OsuNumber.TryParseInt(fields[4], out int v) ? Math.Clamp(v, 0, 100) : 100;
             yield return (time, CleanPath(fields[3]), volume);
+        }
+    }
+
+    /// <summary>
+    /// A file's own Sample lines (its [Events], without .osb variables): the line, its time, layer and volume as
+    /// written, and the cleaned path. Unreadable lines are left out.
+    /// </summary>
+    public static IEnumerable<(OsuLine Line, double Time, string Layer, string PathField, string Path, int Volume)> SampleLines(OsuFile file)
+    {
+        foreach (var line in file.Lines.Where(l => l.Section == "Events"))
+        {
+            var text = line.Text.Trim();
+            if (!text.StartsWith("Sample,", StringComparison.Ordinal) && !text.StartsWith("5,", StringComparison.Ordinal)) continue;
+            var fields = SplitQuoted(text);
+            if (fields.Count < 4 || !OsuNumber.TryParseDouble(fields[1], out double time) || !double.IsFinite(time)) continue;
+            int volume = fields.Count > 4 && OsuNumber.TryParseInt(fields[4], out int v) ? Math.Clamp(v, 0, 100) : 100;
+            yield return (line, time, fields[2].Trim(), fields[3].Trim(), CleanPath(fields[3]), volume);
         }
     }
 

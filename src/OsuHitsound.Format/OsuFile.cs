@@ -29,7 +29,40 @@ public sealed class OsuFile
     /// <summary>In file order.</summary>
     public IReadOnlyList<HitObject> HitObjects { get; }
 
-    public bool IsEdited => Lines.Any(l => l.IsEdited);
+    public bool IsEdited => removedLines || Lines.Any(l => l.IsEdited);
+
+    private bool removedLines;
+
+    /// <summary>Removes a line (e.g. a storyboard Sample line). Timing points and hit objects can't be removed this way.</summary>
+    public void RemoveLine(OsuLine line)
+    {
+        if (line.Section is "TimingPoints" or "HitObjects") throw new InvalidOperationException("Timing points and hit objects aren't removed line by line.");
+        if (lines.Remove(line)) removedLines = true;
+    }
+
+    /// <summary>
+    /// Adds a storyboard sample line (<c>Sample,time,layer,"path",volume</c>) to [Events]: after the last sample line at
+    /// or before its time, else after the "//Storyboard Sound Samples" comment, else at the end of [Events].
+    /// </summary>
+    public OsuLine InsertStoryboardSample(string text, double time)
+    {
+        int events = lines.FindIndex(l => l.Section == "Events" && l.Text.Trim() == "[Events]");
+        if (events < 0) throw new InvalidOperationException("The map has no [Events] section to add storyboard samples to.");
+        int last = -1, comment = -1, end = events;
+        for (int i = events + 1; i < lines.Count && lines[i].Section == "Events"; i++)
+        {
+            var t = lines[i].Text.Trim();
+            if (t.Length > 0) end = i;
+            if (t.StartsWith("//Storyboard Sound Samples", StringComparison.OrdinalIgnoreCase)) comment = i;
+            if ((t.StartsWith("Sample,", StringComparison.Ordinal) || t.StartsWith("5,", StringComparison.Ordinal))
+                && t.Split(',') is [_, var at, ..] && OsuNumber.TryParseDouble(at, out double existing) && existing <= time)
+                last = i;
+        }
+
+        int after = last >= 0 ? last : comment >= 0 ? comment : end;
+        if (lines[after].Terminator.Length == 0) throw new InvalidOperationException("The file ends without a newline; nothing can be added after it.");
+        return InsertLine(after + 1, text, "Events", lines[after].Terminator);
+    }
 
     public static OsuFile Read(string path) => Parse(File.ReadAllBytes(path));
 

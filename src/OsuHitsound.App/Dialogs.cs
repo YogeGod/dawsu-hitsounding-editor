@@ -175,6 +175,14 @@ internal static class Dialogs
             var volumes = Option("Copy volumes", defaults.CopyVolumes, "Off: the targets keep their own volumes.");
             var keep5 = Option("Always keep 5 % volumes", defaults.AlwaysPreserve5Volume, "Hit points the target has at 5 % (muted on purpose) stay at 5 %.");
 
+            // Storyboard samples: copied from the source's [Events], skipped where a hit already plays them (or any hit).
+            var storyboard = Option("Copy storyboarded samples", defaults.CopyStoryboardedSamples, "The source's own storyboard Sample lines go into the targets (Overwrite everything replaces theirs).");
+            var satisfied = Option("Skip samples a hitsound already plays", defaults.IgnoreHitsoundSatisfiedSamples, "Not copied when a target hit point within the leniency plays the same file.");
+            var whenever = Option("Skip samples at any hitsound", defaults.IgnoreWheneverHitsound, "Not copied when there's any target hit point within the leniency.");
+            var storyboardOptions = new StackPanel { Spacing = 2, Margin = new Thickness(22, 0, 0, 0), IsEnabled = storyboard.IsChecked == true };
+            storyboardOptions.Children.AddRange([satisfied, whenever]);
+            storyboard.IsCheckedChanged += (_, _) => storyboardOptions.IsEnabled = storyboard.IsChecked == true;
+
             // Mute slider ends (Mapping Tools' filter): snaps in priority order, the muted ones, length, index and set.
             var mute = Option("Mute slider ends", defaults.MuteSliderEnds, "Target slider ends the source has nothing for, with no additions, play a hitnormal at 5 % when they pass the filter below.");
             static string List(IEnumerable<int> divisors) => string.Join(", ", divisors);
@@ -224,7 +232,7 @@ internal static class Dialogs
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
-                hitsounds, sets, volumes, keep5, mute, muteGrid,
+                hitsounds, sets, volumes, keep5, storyboard, storyboardOptions, mute, muteGrid,
                 new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);
@@ -245,6 +253,9 @@ internal static class Dialogs
                         CopySampleSets = sets.IsChecked == true,
                         CopyVolumes = volumes.IsChecked == true,
                         AlwaysPreserve5Volume = keep5.IsChecked == true,
+                        CopyStoryboardedSamples = storyboard.IsChecked == true,
+                        IgnoreHitsoundSatisfiedSamples = satisfied.IsChecked == true,
+                        IgnoreWheneverHitsound = whenever.IsChecked == true,
                         MuteSliderEnds = mute.IsChecked == true,
                         BeatDivisors = beatDivisors,
                         MutedDivisors = muted,
