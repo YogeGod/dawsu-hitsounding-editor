@@ -126,8 +126,26 @@ public partial class MainWindow : Window
         RampTool.Click += (_, _) => SetTool(Tool.Ramp);
 
         // Playback options.
-        foreach (var (item, speed) in new[] { (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) })
-            item.Click += (_, _) => { if (audio is not null) audio.Speed = speed; UpdateStatus(); };
+        // Speed: the Playback menu and the transport bar's buttons, kept showing the same choice.
+        var speedButtons = new List<(Avalonia.Controls.Primitives.ToggleButton Button, double Speed)>();
+        var speedItems = new[] { (Speed25Item, 0.25), (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) };
+        void SetSpeed(double speed)
+        {
+            if (audio is not null) audio.Speed = speed;
+            foreach (var (item, s) in speedItems) item.IsChecked = s == speed;
+            foreach (var (button, s) in speedButtons) button.IsChecked = s == speed;
+            UpdateStatus();
+        }
+
+        foreach (var (item, speed) in speedItems)
+        {
+            item.Click += (_, _) => SetSpeed(speed);
+            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = false, Padding = new Avalonia.Thickness(6, 2) };
+            button.Classes.Add("viewToggle");
+            button.Click += (_, _) => SetSpeed(speed);
+            speedButtons.Add((button, speed));
+            SpeedPanel.Children.Add(button);
+        }
         SongVolumeSlider.ValueChanged += (_, e) => { if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100); };
         // Global volume: 20–100 % (the slider can't go lower), applied to everything that plays.
         GlobalVolumeSlider.Value = Math.Clamp(prefs.GlobalVolume, GlobalVolumeSlider.Minimum, GlobalVolumeSlider.Maximum);
@@ -158,7 +176,7 @@ public partial class MainWindow : Window
         SaveButton.Click += (_, _) => Save();
         menuCommands =
         [
-            (OpenItem, "open"), (ImportOszItem, "importOsz"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
+            (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
             (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (QuantizeItem, "quantizeDialog"), (RepeatItem, "repeat"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
         ];
@@ -202,6 +220,11 @@ public partial class MainWindow : Window
             inspector?.Close();
             audio?.Dispose();
         };
+
+        // Drop a .osu to open it, or an .osz to import it.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, (_, e) => e.DragEffects = DroppedMap(e) is null ? DragDropEffects.None : DragDropEffects.Copy);
+        AddHandler(DragDrop.DropEvent, async (_, e) => { if (DroppedMap(e) is { } dropped) await OpenDropped(dropped); });
 
         // Pick mode: while the inspector's Pick is on, a click selects the part under it instead of acting on it.
         AddHandler(PointerPressedEvent, OnPickPressed, RoutingStrategies.Tunnel);
@@ -321,8 +344,30 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType("osu! beatmap archive") { Patterns = ["*.osz"] }],
         });
-        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } osz) return;
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { } osz) await ImportOszFile(osz, songs);
+    }
 
+    // The first dropped file that is a .osu or an .osz, or null.
+    private static string? DroppedMap(DragEventArgs e) =>
+        e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null && Path.GetExtension(p).ToLowerInvariant() is ".osu" or ".osz");
+
+    private async Task OpenDropped(string path)
+    {
+        if (Path.GetExtension(path).Equals(".osu", StringComparison.OrdinalIgnoreCase))
+        {
+            if (await MayLeaveMap()) await Open(path);
+        }
+        else if (prefs.SongsFolder is { } songs && Directory.Exists(songs)) await ImportOszFile(path, songs);
+        else
+        {
+            flash = "Set the osu! Songs folder in Preferences first: the .osz is unpacked there.";
+            UpdateStatus();
+        }
+    }
+
+    /// <summary>Unpacks an .osz into a new folder in the Songs folder, then opens a difficulty from it.</summary>
+    private async Task ImportOszFile(string osz, string songs)
+    {
         string folder;
         try
         {
@@ -428,6 +473,7 @@ public partial class MainWindow : Window
         {
             case "open": _ = PickMap(); break;
             case "importOsz": _ = ImportOsz(); break;
+            case "openFolder": OpenMapFolder(); break;
             case "newDiff": _ = NewHitsoundDiff(); break;
             case "save": _ = Save(); break;
             case "preferences": _ = ShowPreferences(); break;
@@ -531,7 +577,8 @@ public partial class MainWindow : Window
 
     private void UpdateSongMute()
     {
-        if (audio is not null) audio.SongMuted = SongMuteButton.IsChecked == true || (model?.AnySoloed ?? false);
+        // Soloing lanes silences the song, unless the song is soloed too.
+        if (audio is not null) audio.SongMuted = SongMuteButton.IsChecked == true || (model is { AnySoloed: true, SongSoloed: false });
     }
 
     private void ApplySongOffset()

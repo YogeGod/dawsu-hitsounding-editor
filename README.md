@@ -12,11 +12,11 @@ The editor also has a built-in tour: **File → Tutorial**.
 
 ![Open, Save .osu and Generate buttons](docs/tutorial/open-save-generate.png)
 
-- **Open…** (Ctrl+O): open a `.osu` from your Songs folder. Each sample file in the mapset becomes a lane you can draw in.
+- **Open…** (Ctrl+O): open a `.osu` from your Songs folder, or drag a `.osu` or `.osz` onto the window. Each sample file in the mapset becomes a lane you can draw in.
 - **Save .osu** (Ctrl+S): write your hitsounds back into the map. A backup of the old file is kept outside the mapset.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready for Mapping Tools' Hitsound Copier.
 
-You can also import an `.osz` or reopen a recent map from the **File** menu.
+You can also import an `.osz`, reopen a recent map, or open the map's folder (**File → Open map folder**, Ctrl+Shift+O) from the **File** menu. Sample files you put in that folder show up as lanes as soon as you switch back to the editor.
 
 ### Menus and settings
 
@@ -78,8 +78,8 @@ Shift or set the volume of the selection, add bookmarks, and click any entry und
 
 ![Sample lanes and the grid](docs/tutorial/lanes-grid.png)
 
-- **Sample lanes**: grouped by sampleset. Each group starts with osu!'s default sounds (hitnormal, whistle, finish, clap), with the map's own sample files under the sound they replace. The default sounds are built in, so they play even without osu! installed. Use the filter to find a lane, and **+** to add a lane for another sample file.
-- **Lane buttons**: **+** adds a lane, **●** plays the sample, **M** mutes the lane and **S** solos it.
+- **Sample lanes**: grouped by sampleset. Each group starts with osu!'s default sounds (hitnormal, whistle, finish, clap), with the map's own sample files under the sound they replace. The default sounds are built in, so they play even without osu! installed. Use the filter to find a lane; the **+** above the list adds a lane for a sample file already in the mapset.
+- **Lane buttons**: **+** picks an audio file and copies it into the mapset as a new sample for that sound (e.g. `drum-hitclap5.wav`, using a number no difficulty uses yet), **●** plays the sample, **M** mutes the lane and **S** solos it. The **Song audio** row has **M** and **S** too: solo the song to hear it without hitsounds.
 - **The grid**: your hitsounds in time, left to right. Red-striped columns can't be saved as drawn yet.
 
 ### Volume
@@ -93,6 +93,10 @@ One bar per circle or slider end. Drag a bar to change its volume, Alt-drag to p
 ![Transport and position](docs/tutorial/transport-position.png)
 
 Go to start, stop, play (Space) and **Cycle** between the L and R markers (L). Ctrl+click the ruler to set L, Alt+click to set R. Next to it: the time, bar.beat.tick, tempo and time signature.
+
+![Playback speed](docs/tutorial/speed.png)
+
+**Speed** plays slower or faster without changing the pitch, from 25 % to 150 %.
 
 ![Global volume](docs/tutorial/global-volume.png)
 

@@ -29,7 +29,8 @@ internal sealed class ArrangeView : Control
 {
     private static UiTheme Theme_ => UiTheme.Current;
 
-    public static double NumberWidth => Theme_.Number("numbers.width");
+    /// <summary>The column of drag handles (⠿) left of the lane names; the lane list's own width is themable.</summary>
+    public const double NumberWidth = 24;
     public static double ListWidth => Theme_.Number("list.width");
     public static double GridLeft => NumberWidth + ListWidth;
     public static double SectionsHeight => Theme_.Number("header.sections");
@@ -195,8 +196,8 @@ internal sealed class ArrangeView : Control
     /// <summary>Right-click on a lane name: the window shows the lane menu (rename, move, delete, add).</summary>
     public event Action<LaneRow>? LaneMenuRequested;
 
-    /// <summary>The "+" above the lane list was clicked.</summary>
-    public event Action? AddLaneRequested;
+    /// <summary>A "+" was clicked: a lane's (that lane), or the one above the lane list (null).</summary>
+    public event Action<Lane?>? AddLaneRequested;
 
     /// <summary>The L and R cycle locators changed, or cycling was switched on or off from the ruler.</summary>
     public event Action? LocatorsChanged;
@@ -396,7 +397,9 @@ internal sealed class ArrangeView : Control
         if (WaveHeight >= 14)
         {
             Paint.DrawText(ctx, "Song audio", new Point(12, RulerBottom + WaveHeight / 2 - 7), 11, Paint.Dim, ListWidth - 60);
-            DrawToggle(ctx, "M", GridLeft - SoloFromRight, RulerBottom + (WaveHeight - RowHeight) / 2, SongMuted ? Paint.MuteOn : null);
+            double songY = RulerBottom + (WaveHeight - RowHeight) / 2;
+            DrawToggle(ctx, "M", GridLeft - MuteFromRight, songY, SongMuted ? Paint.MuteOn : null);
+            DrawToggle(ctx, "S", GridLeft - SoloFromRight, songY, model.SongSoloed ? Paint.SoloOn : null);
         }
         ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom + WaveHeight - 0.5), new Point(GridLeft, RulerBottom + WaveHeight - 0.5));
         Paint.DrawText(ctx, "Gameplay objects", new Point(12, RulerBottom + WaveHeight + ObjectsHeight / 2 - 7), 11, Paint.Dim, ListWidth - 20);
@@ -875,7 +878,7 @@ internal sealed class ArrangeView : Control
         if (Math.Abs(p.X - (GridLeft + Axis.X(Playhead))) <= 4) return "playhead";
         if (RowAt(p.Y) is not { } row) return "arrange";
 
-        if (p.X < NumberWidth) return row is LaneRow ? "numbers" : "grouprow";
+        if (p.X < NumberWidth) return row is LaneRow ? "lanelist" : "grouprow";
         if (p.X < GridLeft)
             return ListTargetAt(row, p.X - NumberWidth) switch
             {
@@ -904,14 +907,24 @@ internal sealed class ArrangeView : Control
             if (!point.Properties.IsLeftButtonPressed) return;
             if (p.X >= GridLeft - AddLaneFromRight && p.X < GridLeft - AddLaneFromRight + ToggleWidth && p.Y < 22)
             {
-                AddLaneRequested?.Invoke(); // the "+" in the SAMPLE LANES title
+                AddLaneRequested?.Invoke(null); // the "+" in the SAMPLE LANES title
                 return;
             }
 
-            if (p.X >= GridLeft - SoloFromRight && p.X < GridLeft - SoloFromRight + ToggleWidth && p.Y >= RulerBottom && p.Y < RulerBottom + WaveHeight)
+            if (p.Y >= RulerBottom && p.Y < RulerBottom + WaveHeight)
             {
-                SongMuteRequested?.Invoke(); // the M on the Song audio row
-                return;
+                // The M and S on the Song audio row.
+                if (p.X >= GridLeft - MuteFromRight && p.X < GridLeft - MuteFromRight + ToggleWidth)
+                {
+                    SongMuteRequested?.Invoke();
+                    return;
+                }
+
+                if (p.X >= GridLeft - SoloFromRight && p.X < GridLeft - SoloFromRight + ToggleWidth)
+                {
+                    model.ToggleSongSolo();
+                    return;
+                }
             }
 
             if (p.X < GridLeft) return;
@@ -972,7 +985,7 @@ internal sealed class ArrangeView : Control
                 case (GroupRow g, ListTarget.Solo): model.ToggleGroupSolo(g.Group); break;
                 case (LaneRow l, ListTarget.Mute): model.ToggleMute(l.Lane); break;
                 case (LaneRow l, ListTarget.Solo): model.ToggleSolo(l.Lane); break;
-                case (LaneRow, ListTarget.Add): AddLaneRequested?.Invoke(); break;
+                case (LaneRow l, ListTarget.Add): AddLaneRequested?.Invoke(l.Lane); break;
                 case (LaneRow l, ListTarget.Preview): PreviewRequested?.Invoke(l.Lane); break;
                 case (LaneRow l, _) when additive:
                     // Ctrl+click selects the lane's hits; Shift+click adds them.

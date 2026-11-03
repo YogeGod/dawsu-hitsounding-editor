@@ -68,6 +68,10 @@ public class PlaybackModelTests
 
         Assert.Equal(["drum-hitnormal", "drum-hitnormal2.wav", "drum-hitnormal3.wav", "drum-hitwhistle", "drum-hitwhistle3.wav", "drum-hitfinish", "drum-hitclap", "drum-hitclap3.ogg"],
             model.LaneRows.Where(r => r.Group == LaneGroup.DrumSet).Select(r => r.Lane.Name));
+        // A sample added later goes under its own sound, by number.
+        model.AddLane(new Lane(LaneSource.BeatmapFile, "drum-hitwhistle5.wav"));
+        Assert.Equal(["drum-hitwhistle", "drum-hitwhistle3.wav", "drum-hitwhistle5.wav", "drum-hitfinish"],
+            model.LaneRows.Select(r => r.Lane.Name).SkipWhile(n => n != "drum-hitwhistle").Take(4));
         Assert.Equal(LaneGroup.SoftSet, ArrangeModel.DisplayGroup(new Lane(LaneSource.Skin, "soft-hitclap")));
         Assert.Equal(LaneGroup.Skin, new Lane(LaneSource.Skin, "soft-hitclap").Group); // the map's own grouping is unchanged
     }
@@ -116,6 +120,25 @@ public class PlaybackModelTests
 
         model.ToggleGroupSolo(LaneGroup.SoftSet);
         Assert.True(model.IsAudible(normal));
+    }
+
+    [Fact]
+    public void Soloing_the_song_silences_the_lanes_except_soloed_ones()
+    {
+        var (map, file) = Load("0,500,4,2,0,100,1,0", "256,192,1000,1,8,0:0:0:0:");
+        var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
+        var (normal, clap) = (model.LaneRows.Single(r => r.Lane.Name == "soft-hitnormal").Lane, model.LaneRows.Single(r => r.Lane.Name == "soft-hitclap").Lane);
+
+        model.ToggleSongSolo();
+        Assert.False(model.IsAudible(normal));
+        Assert.False(model.IsAudible(clap));
+
+        model.ToggleSolo(clap); // song and clap together
+        Assert.True(model.IsAudible(clap));
+        Assert.False(model.IsAudible(normal));
+
+        model.ToggleSongSolo();
+        Assert.True(model.IsAudible(clap));
     }
 
     [Theory]

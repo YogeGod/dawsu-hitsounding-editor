@@ -25,6 +25,24 @@ public class MapDocumentTests : IDisposable
     private static Lane Clap => new(LaneSource.Skin, "soft-hitclap");
 
     [Fact]
+    public void A_sample_added_to_the_folder_is_found_and_a_hit_on_it_saves_with_its_index()
+    {
+        var path = Map();
+        var doc = MapDocument.Load(path);
+        int index = HitsoundDiff.FirstFreeIndex(doc.Folder);
+        var name = $"soft-hitclap{index}.wav";
+        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(path)!, name), [0]);
+
+        Assert.Equal([name], doc.RescanFolder());
+        Assert.Empty(doc.RescanFolder()); // nothing new the second time
+
+        doc.Session.Add([doc.Session.HitAt(new Lane(LaneSource.BeatmapFile, name), 1000)]);
+        doc.Save(Path.Combine(dir, "backups"));
+        var reopened = MapDocument.Load(path);
+        Assert.Contains(reopened.Session.State.Hits, h => h.Lane.Name == name && h.Time == 1000);
+    }
+
+    [Fact]
     public void An_edit_is_saved_and_the_reopened_map_starts_from_it()
     {
         var path = Map();

@@ -60,7 +60,6 @@ internal sealed class UiTheme
             C("header.bg", "Background", "#2f2f31"), C("ruler.bar", "Bar numbers", "#e4e4e6"), C("ruler.beat", "Beat numbers", "#a4a4a9"),
             N("ruler.fontSize", "Font size", 11, 8, 20), N("header.sections", "Sections row height", 18, 0, 40)]),
         new("sections", "Grid", "Song sections", [C("section.fill", "Fill", "#8a6d1e"), N("section.opacity", "Opacity", 0.55, 0, 1)]),
-        new("numbers", "Grid", "Number column", [N("numbers.width", "Width", 28, 16, 60)]),
         new("lanelist", "Grid", "Lane list", [
             N("list.width", "Width", 300, 160, 600), C("lane.text", "Name text", "#e4e4e6"), C("lane.dim", "Index text", "#a4a4a9"),
             N("lane.fontSize", "Font size", 12, 8, 22), C("lane.missing", "Missing / no sound", "#ff9a92")]),

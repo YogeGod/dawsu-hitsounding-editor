@@ -134,7 +134,7 @@ void SaveReadmeCrops()
         ("open-save-generate", [1, 2, 3]), ("menus", [4]), ("map-preferences-keys", [5, 6, 7]), ("undo-redo", [8]),
         ("tools", [9, 10, 11, 12, 13, 14]), ("snap", [15, 16]), ("view-colour-zoom", [17, 18, 19]),
         ("selection-bar", [20]), ("song", [21]), ("inspector", [22]), ("lanes-grid", [23, 24, 25]),
-        ("volume", [26]), ("transport-position", [27, 28]), ("global-volume", [29]),
+        ("volume", [26]), ("transport-position", [27, 28]), ("speed", [29]), ("global-volume", [30]),
     ];
     foreach (var (name, steps) in crops)
     {

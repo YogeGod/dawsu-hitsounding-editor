@@ -134,7 +134,8 @@ public partial class MainWindow
 
         bool audioChanged = edited.AudioDevice != prefs.AudioDevice || edited.BufferMs != prefs.BufferMs;
         bool skinChanged = edited.LazerResources != prefs.LazerResources;
-        prefs = edited;
+        // The dialog doesn't show the global volume: keep the slider's, which restarting the audio below uses.
+        prefs = edited with { GlobalVolume = GlobalVolumeSlider.Value };
         SavePrefs();
         ApplyKeys();
         if (skinChanged) skin = NewSkin();

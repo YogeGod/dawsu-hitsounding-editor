@@ -330,11 +330,21 @@ internal sealed partial class ArrangeModel
 
     public bool IsGroupSoloed(LaneGroup group) => LanesIn(group).All(soloed.Contains);
 
-    /// <summary>Whether a lane sounds: not muted, and soloed when anything is soloed.</summary>
+    /// <summary>Whether a lane sounds: not muted, and soloed when anything is soloed (the song counts: soloing it alone
+    /// silences every lane).</summary>
     public bool IsAudible(Lane lane)
     {
         lock (muted)
-            return !muted.Contains(lane) && (soloed.Count == 0 || soloed.Contains(lane));
+            return !muted.Contains(lane) && (soloed.Count == 0 ? !SongSoloed : soloed.Contains(lane));
+    }
+
+    /// <summary>The Song audio row's S: the song plays with only the soloed lanes, or none.</summary>
+    public bool SongSoloed { get; private set; }
+
+    public void ToggleSongSolo()
+    {
+        SongSoloed = !SongSoloed;
+        Changed?.Invoke();
     }
 
     public void ToggleCollapsed(LaneGroup group)
@@ -518,14 +528,18 @@ internal sealed partial class ArrangeModel
         (laneRows[i], laneRows[j]) = (laneRows[j], laneRows[i]);
     });
 
-    /// <summary>Adds a lane (a sample file in the mapset) at the end of its group, or shows it again if it was deleted.</summary>
+    /// <summary>
+    /// Adds a lane (a sample file in the mapset) under its sound in its group (after the last lane of that sound with a
+    /// lower or equal index; at the group's end for other files), or shows it again if it was deleted.
+    /// </summary>
     public void AddLane(Lane lane) => Relayout(() =>
     {
         hidden.Remove(lane);
         if (laneRows.Any(r => r.Lane == lane)) return;
         added.Add(lane);
         var group = DisplayGroup(lane);
-        int last = laneRows.FindLastIndex(r => r.Group <= group);
+        var place = (SoundOrder(lane), lane.Sample?.Index ?? int.MaxValue);
+        int last = laneRows.FindLastIndex(r => r.Group < group || r.Group == group && (SoundOrder(r.Lane), r.Lane.Sample?.Index ?? int.MaxValue).CompareTo(place) <= 0);
         int shade = laneRows.Count(r => r.Group == group);
         laneRows.Insert(last + 1, new LaneRow(group, lane, 0, shade, IndexOf(lane)));
     });

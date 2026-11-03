@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using OsuHitsound.Audio;
 using OsuHitsound.Format;
@@ -15,7 +16,10 @@ public partial class MainWindow
     private void WireMapFeatures()
     {
         Lanes.LaneMenuRequested += ShowLaneMenu;
-        Lanes.AddLaneRequested += async () => await AddLaneDialog();
+        // A lane's + adds a new sample file for its sound; the list header's + picks one of the mapset's files.
+        Lanes.AddLaneRequested += async lane => { if (lane is null) await AddLaneDialog(); else await AddSampleTo(lane); };
+        // Samples dropped into the folder (File → Open map folder) show up when the editor is back in front.
+        Activated += (_, _) => RefreshFolder();
         AddLaneItem.Click += async (_, _) => await AddLaneDialog();
         GenerateItem.Click += async (_, _) => await Generate();
         LaneFilterBox.TextChanged += (_, _) =>
@@ -112,6 +116,91 @@ public partial class MainWindow
         audio?.LoadLane(lane, folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null);
         model.AddLane(lane);
         SyncScrollBars();
+    }
+
+    /// <summary>
+    /// A lane's +: copies a picked audio file into the mapset as a new index of that lane's sound ("drum-hitclap5.wav"),
+    /// above every index any difficulty uses, so no existing hit anywhere in the mapset changes sound.
+    /// </summary>
+    private async Task AddSampleTo(Lane lane)
+    {
+        if (doc is null || model is null) return;
+        if (lane.Sample is not (var set, var sound, _))
+        {
+            await AddLaneDialog(lane); // a file outside osu!'s naming: pick one of the mapset's files instead
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = $"Add a sample for {HitsoundRules.SampleName(set, sound)}",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Audio") { Patterns = [.. HitsoundRules.SampleExtensions.Select(e => "*" + e)] }],
+        });
+        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } source) return;
+        if (!HitsoundRules.SampleExtensions.Contains(Path.GetExtension(source).ToLowerInvariant()))
+        {
+            flash = "osu! only plays .wav, .ogg and .mp3 samples.";
+            UpdateStatus();
+            return;
+        }
+
+        try
+        {
+            var mapDir = Path.GetDirectoryName(doc.Path)!;
+            int index = HitsoundDiff.FirstFreeIndex(doc.Folder);
+            var name = $"{HitsoundRules.SampleName(set, sound)}{index}{Path.GetExtension(source).ToLowerInvariant()}";
+            File.Copy(source, Path.Combine(mapDir, name), overwrite: false);
+            RefreshFolder();
+            flash = $"Added {name} to the mapset (index {index}, which no difficulty used yet).";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            flash = $"Couldn't add the sample: {ex.Message}";
+        }
+
+        UpdateStatus();
+    }
+
+    /// <summary>Lists the mapset folder again; new sample files named after osu!'s samples get a lane at once.</summary>
+    private void RefreshFolder()
+    {
+        if (doc is null || model is null) return;
+        IReadOnlyList<string> added;
+        try
+        {
+            added = doc.RescanFolder();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return; // the folder is busy or gone: keep the old list
+        }
+
+        foreach (var file in added.Where(f => !f.Contains('/') && HitsoundRules.SampleExtensions.Contains(Path.GetExtension(f).ToLowerInvariant())))
+        {
+            var lane = new Lane(LaneSource.BeatmapFile, file);
+            if (lane.Sample is not null) AddLane(lane);
+        }
+
+        if (added.Count > 0) ScheduleProjectSave();
+    }
+
+    /// <summary>File → Open map folder: the mapset folder in Explorer, to drop samples into.</summary>
+    private void OpenMapFolder()
+    {
+        if (doc is null) return;
+        try
+        {
+            // Explorer itself, with the folder as a quoted argument: the path is never run or opened as a file.
+            var start = new System.Diagnostics.ProcessStartInfo("explorer.exe");
+            start.ArgumentList.Add(Path.GetDirectoryName(doc.Path)!);
+            System.Diagnostics.Process.Start(start);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            flash = $"Couldn't open the folder: {ex.Message}";
+            UpdateStatus();
+        }
     }
 
     // ---------------------------------------------------------------- project file

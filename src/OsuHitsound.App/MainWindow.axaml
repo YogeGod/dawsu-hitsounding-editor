@@ -232,6 +232,7 @@
             <MenuItem Header="File">
               <MenuItem Name="OpenItem" Header="Open…" />
               <MenuItem Name="ImportOszItem" Header="Import .osz…" />
+              <MenuItem Name="OpenFolderItem" Header="Open map folder" />
               <MenuItem Name="NewDiffItem" Header="New hitsound diff…" />
               <MenuItem Name="RecentItem" Header="Recent maps" />
               <MenuItem Name="SaveItem" Header="Save" />
@@ -269,6 +270,7 @@
               <MenuItem Name="ReturnOnStopItem" Header="Return on stop" ToggleType="CheckBox" />
               <MenuItem Name="FollowItem" Header="Follow playback" ToggleType="CheckBox" IsChecked="True" />
               <MenuItem Header="Speed">
+                <MenuItem Name="Speed25Item" Header="25 %" ToggleType="Radio" GroupName="speed" />
                 <MenuItem Name="Speed50Item" Header="50 %" ToggleType="Radio" GroupName="speed" />
                 <MenuItem Name="Speed75Item" Header="75 %" ToggleType="Radio" GroupName="speed" />
                 <MenuItem Name="Speed100Item" Header="100 %" ToggleType="Radio" GroupName="speed" IsChecked="True" />
@@ -433,7 +435,7 @@
 
     <!-- 7. Transport (V6.39: at the bottom) · time, position, tempo and signature · status -->
     <Border Grid.Row="6" Grid.ColumnSpan="3" Name="StatusBar" Classes="transportBar" BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12,0">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="12,0">
         <StackPanel Name="TransportButtons" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
             <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
@@ -457,9 +459,12 @@
             <StackPanel Grid.Column="3"><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="SIGNATURE · SNAP" /></StackPanel>
           </Grid>
         </Border>
-        <TextBlock Grid.Column="2" Name="StatusLeft" VerticalAlignment="Center" FontSize="12" Margin="16,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource LcdCaption}" />
-        <TextBlock Grid.Column="3" Name="StatusRight" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource LcdCaption}" />
-        <StackPanel Grid.Column="4" Name="GlobalVolumePanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
+        <!-- Playback speed, as buttons (also Playback → Speed); the pitch stays the same -->
+        <StackPanel Grid.Column="2" Name="SpeedPanel" Orientation="Horizontal" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center"
+                    ToolTip.Tip="Playback speed: the pitch stays the same (also Playback → Speed)" />
+        <TextBlock Grid.Column="3" Name="StatusLeft" VerticalAlignment="Center" FontSize="12" Margin="16,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource LcdCaption}" />
+        <TextBlock Grid.Column="4" Name="StatusRight" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource LcdCaption}" />
+        <StackPanel Grid.Column="5" Name="GlobalVolumePanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
                     ToolTip.Tip="Global volume: the song, hitsounds and previews together (20–100 %)">
           <TextBlock Text="Global volume" Classes="toolLabel" />
           <Slider Name="GlobalVolumeSlider" Width="110" Minimum="20" Maximum="100" Value="30" Focusable="False" VerticalAlignment="Center" />

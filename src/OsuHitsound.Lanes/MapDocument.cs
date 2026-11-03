@@ -28,7 +28,16 @@ public sealed class MapDocument
     /// <summary>The parsed map as opened; the session's moments refer to its objects. Never written to.</summary>
     public OsuFile File { get; }
 
-    public MapFolder Folder { get; }
+    /// <summary>The mapset folder's files: listed when opened, and again by <see cref="RescanFolder"/>.</summary>
+    public MapFolder Folder { get; private set; }
+
+    /// <summary>Lists the folder again (sample files added while the map is open) and returns the files that are new.</summary>
+    public IReadOnlyList<string> RescanFolder()
+    {
+        var before = Folder.Files.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Folder = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
+        return [.. Folder.Files.Where(f => !before.Contains(f))];
+    }
 
     public DecompiledMap Map { get; }
 
