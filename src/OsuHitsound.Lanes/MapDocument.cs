@@ -9,6 +9,8 @@ namespace OsuHitsound.Lanes;
 /// </summary>
 public sealed class MapDocument
 {
+    private readonly TimingPointIndex timing;
+
     private MapDocument(string path, byte[] opened, OsuFile file, MapFolder folder)
     {
         Path = path;
@@ -17,6 +19,7 @@ public sealed class MapDocument
         Folder = folder;
         Map = Decompiler.Decompile(file, folder);
         Session = new EditSession(file, folder, Map);
+        timing = new TimingPointIndex(file.TimingPoints);
     }
 
     /// <summary>The .osu's full path.</summary>
@@ -54,6 +57,21 @@ public sealed class MapDocument
     /// <summary>A document over given bytes and folder, for tests.</summary>
     public static MapDocument FromBytes(string path, byte[] bytes, MapFolder folder) => new(path, bytes, OsuFile.Parse(bytes), folder);
 
+    /// <summary>Auditions a default row using the map's sample index at the timeline playhead; file rows keep their exact sound.</summary>
+    public Lane LanePreviewAt(Lane lane, double time)
+    {
+        if (lane.Source != LaneSource.Skin || lane.Sample is not { } sample) return lane;
+        try
+        {
+            int index = timing.SamplePointAt(time - Map.Settings.TimeOffset)?.SampleIndex ?? 0;
+            return Decompiler.ResolveLane(Folder, sample.Set, sample.Sound, index);
+        }
+        catch (FormatException)
+        {
+            return lane;
+        }
+    }
+
     /// <summary>Compiles an edit state on a fresh copy of the map as opened (safe off the UI thread: the state is immutable).</summary>
     public (CompileResult Result, OsuFile File) Compile(EditState state)
     {
@@ -71,10 +89,10 @@ public sealed class MapDocument
     /// opened), with what the last Generate for that diff recorded. Returns the folder it planned against.
     /// </summary>
     /// <exception cref="IOException">A difficulty or storyboard in the folder couldn't be read.</exception>
-    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot)
+    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null)
     {
         var current = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
         var previous = GenerateManifest.Load(manifestRoot, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path)!, HitsoundDiff.FileNameFor(File, Path)));
-        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous), current);
+        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin), current);
     }
 }

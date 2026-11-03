@@ -219,6 +219,14 @@ public sealed class AudioEngine : IDisposable
     /// <summary>Plays one lane's sample now, e.g. when its name is clicked.</summary>
     public void Preview(Lane lane, float volume = 1) => mixer.Preview(lane, volume);
 
+    /// <summary>Auditions a resolved map lane, loading an unused custom index on demand.</summary>
+    public void Preview(Lane lane, MapFolder folder)
+    {
+        if (lane.Source != LaneSource.Skin && !loaded.Contains(lane))
+            LoadLane(lane, folder.Find(lane.Name) is { } file ? folder.ReadBytes(file) : null);
+        Preview(lane);
+    }
+
     /// <summary>Loads the sample of a lane (decoded once to the mix format); no-op if it is already loaded.</summary>
     public void LoadLane(Lane lane, byte[]? data)
     {

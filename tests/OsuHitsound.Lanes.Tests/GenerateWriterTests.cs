@@ -56,7 +56,7 @@ public class GenerateWriterTests : IDisposable
     [Fact]
     public void An_unneeded_mix_of_ours_is_overwritten_or_removed_and_the_manifest_records_what_was_written()
     {
-        var plan = Plan("soft-hitnormal4.wav") with { Removes = ["soft-hitnormal4.wav", "soft-hitnormal5.wav"] };
+        var plan = Plan("soft-hitnormal4.wav") with { Removes = ["soft-hitnormal4.wav", "soft-hitnormal5.wav"], LastMixIndex = 25 };
         var mapset = Path.GetDirectoryName(plan.OsuPath)!;
         File.WriteAllText(Path.Combine(mapset, "soft-hitnormal4.wav"), "old");
         File.WriteAllText(Path.Combine(mapset, "soft-hitnormal5.wav"), "old");
@@ -67,6 +67,7 @@ public class GenerateWriterTests : IDisposable
         Assert.False(File.Exists(Path.Combine(mapset, "soft-hitnormal5.wav")));
         var mix = Assert.Single(result.Manifest.Mixes);
         Assert.Equal(("soft-hitnormal4.wav", GenerateManifest.Hash([7])), (mix.FileName, mix.Sha256));
+        Assert.Equal(25, result.Manifest.LastIndex);
     }
 
     [Fact]
@@ -87,9 +88,10 @@ public class GenerateWriterTests : IDisposable
     public void Manifest_round_trips_and_a_broken_one_reads_as_none()
     {
         var root = Path.Combine(dir, "generated");
-        var manifest = new GenerateManifest([new GeneratedMix("soft-hitnormal4.wav", "sig", "AB")]);
+        var manifest = new GenerateManifest([new GeneratedMix("soft-hitnormal4.wav", "sig", "AB")]) { LastIndex = 25 };
         manifest.Save(root, @"C:\maps\a [Hitsounds].osu");
         Assert.Equal(manifest.Mixes, GenerateManifest.Load(root, @"C:\maps\a [Hitsounds].osu")!.Mixes);
+        Assert.Equal(25, GenerateManifest.Load(root, @"C:\maps\a [Hitsounds].osu")!.LastIndex);
 
         File.WriteAllText(ProjectStore.PathFor(root, @"C:\maps\b.osu"), "{ broken");
         Assert.Null(GenerateManifest.Load(root, @"C:\maps\b.osu"));

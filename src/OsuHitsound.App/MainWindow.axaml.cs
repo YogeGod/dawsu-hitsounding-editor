@@ -62,6 +62,21 @@ public partial class MainWindow : Window
 
         Lanes.Axis.Changed += OnAxisChanged;
         Lanes.PreviewRequested += lane => audio?.Preview(lane);
+        Lanes.LaneListPreviewRequested += lane =>
+        {
+            if (audio is null || doc is null) return;
+            double time = audio.IsPlaying ? audio.Position : Lanes.Playhead;
+            var preview = doc.LanePreviewAt(lane, time);
+            try
+            {
+                audio.Preview(preview, doc.Folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                flash = $"Couldn't preview {preview.Name}: {ex.Message}";
+                UpdateStatus();
+            }
+        };
         Lanes.SeekRequested += Seek;
         Lanes.HitsPreviewRequested += hits =>
         {

@@ -67,12 +67,14 @@ public class RealMapTests
 
         var plan = HitsoundDiff.Plan(file, Catalyst, folder, session);
 
-        int times = session.State.Hits.Select(h => (int)Math.Round(h.Time)).Distinct().Count();
-        Assert.Equal(times, plan.Circles);
+        var requiredTimes = session.State.Hits.Select(h => h.Time)
+            .Concat(session.Map.Passive.Where(p => p.Kind == PassiveKind.SliderTick).Select(p => p.Time))
+            .Select(t => (int)Math.Round(t - session.Map.Settings.TimeOffset)).Distinct().ToHashSet();
+        Assert.Subset(plan.Diff.HitObjects.Select(o => (int)o.Time).ToHashSet(), requiredTimes);
         Assert.Empty(plan.Conflicts);
         Assert.EndsWith("[Hitsounds].osu", plan.OsuPath);
         var after = new MapFolder(folder.Files.Concat(plan.Mixes.Select(m => m.FileName)));
-        Assert.Equal(times, Decompiler.Decompile(plan.Diff, after).Moments.Count);
+        Assert.Equal(plan.Circles, Decompiler.Decompile(plan.Diff, after).Moments.Count);
     }
 
     [Fact]

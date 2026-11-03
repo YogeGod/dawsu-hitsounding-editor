@@ -16,6 +16,10 @@ The editor also has a built-in tour: **File → Tutorial**.
 - **Save .osu** (Ctrl+S): write your hitsounds back into the map. A backup of the old file is kept outside the mapset.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready to copy into the other difficulties with **Map → Copy hitsounds…** (see [Copy hitsounds](#copy-hitsounds)).
 
+Generate reuses unchanged mixed samples and continues new filenames after its last generated index. It skips occupied numbers without jumping past unrelated high indexes. Existing sample files keep their names.
+
+Slider ticks and slide or whistle segments are rendered into timed samples in the generated difficulty. Generate stops and names the sample if a required sound cannot be read or decoded.
+
 You can also import an `.osz`, reopen a recent map, or open the map's folder (**File → Open map folder**, Ctrl+Shift+O) from the **File** menu. Sample files you put in that folder show up as lanes as soon as you switch back to the editor.
 
 ### Menus and settings

@@ -21,6 +21,79 @@ public class GenerateTests
 
     private static Lane File(string name) => new(LaneSource.BeatmapFile, name);
 
+    private static readonly byte[] EmptyWav = [
+        0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x41, 0x56, 0x45,
+        0x66, 0x6d, 0x74, 0x20, 0x10, 0, 0, 0, 1, 0, 2, 0,
+        0x44, 0xac, 0, 0, 0x10, 0xb1, 2, 0, 4, 0, 0x10, 0,
+        0x64, 0x61, 0x74, 0x61, 0, 0, 0, 0,
+    ];
+
+    [Fact]
+    public void Empty_slider_loop_does_not_force_a_mix_but_ticks_and_audible_loops_remain()
+    {
+        var (session, file, folder) = Load("256,192,1000,2,0,B|356:192,1,560");
+        var slide = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
+        var tick = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderTick);
+        var blankSkin = new Dictionary<string, byte[]> { [slide.Lane.Name] = [.. EmptyWav, 1, 2] };
+        var blank = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: blankSkin);
+        Assert.DoesNotContain(blank.Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
+        Assert.Contains(blank.Diff.HitObjects, o => o.Time == tick.Time);
+        var audible = EmptyWav.ToArray();
+        audible[40] = 4; // This data chunk is no longer empty.
+        var nonempty = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: new Dictionary<string, byte[]> { [slide.Lane.Name] = audible });
+        Assert.Contains(nonempty.Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
+        Assert.Contains(HitsoundDiff.Plan(file, "map.osu", folder, session).Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
+    }
+
+    [Fact]
+    public void Empty_map_slider_sample_is_skipped()
+    {
+        var text = Header.Replace("800,-50,4,2,0,40,0,0", "800,-50,4,2,1,40,0,0") + "[HitObjects]\r\n256,192,1000,2,0,B|356:192,1,560\r\n";
+        var file = OsuFile.Parse(Encoding.UTF8.GetBytes(text));
+        var folder = new MapFolder(["soft-sliderslide.wav"], _ => EmptyWav);
+        var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
+        var slide = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
+        Assert.Equal(LaneSource.BeatmapFile, slide.Lane.Source);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        Assert.DoesNotContain(plan.Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
+        Assert.Empty(plan.Conflicts);
+    }
+
+    [Fact]
+    public void Generate_renders_slider_ticks_and_body_segments_as_timed_mixes()
+    {
+        var (session, file, folder) = Load("256,192,1000,2,0,B|356:192,1,560");
+        var slide = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
+        var tick = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderTick);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        Assert.Contains(plan.Diff.HitObjects, o => o.Time == tick.Time);
+        var loop = Assert.Single(plan.Mixes.SelectMany(m => m.Loops));
+        Assert.Equal(slide.Lane, loop.Lane);
+        Assert.Equal(slide.EndTime - slide.Time, loop.Duration);
+        Assert.Contains(plan.Mixes, m => m.Layers.Any(l => l.Lane == tick.Lane));
+        Assert.Empty(plan.Conflicts);
+    }
+
+    [Fact]
+    public void Simultaneous_slider_ticks_and_body_loops_keep_both_voices()
+    {
+        var (session, file, folder) = Load("256,192,1000,2,0,B|356:192,1,560\n256,192,1000,2,0,B|356:192,1,560");
+        var tick = session.Map.Passive.First(p => p.Kind == PassiveKind.SliderTick);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        Assert.Contains(plan.Mixes, m => m.Loops.Count == 2);
+        Assert.Contains(plan.Mixes, m => m.Layers.Count(l => l.Lane == tick.Lane) == 2);
+        Assert.Empty(plan.Conflicts);
+    }
+
+    [Fact]
+    public void Missing_source_files_remain_required_in_the_mix_instead_of_disappearing()
+    {
+        var (session, file, folder) = Load("256,192,1000,1,0,0:0:0:0:missing.wav");
+        session.Add([session.HitAt(Skin("soft-hitclap"), 1000)]);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        Assert.Contains(plan.Mixes.SelectMany(m => m.Layers), layer => layer.Lane.Name == "missing.wav" && layer.Lane.Missing);
+    }
+
     [Fact]
     public void Generate_works_for_a_mapset_with_a_storyboard_file()
     {
@@ -134,7 +207,10 @@ public class GenerateTests
     public void Regenerating_reuses_an_unchanged_mix_with_the_same_contents()
     {
         var (s, file, folder) = Regenerating([]);
-        var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, Previous(ClapSignature));
+        var skinBytes = new byte[] { 42 };
+        var inputHash = GenerateManifest.Hash(Encoding.UTF8.GetBytes("mix-v2;" + GenerateManifest.Hash(skinBytes)));
+        var previous = new GenerateManifest([new GeneratedMix("soft-hitnormal4.wav", ClapSignature, GenerateManifest.Hash(MixBytes)) { InputHash = inputHash }]);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, previous, new Dictionary<string, byte[]> { ["drum-hitclap"] = skinBytes });
 
         Assert.Empty(plan.Mixes);
         Assert.Equal("soft-hitnormal4.wav", Assert.Single(plan.Reused).FileName);
@@ -155,13 +231,13 @@ public class GenerateTests
     }
 
     [Fact]
-    public void An_unneeded_mix_is_removed_and_no_longer_holds_up_the_indexes()
+    public void An_unneeded_mix_is_removed_but_new_mixes_continue_after_the_last_generated_index()
     {
         var (s, file, folder) = Regenerating([], clap: Skin("normal-hitclap")); // the mix now has other contents
         var plan = HitsoundDiff.Plan(file, "map.osu", folder, s, Previous(ClapSignature));
 
         Assert.Equal(["soft-hitnormal4.wav"], plan.Removes);
-        Assert.Equal("soft-hitnormal2.wav", Assert.Single(plan.Mixes).FileName); // neither the old diff nor its old mix holds an index any more
+        Assert.Equal("soft-hitnormal5.wav", Assert.Single(plan.Mixes).FileName);
     }
 
     [Fact]
@@ -173,5 +249,14 @@ public class GenerateTests
 
         Assert.Empty(plan.Removes);
         Assert.Equal("soft-hitnormal5.wav", Assert.Single(plan.Mixes).FileName);
+    }
+
+    [Fact]
+    public void A_previous_generated_sample_used_by_unsaved_editor_notes_is_kept()
+    {
+        var (session, file, folder) = Regenerating([], clap: Skin("normal-hitclap"));
+        session.Add([session.HitAt(File("soft-hitnormal4.wav"), 1500)]);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session, Previous(ClapSignature));
+        Assert.DoesNotContain("soft-hitnormal4.wav", plan.Removes);
     }
 }

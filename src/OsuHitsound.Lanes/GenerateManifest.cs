@@ -5,7 +5,10 @@ using System.Text.Json;
 namespace OsuHitsound.Lanes;
 
 /// <summary>A mix Generate wrote: its file, what it contains (<see cref="MixFile.Signature"/>) and its bytes' SHA-256.</summary>
-public sealed record GeneratedMix(string FileName, string Signature, string Sha256);
+public sealed record GeneratedMix(string FileName, string Signature, string Sha256)
+{
+    public string? InputHash { get; init; }
+}
 
 /// <summary>
 /// The mixes Generate wrote for one [Hitsounds] diff, kept in the editor's app data (never in the mapset). The next
@@ -14,6 +17,9 @@ public sealed record GeneratedMix(string FileName, string Signature, string Sha2
 /// </summary>
 public sealed record GenerateManifest(IReadOnlyList<GeneratedMix> Mixes)
 {
+    /// <summary>Last allocated generated index, retained even if its mix is no longer needed. Zero for older records.</summary>
+    public int LastIndex { get; init; }
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     public static string DefaultRoot() =>

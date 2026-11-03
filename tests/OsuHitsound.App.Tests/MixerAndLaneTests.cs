@@ -9,7 +9,7 @@ namespace OsuHitsound.App.Tests;
 public class MixerAndLaneTests
 {
     [Fact]
-    public void Mixing_sums_layers_at_their_gains_into_a_16_bit_wav()
+    public void Mixing_sums_layers_and_preserves_float_headroom_when_the_sum_exceeds_full_scale()
     {
         var a = new float[SampleMixer.Rate * 2]; // 1 s stereo
         var b = new float[100];
@@ -21,16 +21,52 @@ public class MixerAndLaneTests
         var wav = SampleMixer.Mix([(a, 1f), (b, 0.5f)]);
 
         Assert.Equal("RIFF", Encoding.ASCII.GetString(wav, 0, 4));
-        Assert.Equal(44 + a.Length * 2, wav.Length);
-        Assert.Equal((short)Math.Round(0.75 * short.MaxValue), BitConverter.ToInt16(wav, 44));
-        Assert.Equal(short.MaxValue, BitConverter.ToInt16(wav, 48));
+        Assert.Equal(44 + a.Length * 4, wav.Length);
+        Assert.Equal(3, BitConverter.ToInt16(wav, 20)); // IEEE float WAV
+        Assert.Equal(0.75f, BitConverter.ToSingle(wav, 44));
+        Assert.Equal(1.35f, BitConverter.ToSingle(wav, 52), 5);
     }
 
     [Fact]
     public void A_mix_is_never_shorter_than_25_ms()
     {
         var wav = SampleMixer.Mix([(new float[10], 1f)]);
-        Assert.True((wav.Length - 44) / 4 >= SampleMixer.Rate / 40);
+        Assert.True((wav.Length - 44) / 4.0 / SampleMixer.Rate >= 0.025);
+        Assert.Equal(0, (wav.Length - 44) % 4); // every PCM frame has both 16-bit channels
+        Assert.Equal(wav.Length - 8, BitConverter.ToInt32(wav, 4));
+        Assert.Equal(wav.Length - 44, BitConverter.ToInt32(wav, 40));
+    }
+
+    [Fact]
+    public void Required_mix_layers_cannot_be_silently_omitted_and_slider_loops_are_finite()
+    {
+        var hit = new Lane(LaneSource.BeatmapFile, "hit.wav");
+        var slide = new Lane(LaneSource.BeatmapFile, "slide.wav");
+        var mix = new MixFile("soft-hitnormal2.wav", [(hit, 100)]) { Loops = [(slide, 50, 100)] };
+        var ex = Assert.Throws<IOException>(() => SampleMixer.Mix(mix, lane => lane == hit ? [0.2f, 0.2f] : null));
+        Assert.Contains("slide.wav", ex.Message);
+        var wav = SampleMixer.Mix(mix, lane => lane == hit ? [0.2f, 0.2f] : [0.5f, 0.5f]);
+        Assert.Equal(44 + 4410 * 4, wav.Length);
+        Assert.Equal((short)Math.Round(0.45 * short.MaxValue), BitConverter.ToInt16(wav, 44));
+        Assert.Equal((short)Math.Round(0.25 * short.MaxValue), BitConverter.ToInt16(wav, 48));
+    }
+
+    [Fact]
+    public void Official_blank_wav_decodes_as_silence_even_with_trailing_tags()
+    {
+        byte[] blank = [
+            0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x41, 0x56, 0x45,
+            0x66, 0x6d, 0x74, 0x20, 0x10, 0, 0, 0, 1, 0, 2, 0,
+            0x44, 0xac, 0, 0, 0x10, 0xb1, 2, 0, 4, 0, 0x10, 0,
+            0x64, 0x61, 0x74, 0x61, 0, 0, 0, 0,
+        ];
+        Assert.Equal([0f, 0f], SampleMixer.Decode(blank)!);
+        Assert.Equal([0f, 0f], SampleMixer.Decode([.. blank, 1, 2, 3])!);
+        var lane = new Lane(LaneSource.BeatmapFile, "soft-sliderslide.wav");
+        var mix = new MixFile("soft-hitnormal2.wav", []) { Loops = [(lane, 100, 100)] };
+        var wav = SampleMixer.Mix(mix, _ => SampleMixer.Decode(blank));
+        Assert.Equal(44 + 4410 * 4, wav.Length);
+        Assert.All(wav.Skip(44), value => Assert.Equal(0, value));
     }
 
     [Fact]

@@ -205,6 +205,7 @@ internal sealed class ArrangeView : Control
     public IReadOnlySet<MomentKey> SelectedMoments => Edits.SelectedMoments;
 
     public event Action<Lane>? PreviewRequested;
+    public event Action<Lane>? LaneListPreviewRequested;
 
     public event Action<double>? SeekRequested;
 
@@ -1141,13 +1142,13 @@ internal sealed class ArrangeView : Control
                 case (LaneRow l, ListTarget.Mute): model.ToggleMute(l.Lane); break;
                 case (LaneRow l, ListTarget.Solo): model.ToggleSolo(l.Lane); break;
                 case (LaneRow l, ListTarget.Add): AddLaneRequested?.Invoke(l.Lane); break;
-                case (LaneRow l, ListTarget.Preview): PreviewRequested?.Invoke(l.Lane); break;
+                case (LaneRow l, ListTarget.Preview): LaneListPreviewRequested?.Invoke(l.Lane); break;
                 case (LaneRow l, _) when additive:
                     // Ctrl+click selects the lane's hits; Shift+click adds them.
                     var laneHits = session.State.Hits.Where(h => h.Lane == l.Lane);
                     SetSelection(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? selection.Concat(laneHits).ToList() : laneHits);
                     break;
-                case (LaneRow l, _): PreviewRequested?.Invoke(l.Lane); break;
+                case (LaneRow l, _): LaneListPreviewRequested?.Invoke(l.Lane); break;
             }
 
             return;

@@ -1,18 +1,45 @@
 using ManagedBass;
+using OsuHitsound.Lanes;
 
 namespace OsuHitsound.Audio;
 
 /// <summary>
-/// Mixes hitsound samples into one 16-bit stereo 44.1 kHz WAV for Generate mode: each layer at its volume, summed and
-/// clipped. Decoding uses BASS (initialised by the audio engine); the summing and WAV writing are pure for tests.
+/// Mixes hitsound samples into stereo 44.1 kHz WAV for Generate mode. Uses 16-bit PCM when the mix fits, and 32-bit
+/// float when it needs headroom. Decoding uses BASS; the summing and WAV writing are pure for tests.
 /// </summary>
 public static class SampleMixer
 {
     public const int Rate = 44100;
 
+    /// <summary>Render a planned mix only when every required sample can be decoded.</summary>
+    public static byte[] Mix(MixFile mix, Func<Lane, float[]?> decode)
+    {
+        var layers = new List<(float[] Stereo, float Gain)>();
+        foreach (var (lane, volume) in mix.Layers)
+        {
+            var data = decode(lane);
+            if (data is not { Length: > 0 }) throw new IOException($"Couldn't make {mix.FileName}: {lane.Name} could not be decoded.");
+            layers.Add((data, volume / 100f));
+        }
+        foreach (var (lane, volume, duration) in mix.Loops)
+        {
+            var data = decode(lane);
+            if (data is not { Length: > 1 }) throw new IOException($"Couldn't make {mix.FileName}: {lane.Name} could not be decoded.");
+            int frames = checked((int)Math.Ceiling(duration * Rate / 1000));
+            var repeated = new float[checked(frames * 2)];
+            for (int i = 0; i < repeated.Length; i++) repeated[i] = data[i % data.Length];
+            layers.Add((repeated, volume / 100f));
+        }
+        if (layers.Count == 0) throw new IOException($"Couldn't make {mix.FileName}: no sounds were supplied.");
+        return Mix(layers);
+    }
+
     /// <summary>Decodes a sample file to interleaved stereo floats at 44.1 kHz, or null when BASS can't read it.</summary>
     public static float[]? Decode(byte[] file)
     {
+        // osu!'s official blank.wav is a valid PCM WAV with an empty data chunk. BASS refuses to open it, but it
+        // deliberately represents silence, including when other software has appended tags after the RIFF payload.
+        if (BlankSample.IsEmptyWav(file)) return [0, 0];
         int stream = Bass.CreateStream(file, 0, file.Length, BassFlags.Decode | BassFlags.Float);
         if (stream == 0) return null;
         try
@@ -59,11 +86,12 @@ public static class SampleMixer
         return output;
     }
 
-    /// <summary>Sums stereo 44.1 kHz layers at their gains (volume / 100) into a 16-bit WAV, clipped to full scale.</summary>
+    /// <summary>Sums stereo 44.1 kHz layers at their gains (volume / 100), preserving over-full-scale values as float WAV.</summary>
     public static byte[] Mix(IReadOnlyList<(float[] Stereo, float Gain)> layers)
     {
         int length = layers.Count == 0 ? 0 : layers.Max(l => l.Stereo.Length);
-        length = Math.Max(length, 2 * Rate / 40); // at least 25 ms (ranking criteria)
+        int minFrames = (int)Math.Ceiling(Rate * 0.025); // at least 25 ms, in complete stereo frames
+        length = Math.Max((length + 1) / 2, minFrames) * 2;
         var sum = new float[length];
         foreach (var (stereo, gain) in layers)
             for (int i = 0; i < stereo.Length; i++)
@@ -71,22 +99,27 @@ public static class SampleMixer
 
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
-        int dataBytes = sum.Length * 2;
+        bool floating = sum.Any(s => s > 1f || s < -1f);
+        int bytesPerSample = floating ? 4 : 2;
+        int dataBytes = checked(sum.Length * bytesPerSample);
         w.Write("RIFF"u8);
         w.Write(36 + dataBytes);
         w.Write("WAVE"u8);
         w.Write("fmt "u8);
         w.Write(16);
-        w.Write((short)1); // PCM
+        w.Write((short)(floating ? 3 : 1)); // IEEE float or integer PCM
         w.Write((short)2);
         w.Write(Rate);
-        w.Write(Rate * 4);
-        w.Write((short)4);
-        w.Write((short)16);
+        w.Write(Rate * 2 * bytesPerSample);
+        w.Write((short)(2 * bytesPerSample));
+        w.Write((short)(bytesPerSample * 8));
         w.Write("data"u8);
         w.Write(dataBytes);
         foreach (float s in sum)
-            w.Write((short)Math.Round(Math.Clamp(s, -1f, 1f) * short.MaxValue));
+        {
+            if (floating) w.Write(s);
+            else w.Write((short)Math.Round(Math.Clamp(s, -1f, 1f) * short.MaxValue));
+        }
         w.Flush();
         return ms.ToArray();
     }

@@ -48,7 +48,10 @@ public static class GenerateWriter
                 }
             }
 
-            var manifest = new GenerateManifest([.. plan.Reused, .. mixes.Select(m => new GeneratedMix(m.Mix.FileName, m.Mix.Signature, GenerateManifest.Hash(m.Bytes)))]);
+            var manifest = new GenerateManifest([.. plan.Reused, .. mixes.Select(m => new GeneratedMix(m.Mix.FileName, m.Mix.Signature, GenerateManifest.Hash(m.Bytes)) { InputHash = plan.InputHashes.GetValueOrDefault(m.Mix.Signature) })])
+            {
+                LastIndex = plan.LastMixIndex,
+            };
             return new GenerateResult(backup, manifest);
         }
         catch

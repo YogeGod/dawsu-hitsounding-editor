@@ -420,7 +420,7 @@ public partial class MainWindow
         {
             flash = "Planning the hitsound diff…";
             UpdateStatus();
-            (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot()));
+            (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value));
         }
         catch (Exception ex)
         {
@@ -469,12 +469,7 @@ public partial class MainWindow
                     return decoded[lane] = bytes is null ? null : SampleMixer.Decode(bytes);
                 }
 
-                byte[]? Render(MixFile mix)
-                {
-                    var layers = mix.Layers.Select(l => (Stereo: Decoded(l.Lane), Gain: l.Volume / 100f)).Where(l => l.Stereo is not null)
-                        .Select(l => (l.Stereo!, l.Gain)).ToList();
-                    return layers.Count == 0 ? null : SampleMixer.Mix(layers);
-                }
+                byte[]? Render(MixFile mix) => SampleMixer.Mix(mix, Decoded);
 
                 var written = GenerateWriter.Write(plan, Render, MapSaver.DefaultBackupRoot());
                 try
@@ -493,13 +488,20 @@ public partial class MainWindow
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             flash = $"Generate stopped, nothing was written: {ex.Message}";
+            UpdateStatus();
+            return;
         }
         catch (Exception ex)
         {
             // Unexpected: report it rather than close the editor (the old diff, if any, has a backup in the editor's app data).
             flash = $"Generate failed: {ex.Message}";
+            UpdateStatus();
+            return;
         }
 
         UpdateStatus();
+        if (await Dialogs.Confirm(this, "Hitsound diff generated", $"Open {Path.GetFileName(plan.OsuPath)} now?", "Open", "Stay here")
+            && await MayLeaveMap())
+            await Open(plan.OsuPath);
     }
 }

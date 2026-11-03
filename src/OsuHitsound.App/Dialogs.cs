@@ -14,12 +14,12 @@ namespace OsuHitsound.App;
 /// <summary>Small modal dialogs: confirm, a text prompt, and picking one item from a list.</summary>
 internal static class Dialogs
 {
-    public static async Task<bool> Confirm(Window owner, string title, string text, string ok = "OK") =>
+    public static async Task<bool> Confirm(Window owner, string title, string text, string ok = "OK", string cancel = "Cancel") =>
         await Show<bool>(owner, title, (body, close) =>
         {
             body.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 520 });
             return (() => close(true), ok);
-        });
+        }, cancel);
 
     public static async Task<string?> Prompt(Window owner, string title, string label, string initial) =>
         await Show<string?>(owner, title, (body, close) =>
@@ -640,7 +640,7 @@ internal static class Dialogs
         return () => edited with { CubaseKeyFile = Blank(file.Text) };
     }
 
-    private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build)
+    private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build, string cancelText = "Cancel")
     {
         var window = new Window
         {
@@ -661,7 +661,7 @@ internal static class Dialogs
         var body = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         var (ok, okText) = build(body, Close);
         var okButton = new Button { Content = okText, IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = cancelText, IsCancel = true };
         okButton.Click += (_, _) => ok();
         cancel.Click += (_, _) => window.Close();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
