@@ -64,7 +64,7 @@ public partial class MainWindow
             {
                 WindowX = Position.X, WindowY = Position.Y, WindowWidth = Bounds.Width, WindowHeight = Bounds.Height,
                 SnapMode = Lanes.Edits.SnapMode, QuantizeStrength = Lanes.Edits.QuantizeStrength, ColourByVolume = Lanes.ColourByVolume,
-                InspectorOpen = InspectorToggle.IsChecked == true,
+                InspectorOpen = narrowLayout ? wideInspectorOpen : InspectorToggle.IsChecked == true,
                 InspectorWidth = InspectorWidthToSave,
                 GlobalVolume = GlobalVolumeSlider.Value,
                 InspectorCards = [.. Inspector.Order], InspectorFolded = [.. Inspector.Folded],

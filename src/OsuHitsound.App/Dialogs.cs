@@ -133,8 +133,11 @@ internal static partial class Dialogs
     /// Hitsound Copier options. Returns the choice, or null on Cancel.
     /// </summary>
     public static async Task<(string Source, IReadOnlyList<string> Targets, HitsoundCopyOptions Options)?> CopyHitsounds(
-        Window owner, IReadOnlyList<(string Path, string Name)> difficulties, string openMap) =>
-        await Show<(string, IReadOnlyList<string>, HitsoundCopyOptions)?>(owner, "Copy hitsounds", (body, close) =>
+        Window owner, IReadOnlyList<(string Path, string Name)> difficulties, string openMap)
+    {
+        Button? copyButton = null;
+        Action updateCopyScope = () => { };
+        return await Show<(string, IReadOnlyList<string>, HitsoundCopyOptions)?>(owner, "Copy hitsounds", (body, close) =>
         {
             var defaults = new HitsoundCopyOptions();
             var source = new ComboBox
@@ -150,10 +153,24 @@ internal static partial class Dialogs
             void UpdateScope()
             {
                 int count = boxes.Count(b => b.Box.IsChecked == true);
-                scope.Text = mode.SelectedIndex == 0
+                if (copyButton is not null)
+                {
+                    copyButton.IsEnabled = count > 0;
+                    copyButton.Content = count == 0 ? "Select target difficulties"
+                        : $"{(mode.SelectedIndex == 0 ? "Replace hitsounds in" : "Copy into")} {count} difficult{(count == 1 ? "y" : "ies")}";
+                }
+                scope.Text = count == 0 ? "Choose the difficulties that should receive hitsounds. Nothing is selected yet."
+                    : mode.SelectedIndex == 0
                     ? $"Replace hitsounds in {count} selected difficult{(count == 1 ? "y" : "ies")}. Their existing hitsounds are cleared first."
                     : $"Copy defined hit points into {count} selected difficult{(count == 1 ? "y" : "ies")}. Other hit points stay unchanged.";
             }
+            updateCopyScope = UpdateScope;
+            var selectAll = new Button { Content = "Select all" };
+            var clearTargets = new Button { Content = "Clear selection" };
+            selectAll.Click += (_, _) => { foreach (var (box, _) in boxes) box.IsChecked = true; };
+            clearTargets.Click += (_, _) => { foreach (var (box, _) in boxes) box.IsChecked = false; };
+            var targetActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            targetActions.Children.AddRange([selectAll, clearTargets]);
             void FillTargets()
             {
                 foreach (var (box, path) in boxes) targetChoices[path] = box.IsChecked == true;
@@ -161,7 +178,7 @@ internal static partial class Dialogs
                 boxes.Clear();
                 foreach (var (path, name) in difficulties.Where((_, i) => i != source.SelectedIndex))
                 {
-                    var box = new CheckBox { Content = name, IsChecked = targetChoices.GetValueOrDefault(path, true) };
+                    var box = new CheckBox { Content = name, IsChecked = targetChoices.GetValueOrDefault(path, false) };
                     box.IsCheckedChanged += (_, _) => UpdateScope();
                     boxes.Add((box, path));
                     targets.Children.Add(box);
@@ -260,7 +277,7 @@ internal static partial class Dialogs
             body.Children.AddRange([
                 new TextBlock { Text = "Copy from", FontWeight = FontWeight.SemiBold }, source,
                 new TextBlock { Text = "Copy into", FontWeight = FontWeight.SemiBold },
-                new ScrollViewer { Content = targets, MaxHeight = 180 },
+                targetActions, new ScrollViewer { Content = targets, MaxHeight = 180 },
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 scope,
@@ -302,7 +319,8 @@ internal static partial class Dialogs
                         MutedSampleSet = mutedSets[Math.Max(0, mutedSet.SelectedIndex)].Set,
                     }));
             }, "Copy to selected difficulties");
-        }, scroll: true);
+        }, scroll: true, configureOk: button => { copyButton = button; updateCopyScope(); });
+    }
 
     /// <summary>
     /// The Scale by volume dialog. <paramref name="count"/> says how many circles and slider ends a choice changes, for

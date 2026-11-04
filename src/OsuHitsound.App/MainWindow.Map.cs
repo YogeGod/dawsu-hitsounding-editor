@@ -172,7 +172,7 @@ public partial class MainWindow
         { await AddLaneDialog(lane); return; }
         string family = HitsoundRules.SampleName(set, sound);
         if (!DefaultSkin.Bundled().TryGetValue(family, out var bytes))
-        { flash = $"No bundled default for {family}. Choose a sample through Channel."; UpdateStatus(); return; }
+        { flash = $"No bundled default for {family}. Choose a sample through Active lane."; UpdateStatus(); return; }
         AddSampleLayer(lane, bytes);
     }
 
@@ -191,7 +191,7 @@ public partial class MainWindow
             model.AddSlotLane(addedLane, slot);
             audio?.LoadLane(addedLane, bytes);
             ScheduleProjectSave(); SyncScrollBars();
-            flash = $"Added {slot.Name} with its default sound. Choose another sound through Channel.";
+            flash = $"Added {slot.Name} with its default sound. Choose another sound through Active lane.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or ArgumentException)
         { flash = $"Couldn't add the sample layer: {ex.Message}"; }
@@ -496,10 +496,11 @@ public partial class MainWindow
         finally { Root.IsEnabled = wasEnabled; }
 
         if (openIsTarget) await Open(mapPath); // show what was written
-        int written = results.Count(r => r.Backup is not null), conflicts = results.Sum(r => r.Conflicts);
+        int written = results.Count(r => r.Error is null), conflicts = results.Sum(r => r.Conflicts);
         var failed = results.Where(r => r.Error is not null).ToList();
         flash = $"Copied hitsounds into {written} of {results.Count} difficult{(results.Count == 1 ? "y" : "ies")} " +
-                $"({results.Sum(r => r.Matched)} hits matched, {results.Sum(r => r.Changed)} hit points changed)." +
+                $"— {failed.Count} not written.\n" +
+                $"{results.Sum(r => r.Matched)} hits matched, {results.Sum(r => r.Changed)} hit points changed." +
                 (results.Sum(r => r.Muted) is > 0 and var mutedEnds ? $" {mutedEnds} slider ends muted." : "") +
                 (results.Sum(r => r.OnTicksAndSlides) is > 0 and var onSliders ? $" {onSliders} hits put on slider ticks and slides ({results.Sum(r => r.Generated)} new samples)." : "") +
                 (conflicts > 0 ? $" {conflicts} couldn't be saved as copied and kept their old sounds." : "") +

@@ -65,6 +65,14 @@ public partial class MainWindow
         WorkflowMessageRow.IsVisible = WorkflowMessage.IsVisible || WorkflowWarning.IsVisible;
         DismissWorkflowButton.IsVisible = workflowResult is not null;
         WorkflowPreferencesButton.IsVisible = doc is null || audioError is not null || WorkflowMessage.Text?.Contains("Preferences", StringComparison.OrdinalIgnoreCase) == true;
-        WorkflowMessageScroll.MaxHeight = Bounds.Height < 600 ? 20 : 88;
+        bool compact = Bounds.Height < 600;
+        WorkflowMessageScroll.MaxHeight = compact ? 44 : 88;
+        foreach (var text in new[] { WorkflowMessage, WorkflowWarning })
+        {
+            text.MaxLines = compact ? 1 : 0;
+            text.TextWrapping = compact ? Avalonia.Media.TextWrapping.NoWrap : Avalonia.Media.TextWrapping.Wrap;
+            text.TextTrimming = compact ? Avalonia.Media.TextTrimming.CharacterEllipsis : Avalonia.Media.TextTrimming.None;
+            ToolTip.SetTip(text, text.Text);
+        }
     }
 }

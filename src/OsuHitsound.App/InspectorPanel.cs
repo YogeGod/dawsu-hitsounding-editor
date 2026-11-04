@@ -52,7 +52,10 @@ internal sealed class InspectorPanel : Border
 {
     public const string SelectionCard = "selection", BookmarksCard = "bookmarks", RecentCard = "recent", ChannelCard = "channel";
 
-    private readonly TextBlock channelName = new() { Text = "No lane selected", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock channelName = new() { Text = "No active lane", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock laneHelp = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11 };
+    private readonly Button useSelectedLane = new() { Content = "Use selected hit's lane", IsVisible = false };
+    private Lane? selectedLane;
     private readonly TextBlock sampleFile = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.9 };
     private readonly ComboBox channelSample = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MaxDropDownHeight = 280, Foreground = Brushes.Gainsboro };
     private readonly Button replaceSample = new() { Content = "Browse sample…" };
@@ -65,6 +68,7 @@ internal sealed class InspectorPanel : Border
     public event Action<Lane, Lane>? ChannelSampleRequested;
     public event Action<Lane>? BrowseChannelSampleRequested;
     public event Action<Lane>? PreviewChannelRequested;
+    public event Action<Lane>? ActivateLaneRequested;
 
     private readonly StackPanel cards = new() { Spacing = 8, Margin = new Thickness(8) };
     private readonly Dictionary<string, (Border Card, Control Body)> byId = [];
@@ -117,7 +121,9 @@ internal sealed class InspectorPanel : Border
         };
         replaceSample.Click += (_, _) => { if (channelLane is { } lane) BrowseChannelSampleRequested?.Invoke(lane); };
         previewSample.Click += (_, _) => { if (channelLane is { } lane) PreviewChannelRequested?.Invoke(lane); };
-        AddCard(ChannelCard, "Channel", Stack(channelName, sampleFile, channelSample, Row(null, replaceSample, previewSample)));
+        useSelectedLane.Click += (_, _) => { if (selectedLane is { } lane) ActivateLaneRequested?.Invoke(lane); };
+        Avalonia.Automation.AutomationProperties.SetName(channelSample, "Sample for active lane");
+        AddCard(ChannelCard, "Active lane", Stack(channelName, laneHelp, useSelectedLane, sampleFile, channelSample, Row(null, replaceSample, previewSample)));
         AddCard("browser", "File browser", Browser);
         AddCard("soundSets", "Sound sets", SoundSets);
 
@@ -162,6 +168,10 @@ internal sealed class InspectorPanel : Border
         try
         {
             var active = model?.ActiveLane;
+            var selectionLanes = selected.Select(h => h.Lane).Distinct().Take(2).ToList();
+            selectedLane = selectionLanes.Count == 1 ? selectionLanes[0] : null;
+            useSelectedLane.IsVisible = selectedLane is not null && selectedLane != active;
+            useSelectedLane.Content = selected.Count == 1 ? "Use selected hit's lane" : "Use selected hits' lane";
             var source = (model, model?.LaneRows.Count ?? 0, (object?)session?.State.LaneOrder);
             bool changed = source != channelFrom;
             if (changed)
@@ -175,13 +185,15 @@ internal sealed class InspectorPanel : Border
                 channelLane = active;
                 channelSample.SelectedIndex = active is null ? -1 : channelChoices.IndexOf(active);
             }
-            channelName.Text = active is null ? "No lane selected" : model!.NameOf(active);
-            sampleFile.Text = active is null ? "Select a lane to choose its sample." : active.Source == LaneSource.Skin ? "Default hitsound" : $"Sample: {active.Name}";
+            channelName.Text = active is null ? "No active lane" : model!.NameOf(active);
+            laneHelp.Text = active is null ? "Click a lane name to choose its sample. Selecting hits is separate."
+                : model!.CanReplaceSample(active) ? "Changing this sample updates every hit in this lane."
+                : "This lane is read-only; you can preview its sample.";
+            sampleFile.Text = active is null ? "" : active.Source == LaneSource.Skin ? "Sample: default hitsound" : $"Sample: {active.Name}";
             if (active is not null && model!.SlotOf(active) != active)
-                sampleFile.Text = $"Slot: {model.SlotOf(active).Name} · Audio: {active.Name}";
+                sampleFile.Text = $"Lane: {model.SlotOf(active).Name}\nSample: {active.Name}";
             previewSample.IsEnabled = active is not null;
             channelSample.IsEnabled = replaceSample.IsEnabled = active is not null && model!.CanReplaceSample(active);
-            if (active is not null && !model!.CanReplaceSample(active)) sampleFile.Text += " (read-only; preview available)";
             selectionText.Text = InspectorText.Selection(session, model, selected, time);
             var from = (session, session?.Position ?? 0, session?.StepCount ?? 0, (object?)session?.State.Bookmarks, model);
             if (from == listsFrom) return;

@@ -242,6 +242,7 @@ public partial class MainWindow : Window
         ColourVolumeItem.Click += (_, _) => SetColourByVolume(true);
         SetColourByVolume(prefs.ColourByVolume);
         SetupInspector();
+        SetupCompactLayout();
         SetupTutorial();
         SetupOutput();
         SetupSoundSets();
@@ -836,6 +837,12 @@ public partial class MainWindow : Window
             try { if (doc is not null) audio?.Preview(doc.LanePreviewAt(lane, Lanes.Playhead), doc.Folder); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { flash = ex.Message; UpdateStatus(); }
         };
+        Inspector.ActivateLaneRequested += lane =>
+        {
+            model?.SetActive(lane);
+            ScheduleProjectSave();
+            Lanes.InvalidateVisual();
+        };
         Inspector.SetLayout(prefs.InspectorCards, prefs.InspectorFolded);
         InspectorToggle.IsChecked = prefs.InspectorOpen;
         inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
@@ -1262,13 +1269,14 @@ public partial class MainWindow : Window
     {
         double width = Bounds.Width > 0 ? Bounds.Width : Width;
         var t = UiTheme.Current;
+        UpdateCompactLayout(width);
         TitleBarContent.Width = Math.Max(TitleBarContent.MinWidth, width - 24);
         ControlBarContent.Width = Math.Max(ControlBarContent.MinWidth, width - 24);
         EditBarContent.Width = Math.Max(EditBarContent.MinWidth, width - 24);
         StatusBarContent.Width = Math.Max(StatusBarContent.MinWidth, width - 24);
-        Root.RowDefinitions[1].Height = new GridLength(t.Number("control.height") + (width < ControlBarContent.MinWidth + 24 ? 14 : 0));
-        Root.RowDefinitions[2].Height = new GridLength(t.Number("edit.height") + (width < EditBarContent.MinWidth + 24 ? 14 : 0));
-        Root.RowDefinitions[6].Height = new GridLength(t.Number("status.height") + (width < StatusBarContent.MinWidth + 24 ? 14 : 0));
+        Root.RowDefinitions[1].Height = new GridLength(t.Number("control.height"));
+        Root.RowDefinitions[2].Height = new GridLength(t.Number("edit.height"));
+        Root.RowDefinitions[6].Height = new GridLength(t.Number("status.height"));
     }
 
     private void UpdateVolumePanelHeight()
@@ -1278,8 +1286,9 @@ public partial class MainWindow : Window
                         + rows[3].Height.Value + rows[6].Height.Value + WorkflowFooter.Bounds.Height;
         // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
         double available = Math.Max(0, Bounds.Height - chrome - Lanes.HeaderHeight - 80);
+        double maximum = Math.Max(0, Bounds.Height - chrome - Lanes.HeaderHeight - 8);
         rows[5].Height = new GridLength(VolumeToggle.IsChecked == true
-            ? Math.Min(UiTheme.Current.Number("volume.height"), available) : 0);
+            ? Math.Min(maximum, Math.Min(UiTheme.Current.Number("volume.height"), Math.Max(80, available))) : 0);
     }
 
     // Where the current playback began, for "Return on stop".
@@ -1442,7 +1451,7 @@ public partial class MainWindow : Window
         int unanchored = model.Session.Unanchored.Count();
         if (conflicts.Count > 0)
             notes.Add($"{conflicts.Count} moment{(conflicts.Count == 1 ? "" : "s")} can't be saved as drawn (first at {FormatTime(conflicts[0].Time)}: {conflicts[0].Reason})");
-        if (unanchored > 0) notes.Add($"{unanchored} hit{(unanchored == 1 ? "" : "s")} with no object (not saved in Apply mode)");
+        if (unanchored > 0) notes.Add($"{unanchored} hit{(unanchored == 1 ? " has" : "s have")} no gameplay object and won't be included by Save .osu. Use HS mode or Generate to include them.");
         if (audioError is not null) notes.Add($"No sound: {audioError}");
         else if (audio is { HasSong: false }) notes.Add($"Song file \"{map.Settings.AudioFilename}\" not found; hitsounds play on their own.");
         int silent = model.Silent.Count(model.Notes.ContainsKey);
