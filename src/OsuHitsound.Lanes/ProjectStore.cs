@@ -26,6 +26,7 @@ public sealed record HsProject(bool Enabled, bool StartedEmpty, string FileHash,
 public sealed record ProjectData
 {
     public ExportMergeSettings? ExportSettings { get; init; }
+    public SoundSetProject? SoundSets { get; init; }
     /// <summary>3 preserves folder order as well as lane order; a version 1 alphabetical layout is ignored.</summary>
     public int Version { get; init; } = CurrentVersion;
 
@@ -96,7 +97,9 @@ public static class ProjectStore
         var path = PathFor(root, osuPath);
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<ProjectData>(File.ReadAllText(path), Json) : null;
+            if (!File.Exists(path)) return null;
+            if (new FileInfo(path).Length > 192 * 1024 * 1024) throw new JsonException("Editor project is too large.");
+            return JsonSerializer.Deserialize<ProjectData>(File.ReadAllText(path), Json);
         }
         catch (JsonException)
         {

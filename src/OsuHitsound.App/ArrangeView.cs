@@ -223,12 +223,16 @@ internal sealed class ArrangeView : Control
     internal void PlaceHit(Lane lane, double time)
     {
         if (Session is not { } session) return;
+        if (DrawSoundSetRequested?.Invoke(time) == true) return;
         var before = session.State;
         var hit = session.HitAt(lane, time);
         session.Add([hit]);
         if (AuditionOnPlacement && !ReferenceEquals(before, session.State)) PlacementPreviewRequested?.Invoke(hit);
     }
     public event Action<Lane>? LaneListPreviewRequested;
+    public bool DrawSoundSetActive { get; set; }
+    public Func<double, bool>? DrawSoundSetRequested { get; set; }
+    public event Action? SoundSetStrokeFinished;
 
     public event Action<double>? SeekRequested;
 
@@ -867,6 +871,8 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), Math.Max(2, noteSize - 4), fill, Paint.NoteRingPen);
             else if (n.Hit is { } hit && selection.Contains(hit))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, Paint.SelectedRingPen);
+            else if (n.Hit is { SetPlacement: var linked } && linked != Guid.Empty && selection.Any(h => h.SetPlacement == linked))
+                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, fill, Paint.SelectedRingPen);
             else if (VisibleProblem(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, ConflictRing);
             else if (model.IsPreviewMuted(n.Hit!))
@@ -1257,7 +1263,7 @@ internal sealed class ArrangeView : Control
                 drag = Drag.None;
                 break;
 
-            case Tool.Draw when row is LaneRow lane && under is null:
+            case Tool.Draw when row is LaneRow lane && (under is null || DrawSoundSetActive):
                 session.BeginGesture("Draw");
                 drag = Drag.Paint;
                 paintRow = lane;
@@ -1453,6 +1459,7 @@ internal sealed class ArrangeView : Control
 
         if (drag == Drag.Range && Math.Abs(dragNow.X - dragStart.X) < DragThreshold) Edits.ClearRange();
 
+        bool finishedSetStroke = drag == Drag.Paint;
         Session?.EndGesture();
         drag = Drag.None;
         dragAnchor = null;
@@ -1460,14 +1467,17 @@ internal sealed class ArrangeView : Control
         e.Pointer.Capture(null);
         SelectionChanged?.Invoke();
         InvalidateVisual();
+        if (finishedSetStroke) SoundSetStrokeFinished?.Invoke();
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
+        bool finishedSetStroke = drag == Drag.Paint;
         Session?.EndGesture();
         drag = Drag.None;
         draggedRow = dropRow = null;
         laneDropY = null;
+        if (finishedSetStroke) SoundSetStrokeFinished?.Invoke();
         InvalidateVisual();
         base.OnPointerCaptureLost(e);
     }

@@ -66,7 +66,7 @@ public sealed partial class EditSession
                 int nearest = Sorted.Nearest(baseMoments, h.Time, AnchorTolerance, m => m.Moment.Time, m => !ownedOriginals.Contains(m.Key));
                 if (nearest >= 0) h = h with { Time = baseMoments[nearest].Moment.Time, Anchor = baseMoments[nearest].Key };
                 else if (byTime.TryGetValue(HsTime(h.Time), out var existing)) h = h with { Time = circles[existing], Anchor = existing };
-                else h = HsHit(h.Lane, h.Time) with { Voice = h.Voice };
+                else h = HsHit(h.Lane, h.Time) with { Voice = h.Voice, SetPlacement = h.SetPlacement, SetMember = h.SetMember };
             }
             if (h.Anchor is { ObjectIndex: < 0 } key)
             {

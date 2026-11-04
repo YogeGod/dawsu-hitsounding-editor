@@ -108,3 +108,16 @@ The current concrete proposal is 2026-11-04-revised-implementation-plan.md. It r
 ## Follow-up after 33b0acb
 
 The owner requested continuing the remaining feedback. Q40A confirms that 2/1, 3/1 and 4/1 snap grids start at each red timing point, rather than restarting every measure or starting at a chosen hit. Scope and verification are in 2026-11-04-long-snap-plan.md. The owner approved implementation and committing to feature/electron-lane-grouping; this follow-up is implemented and tested. Earlier implementation-status statements above are historical; the first approved update was implemented and pushed as 33b0acb.
+
+## Reusable hitsound sets follow-up
+
+After the longer-snap update (68cd020), the owner requested continuing the remaining feedback. Retain the earlier Q12-Q34 reusable-set decisions.
+
+- Q41A: select a saved hitsound set, then place it with the existing Draw tool. Ordinary single-lane drawing stays available; dragging sets from a panel is outside the initial interaction scope.
+- Q42A: Replace affects the sound types supplied by the set and preserves unrelated sounds at that timestamp. Applying kick + clap over kick + whistle replaces the kick and adds clap while retaining whistle. Show the affected sounds before Replace, as previously agreed.
+
+- Q43A: Add adopts an identical pre-existing independent sound into the linked placement instead of creating a duplicate. Preserve its current volume as a local override; future saved-set updates affect its non-overridden properties.
+
+- Q44A: when two linked sets share an identical sound at the same timestamp, the first placement retains control of that sound. A later Add does not steal the link or create a duplicate. Its other components remain linked to the later placement. Do not introduce automatic link takeover during later updates.
+
+The resulting plan is 2026-11-04-reusable-sets-plan.md. The owner approved implementation, commit and push on feature/electron-lane-grouping with ok. The feature is implemented; evidence and remaining verification limits are recorded in 2026-11-04-reusable-sets-verification.md.

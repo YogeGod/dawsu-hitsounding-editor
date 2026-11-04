@@ -94,7 +94,8 @@ public sealed partial class MapDocument
                 {
                     var layers = hits[key].Select(h => (h.Lane, Volume: EditSession.VolumeOf(state, h))).ToList();
                     bool encoded = !needsPreparation.Contains(projected) && layers.Select(l => l.Volume).Distinct().Count() <= 1 && layers.Select(l => l.Lane).Distinct().Count() == layers.Count;
-                    wanted[projected] = pairing.For(layers, hits[key].FirstOrDefault()?.Time ?? double.NaN, projected, encoded);
+                    wanted[projected] = pairing.For(layers, hits[key].FirstOrDefault()?.Time ?? double.NaN, projected, encoded,
+                        exactGainLanes: hits[key].Where(h => h.SetPlacement != Guid.Empty).Select(h => h.Lane).ToHashSet());
                 }
                 catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException)
                 { preparationProblems.Add(new(hits[key].FirstOrDefault()?.Time ?? 0, projected, ex.Message)); }
@@ -103,6 +104,8 @@ public sealed partial class MapDocument
         var reverse = projection.Keys.ToDictionary(p => p.Value, p => p.Key);
         var conflicts = preparationProblems.Concat(pairing?.Conflicts ?? []).Concat(result.Conflicts).DistinctBy(c => c.Moment).Select(c => c with { Moment = reverse[c.Moment] }).ToList();
         var conflicted = conflicts.Select(c => c.Moment).ToHashSet();
+        foreach (var issue in Session.SoundSetInputProblems(Folder, state))
+            conflicts.Add(new(issue.Hit.Time, issue.Hit.Anchor ?? new(-1, 0), issue.Error));
         foreach (var group in state.Hits.Where(h => h.Anchor is not null).GroupBy(h => h.Anchor!.Value))
             if (pairing is null && !conflicted.Contains(group.Key) && (group.Select(h => EditSession.VolumeOf(state, h)).Distinct().Count() > 1
                 || group.Select(h => h.Lane).Distinct().Count() != group.Count()))
@@ -126,6 +129,7 @@ public sealed partial class MapDocument
     public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null)
     {
         var current = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
+        if (Session.SoundSetInputProblems(current).FirstOrDefault().Error is { } problem) throw new IOException(problem);
         var previous = GenerateManifest.Load(manifestRoot, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path)!, HitsoundDiff.FileNameFor(File, Path)));
         return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin, mergeSettings), current);
     }

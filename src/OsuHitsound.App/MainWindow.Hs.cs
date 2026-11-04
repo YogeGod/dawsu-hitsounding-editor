@@ -44,7 +44,7 @@ public partial class MainWindow
         double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom, position = audio?.Position ?? Lanes.Playhead;
         var decoded = new Dictionary<Lane, float[]?>();
         int loose = session.Unanchored.Count();
-        bool hs = session.State.HsMode || session.HasHsObjects;
+        bool hs = session.State.HsMode || session.State.HsCircles.Count > 0;
         try
         {
             if (!SaveProject()) throw new IOException("The editor project could not be written. Fix its folder permissions before saving.");

@@ -12,6 +12,8 @@ public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor)
 {
     /// <summary>Distinguishes overlapping copies of one sample that need different layer volumes.</summary>
     public int Voice { get; init; }
+    public Guid SetPlacement { get; init; }
+    public Guid SetMember { get; init; }
 }
 
 /// <summary>
@@ -24,6 +26,8 @@ public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<
     public bool HsMode { get; init; }
     public ImmutableDictionary<MomentKey, double> HsCircles { get; init; } = ImmutableDictionary<MomentKey, double>.Empty;
     public ImmutableDictionary<EditHit, int> LayerVolumes { get; init; } = ImmutableDictionary<EditHit, int>.Empty;
+    public ImmutableList<SoundSet> SoundSets { get; init; } = [];
+    public ImmutableList<SoundSetPlacement> SoundPlacements { get; init; } = [];
 }
 
 /// <summary>What a range edit does with the hits in a time range.</summary>
@@ -51,10 +55,12 @@ public sealed partial class EditSession
     private EditState? gestureStart;
     private string gestureLabel = "Edit";
     private readonly double timeOffset; // v3/v4 maps show 24 ms later than written; bookmarks are stored as written
+    private readonly MapFolder sampleFolder;
 
     public EditSession(OsuFile file, MapFolder folder, DecompiledMap map)
     {
         baseMap = map;
+        sampleFolder = folder;
         sourceFile = file;
         var objectIndex = file.HitObjects.Select((o, i) => (o, i)).ToDictionary(x => x.o, x => x.i); // HitObject compares by reference
         baseMoments = [.. map.Moments.Select(m => (m, new MomentKey(objectIndex[m.Object], m.Node)))];
@@ -91,7 +97,8 @@ public sealed partial class EditSession
 
     private static bool MapChanged(EditState a, EditState b) =>
         !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks)
-        || !ReferenceEquals(a.HsCircles, b.HsCircles) || !ReferenceEquals(a.LayerVolumes, b.LayerVolumes);
+        || !ReferenceEquals(a.HsCircles, b.HsCircles) || !ReferenceEquals(a.LayerVolumes, b.LayerVolumes)
+        || !ReferenceEquals(a.SoundSets, b.SoundSets) || !ReferenceEquals(a.SoundPlacements, b.SoundPlacements);
 
     /// <summary>Seeds the editor-only layout on load or after adding lanes, without creating an edit.</summary>
     public void RestoreLaneOrder(IEnumerable<Lane> lanes)
@@ -189,7 +196,7 @@ public sealed partial class EditSession
     /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>
     public IReadOnlyList<EditHit> MoveEach(IReadOnlyList<(EditHit Hit, Lane Lane, double Time)> moves, string label)
     {
-        var targets = moves.Select(m => HitAt(m.Lane, m.Time) with { Voice = m.Hit.Voice }).ToList();
+        var targets = moves.Select(m => HitAt(m.Lane, m.Time) with { Voice = m.Hit.Voice, SetPlacement = m.Hit.SetPlacement, SetMember = m.Hit.SetMember }).ToList();
         if (targets.SequenceEqual(moves.Select(m => m.Hit))) return targets.Distinct().ToList();
         IReadOnlyList<EditHit> moved = [];
         Change(label, s => PlaceLayers(s, moves.Select((m, i) =>
@@ -239,10 +246,16 @@ public sealed partial class EditSession
     {
         var originals = hits.ToList();
         IReadOnlyList<EditHit> copies = [];
-        Change(label, s => PlaceLayers(s, originals.Select(h =>
-            (HitAt(h.Lane, h.Time + offset) with { Voice = h.Voice },
-             Volume: s.HsMode || s.LayerVolumes.ContainsKey(h) ? (int?)VolumeOf(s, h) : null)), [], out copies));
-        return copies;
+        var whole = State.SoundPlacements.Where(p => State.Hits.Where(h => h.SetPlacement == p.Id).Any() && State.Hits.Where(h => h.SetPlacement == p.Id).All(originals.Contains))
+            .ToDictionary(p => p.Id, p => p with { Id = Guid.NewGuid(), Time = p.Time + offset, Overrides = p.Overrides.Where(o => !o.Value.Shared).ToImmutableDictionary() });
+        Change(label, s =>
+        {
+            var next = PlaceLayers(s, originals.Select(h =>
+                (HitAt(h.Lane, h.Time + offset) with { Voice = h.Voice, SetPlacement = whole.GetValueOrDefault(h.SetPlacement)?.Id ?? Guid.Empty, SetMember = whole.ContainsKey(h.SetPlacement) ? h.SetMember : Guid.Empty },
+                 Volume: s.HsMode || s.LayerVolumes.ContainsKey(h) ? (int?)VolumeOf(s, h) : null)), [], out copies);
+            return whole.Count == 0 ? next : RenderSoundSets(next with { SoundPlacements = next.SoundPlacements.AddRange(whole.Values) });
+        });
+        return whole.Count == 0 ? copies : copies.Where(h => h.SetPlacement == Guid.Empty).Concat(State.Hits.Where(h => whole.Values.Any(p => p.Id == h.SetPlacement))).Distinct().ToList();
     }
 
     public void SetVolume(IEnumerable<MomentKey> keys, int volume, string label = "Volume")
@@ -285,6 +298,12 @@ public sealed partial class EditSession
     public void ResetToGestureStart()
     {
         if (gestureStart is not null) State = gestureStart;
+    }
+
+    public void CancelGesture()
+    {
+        if (gestureStart is not { } start) return;
+        State = start; gestureStart = null; Announce();
     }
 
     public void EndGesture()
@@ -377,6 +396,7 @@ public sealed partial class EditSession
         if (!ReferenceEquals(next, State))
         {
             next = MaintainHsCircles(next);
+            if (ReferenceEquals(next.SoundPlacements, State.SoundPlacements) && ReferenceEquals(next.SoundSets, State.SoundSets)) next = ReconcileSoundSets(State, next);
             if (next.LayerVolumes.Count > 0)
             {
                 var present = next.Hits.ToHashSet();

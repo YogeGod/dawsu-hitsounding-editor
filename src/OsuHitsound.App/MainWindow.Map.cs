@@ -321,6 +321,7 @@ public partial class MainWindow
             CollapsedFamilies = [.. model.CollapsedFamilies],
             HsMode = doc!.HsProject,
             ExportSettings = exportSettings,
+            SoundSets = session.CaptureSoundSets(doc!.HsProject.FileHash),
             LocatorLeft = Lanes.LocatorLeft,
             LocatorRight = Lanes.LocatorRight,
             Cycle = Lanes.Cycle,
@@ -375,6 +376,9 @@ public partial class MainWindow
             session.Restore(loose.Select(p => p.Hit!), loose.Where(p => p.Project.Volume is >= 0 and <= 100)
                 .ToDictionary(p => p.Hit!, p => p.Project.Volume!.Value));
         }
+
+        try { session.RestoreSoundSets(project.SoundSets, GenerateManifest.Hash(doc!.Opened)); }
+        catch (FormatException ex) { flash = $"Sound-set links were not restored: {ex.Message}"; }
 
         foreach (var muted in project.PreviewMuted)
             if (session.State.Hits.FirstOrDefault(h => ProjectStore.KeyOf(h.Lane) == muted.Lane && Math.Abs(h.Time - muted.Time) < 0.5) is { } hit)

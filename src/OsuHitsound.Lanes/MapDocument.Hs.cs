@@ -28,6 +28,7 @@ public sealed partial class MapDocument
         var projection = Session.ProjectHs(state, Opened);
         projection.File.SetBookmarks(state.Bookmarks);
         var folder = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
+        if (Session.SoundSetInputProblems(folder, state).FirstOrDefault().Error is { } problem) throw new IOException(problem);
         var first = Compiler.Apply(OsuFile.Parse(projection.File.ToBytes()), folder, projection.Wanted);
         var needsMix = first.Conflicts.Select(c => c.Moment).ToHashSet();
         var inputs = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value);
@@ -68,7 +69,8 @@ public sealed partial class MapDocument
         var wishes = new Dictionary<MomentKey, WantedSound>(projection.Wanted);
         if (pairing is not null)
             foreach (var (key, projected) in projection.Keys)
-                wishes[projected] = pairing.For(layers[projected], inputs[key].FirstOrDefault()?.Time ?? double.NaN, projected, alreadyEncoded: !needsMix.Contains(projected));
+                wishes[projected] = pairing.For(layers[projected], inputs[key].FirstOrDefault()?.Time ?? double.NaN, projected, alreadyEncoded: !needsMix.Contains(projected),
+                    exactGainLanes: inputs[key].Where(h => h.SetPlacement != Guid.Empty).Select(h => h.Lane).ToHashSet());
         else
             foreach (var key in needsMix) wishes[key] = mixer.MixFor(layers[key]).Wanted();
         var outputFiles = pairing?.Files ?? mixer.ToWrite;

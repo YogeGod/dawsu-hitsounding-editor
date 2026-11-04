@@ -58,6 +58,7 @@ internal sealed class InspectorPanel : Border
     private readonly Button replaceSample = new() { Content = "Browse sample…" };
     private readonly Button previewSample = new() { Content = "Preview" };
     public FileBrowserPanel Browser { get; } = new();
+    public SoundSetPanel SoundSets { get; } = new();
     private Lane? channelLane;
     private List<Lane> channelChoices = [];
     private (ArrangeModel? Model, int Count, object? Order) channelFrom;
@@ -118,6 +119,7 @@ internal sealed class InspectorPanel : Border
         previewSample.Click += (_, _) => { if (channelLane is { } lane) PreviewChannelRequested?.Invoke(lane); };
         AddCard(ChannelCard, "Channel", Stack(channelName, sampleFile, channelSample, Row(null, replaceSample, previewSample)));
         AddCard("browser", "File browser", Browser);
+        AddCard("soundSets", "Sound sets", SoundSets);
 
         var shift = new Button { Content = "Shift" };
         shift.Click += (_, _) => { if (OsuNumber.TryParseDouble(shiftBox.Text ?? "", out double ms) && double.IsFinite(ms) && ms != 0) ShiftTimeRequested?.Invoke(ms); };

@@ -233,6 +233,7 @@ public partial class MainWindow : Window
         SetupInspector();
         SetupTutorial();
         SetupOutput();
+        SetupSoundSets();
         Deactivated += (_, _) => UpdateToolCursors(KeyModifiers.None);
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
@@ -839,7 +840,12 @@ public partial class MainWindow : Window
     /// <summary>The width to save: the panel's when shown, else the one it had.</summary>
     internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[0].ActualWidth > 0 ? Root.ColumnDefinitions[0].ActualWidth : inspectorWidth;
 
-    private void RefreshInspector() => Inspector.Refresh(session, model, Lanes.Selection, FormatTime);
+    private void RefreshInspector()
+    {
+        Inspector.Refresh(session, model, Lanes.Selection, FormatTime);
+        Inspector.SoundSets.Refresh(session, Lanes.Selection);
+        Lanes.DrawSoundSetActive = Inspector.SoundSets.SelectedSet is { } id && session?.State.SoundSets.Any(s => s.Id == id) == true;
+    }
 
     /// <summary>Fit: zooms out so the whole map is in view.</summary>
     private void FitTimeline()

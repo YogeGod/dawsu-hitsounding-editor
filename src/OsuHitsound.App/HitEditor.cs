@@ -28,6 +28,13 @@ internal sealed class HitEditor
 {
     private ArrangeModel? model;
     private List<(Lane Lane, double Offset, int Volume, int Voice)> clipboard = [];
+    private List<(EditHit Hit, int Volume)> setClipboard = [];
+    private List<SoundSetPlacement> clipboardPlacements = [];
+    private EditSession? clipboardSession;
+    private List<SoundSet> clipboardSets = [];
+    private Dictionary<Lane, byte[]> clipboardAudio = [];
+    public Func<Lane, byte[]?>? ReadClipboardAudio { get; set; }
+    public Func<IReadOnlyList<SoundSet>, IReadOnlyList<SoundSetPlacement>, IReadOnlyList<(EditHit Hit, int Volume)>, IReadOnlyDictionary<Lane, byte[]>, double, IReadOnlyList<EditHit>>? ImportSetClipboard { get; set; }
 
     /// <summary>The selected hits. Mouse gestures change it directly while dragging and call <see cref="Notify"/> after.</summary>
     public HashSet<EditHit> Selected { get; } = [];
@@ -145,6 +152,15 @@ internal sealed class HitEditor
         if (Selected.Count == 0) return;
         double start = Selected.Min(h => h.Time);
         clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start, Session?.VolumeOf(h) ?? 100, h.Voice))];
+        clipboardSession = Session;
+        setClipboard = [.. Selected.Select(h => (h, Session?.VolumeOf(h) ?? 100))];
+        clipboardPlacements = Session is null ? [] : Session.State.SoundPlacements.Where(p => Session.State.Hits.Any(h => h.SetPlacement == p.Id) &&
+            Session.State.Hits.Where(h => h.SetPlacement == p.Id).All(Selected.Contains)).ToList();
+        clipboardSets = Session?.State.SoundSets.Where(s => clipboardPlacements.Any(p => p.SetId == s.Id)).ToList() ?? [];
+        clipboardAudio = [];
+        if (clipboardPlacements.Count > 0 && ReadClipboardAudio is not null)
+            foreach (var lane in Selected.Select(h => h.Lane).Distinct())
+                if (ReadClipboardAudio(lane) is { } bytes) clipboardAudio[lane] = bytes.ToArray();
     }
 
     public void Cut()
@@ -158,6 +174,10 @@ internal sealed class HitEditor
     {
         if (Session is not { } session || clipboard.Count == 0) return;
         double at = SnapTime(time);
+        if (session == clipboardSession && clipboardPlacements.Count > 0)
+        { Select(session.PasteSoundSets(setClipboard, clipboardPlacements, at - setClipboard.Min(p => p.Hit.Time))); return; }
+        if (clipboardPlacements.Count > 0 && ImportSetClipboard is not null)
+        { Select(ImportSetClipboard(clipboardSets, clipboardPlacements, setClipboard, clipboardAudio, at - setClipboard.Min(p => p.Hit.Time))); return; }
         var hits = session.AddWithVolumes(clipboard.Select(c => (session.HitAt(c.Lane, at + c.Offset) with { Voice = c.Voice }, c.Volume)), "Paste");
         Select(hits);
     }

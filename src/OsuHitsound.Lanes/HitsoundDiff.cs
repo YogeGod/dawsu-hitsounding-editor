@@ -73,6 +73,7 @@ public static class HitsoundDiff
     {
         mergeSettings?.Validate();
         double offset = session.Map.Settings.TimeOffset;
+        var setGainLanes = session.State.Hits.Where(h => h.SetPlacement != Guid.Empty).ToLookup(h => (int)Math.Round(h.Time - offset), h => h.Lane);
 
         var silentLoops = new Dictionary<Lane, bool>();
         bool IsEmptyLoop(Lane lane)
@@ -149,7 +150,7 @@ public static class HitsoundDiff
                     (IReadOnlyList<(Lane Lane, int Volume, double Duration)>)g.Loops)));
             var passiveWishes = groups.Select(g => g.Slider ? passiveMixer.MixFor(MixPlanner.Normalize(g.Layers, true), g.Loops).Wanted() : null).ToList();
             var pairing = new PairingPlanner(folder.With(passiveMixer.All.Select(m => m.FileName)), skin, mergeSettings, previous);
-            var pairWishes = groups.Select((g, i) => passiveWishes[i] ?? pairing.For(g.Layers, g.Time + offset, new(i, 0))).ToList();
+            var pairWishes = groups.Select((g, i) => passiveWishes[i] ?? pairing.For(g.Layers, g.Time + offset, new(i, 0), exactGainLanes: setGainLanes[g.Time].ToHashSet())).ToList();
             // Passive names may share indexes with paired outputs only if no filenames collide.
             if (pairing.Files.Select(m => m.FileName).Intersect(passiveMixer.All.Select(m => m.FileName), StringComparer.OrdinalIgnoreCase).Any())
                 throw new IOException("A slider rendering conflicts with a paired sample filename. No files were written.");

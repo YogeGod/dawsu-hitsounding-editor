@@ -70,27 +70,29 @@ public sealed class PairingPlanner
         return layers.All(l => Decompiler.ResolveLane(folder, l.Lane.Sample!.Value.Set, l.Lane.Sample.Value.Sound, index) == l.Lane);
     }
 
-    public WantedSound For(IEnumerable<(Lane Lane, int Volume)> input, double time = double.NaN, MomentKey? moment = null, bool alreadyEncoded = false)
+    public WantedSound For(IEnumerable<(Lane Lane, int Volume)> input, double time = double.NaN, MomentKey? moment = null, bool alreadyEncoded = false, IReadOnlySet<Lane>? exactGainLanes = null)
     {
         var original = input.ToList();
-        var layers = MixPlanner.Normalize(original, includeMissing: true);
+        bool bakeExactGain = original.Any(l => exactGainLanes?.Contains(l.Lane) == true && l.Volume < HitsoundRules.StableMinimumVolume);
+        var layers = bakeExactGain ? original.Select(l => (l.Lane, Volume: exactGainLanes?.Contains(l.Lane) == true ? l.Volume : Math.Max(l.Volume, HitsoundRules.StableMinimumVolume))).OrderBy(l => ProjectStore.KeyOf(l.Lane)).ToList()
+            : MixPlanner.Normalize(original, includeMissing: true);
         var combination = new MergeCombination(layers, []) { Time = time, MatchBalance = true };
         // Preserve exact original lanes/volumes when they already fit, including low inherited volumes.
         bool noOverrides = settings.Rules.Count == 0 && settings.OccurrenceRules.Count == 0 && settings.KeepOriginalRules.Count == 0 && settings.OccurrenceKeepOriginal.Count == 0;
-        if (original.Count > 0 && noOverrides && (alreadyEncoded || layers.Count == 1 && CanEncode(folder, original))) return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
+        if (!bakeExactGain && original.Count > 0 && noOverrides && (alreadyEncoded || layers.Count == 1 && CanEncode(folder, original))) return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
         combination = combination with { Fingerprints = layers.Select(l => l.Lane).Distinct().ToDictionary(l => l, Fingerprint) };
         if (layers.Count > 1) combinations.Add(combination);
-        if (settings.KeepOriginal(combination) && !alreadyEncoded && !CanEncode(folder, original))
+        if (settings.KeepOriginal(combination) && (bakeExactGain || !alreadyEncoded && !CanEncode(folder, original)))
         {
             conflicts.Add(new(time, moment ?? new(-1, 0), "Original files were requested, but these layers need pairing or fusion. Use automatic handling in Review output, or change the layers."));
             return new(original.Select(l => l.Lane).ToList(), original.FirstOrDefault().Volume);
         }
         string? rule = settings.RuleFor(combination);
-        if (rule is null && (alreadyEncoded || CanEncode(folder, original))) return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
+        if (!bakeExactGain && rule is null && (alreadyEncoded || CanEncode(folder, original))) return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
         var chosen = rule ?? combination.AutomaticSlot(settings) ?? "soft-hitnormal";
         var bank = HitsoundRules.ParseSampleName(chosen)!.Value.Set;
         var normalBank = layers.FirstOrDefault(l => l.Lane.Sample?.Sound == "hitnormal").Lane?.Sample?.Set ?? bank;
-        int volume = layers.Count == 0 ? 100 : layers.Select(l => l.Volume).Distinct().Count() == 1 ? layers[0].Volume : 100;
+        int volume = layers.Count == 0 || bakeExactGain ? 100 : layers.Select(l => l.Volume).Distinct().Count() == 1 ? layers[0].Volume : 100;
         var components = layers.GroupBy(l => l.Lane.Sample?.Sound is "hitwhistle" or "hitfinish" or "hitclap" ? l.Lane.Sample.Value.Sound : "hitnormal")
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .Select(g => (Slot: HitsoundRules.SampleName(g.Key == "hitnormal" ? normalBank : bank, g.Key), Layers: g.ToList())).ToList();
