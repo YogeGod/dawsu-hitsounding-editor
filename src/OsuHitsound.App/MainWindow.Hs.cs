@@ -33,9 +33,9 @@ public partial class MainWindow
         finally { fillingHs = false; }
     }
 
-    private async Task SaveHs()
+    private async Task<bool> SaveHs()
     {
-        if (doc is not { } document || session is null || savingHs) return;
+        if (doc is not { } document || session is null || savingHs) return false;
         savingHs = true;
         bool wasEnabled = Root.IsEnabled;
         Root.IsEnabled = false;
@@ -49,7 +49,7 @@ public partial class MainWindow
         {
             if (!SaveProject()) throw new IOException("The editor project could not be written. Fix its folder permissions before saving.");
             if (loose > 0 && !session.State.Hits.Any(h => h.Anchor is not null))
-            { flash = $"{loose} hitsound(s) have no hit object and cannot be saved into this difficulty. Use HS mode or Generate. Their editor project is kept."; UpdateStatus(); return; }
+            { flash = $"{loose} hitsound(s) have no hit object and cannot be saved into this difficulty. Use HS mode or Generate. Their editor project is kept."; UpdateStatus(); return false; }
             string manifests = GenerateManifest.DefaultRoot();
             var defaults = skin.Value;
             var (plan, fresh) = await Task.Run(() => document.PlanHsSave(manifests, defaults, exportSettings));
@@ -72,7 +72,7 @@ public partial class MainWindow
                     });
                 }
                 finally { audio?.StopAudition(); }
-                if (settings is null) return;
+                if (settings is null) return false;
                 decoded.Clear();
                 (plan, fresh) = await Task.Run(() => document.PlanHsSave(manifests, defaults, settings));
             }
@@ -81,11 +81,13 @@ public partial class MainWindow
             if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0 || loose > 0) && !await Dialogs.Confirm(this, hs ? "Save HS difficulty" : "Save difficulty",
                 $"Save this difficulty with {plan.Storage.Mixes.Count} new paired/fused sample(s)? Original layers remain editable; existing shared samples are protected."
                     + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
-                    + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return;
+                    + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return false;
             var written = await Task.Run(() => document.WriteHsSave(plan, mix => SampleMixer.Mix(mix, Decode), MapSaver.DefaultBackupRoot(), manifests));
             bool projectSaved = SaveProject();
             // Preserve editable layers in this window even if a sidecar write unexpectedly fails after the .osu save.
-            await (Loading = OpenAsync(document.Path, hsOverride: document.HsProject));
+            var reload = OpenAsync(document.Path, hsOverride: document.HsProject);
+            Loading = reload;
+            if (!await reload) return false;
             if (view is not null) model?.RestoreViewState(view);
             (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
             Seek(position);
@@ -94,11 +96,13 @@ public partial class MainWindow
                 + (plan.Notes.Count > 0 ? " " + string.Join(" ", plan.Notes) : "")
                 + (projectSaved ? "" : " Editor state could not be persisted. Keep this window open and retry Save before closing.");
             UpdateStatus();
+            return projectSaved;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or FormatException)
         {
             flash = $"Save stopped: {ex.Message}";
             UpdateStatus();
+            return false;
         }
         finally
         {

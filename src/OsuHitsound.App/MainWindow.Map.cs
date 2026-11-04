@@ -294,8 +294,30 @@ public partial class MainWindow
     {
         projectTimer?.Stop();
         if (model is null || session is null || mapPath is null) return true;
+        var data = CaptureProject();
+        // Keep view preferences, but don't resurrect discarded edits from a previous autosave.
+        if (discardProjectOnClose && closeProjectBaseline is { } baseline)
+            data = data with { Unanchored = baseline.Unanchored, HsMode = baseline.HsMode, SoundSets = baseline.SoundSets };
+        try
+        {
+            ProjectStore.Save(ProjectStore.DefaultRoot(), mapPath, data);
+            SaveDrumMaps();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        {
+            flash = $"Couldn't save the editor project: {ex.Message}";
+            UpdateStatus();
+            return false;
+        }
+    }
+
+    private ProjectData CaptureProject()
+    {
+        var model = this.model ?? throw new InvalidOperationException("No map is open.");
+        var session = this.session ?? throw new InvalidOperationException("No edit session is open.");
         var (names, order, added, hidden) = model.LaneLayout();
-        var data = new ProjectData
+        return new ProjectData
         {
             Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time) { Volume = session.State.LayerVolumes.TryGetValue(h, out int volume) ? volume : null })],
             LaneNames = names,
@@ -315,18 +337,6 @@ public partial class MainWindow
             SongOffset = mapSongOffset,
             TimeSignatures = [.. model.TimeSignatures],
         };
-        try
-        {
-            ProjectStore.Save(ProjectStore.DefaultRoot(), mapPath, data);
-            SaveDrumMaps();
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
-        {
-            flash = $"Couldn't save the editor project: {ex.Message}";
-            UpdateStatus();
-            return false;
-        }
     }
 
     /// <summary>Puts back what the project file kept for this map: lanes, hits with no object, locators, mutes, offset.</summary>

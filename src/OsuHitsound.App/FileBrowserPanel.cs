@@ -16,6 +16,9 @@ internal sealed class FileBrowserPanel : StackPanel
     private readonly TextBox location = new() { Watermark = "Folder path", Foreground = Avalonia.Media.Brushes.Gainsboro };
     private readonly ListBox entries = new() { Height = 180 };
     private readonly TextBlock status = new() { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 11 };
+    private readonly TextBlock assignment = new() { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 11 };
+    private string? assignmentTarget;
+    private bool canAssign;
     private readonly Button use = new() { Content = "Use sample" }, preview = new() { Content = "Preview" };
     private string? samplesRoot, mapsRoot;
     private string? activeMapRoot, libraryRoot;
@@ -43,11 +46,11 @@ internal sealed class FileBrowserPanel : StackPanel
         };
         var actions = new WrapPanel { Orientation = Orientation.Horizontal };
         actions.Children.AddRange([use, preview]);
-        Children.AddRange([mode, location, navigation, entries, actions, status]);
+        Children.AddRange([mode, location, navigation, entries, assignment, actions, status]);
         mode.SelectionChanged += (_, _) =>
         {
-            use.Content = mode.SelectedIndex == 0 ? "Use sample" : "Open map";
             preview.IsVisible = mode.SelectedIndex == 0;
+            RefreshActions();
             SetFolder(mode.SelectedIndex == 0 ? samplesRoot : mapsRoot);
         };
         browse.Click += async (_, _) =>
@@ -61,9 +64,32 @@ internal sealed class FileBrowserPanel : StackPanel
         go.Click += (_, _) => SetFolder(location.Text);
         location.KeyDown += (_, e) => { if (e.Key == Key.Enter) { SetFolder(location.Text); e.Handled = true; } };
         use.Click += (_, _) => Activate();
+        entries.SelectionChanged += (_, _) => RefreshActions();
         entries.DoubleTapped += (_, _) => Activate();
         entries.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Activate(); e.Handled = true; } };
         preview.Click += (_, _) => { if (entries.SelectedItem is Entry { Folder: false } file) PreviewRequested?.Invoke(file.Path); };
+        RefreshActions();
+    }
+
+    public void SetAssignmentTarget(string? name, bool editable)
+    {
+        assignmentTarget = name;
+        canAssign = editable;
+        RefreshActions();
+    }
+
+    private void RefreshActions()
+    {
+        bool samples = mode.SelectedIndex == 0;
+        assignment.IsVisible = samples;
+        assignment.Text = assignmentTarget is null ? "Choose an active lane before assigning a sample."
+            : !canAssign ? $"{assignmentTarget} is read-only. Preview listens without changing it."
+            : $"Assigns to {assignmentTarget} for every hit in that lane. Double-click a sample or press Enter to assign; Preview only listens.";
+        use.Content = entries.SelectedItem is Entry { Folder: true } ? "Open folder"
+            : samples ? "Replace lane sample" : "Open map";
+        use.IsEnabled = entries.SelectedItem is Entry entry && (entry.Folder || !samples || canAssign);
+        preview.IsEnabled = entries.SelectedItem is Entry { Folder: false };
+        ToolTip.SetTip(use, samples ? assignment.Text : "Open the selected map or folder");
     }
 
     public void SetRoots(string? samples, string? maps)
@@ -78,7 +104,8 @@ internal sealed class FileBrowserPanel : StackPanel
     {
         if (entries.SelectedItem is not Entry entry) return;
         if (entry.Folder) SetFolder(entry.Path);
-        else if (mode.SelectedIndex == 0) SampleRequested?.Invoke(entry.Path);
+        else if (mode.SelectedIndex == 0 && canAssign) SampleRequested?.Invoke(entry.Path);
+        else if (mode.SelectedIndex == 0) { status.Text = "Choose an editable active lane before assigning a sample."; }
         else OpenMapRequested?.Invoke(entry.Path);
     }
 

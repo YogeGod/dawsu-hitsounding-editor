@@ -394,10 +394,10 @@
           <TextBlock Name="InfoStart" Text="—" Classes="fieldValue" />
         </StackPanel>
         <StackPanel Classes="field">
-          <TextBlock Text="VOLUME · %" Classes="fieldLabel" />
+          <TextBlock Text="VOLUME AT TIMES · %" Classes="fieldLabel" ToolTip.Tip="Changes all sounds at the selected gameplay times, including sounds in other lanes." />
           <StackPanel Orientation="Horizontal" Spacing="4">
-            <TextBox Name="VolumeValueBox" Width="60" Watermark="0-100" ToolTip.Tip="A value for the selected moments; Enter or Apply" />
-            <Button Name="VolumeApplyButton" Content="Apply" Focusable="True" />
+            <TextBox Name="VolumeValueBox" Width="60" Watermark="0-100" ToolTip.Tip="Volume for all sounds at the selected gameplay times, across lanes. Enter or Apply commits the value." />
+            <Button Name="VolumeApplyButton" Content="Apply" Focusable="True" ToolTip.Tip="Change the volume of all sounds at the selected gameplay times, including other lanes." />
           </StackPanel>
         </StackPanel>
         <StackPanel Classes="field">
@@ -476,8 +476,14 @@
             </StackPanel>
           </StackPanel>
           </ScrollViewer>
-          <TextBlock Name="SavedText" IsVisible="False" Margin="14,8" Foreground="{DynamicResource LcdCaption}" TextWrapping="Wrap"
-                     Text="This tab will show the hitSound and hitSample fields (and any green lines) the selected moment saves as. It arrives with the compiler." />
+          <ScrollViewer Name="SavedPreview" IsVisible="False" Margin="14,8" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="8">
+              <TextBlock Name="SavedSummary" Foreground="{DynamicResource ButtonText}" TextWrapping="Wrap" />
+              <Expander Name="SavedFields" Header="Advanced: osu! fields" HorizontalAlignment="Stretch">
+                <TextBlock Name="SavedText" Foreground="{DynamicResource LcdCaption}" TextWrapping="Wrap" />
+              </Expander>
+            </StackPanel>
+          </ScrollViewer>
         </Panel>
       </DockPanel>
     </Border>
@@ -561,6 +567,7 @@
           </ScrollViewer>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Top">
             <Button Name="WorkflowDetailsButton" Content="Details…" />
+            <Button Name="NextProblemButton" Content="Next problem" IsVisible="False" ToolTip.Tip="Select and reveal the next conflict or hit without a gameplay object. Wraps to the first problem." />
             <Button Name="WorkflowPreferencesButton" Content="Preferences…" />
             <Button Name="DismissWorkflowButton" Content="Dismiss" />
           </StackPanel>

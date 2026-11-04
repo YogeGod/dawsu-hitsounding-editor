@@ -8,6 +8,7 @@ public partial class MainWindow
     private string? workflowWarning;
     private void SetupWorkflowFeedback()
     {
+        NextProblemButton.Click += (_, _) => ShowNextOutputProblem();
         WorkingFolderButton.Click += (_, _) => OpenMapFolder();
         WorkflowHelpToggle.IsCheckedChanged += (_, _) => WorkflowHelpPanel.IsVisible = WorkflowHelpToggle.IsChecked == true;
         WorkflowPreferencesButton.Click += async (_, _) => await ShowPreferences();
@@ -64,6 +65,7 @@ public partial class MainWindow
         WorkflowMessage.IsVisible = !string.IsNullOrEmpty(WorkflowMessage.Text);
         WorkflowMessageRow.IsVisible = WorkflowMessage.IsVisible || WorkflowWarning.IsVisible;
         DismissWorkflowButton.IsVisible = workflowResult is not null;
+        NextProblemButton.IsVisible = session?.Unanchored.Any() == true || lastCompile?.Result.Conflicts.Count > 0;
         WorkflowPreferencesButton.IsVisible = doc is null || audioError is not null || WorkflowMessage.Text?.Contains("Preferences", StringComparison.OrdinalIgnoreCase) == true;
         bool compact = Bounds.Height < 600;
         WorkflowMessageScroll.MaxHeight = compact ? 44 : 88;

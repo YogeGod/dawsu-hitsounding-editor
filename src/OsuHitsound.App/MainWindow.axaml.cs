@@ -120,7 +120,7 @@ public partial class MainWindow : Window
         {
             Volume.IsVisible = VolumeTab.IsChecked == true;
             VolumeControlScroller.IsVisible = Volume.IsVisible;
-            SavedText.IsVisible = !Volume.IsVisible;
+            SavedPreview.IsVisible = !Volume.IsVisible;
         };
         SizeChanged += (_, _) => { RefreshWorkflowFeedback(); UpdateChromeHeights(); UpdateVolumePanelHeight(); };
         SnapBox.ItemsSource = SnapOptions.Select(s => s.ToString()).ToList();
@@ -253,18 +253,7 @@ public partial class MainWindow : Window
         frameTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(15), DispatcherPriority.Render, (_, _) => OnFrame());
         frameTimer.Start();
 
-        Closing += (_, e) =>
-        {
-            if (savingHs) { e.Cancel = true; return; }
-            // Unsaved edits: the first close only warns; closing again discards them.
-            if (session is { IsEdited: true } && !closeConfirmed)
-            {
-                e.Cancel = true;
-                closeConfirmed = true;
-                flash = "You have unsaved edits: Ctrl+S saves them, or close again to discard them.";
-                UpdateStatus();
-            }
-        };
+        Closing += OnEditorClosing;
         Closed += (_, _) =>
         {
             loadNumber++; // a map still loading is dropped, not shown in a closed window
@@ -389,6 +378,7 @@ public partial class MainWindow : Window
             mapSongOffset = 0; // a map without a project has none of its own
             ApplyOffsets();
             RestoreProject(restoreUnanchored, hsOverride);
+            closeProjectBaseline = CaptureProject();
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             UpdateActiveLaneText();
@@ -568,14 +558,20 @@ public partial class MainWindow : Window
         bool controlKey = (focused is Button or Avalonia.Controls.Primitives.ToggleButton && e.Key is Key.Space or Key.Enter)
             || (focused is ComboBox or Slider && e.Key is Key.Space or Key.Enter or Key.Escape
                 or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown);
-        if (e.Handled || focused is TextBox
+        var command = EditorCommands.Match(e);
+        bool globalCommand = (command?.Id is "save" or "help")
+            && (e.Key is >= Key.F1 and <= Key.F24
+                || e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt)
+                && e.Key is not (Key.A or Key.C or Key.X or Key.V or Key.Z or Key.Y or Key.Left or Key.Right
+                    or Key.Up or Key.Down or Key.Home or Key.End or Key.Back or Key.Delete));
+        if (e.Handled || focused is TextBox && !globalCommand
             || (e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift && controlKey))
         {
             base.OnKeyDown(e);
             return;
         }
 
-        if (EditorCommands.Match(e) is not { } command)
+        if (command is null)
         {
             base.OnKeyDown(e);
             return;
@@ -1106,11 +1102,12 @@ public partial class MainWindow : Window
     /// Saves the edits: compiles a fresh copy of the map as opened, refuses if the file changed on disk since, keeps a
     /// timestamped backup in the editor's app-data folder (never in the mapset), writes the .osu and reloads it.
     /// </summary>
-    private async Task Save()
+    private async Task<bool> Save()
     {
-        if (savingHs) return;
-        if (session is null || mapPath is null || originalBytes is null || folder is null) return;
-        if (exportSettings.PairSamples || session.State.HsMode || session.HasHsObjects) { await SaveHs(); return; }
+        if (savingHs || generating || !Loading.IsCompleted) return false;
+        if (session is null || mapPath is null || originalBytes is null || folder is null) return false;
+        if (exportSettings.PairSamples || session.State.HsMode || session.HasHsObjects) return await SaveHs();
+        bool success = false;
         try
         {
             int unanchored = session.Unanchored.Count();
@@ -1124,13 +1121,16 @@ public partial class MainWindow : Window
             {
                 // Reload so the editor starts again from what is now on disk (and its undo history starts fresh).
                 double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom;
-                await Open(mapPath); // awaited: the reload would otherwise clear this message and the view when it finishes
+                var reload = OpenAsync(mapPath);
+                Loading = reload;
+                if (!await reload) return false;
                 (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
                 flash = string.Join(' ', [
                     $"Saved. {result.TimingPointsAdded} green line{(result.TimingPointsAdded == 1 ? "" : "s")} added, {result.TimingPointsChanged} changed."
                         + Problems(result.Conflicts.Count, unanchored),
                     .. result.Notes, $"Backup: {saved.Backup}"]);
             }
+            success = result.Conflicts.Count == 0 && unanchored == 0 && SaveProject();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -1138,6 +1138,7 @@ public partial class MainWindow : Window
         }
 
         UpdateStatus();
+        return success;
 
         static string Problems(int conflicts, int unanchored) =>
             (conflicts > 0 ? $" {conflicts} moment{(conflicts == 1 ? "" : "s")} kept their old sounds (conflicts)." : "")
@@ -1480,21 +1481,35 @@ public partial class MainWindow : Window
     /// <summary>The "What gets saved" tab: the selected moment's object line (and the timing point it reads) as compiled.</summary>
     private void UpdateSavedTab()
     {
-        if (session is null || lastCompile is not { } compiled || Lanes.Selection.FirstOrDefault(h => h.Anchor is not null) is not { Anchor: { } key })
+        SavedFields.IsVisible = false;
+        SavedText.Text = "";
+        if (session is null || Lanes.Selection.Count == 0)
         {
-            SavedText.Text = "Select a hit to see the hitSound and hitSample fields (and any green line) its moment saves as.";
+            SavedSummary.Text = "Select a hit to see whether Save .osu includes it.";
             return;
         }
-
-        if (!session.MomentByKey.TryGetValue(key, out var moment) || !compiled.Keys.TryGetValue(key, out var savedKey))
-        { SavedText.Text = "Checking the current objects…"; return; }
+        int loose = Lanes.Selection.Count(h => h.Anchor is null);
+        string looseSummary = loose == 0 ? "" : $"{loose} selected hit{(loose == 1 ? " has" : "s have")} no gameplay object. Save .osu omits {(loose == 1 ? "it" : "them")}; use HS mode or Generate to include {(loose == 1 ? "it" : "them")}.\n";
+        if (Lanes.Selection.FirstOrDefault(h => h.Anchor is not null) is not { Anchor: { } key })
+        {
+            SavedSummary.Text = looseSummary.TrimEnd();
+            return;
+        }
+        if (lastCompile is not { } compiled || !session.MomentByKey.TryGetValue(key, out var moment)
+            || !compiled.Keys.TryGetValue(key, out var savedKey))
+        {
+            SavedSummary.Text = looseSummary + "Checking how this selected gameplay object will be saved…";
+            return;
+        }
+        var conflict = compiled.Result.Conflicts.FirstOrDefault(c => c.Moment == key);
+        SavedSummary.Text = looseSummary + (conflict is null
+            ? $"Save .osu updates the {Describe(moment)}.\nSounds at this gameplay time share its volume setting."
+            : $"Can't be saved as drawn: {conflict.Reason}");
         var line = compiled.File.HitObjects[savedKey.ObjectIndex].Line.Text;
         var point = new TimingPointIndex(compiled.File.TimingPoints).SamplePointAt(moment.Time - session.Map.Settings.TimeOffset);
-        var conflict = compiled.Result.Conflicts.FirstOrDefault(c => c.Moment == key);
-        SavedText.Text = $"{Describe(moment)}\nObject line: {line}\nTiming point it reads: {point?.Line.Text ?? "none"}"
-            + (conflict is not null ? $"\nCan't be saved as drawn: {conflict.Reason}" : "");
+        SavedText.Text = $"Object line: {line}\nTiming point it reads: {point?.Line.Text ?? "none"}";
+        SavedFields.IsVisible = true;
     }
-
     private string Describe(EditHit hit) => hit.Anchor is { } key && session?.MomentByKey.GetValueOrDefault(key) is { } m
         ? $"{hit.Lane.Name} on the {Describe(m)}"
         : $"{hit.Lane.Name} at {FormatTime(hit.Time)} (no object)";

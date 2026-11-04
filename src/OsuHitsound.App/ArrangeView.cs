@@ -352,6 +352,16 @@ internal sealed class ArrangeView : Control
         return tops[Math.Clamp(i, 0, tops.Length - 1)];
     }
 
+    public void RevealLane(Lane lane)
+    {
+        if (Model is not { } model) return;
+        model.RevealLane(lane);
+        int row = model.Rows.ToList().FindIndex(r => r is LaneRow l && l.Lane == lane);
+        if (row >= 0) ScrollY = RowTop(row) - Math.Max(0, (Bounds.Height - HeaderHeight - RowHeight) / 2);
+        LaneLayoutChanged?.Invoke();
+        InvalidateVisual();
+    }
+
     public void SetModel(ArrangeModel? model)
     {
         if (Model is not null) Model.Changed -= OnModelChanged;

@@ -168,6 +168,7 @@ internal sealed class InspectorPanel : Border
         try
         {
             var active = model?.ActiveLane;
+            Browser.SetAssignmentTarget(active is null ? null : model!.NameOf(active), active is not null && model!.CanReplaceSample(active));
             var selectionLanes = selected.Select(h => h.Lane).Distinct().Take(2).ToList();
             selectedLane = selectionLanes.Count == 1 ? selectionLanes[0] : null;
             useSelectedLane.IsVisible = selectedLane is not null && selectedLane != active;
