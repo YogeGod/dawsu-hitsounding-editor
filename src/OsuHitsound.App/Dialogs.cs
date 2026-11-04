@@ -651,8 +651,9 @@ internal static partial class Dialogs
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark,
-            Background = new SolidColorBrush(Color.Parse("#2b2b2d")),
+            Background = Paint.Brush(UiTheme.Current.Color("title.bg")),
         };
+        window.Classes.Add("editorDialog");
         var result = new TaskCompletionSource<T?>();
         void Close(T value)
         {
@@ -662,12 +663,13 @@ internal static partial class Dialogs
 
         var body = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         var (ok, okText) = build(body, Close);
-        var okButton = new Button { Content = okText, IsDefault = true };
+        var okButton = new Button { Content = okText, IsDefault = true, MinWidth = 80 };
+        okButton.Classes.Add("dialogPrimary");
         configureOk?.Invoke(okButton);
-        var cancel = new Button { Content = cancelText, IsCancel = true };
+        var cancel = new Button { Content = cancelText, IsCancel = true, MinWidth = 80 };
         okButton.Click += (_, _) => ok();
         cancel.Click += (_, _) => window.Close();
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         buttons.Children.AddRange([okButton, cancel]);
         if (scroll)
         {

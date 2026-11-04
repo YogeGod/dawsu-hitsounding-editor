@@ -2,10 +2,68 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OsuHitsound.App.App"
              RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <SolidColorBrush x:Key="HeaderBg">#24262d</SolidColorBrush>
+    <SolidColorBrush x:Key="ButtonBg">#343840</SolidColorBrush>
+    <SolidColorBrush x:Key="ButtonText">#e8ebf0</SolidColorBrush>
+    <SolidColorBrush x:Key="ChromeBorder">#4a4e59</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlHover">#454b56</SolidColorBrush>
+    <SolidColorBrush x:Key="ButtonActive">#1473d2</SolidColorBrush>
+    <SolidColorBrush x:Key="LcdBg">#1c2026</SolidColorBrush>
+    <SolidColorBrush x:Key="LcdCaption">#a7afbe</SolidColorBrush>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme DensityStyle="Compact" />
     <Style Selector="Window">
       <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    </Style>
+    <Style Selector="Button, ToggleButton">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter, ToggleButton:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    </Style>
+    <Style Selector="Button:focus-visible, ToggleButton:focus-visible, ComboBox:focus-visible, TextBox:focus">
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+    </Style>
+    <Style Selector="ComboBox, TextBox">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Background" Value="{DynamicResource LcdBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="{DynamicResource LcdBg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="ToolTip">
+      <Setter Property="Background" Value="{DynamicResource LcdBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="MaxWidth" Value="440" />
+    </Style>
+    <Style Selector="Window.editorDialog Button">
+      <Setter Property="MinWidth" Value="64" />
+    </Style>
+    <Style Selector="Button.dialogPrimary /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
+      <Setter Property="Foreground" Value="#ffffff" />
+    </Style>
+    <Style Selector="Button.dialogPrimary">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
     </Style>
   </Application.Styles>
 </Application>

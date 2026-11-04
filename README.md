@@ -28,7 +28,19 @@ Choose your main **Hitsound folder** in Preferences. Open it from File or the in
 
 The snap selector includes **2/1, 3/1 and 4/1**: every 2, 3 or 4 osu! beats. These grids start at each red timing point; green lines and editor-only time-signature changes keep the same grid. Purple lines mark the active long-snap positions while beat/bar lines remain visible. Drawing, moving, quantize, duplicate and repeat use the selected spacing. Repeat crosses onto a new red line before following its new grid. Alt+wheel includes 4/1 and 2/1 in the straight cycle, or 3/1 with Triplets on. Shift+1–9 still chooses 1/n.
 
+A sample lane's **+** immediately adds the next numbered layer, as in Electron V6.39. With a standard family selected, the header **+** and **Map → Add lane** do the same. The new lane starts with no hits and uses that family's bundled default sound, even when its parent uses a custom sample. Choose a different sound through **Channel**. Existing files and indexes referenced by other difficulties are protected; the visible slot number can differ from its safe backing filename. Undo hides the added lane; its audio file is conservatively retained.
+
 Click a base sound's disclosure arrow to fold or unfold its numbered sample lanes above index 1. Folded notes still play and export normally; the folded state is saved with the project. Searching the lane list reveals matching numbered lanes even while the family is folded.
+
+### Drum maps
+
+Click the keyboard button immediately left of the lane header's **+ / − / collapse** buttons to switch between Sample view and the flat **Drum-map view**. Right-click it for **Drum Map Setup**. Instrument rows show only their instrument names. Edit assignments in Setup or inspect the selected sample in Channel; drag their grips to reorder them across sample families. Other samples stay below the named instruments. The regular Sample view keeps its own names, order and folders.
+
+**Yoge Expanded Kit** and **Yoge Simple Kit** start unassigned. Click an unassigned instrument to choose its sample. Setup offers **New Map**, **New Copy**, **Rename**, **Remove**, **Edit rows**, **Save** and **Load**. These are editing presets shared by the mapset's difficulties. New Map creates a preset. Save writes a portable `.dawsudrum` with snapshots of assigned audio; Load asks whether to use those samples or match your own, then opens assignment review. Accepting bundled samples installs fresh files without overwriting existing samples. If an assigned numbered layer has no custom audio, it gets the bundled default for its family. Instruments with no assignment stay unassigned. Canceling review installs nothing. In **Edit rows**, choose a family and **Add numbered layer** to make another layer available to every instrument, then choose it in Assigned sample. Pending layers create no audio files until you save the setup.
+
+Aliases assigned to the same sample mirror its hits and play once. Existing editing tools, snapping, copy/paste, volume and export continue to use the same note data. Changing an assignment defaults to leaving hits where they are; explicitly moving them previews destination overlaps, requires a handling choice and affects only the current difficulty. Undo restores notes and assignments together. The Channel sample-replacement command also keeps drum-map aliases linked to the replacement. Undo retains imported sample files conservatively.
+
+### Pairing and reusable sound sets
 
 Save, Generate and Copy hitsounds share the same pairing rules. Distinct sound types stay separate through compatible numbered copies. Simultaneous finishes fuse into a new **hitfinish** sample; the kick/hitnormal stays separate. Source samples remain unchanged. The editor project retains the original editable layers.
 

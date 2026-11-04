@@ -26,7 +26,7 @@ internal sealed class FileBrowserPanel : StackPanel
 
     public FileBrowserPanel()
     {
-        Spacing = 5;
+        Spacing = 6;
         var browse = new Button { Content = "Folder…" };
         var up = new Button { Content = "Up" };
         var go = new Button { Content = "Go" };

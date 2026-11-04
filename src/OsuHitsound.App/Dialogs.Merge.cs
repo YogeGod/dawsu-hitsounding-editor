@@ -8,7 +8,7 @@ namespace OsuHitsound.App;
 
 internal static partial class Dialogs
 {
-    private static TextBlock MergeText(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 540 };
+    private static TextBlock MergeText(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 540, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
 
     private static async Task SaveMergePreset(Window owner, ExportMergeSettings settings, TextBlock status)
     {

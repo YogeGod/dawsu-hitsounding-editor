@@ -238,6 +238,7 @@ internal sealed class ArrangeView : Control
 
     /// <summary>Right-click on a lane name: the window shows the lane menu (rename, move, delete, add).</summary>
     public event Action<LaneRow>? LaneMenuRequested;
+    public event Action<Guid>? DrumEntrySetupRequested;
 
     /// <summary>A "+" was clicked: a lane's (that lane), or the one above the lane list (null).</summary>
     public event Action<Lane?>? AddLaneRequested;
@@ -437,7 +438,7 @@ internal sealed class ArrangeView : Control
     {
         ctx.FillRectangle(Paint.Chrome2, new Rect(0, 0, width, HeaderHeight));
         ctx.FillRectangle(TitleBand, new Rect(0, 0, GridLeft, RulerBottom));
-        Paint.DrawText(ctx, "SAMPLE LANES", new Point(10, 6), 8, Paint.Dim, ListWidth - 60, Paint.UiBold);
+        Paint.DrawText(ctx, model.DrumMapMode ? "DRUM MAP · " + model.ActiveDrumMap?.Name : "SAMPLE LANES", new Point(10, 6), 8, Paint.Dim, Math.Max(20, GridLeft - 114), Paint.UiBold);
         double headerY = -((RowHeight - 18) / 2) + 2;
         DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, headerY, null);
         DrawToggle(ctx, "−", GridLeft - RemoveLaneFromRight, headerY, null);
@@ -698,6 +699,11 @@ internal sealed class ArrangeView : Control
                 break;
             }
 
+            case UnassignedDrumRow empty:
+                ctx.FillRectangle(Paint.LaneHeadA, new Rect(0, y, GridLeft, RowHeight));
+                Paint.DrawText(ctx, "⠿", new Point(GripX, y + (RowHeight - 16) / 2), 12, Paint.Dim, 0);
+                Paint.DrawText(ctx, empty.Entry.Name + " (unassigned — click to assign)", new Point(28, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, Paint.Dim, GridLeft - 40);
+                break;
             case LaneRow lane:
             {
                 bool greyed = !model.IsAudible(lane.Lane);
@@ -725,15 +731,15 @@ internal sealed class ArrangeView : Control
                     ctx.DrawLine(TreePen, new Point(branch, y), new Point(branch, last ? cy : y + RowHeight));
                     ctx.DrawLine(TreePen, new Point(branch, cy), new Point(branch + 10, cy));
                 }
-                else if (!last) ctx.DrawLine(TreePen, new Point(TreeX, y + RowHeight * 0.6), new Point(TreeX, y + RowHeight));
+                else if (!last && !model.DrumMapMode) ctx.DrawLine(TreePen, new Point(TreeX, y + RowHeight * 0.6), new Point(TreeX, y + RowHeight));
                 if (model.IsFamilyParent(lane.Lane))
                     Paint.DrawText(ctx, model.IsFamilyCollapsed(lane.Lane) ? "▸" : "▾", new Point(DisclosureX + indent - 4, cy - 8), 11, Paint.Text, 0);
                 else ctx.DrawEllipse(DisclosureDot, null, new Point(DisclosureX + indent, cy), 1.2, 1.2);
 
                 bool silent = lane.Lane.Missing || model.Silent.Contains(lane.Lane);
-                string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.NameOf(lane.Lane);
+                string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.DrumRowName(lane);
                 if (silent) name += lane.Lane.Missing ? "  (missing)" : "  (no sound)";
-                if (model.SlotOf(lane.Lane).Source == LaneSource.Skin) name += lane.Lane.Source == LaneSource.Skin ? " · skin" : " · slot 0";
+                if (!model.DrumMapMode && model.SlotOf(lane.Lane).Source == LaneSource.Skin) name += lane.Lane.Source == LaneSource.Skin ? " · skin" : " · slot 0";
                 if (ShowIndexes && lane.Index is { } idx) name += $"  · idx {idx}";
                 ctx.DrawEllipse(silent ? MissingDot : LoadedDot, null, new Point(DotX + indent, cy), 2.5, 2.5);
                 double nameWidth = GridLeft - IconFromRight - 14 - NameX - indent;
@@ -979,6 +985,13 @@ internal sealed class ArrangeView : Control
         if (!layoutMoved || Model is not { } model || p.X < 0 || p.X >= GridLeft || p.Y < HeaderHeight || p.Y >= Bounds.Height || model.Rows.Count == 0) return;
         int i = Math.Clamp(RowIndexAt(p.Y), 0, model.Rows.Count - 1);
         var target = model.Rows[i];
+        if (model.DrumMapMode && draggedRow is LaneRow or UnassignedDrumRow)
+        {
+            if (target is not (LaneRow or UnassignedDrumRow)) return;
+            double top = HeaderHeight + RowTop(i) - scrollY;
+            dropAfter = p.Y >= top + RowHeight / 2;
+            laneDropY = top + (dropAfter ? RowHeight : 0); dropRow = target; return;
+        }
         if (draggedRow is LaneRow lane)
         {
             if (target is not LaneRow other || other.Group != lane.Group) return;
@@ -1175,7 +1188,14 @@ internal sealed class ArrangeView : Control
 
         if (RowAt(p.Y) is not { } row) return;
         // The lane touched last is the active one (its name clicked, or a hit drawn, picked or moved in it).
-        if (row is LaneRow touched && point.Properties.IsLeftButtonPressed) model.SetActive(touched.Lane);
+        if (row is LaneRow touched && point.Properties.IsLeftButtonPressed) model.SetActiveRow(touched);
+        if (row is UnassignedDrumRow empty && p.X < GridLeft)
+        {
+            if (point.Properties.IsLeftButtonPressed && OnLaneGrip(row, p))
+            { drag = Drag.Layout; draggedRow = row; dropRow = null; dragStart = dragNow = p; layoutMoved = false; e.Pointer.Capture(this); }
+            else DrumEntrySetupRequested?.Invoke(empty.Entry.Id);
+            return;
+        }
         if (p.X < GridLeft)
         {
             if (point.Properties.IsLeftButtonPressed && row is LaneRow family && model.IsFamilyParent(family.Lane))
@@ -1394,7 +1414,7 @@ internal sealed class ArrangeView : Control
                 int rowShift = RowIndexAt(p.Y) - RowIndexAt(dragStart.Y);
                 session.ResetToGestureStart();
                 selection.Clear();
-                selection.UnionWith(session.Move(dragHits, offset, h => HitEditor.ShiftLane(model, h.Lane, rowShift)));
+                selection.UnionWith(session.Move(dragHits, offset, h => model.DrumMapMode ? model.ShiftDrumLane(h.Lane, rowShift, h.Lane == dragAnchor.Lane ? RowIndexAt(dragStart.Y) : null) : HitEditor.ShiftLane(model, h.Lane, rowShift)));
                 break;
             }
 
@@ -1436,7 +1456,8 @@ internal sealed class ArrangeView : Control
         if (drag == Drag.Layout && Model is { } layout)
         {
             UpdateLaneDrop(e.GetPosition(this));
-            if (draggedRow is LaneRow lane && dropRow is LaneRow target) layout.MoveLaneTo(lane.Lane, target.Lane, dropAfter);
+            if (layout.DrumMapMode && draggedRow is { } drumRow && dropRow is { } drumTarget) layout.MoveDrumRow(drumRow, drumTarget, dropAfter);
+            else if (draggedRow is LaneRow lane && dropRow is LaneRow target) layout.MoveLaneTo(lane.Lane, target.Lane, dropAfter);
             else if (draggedRow is GroupRow folder && dropRow is { } destination) layout.MoveFolderTo(folder.Group, destination.Group, dropAfter);
             draggedRow = dropRow = null;
             laneDropY = null;

@@ -10,7 +10,7 @@ internal sealed partial class ArrangeModel
 
     public Lane SlotOf(Lane lane) => laneSlots.GetValueOrDefault(lane) ?? lane;
     public string? FamilyKey(Lane lane) => FamilyOf(SlotOf(lane));
-    public int DepthOf(Lane lane) => depths.GetValueOrDefault(lane, 1);
+    public int DepthOf(Lane lane) => DrumMapMode ? 1 : depths.GetValueOrDefault(lane, 1);
     public bool IsFamilyBase(Lane lane) => FamilyKey(lane) is { } key && familyParents.GetValueOrDefault(key) == lane;
     public IReadOnlyList<LaneRow> FolderChildren(LaneGroup group) => closedFolders.GetValueOrDefault(group) ?? [];
     public Dictionary<string, string> SlotLayout() => laneSlots.ToDictionary(p => ProjectStore.KeyOf(p.Key), p => ProjectStore.KeyOf(p.Value));

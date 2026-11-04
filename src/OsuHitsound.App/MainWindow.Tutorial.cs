@@ -93,7 +93,7 @@ public partial class MainWindow
             () => On(Inspector)),
         new("Sample lanes", "Every sample you can use, grouped by sampleset: hitnormal, whistle, finish and clap, each with the default sound first and the map's own files under it. Type in the filter to find one. Above it, + adds a lane for a sample file already in the mapset, − deletes the highlighted lane (the one you touched last), and ‹ hides or shows the names.",
             () => InLanes(Lanes.LaneListHeaderRect)),
-        new("A lane's buttons", "The icon shows the sound (normal, whistle, finish, clap). + adds a new sample file for this sound to the mapset, ● plays the sample, M mutes the lane and S solos it while you listen. The Song audio row has M and S too.",
+        new("A lane's buttons", "The icon shows the sound (normal, whistle, finish, clap). + immediately adds the next numbered layer with the default family sound; choose another sample through Channel, ● plays the sample, M mutes the lane and S solos it while you listen. The Song audio row has M and S too.",
             () => InLanes(Lanes.FirstLaneButtonsRect())),
         new("The grid", "Your hitsounds: one row per sample, in time from left to right. Red-striped columns are sounds that can't be saved as drawn yet.",
             () => InLanes(Lanes.GridRect)),

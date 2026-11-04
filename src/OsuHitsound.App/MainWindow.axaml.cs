@@ -111,7 +111,7 @@ public partial class MainWindow : Window
             VolumeControlScroller.IsVisible = Volume.IsVisible;
             SavedText.IsVisible = !Volume.IsVisible;
         };
-        SizeChanged += (_, _) => UpdateVolumePanelHeight();
+        SizeChanged += (_, _) => { UpdateChromeHeights(); UpdateVolumePanelHeight(); };
         SnapBox.ItemsSource = SnapOptions.Select(s => s.ToString()).ToList();
         SnapBox.SelectedIndex = Array.IndexOf(SnapOptions, new SnapSpacing(1, 4));
         SnapBox.SelectionChanged += (_, _) =>
@@ -169,7 +169,7 @@ public partial class MainWindow : Window
         foreach (var (item, speed) in speedItems)
         {
             item.Click += (_, _) => SetSpeed(speed);
-            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = false, Padding = new Avalonia.Thickness(6, 2) };
+            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = false, Padding = new Avalonia.Thickness(4, 2), FontSize = 11 };
             button.Classes.Add("viewToggle");
             button.Click += (_, _) => SetSpeed(speed);
             speedButtons.Add((button, speed));
@@ -844,6 +844,7 @@ public partial class MainWindow : Window
     {
         Inspector.Refresh(session, model, Lanes.Selection, FormatTime);
         Inspector.SoundSets.Refresh(session, Lanes.Selection);
+        RefreshDrumMapToggle();
         Lanes.DrawSoundSetActive = Inspector.SoundSets.SelectedSet is { } id && session?.State.SoundSets.Any(s => s.Id == id) == true;
     }
 
@@ -1165,6 +1166,9 @@ public partial class MainWindow : Window
         Resources["LcdFontSize"] = t.Number("lcd.fontSize");
         Resources["PlayIcon"] = B("play.icon");
         Resources["VolumeSide"] = B("volume.side");
+        if (Avalonia.Application.Current is { } app)
+            foreach (var key in new[] { "HeaderBg", "ButtonBg", "ButtonText", "ChromeBorder", "ControlHover", "ButtonActive", "LcdBg", "LcdCaption" })
+                app.Resources[key] = Resources[key];
 
         TitleBar.Background = B("title.bg");
         ControlBar.Background = B("control.bg");
@@ -1184,14 +1188,14 @@ public partial class MainWindow : Window
         var rows = Root.RowDefinitions;
         rows[0].Height = new GridLength(t.Number("title.height"));
         // These rows contain fixed-height controls; their theme minimums (UiTheme) keep inspector edits from clipping them.
-        rows[1].Height = new GridLength(t.Number("control.height"));
-        rows[2].Height = new GridLength(t.Number("edit.height"));
+        UpdateChromeHeights();
         rows[3].Height = new GridLength(t.Number("overview.height"));
         bool showVolume = VolumeToggle.IsChecked == true;
         BottomPanel.IsVisible = showVolume;
-        rows[6].Height = new GridLength(t.Number("status.height"));
+
         HScroll.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
         LaneFilterBox.Width = ArrangeView.GridLeft - 16;
+        DrumMapToggle.Margin = new Avalonia.Thickness(ArrangeView.GridLeft - 96, 0, 0, 0);
         VolumeControlScroller.Width = ArrangeView.GridLeft;
         UpdateVolumePanelHeight();
 
@@ -1200,6 +1204,19 @@ public partial class MainWindow : Window
         Overview.InvalidateVisual();
         Volume.InvalidateVisual();
         SyncScrollBars();
+    }
+
+    private void UpdateChromeHeights()
+    {
+        double width = Bounds.Width > 0 ? Bounds.Width : Width;
+        var t = UiTheme.Current;
+        TitleBarContent.Width = Math.Max(TitleBarContent.MinWidth, width - 24);
+        ControlBarContent.Width = Math.Max(ControlBarContent.MinWidth, width - 24);
+        EditBarContent.Width = Math.Max(EditBarContent.MinWidth, width - 24);
+        StatusBarContent.Width = Math.Max(StatusBarContent.MinWidth, width - 24);
+        Root.RowDefinitions[1].Height = new GridLength(t.Number("control.height") + (width < ControlBarContent.MinWidth + 24 ? 14 : 0));
+        Root.RowDefinitions[2].Height = new GridLength(t.Number("edit.height") + (width < EditBarContent.MinWidth + 24 ? 14 : 0));
+        Root.RowDefinitions[6].Height = new GridLength(t.Number("status.height") + (width < StatusBarContent.MinWidth + 24 ? 14 : 0));
     }
 
     private void UpdateVolumePanelHeight()

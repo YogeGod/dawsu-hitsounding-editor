@@ -315,6 +315,7 @@ internal sealed class HitEditor
     public static Lane ShiftLane(ArrangeModel model, Lane lane, int shift)
     {
         if (shift == 0) return lane;
+        if (model.DrumMapMode) return model.ShiftDrumLane(lane, shift);
         var lanes = model.Rows.OfType<LaneRow>().Select(r => r.Lane).ToList();
         int at = lanes.IndexOf(lane);
         return at < 0 ? lane : lanes[Math.Clamp(at + shift, 0, lanes.Count - 1)];

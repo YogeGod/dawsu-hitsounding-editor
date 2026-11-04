@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
@@ -22,16 +23,31 @@ internal sealed partial class ArrangeModel
         var slot = SlotOf(original);
         var replacementSlot = laneSlots.GetValueOrDefault(replacement);
         var oldOrder = laneRows.Select(r => r.Lane).ToList();
+        var drumBefore = DrumMaps;
+        var originalKey = ProjectStore.KeyOf(original);
+        var replacementKey = ProjectStore.KeyOf(replacement);
+        var slotKey = ProjectStore.KeyOf(preserveSlot ? slot : SlotOf(replacement));
+        var drumAfter = drumBefore with { Presets = drumBefore.Presets.Select(preset => preset with
+        {
+            Rows = preset.Rows.Select(row => row.LaneKey == originalKey
+                ? row with { LaneKey = replacementKey, SlotKey = slotKey } : row).ToImmutableList()
+        }).ToImmutableList() };
+        bool drumChanged = drumBefore.Presets.Any(p => p.Rows.Any(r => r.LaneKey == originalKey));
         AddLane(replacement);
 
-        void Restore(SampleLaneState a, SampleLaneState b, Lane? active, Lane? mapping) => Relayout(() =>
+        void Restore(SampleLaneState a, SampleLaneState b, Lane? active, Lane? mapping, DrumMapCollection drumMaps)
         {
-            if (mapping is null) laneSlots.Remove(replacement); else laneSlots[replacement] = mapping;
-            RefreshSlotRows();
-            Apply(original, a);
-            Apply(replacement, b);
-            ActiveLane = active;
-        });
+            Relayout(() =>
+            {
+                if (mapping is null) laneSlots.Remove(replacement); else laneSlots[replacement] = mapping;
+                RefreshSlotRows();
+                Apply(original, a);
+                Apply(replacement, b);
+                ActiveLane = active;
+                if (drumChanged) DrumMaps = drumMaps;
+            });
+            if (drumChanged) DrumMapsChanged?.Invoke();
+        }
         void Apply(Lane lane, SampleLaneState state)
         {
             lock (muted)
@@ -44,10 +60,10 @@ internal sealed partial class ArrangeModel
         }
 
         Session.RetargetLane(original, replacement,
-            () => Restore(originalBefore, replacementBefore, activeBefore, replacementSlot),
+            () => Restore(originalBefore, replacementBefore, activeBefore, replacementSlot, drumBefore),
             () => Restore(originalBefore with { Soloed = false, Hidden = true },
                 replacementBefore with { Muted = originalBefore.Muted || replacementBefore.Muted,
-                    Soloed = originalBefore.Soloed || replacementBefore.Soloed, Hidden = false, Name = display }, replacement, preserveSlot ? slot : replacementSlot),
+                    Soloed = originalBefore.Soloed || replacementBefore.Soloed, Hidden = false, Name = display }, replacement, preserveSlot ? slot : replacementSlot, drumAfter),
             preserveSlot ? oldOrder.Select(l => l == original ? replacement : l).Append(original).Distinct().ToList() : null);
         return true;
     }

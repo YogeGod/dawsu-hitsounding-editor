@@ -53,7 +53,7 @@ internal sealed class InspectorPanel : Border
     public const string SelectionCard = "selection", BookmarksCard = "bookmarks", RecentCard = "recent", ChannelCard = "channel";
 
     private readonly TextBlock channelName = new() { Text = "No lane selected", TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock sampleFile = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.7 };
+    private readonly TextBlock sampleFile = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.9 };
     private readonly ComboBox channelSample = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MaxDropDownHeight = 280, Foreground = Brushes.Gainsboro };
     private readonly Button replaceSample = new() { Content = "Browse sample…" };
     private readonly Button previewSample = new() { Content = "Preview" };
@@ -66,7 +66,7 @@ internal sealed class InspectorPanel : Border
     public event Action<Lane>? BrowseChannelSampleRequested;
     public event Action<Lane>? PreviewChannelRequested;
 
-    private readonly StackPanel cards = new() { Spacing = 6, Margin = new Thickness(6) };
+    private readonly StackPanel cards = new() { Spacing = 8, Margin = new Thickness(8) };
     private readonly Dictionary<string, (Border Card, Control Body)> byId = [];
     private readonly TextBlock selectionText = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBox shiftBox = new() { Width = 70, Watermark = "ms" };
@@ -135,7 +135,7 @@ internal sealed class InspectorPanel : Border
         AddCard(BookmarksCard, "Bookmarks", Stack(bookmarkList, Row(null, add, remove)));
 
         recentList.SelectionChanged += (_, _) => { if (!filling && recentList.SelectedIndex is >= 0 and var i && i < recentPositions.Count) GoToStepRequested?.Invoke(recentPositions[i]); };
-        AddCard(RecentCard, "Recent edits", Stack(recentList, new TextBlock { Text = "Click an edit to go back (or forward) to just after it.", TextWrapping = TextWrapping.Wrap, Opacity = 0.6, FontSize = 11 }));
+        AddCard(RecentCard, "Recent edits", Stack(recentList, new TextBlock { Text = "Click an edit to go back (or forward) to just after it.", TextWrapping = TextWrapping.Wrap, Opacity = 0.85, FontSize = 11 }));
     }
 
     /// <summary>Card ids, top to bottom.</summary>
@@ -203,7 +203,7 @@ internal sealed class InspectorPanel : Border
     {
         var grip = new TextBlock { Text = "⠿", Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0) };
         ToolTip.SetTip(grip, "Drag to move this card");
-        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro, FontWeight = FontWeight.SemiBold };
+        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro, FontWeight = FontWeight.SemiBold, HorizontalContentAlignment = HorizontalAlignment.Left };
         header.Click += (_, _) => { body.IsVisible = !body.IsVisible; LayoutChanged?.Invoke(); };
         var top = new DockPanel();
         DockPanel.SetDock(grip, Dock.Right);
@@ -215,8 +215,8 @@ internal sealed class InspectorPanel : Border
             BorderBrush = new SolidColorBrush(Color.Parse("#3a414c")),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(4),
-            Child = new StackPanel { Spacing = 4, Children = { top, body } },
+            Padding = new Thickness(6),
+            Child = new StackPanel { Spacing = 6, Children = { top, body } },
         };
 
         grip.PointerPressed += (_, e) => { dragging = id; e.Pointer.Capture(grip); e.Handled = true; };

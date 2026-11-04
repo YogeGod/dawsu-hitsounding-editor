@@ -23,6 +23,23 @@ public class ElectronGroupingTests
     }
 
     [Fact]
+    public void Preset_default_backing_keeps_the_requested_extra_slot_and_starts_without_hits()
+    {
+        var (model, _) = Setup(); var before = model.Session.State.Hits;
+        var backing = File("soft-hitclap27.wav"); var slot = File("soft-hitclap4.wav");
+        model.AddLane(backing, slot);
+        Assert.Equal(slot, model.SlotOf(backing));
+        Assert.Equal(4, model.LaneRows.Single(r => r.Lane == backing).Index);
+        Assert.Equal("soft-hitclap4.wav", model.NameOf(backing));
+        Assert.Equal(before, model.Session.State.Hits);
+        var (names, order, added, hidden) = model.LaneLayout();
+        var (reopened, _) = Setup();
+        reopened.ApplyLaneLayout(new ProjectData { LaneNames = names, LaneOrder = order, AddedLanes = added, HiddenLanes = hidden, LaneSlots = model.SlotLayout() }, _ => true);
+        Assert.Equal(slot, reopened.SlotOf(backing));
+        Assert.Equal("soft-hitclap5.wav", reopened.NextSlot(backing, new MapFolder([])).Name);
+    }
+
+    [Fact]
     public void File_index_one_is_the_only_family_parent_and_skin_zero_remains_a_distinct_child()
     {
         var (model, _) = Setup();

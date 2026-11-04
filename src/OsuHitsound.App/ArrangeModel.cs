@@ -14,6 +14,8 @@ internal sealed record LaneRow(LaneGroup Group, Lane Lane, int Number, int Shade
 {
     /// <summary>The lane colour: its group's shade, read from the theme each time so edits show at once.</summary>
     public Color Color => ArrangeModel.ShadeOf(Group, Shade);
+    public Guid? DrumEntryId { get; init; }
+    public string? InstrumentName { get; init; }
 }
 
 /// <summary>
@@ -386,14 +388,14 @@ internal sealed partial class ArrangeModel
     private readonly Dictionary<string, Lane> familyParents = [];
     private readonly HashSet<string> familiesWithChildren = [];
     private readonly Dictionary<Lane, IReadOnlyList<LaneRow>> collapsedChildren = [];
-    public IReadOnlyList<LaneRow> CollapsedChildren(Lane parent) => collapsedChildren.GetValueOrDefault(parent) ?? [];
+    public IReadOnlyList<LaneRow> CollapsedChildren(Lane parent) => DrumMapMode ? [] : collapsedChildren.GetValueOrDefault(parent) ?? [];
     internal static string? FamilyOf(Lane lane) => lane.Sample is { } s ? $"{s.Set}:{s.Sound}" : null;
     public IReadOnlyCollection<string> CollapsedFamilies => collapsedFamilies;
     public bool IsFamilyCollapsed(Lane lane) => FamilyKey(lane) is { } key && collapsedFamilies.Contains(key);
-    public bool IsFamilyParent(Lane lane) => FamilyKey(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
+    public bool IsFamilyParent(Lane lane) => !DrumMapMode && FamilyKey(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
     public void ToggleFamily(Lane lane)
     {
-        if (FamilyKey(lane) is not { } key) return;
+        if (DrumMapMode || FamilyKey(lane) is not { } key) return;
         Relayout(() => { if (!collapsedFamilies.Remove(key)) collapsedFamilies.Add(key); });
     }
 
@@ -560,7 +562,7 @@ internal sealed partial class ArrangeModel
         Changed?.Invoke();
     }
 
-    private List<Row> BuildRows() => BuildGroupedRows();
+    private List<Row> BuildRows() => DrumMapMode ? BuildDrumRows() : BuildGroupedRows();
 
     // ---------------------------------------------------------------- lane management (kept in the project file)
 
@@ -626,10 +628,11 @@ internal sealed partial class ArrangeModel
     /// Adds a lane (a sample file in the mapset) under its sound in its group (after the last lane of that sound with a
     /// lower or equal index; at the group's end for other files), or shows it again if it was deleted.
     /// </summary>
-    public void AddLane(Lane lane) => Relayout(() =>
+    public void AddLane(Lane lane, Lane? slot = null) => Relayout(() =>
     {
         hidden.Remove(lane);
-        if (laneRows.Any(r => r.Lane == lane)) return;
+        if (slot is not null) laneSlots[lane] = slot;
+        if (laneRows.Any(r => r.Lane == lane)) { if (slot is not null) RefreshSlotRows(); return; }
         added.Add(lane);
         var group = DisplayGroup(SlotOf(lane));
         var place = (SoundOrder(SlotOf(lane)), SlotOf(lane).Sample?.Index ?? int.MaxValue);

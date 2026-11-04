@@ -15,15 +15,16 @@ public partial class MainWindow
 
     private void WireMapFeatures()
     {
+        SetupDrumMaps();
         Lanes.LaneLayoutChanged += ScheduleProjectSave;
         Lanes.LaneMenuRequested += ShowLaneMenu;
-        // A lane's + adds a new sample file for its sound; the list header's + picks one of the mapset's files.
-        Lanes.AddLaneRequested += async lane => { if (lane is null) await AddLaneDialog(); else await AddSampleTo(lane); };
+        // Standard families add a numbered default immediately, like Electron V6.39.
+        Lanes.AddLaneRequested += async lane => await AddExtraLane(lane);
         Lanes.RemoveLaneRequested += async () => await DeleteActiveLane();
         Lanes.CollapseNamesRequested += ToggleLaneNames;
         // Samples dropped into the folder (File → Open map folder) show up when the editor is back in front.
         Activated += (_, _) => RefreshFolder();
-        AddLaneItem.Click += async (_, _) => await AddLaneDialog();
+        AddLaneItem.Click += async (_, _) => await AddExtraLane();
         GenerateItem.Click += async (_, _) => await Generate();
         CopyHitsoundsItem.Click += async (_, _) => await CopyHitsounds();
         LaneFilterBox.TextChanged += (_, _) =>
@@ -52,6 +53,7 @@ public partial class MainWindow
     private void ShowLaneMenu(LaneRow row)
     {
         if (model is null || session is null) return;
+        if (model.DrumMapMode) { ShowDrumRowMenu(row); return; }
         var lane = row.Lane;
         MenuItem Item(string header, Action action)
         {
@@ -77,7 +79,7 @@ public partial class MainWindow
                 Item("Move down", () => { model.MoveLane(lane, 1); ScheduleProjectSave(); }),
                 new Separator(),
                 Item("Delete lane (removes its hits)", () => DeleteLane(lane)),
-                Item("Add lane…", async () => await AddLaneDialog(lane)),
+                Item("Add lane", async () => await AddExtraLane(lane)),
             },
         };
         menu.Open(Lanes);
@@ -155,60 +157,44 @@ public partial class MainWindow
         SyncScrollBars();
     }
 
-    /// <summary>
-    /// A lane's +: copies a picked audio file into the mapset as a new index of that lane's sound ("drum-hitclap5.wav"),
-    /// using the next editor index in that family and an isolated backing file when other maps need protection.
-    /// </summary>
-    private async Task AddSampleTo(Lane lane)
+    private async Task AddExtraLane(Lane? lane = null)
     {
-        if (doc is not { } current || model is null || session?.IsGestureActive == true) return;
-        if (model.SlotOf(lane).Sample is not (var set, var sound, _))
-        {
-            await AddLaneDialog(lane); // a file outside osu!'s naming: pick one of the mapset's files instead
-            return;
-        }
-
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = $"Add a sample for {HitsoundRules.SampleName(set, sound)}",
-            SuggestedStartLocation = await SampleStartLocation(),
-            AllowMultiple = false,
-            FileTypeFilter = [new FilePickerFileType("Audio") { Patterns = [.. HitsoundRules.SampleExtensions.Select(e => "*" + e)] }],
-        });
-        if (!ReferenceEquals(doc, current) || files.Count == 0 || files[0].TryGetLocalPath() is not { } source) return;
-        RememberSampleFolder(source);
-        AddSampleFile(lane, source);
+        lane ??= model?.ActiveLane;
+        if (lane is not null && model?.SlotOf(lane).Sample is not null) await AddSampleTo(lane);
+        else await AddLaneDialog(lane);
     }
 
-    private void AddSampleFile(Lane lane, string source)
+    /// <summary>V6.39: add the next numbered layer using its family's bundled default, without a picker.</summary>
+    private async Task AddSampleTo(Lane lane)
+    {
+        if (doc is null || model is null || session?.IsGestureActive == true) return;
+        if (model.SlotOf(lane).Sample is not (var set, var sound, _))
+        { await AddLaneDialog(lane); return; }
+        string family = HitsoundRules.SampleName(set, sound);
+        if (!DefaultSkin.Bundled().TryGetValue(family, out var bytes))
+        { flash = $"No bundled default for {family}. Choose a sample through Channel."; UpdateStatus(); return; }
+        AddSampleLayer(lane, bytes);
+    }
+
+    private void AddSampleLayer(Lane lane, byte[] bytes)
     {
         if (doc is null || model is null || session?.IsGestureActive == true || model.SlotOf(lane).Sample is null) return;
-        if (!HitsoundRules.SampleExtensions.Contains(Path.GetExtension(source).ToLowerInvariant()))
-        {
-            flash = "osu! only plays .wav, .ogg and .mp3 samples.";
-            UpdateStatus();
-            return;
-        }
-
         try
         {
             var mapDir = Path.GetDirectoryName(doc.Path)!;
             var fresh = MapFolder.FromDirectory(mapDir);
             var slot = model.NextSlot(lane, fresh);
-            var name = SampleSlots.BackingFile(fresh, slot, Path.GetExtension(source));
-            File.Copy(source, Path.Combine(mapDir, name), overwrite: false);
+            var name = SampleSlots.BackingFile(fresh, slot, ".wav");
+            using (var stream = new FileStream(Path.Combine(mapDir, name), FileMode.CreateNew, FileAccess.Write)) stream.Write(bytes);
             doc.RescanFolder();
             var addedLane = new Lane(LaneSource.BeatmapFile, name);
             model.AddSlotLane(addedLane, slot);
-            audio?.LoadLane(addedLane, doc.Folder.ReadBytes(name));
+            audio?.LoadLane(addedLane, bytes);
             ScheduleProjectSave(); SyncScrollBars();
-            flash = $"Added {slot.Name}. Existing samples and other difficulties were kept.";
+            flash = $"Added {slot.Name} with its default sound. Choose another sound through Channel.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or ArgumentException)
-        {
-            flash = $"Couldn't add the sample: {ex.Message}";
-        }
-
+        { flash = $"Couldn't add the sample layer: {ex.Message}"; }
         UpdateStatus();
     }
 
@@ -332,9 +318,10 @@ public partial class MainWindow
         try
         {
             ProjectStore.Save(ProjectStore.DefaultRoot(), mapPath, data);
+            SaveDrumMaps();
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
         {
             flash = $"Couldn't save the editor project: {ex.Message}";
             UpdateStatus();
@@ -391,6 +378,7 @@ public partial class MainWindow
         ApplyOffsets();
 
         model.RebuildNotes();
+        RestoreDrumMaps();
         SyncScrollBars();
     }
 

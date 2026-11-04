@@ -25,7 +25,7 @@ internal sealed class SoundSetPanel : StackPanel
     public event Action? ChoiceChanged;
     public SoundSetPanel()
     {
-        Spacing = 5;
+        Spacing = 6;
         sets.ItemsSource = new[] { "Single sample" }; sets.SelectedIndex = 0;
         sets.SelectionChanged += (_, _) => { if (!filling) ChoiceChanged?.Invoke(); };
         members.SelectionChanged += (_, _) => { if (!filling) ChoiceChanged?.Invoke(); };
