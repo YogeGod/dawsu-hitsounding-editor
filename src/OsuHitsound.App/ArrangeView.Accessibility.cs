@@ -25,7 +25,7 @@ internal sealed partial class ArrangeView
     {
         if (Model is not { } model) return;
         // Issue navigation must also work through a filter or a collapsed group.
-        model.SetFilter("");
+        if (!model.Rows.OfType<LaneRow>().Any(r => r.Lane == lane)) model.SetFilter("");
         var row = model.LaneRows.FirstOrDefault(r => r.Lane == lane);
         if (row is null) return;
         if (model.IsCollapsed(row.Group)) model.ToggleCollapsed(row.Group);

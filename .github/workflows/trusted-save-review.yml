@@ -23,8 +23,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Test
-        run: dotnet test OsuHitsoundEditor.slnx --configuration Release --logger "trx;LogFilePrefix=tests" --results-directory artifacts/test-results
+      # The three Every_corpus_* tests require the owner's untracked local osu! map collection.
+      # Keep those tests intact; this hosted check runs all self-contained tests.
+      - name: Test (self-contained cases)
+        run: dotnet test OsuHitsoundEditor.slnx --configuration Release --filter "FullyQualifiedName!~Every_corpus_" --logger "trx;LogFilePrefix=tests" --results-directory artifacts/test-results
       - name: Verify UI and render screenshots
         run: dotnet run --project tools/Snapshot --configuration Release -- --trust-review artifacts/ui-review
       - name: Upload screenshots and test results

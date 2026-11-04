@@ -13,7 +13,8 @@ The editor also has a built-in tour: **File → Tutorial**.
 ![Open, Save .osu and Generate buttons](docs/tutorial/open-save-generate.png)
 
 - **Open…** (Ctrl+O): open a `.osu` from your Songs folder, or drag a `.osu` or `.osz` onto the window. Each sample file in the mapset becomes a lane you can draw in.
-- **Save .osu** (Ctrl+S): write your hitsounds back into the map. A backup of the old file is kept outside the mapset.
+- **Save .osu** (Ctrl+S): write your hitsounds back into the map. Save blocks if any intended hits cannot be written, and leaves the map unchanged. The **save issues** button opens a list with each issue's time, cause and a **Go to issue** action. Resolve the issue, or use Generate when you need new objects. Successful saves keep your selection and undo history; a backup of the old file is kept outside the mapset. Save readiness checks encoding, not audibility or ranking eligibility.
+- **Closing with unsaved edits** offers **Save**, **Discard** and **Cancel**. Cancel is the default. A blocked or failed Save leaves the editor open with your edits.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready to copy into the other difficulties with **Map → Copy hitsounds…** (see [Copy hitsounds](#copy-hitsounds)).
 
 You can also import an `.osz`, reopen a recent map, or open the map's folder (**File → Open map folder**, Ctrl+Shift+O) from the **File** menu. Sample files you put in that folder show up as lanes as soon as you switch back to the editor.
@@ -28,6 +29,12 @@ Every command is also in the menus: File, Edit, Playback, Map and View.
 
 - **Preferences**: your Songs folder, the audio output (WASAPI shared or exclusive, ASIO, DirectSound or MME) and its device, and key commands. Hitsounds are mixed with the song sample-accurately, so they stay in time on every output; if an output can't start (an ASIO device that isn't connected, say), the editor uses WASAPI shared and tells you why.
 - **Keys / F1**: a searchable list of every shortcut and mouse action.
+
+### Keyboard access
+
+Tab and Shift+Tab move between controls; Space activates a focused button, and arrow keys operate focused dropdowns and sliders. **F6** returns to the editing grid without changing its selection.
+
+In the grid, **Ctrl+Alt+Up / Down** chooses a lane, **Ctrl+Alt+P** previews its sample, **Ctrl+Alt+M / S** toggles audition mute / solo, and **Shift+F10** opens its lane actions. The grid exposes lane names, actions and visible hits to accessibility tools. Native Windows screen-reader behavior still requires verification.
 
 ### Tools
 

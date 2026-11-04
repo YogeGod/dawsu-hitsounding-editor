@@ -120,6 +120,12 @@ internal static class EditorCommands
     /// <summary>Mouse actions, for the help only.</summary>
     public static readonly IReadOnlyList<(string Group, string Keys, string Description)> Mouse =
     [
+        ("Keyboard navigation", "Tab / Shift+Tab", "Move between native controls; Space activates the focused button"),
+        ("Keyboard navigation", "F6", "Return focus to the editing grid"),
+        ("Keyboard navigation", "Ctrl+Alt+Up / Down", "Choose the previous / next visible lane"),
+        ("Keyboard navigation", "Ctrl+Alt+P", "Preview the active lane's sample"),
+        ("Keyboard navigation", "Ctrl+Alt+M / S", "Toggle the active lane's audition mute / solo"),
+        ("Keyboard navigation", "Shift+F10", "Open actions for the active lane"),
         ("Mouse: grid", "Click / drag (Select)", "Select hits, drag a box, or drag hits to move them"),
         ("Mouse: grid", "Ctrl+click / Shift+click", "Toggle / add a hit to the selection"),
         ("Mouse: grid", "Drag (Range)", "Mark a time range over the lanes dragged across; a click clears it"),

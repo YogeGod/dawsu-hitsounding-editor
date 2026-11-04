@@ -72,6 +72,8 @@ public partial class MainWindow
         SaveIssuesButton.Content = issues.Count > 0 ? $"{issues.Count} save issue{(issues.Count == 1 ? "" : "s")}…" : "Ready to save";
         SaveIssuesButton.IsEnabled = issues.Count > 0;
         SaveIssuesButton.Classes.Set("needsAttention", issues.Count > 0);
+        Avalonia.Automation.AutomationProperties.SetName(SaveIssuesButton, issues.Count > 0
+            ? $"{issues.Count} save issues. Open issue list." : "Ready to save. Encoding check passed.");
         saveIssuesWindow?.UpdateIssues(issues);
     }
 
