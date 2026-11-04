@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.Media;
+using Color = Avalonia.Media.Color;
 using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
@@ -24,6 +25,8 @@ internal sealed class VolumeLane : Control
     private static readonly double[] GuideLines = [0.25, 0.5, 0.75, 1.0];
     private static readonly IBrush ConflictBar = Paint.Brush("#ff453a");
     private static readonly IPen RampPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ffffff"), 1.5, new Avalonia.Media.Immutable.ImmutableDashStyle([4, 3], 0));
+    private static readonly Dictionary<Color, IBrush> StemBrushes = [];
+    private static readonly Dictionary<Color, IBrush> CapBrushes = [];
 
     private enum Gesture
     {
@@ -33,11 +36,32 @@ internal sealed class VolumeLane : Control
         Ramp,
     }
 
+    private readonly DrawLayer playheadLayer;
     private ArrangeModel? model;
     private TimeAxis? axis;
     private Gesture gesture;
     private List<MomentKey>? dragging;
     private Point last, rampStart, rampEnd;
+
+    /// <summary>How many times the bars were invalidated. A playhead tick does not increment this.</summary>
+    internal int SceneInvalidations { get; private set; }
+
+    public VolumeLane()
+    {
+        playheadLayer = new DrawLayer(DrawPlayhead);
+        VisualChildren.Add(playheadLayer);
+    }
+
+    /// <summary>Redraws the bars. The playhead layer is separate.</summary>
+    public new void InvalidateVisual()
+    {
+        SceneInvalidations++;
+        base.InvalidateVisual();
+        playheadLayer.Redraw();
+    }
+
+    /// <summary>Moves the playhead without rebuilding the bars.</summary>
+    internal void InvalidatePlayhead() => playheadLayer.Redraw();
 
     public double Playhead { get; set; }
 
@@ -71,6 +95,35 @@ internal sealed class VolumeLane : Control
     }
 
     private (double Top, double Bottom) Range => (8, Bounds.Height - 6);
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        playheadLayer.Measure(availableSize);
+        return default;
+    }
+
+    private Size arrangedSize;
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        playheadLayer.Arrange(new Rect(finalSize));
+        if (arrangedSize != finalSize)
+        {
+            arrangedSize = finalSize;
+            playheadLayer.Redraw();
+        }
+
+        return base.ArrangeOverride(finalSize);
+    }
+
+    private static IBrush StemBrush(Color color) =>
+        StemBrushes.TryGetValue(color, out var brush) ? brush : StemBrushes[color] = Paint.Brush(color, 0.75);
+
+    private static IBrush CapBrush(Color color)
+    {
+        var bright = Paint.Brighten(color, 0.45);
+        return CapBrushes.TryGetValue(bright, out var brush) ? brush : CapBrushes[bright] = Paint.Brush(bright);
+    }
 
     public override void Render(DrawingContext ctx)
     {
@@ -109,17 +162,23 @@ internal sealed class VolumeLane : Control
                 var color = ArrangeModel.GroupColor(group);
                 bool selected = SelectedMoments.Contains(key);
                 bool conflict = ShowExportWarnings && model.Conflicted.Contains(key);
-                var stem = selected ? Paint.White : conflict ? ConflictBar : Paint.Brush(color, 0.75);
+                var stem = selected ? Paint.White : conflict ? ConflictBar : StemBrush(color);
                 ctx.FillRectangle(stem, new Rect(x - 2.5, bottom - h, 5, h));
-                ctx.FillRectangle(selected ? Paint.Selection : Paint.Brush(Paint.Brighten(color, 0.45)), new Rect(x - 2.5, bottom - h - 2, 5, 5));
+                ctx.FillRectangle(selected ? Paint.Selection : CapBrush(color), new Rect(x - 2.5, bottom - h - 2, 5, 5));
             }
 
 
             if (gesture == Gesture.Ramp) ctx.DrawLine(RampPen, rampStart, rampEnd);
-
-            double px = ArrangeView.GridLeft + axis.X(Playhead);
-            ctx.DrawLine(Paint.PlayheadPen, new Point(px, 0), new Point(px, size.Height));
         }
+    }
+
+    private void DrawPlayhead(DrawingContext ctx, Rect bounds)
+    {
+        if (model is null || axis is null || bounds.Width <= 0 || bounds.Height <= 0) return;
+        double px = ArrangeView.GridLeft + axis.X(Playhead);
+        double width = Math.Max(0, bounds.Width - ArrangeView.GridLeft);
+        using (ctx.PushClip(new Rect(ArrangeView.GridLeft, 0, width, bounds.Height)))
+            ctx.DrawLine(Paint.PlayheadPen, new Point(px, 0), new Point(px, bounds.Height));
     }
 
     private int VolumeAt(double y)

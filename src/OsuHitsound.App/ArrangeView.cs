@@ -75,6 +75,15 @@ internal sealed class ArrangeView : Control
     private double? rowHeight; // set by Ctrl+Shift+wheel; null follows the theme
     private double scrollY;
     private HashSet<EditHit> selection => Edits.Selected;
+    private readonly HashSet<Guid> linkedSelection = [];
+    private readonly DrawLayer playheadLayer;
+    private int modelGeneration;
+    private List<GridLine> gridLines = [];
+    private (double Left, double Zoom, double GridWidth, double GridLeft, int Generation) gridKey;
+    private bool gridReady;
+
+    /// <summary>How many times the note scene was invalidated. A playhead tick does not increment this.</summary>
+    internal int SceneInvalidations { get; private set; }
 
     // The gesture in progress.
     private enum Drag
@@ -105,6 +114,8 @@ internal sealed class ArrangeView : Control
 
     public ArrangeView()
     {
+        playheadLayer = new DrawLayer(DrawPlayhead);
+        VisualChildren.Add(playheadLayer);
         ClipToBounds = true;
         Focusable = true;
         Edits.Changed += () =>
@@ -113,6 +124,17 @@ internal sealed class ArrangeView : Control
             InvalidateVisual();
         };
     }
+
+    /// <summary>Redraws notes, grid and lane names. The playhead layer is separate and is not part of this scene.</summary>
+    public new void InvalidateVisual()
+    {
+        SceneInvalidations++;
+        base.InvalidateVisual();
+        playheadLayer.Redraw();
+    }
+
+    /// <summary>Moves the playhead without rebuilding the scene.</summary>
+    internal void InvalidatePlayhead() => playheadLayer.Redraw();
 
     /// <summary>Row height in px (vertical zoom, Ctrl+Shift+wheel). Design G's compact rows are 22 px.</summary>
     public double RowHeight
@@ -332,19 +354,41 @@ internal sealed class ArrangeView : Control
 
     public void SetModel(ArrangeModel? model)
     {
-        if (Model is not null) Model.Changed -= InvalidateVisual;
+        if (Model is not null) Model.Changed -= OnModelChanged;
         Model = model;
-        if (model is not null) model.Changed += InvalidateVisual;
+        if (model is not null) model.Changed += OnModelChanged;
         scrollY = 0;
         Edits.Model = model;
         drag = Drag.None;
         Axis.End = model?.LastTime ?? 0;
+        modelGeneration++;
         InvalidateVisual();
     }
+
+    private void OnModelChanged()
+    {
+        modelGeneration++;
+        InvalidateVisual();
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        playheadLayer.Measure(availableSize);
+        return default;
+    }
+
+    private Size arrangedSize;
 
     protected override Size ArrangeOverride(Size finalSize)
     {
         Axis.Width = Math.Max(1, finalSize.Width - GridLeft);
+        playheadLayer.Arrange(new Rect(finalSize));
+        if (arrangedSize != finalSize)
+        {
+            arrangedSize = finalSize;
+            playheadLayer.Redraw();
+        }
+
         return base.ArrangeOverride(finalSize);
     }
 
@@ -362,7 +406,8 @@ internal sealed class ArrangeView : Control
 
         double gridWidth = size.Width - GridLeft;
         double from = Axis.Time(0), to = Axis.Time(gridWidth);
-        var lines = model.GridLines(from, to).ToList();
+        var lines = VisibleGridLines(model, gridWidth);
+        CollectLinkedPlacements(selection, linkedSelection);
 
         using (ctx.PushClip(new Rect(0, HeaderHeight, size.Width, size.Height - HeaderHeight)))
         {
@@ -406,9 +451,6 @@ internal sealed class ArrangeView : Control
                     var r = new Rect(dragStart, dragNow).Normalize();
                     ctx.DrawRectangle(MarqueeFill, MarqueePen, r);
                 }
-
-                double px = GridLeft + Axis.X(Playhead);
-                ctx.DrawLine(Paint.PlayheadPen, new Point(px, HeaderHeight), new Point(px, size.Height));
             }
             if (drag == Drag.Layout && laneDropY is { } dropY)
                 ctx.DrawLine(LaneDropPen, new Point(0, dropY), new Point(size.Width, dropY));
@@ -488,15 +530,46 @@ internal sealed class ArrangeView : Control
             // with what's above them.
             using (ctx.PushOpacity(StripGridOpacity))
                 DrawGridLines(ctx, model, lines, Axis.Time(0), Axis.Time(gridWidth), RulerBottom, HeaderHeight);
-
-            double px = GridLeft + Axis.X(Playhead);
-            ctx.FillRectangle(Paint.White, new Rect(px - 2, rulerTop, 4, RulerHeight));
         }
 
         ctx.DrawLine(Paint.DividerPen, new Point(0, HeaderHeight - 0.5), new Point(width, HeaderHeight - 0.5));
     }
 
     private const double StripGridOpacity = 0.35; // the grid lines over the waveform and objects
+
+    // Bar and beat lines depend on the axis and the timing, not on the playhead or the selection.
+    private List<GridLine> VisibleGridLines(ArrangeModel model, double gridWidth)
+    {
+        var key = (Axis.Left, Axis.Zoom, gridWidth, GridLeft, modelGeneration);
+        if (!gridReady || gridKey != key)
+        {
+            gridLines = model.GridLines(Axis.Time(0), Axis.Time(gridWidth)).ToList();
+            (gridKey, gridReady) = (key, true);
+        }
+
+        return gridLines;
+    }
+
+    /// <summary>Placements of the current selection, so a linked note is recognised without scanning the selection per note.</summary>
+    internal static void CollectLinkedPlacements(IEnumerable<EditHit> hits, HashSet<Guid> into)
+    {
+        into.Clear();
+        foreach (var hit in hits)
+            if (hit.SetPlacement != Guid.Empty)
+                into.Add(hit.SetPlacement);
+    }
+
+    /// <summary>The playhead only: a line through the grid and a cap on the ruler. The scene underneath is not redrawn.</summary>
+    private void DrawPlayhead(DrawingContext ctx, Rect bounds)
+    {
+        if (Model is null || bounds.Width <= 0 || bounds.Height <= 0) return;
+        double gridWidth = Math.Max(0, bounds.Width - GridLeft);
+        double px = GridLeft + Axis.X(Playhead);
+        using (ctx.PushClip(new Rect(GridLeft, HeaderHeight, gridWidth, Math.Max(0, bounds.Height - HeaderHeight))))
+            ctx.DrawLine(Paint.PlayheadPen, new Point(px, HeaderHeight), new Point(px, bounds.Height));
+        using (ctx.PushClip(new Rect(GridLeft, 0, gridWidth, HeaderHeight)))
+            ctx.FillRectangle(Paint.White, new Rect(px - 2, SectionsHeight, 4, RulerHeight));
+    }
 
     /// <summary>Bar, beat and (with snap on, when at least 6 px apart) snap lines between two heights.</summary>
     private void DrawGridLines(DrawingContext ctx, ArrangeModel model, List<GridLine> lines, double from, double to, double top, double bottom)
@@ -877,7 +950,7 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), Math.Max(2, noteSize - 4), fill, Paint.NoteRingPen);
             else if (n.Hit is { } hit && selection.Contains(hit))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, Paint.SelectedRingPen);
-            else if (n.Hit is { SetPlacement: var linked } && linked != Guid.Empty && selection.Any(h => h.SetPlacement == linked))
+            else if (n.Hit is { SetPlacement: var linked } && linkedSelection.Contains(linked))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, fill, Paint.SelectedRingPen);
             else if (VisibleProblem(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, ConflictRing);
