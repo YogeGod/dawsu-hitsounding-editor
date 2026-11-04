@@ -49,7 +49,7 @@ No new exploitable security finding was identified in the changed paths. Checked
 ## Remaining feedback
 
 - F06: click/navigation behavior was intentionally left unchanged by owner instruction. The reported missed-click case is not reproduced.
-- F07: longer snap options and their phase policy are deferred, along with reusable linked sound sets and rendered-audio editing.
+- F07 was deferred from this first update and subsequently completed in the approved longer-snap follow-up; see `2026-11-04-long-snap-verification.md`. Reusable linked sound sets and rendered-audio editing remain future scope.
 - F09: the original export crash is unconfirmed without its map, samples and exact steps. Controlled Save/Generate/Copy and failure/rollback checks pass; they do not prove that report fixed.
 - F11: the 0.785 versus 0.4805 offset example lacks confirmed units and test conditions. The global -17 ms default was not changed.
 - F13: the literal unexpected filename “softer whistle 47” and creation path remain unconfirmed. New allocation/reuse checks do not identify that original file.

@@ -79,7 +79,7 @@ public partial class MainWindow
             () => On(MuteTool)),
         new("Ramp tool (6)", "Drag in the volume controller at the bottom to draw a smooth volume ramp.", () => On(RampTool)),
         new("Snap", "Turns snapping on or off (J). When on, hits land on the beat grid.", () => On(SnapToggle)),
-        new("Snap mode and beat division", "Grid puts dragged hits on grid lines; Grid relative moves them by whole steps and keeps their offset. The divisor (1/4, 1/8…) sets how fine the grid is (Shift+1–9).",
+        new("Snap mode and beat division", "Grid puts dragged hits on grid lines; Grid relative moves them by whole steps and keeps their offset. Choose 1/4, 1/8… or 2/1, 3/1, 4/1 for every 2, 3, 4 beats from each red timing point. Shift+1–9 still selects 1/n.",
             () => Around(SnapModeBox, SnapBox)),
         new("View toggles", "Show or hide the inspector, each lane's file index (Info) and the volume controller.",
             () => Around(InspectorToggle, LaneDetailsToggle, VolumeToggle)),

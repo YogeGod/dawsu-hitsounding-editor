@@ -47,8 +47,7 @@ internal sealed class HitEditor
         }
     }
 
-    /// <summary>Snap divisor (1/n of a beat) and whether snapping is on (J).</summary>
-    public int Divisor { get; set; } = 4;
+    public SnapSpacing Spacing { get; set; } = new(1, 4);
 
     public bool SnapOn { get; set; } = true;
 
@@ -59,14 +58,14 @@ internal sealed class HitEditor
 
     private EditSession? Session => model?.Session;
 
-    public double SnapTime(double time) => SnapOn && model is { } m ? m.Snap(time, Divisor) : time;
+    public double SnapTime(double time) => SnapOn && model is { } m ? m.Snap(time, Spacing) : time;
 
     /// <summary>
     /// The snapped offset for dragging a hit at <paramref name="time"/> by <paramref name="raw"/> ms: to a grid line, or with
     /// Grid relative by whole grid steps, so the hit keeps its offset from its own line.
     /// </summary>
     public double SnapOffset(double time, double raw) => SnapOn && SnapMode == SnapMode.GridRelative && model is { } m
-        ? m.Snap(time + raw, Divisor) - m.Snap(time, Divisor)
+        ? m.Snap(time + raw, Spacing) - m.Snap(time, Spacing)
         : SnapTime(time + raw) - time;
 
     /// <summary>The moments the selected hits play on.</summary>
@@ -125,7 +124,8 @@ internal sealed class HitEditor
         else
         {
             double step = StepAt(anchor.Time);
-            offset = toGrid ? model.Snap(anchor.Time + direction * step * 0.51, Divisor) - anchor.Time
+            offset = toGrid ? (Spacing.IsLong ? model.AdjacentLongSnap(anchor.Time, direction, Spacing)
+                    : model.Snap(anchor.Time + direction * step * 0.51, Spacing)) - anchor.Time
                 : SnapMode == SnapMode.GridRelative ? SnapOffset(anchor.Time, direction * step) // whole grid lines, offset kept
                 : direction * step;
             if (toGrid && Math.Abs(offset) < 1e-6) offset = direction * step;
@@ -166,7 +166,8 @@ internal sealed class HitEditor
     public void Duplicate()
     {
         if (Session is not { } session || Selected.Count == 0) return;
-        double shift = DefaultRepeatGap() * StepAt(Selected.Min(h => h.Time));
+        double start = Selected.Min(h => h.Time);
+        double shift = Spacing.IsLong && model is { } m ? m.StepsAfter(start, DefaultRepeatGap(), Spacing) - start : DefaultRepeatGap() * StepAt(start);
         Select(session.Copy(Selected, shift, "Duplicate"));
     }
 
@@ -243,7 +244,7 @@ internal sealed class HitEditor
         if (Session is not { } session || model is not { } m) return 0;
         // Only loose hits that are off the grid: a Q on hits already there is not an edit.
         var moves = Selected.Where(h => h.Anchor is null || session.State.HsMode && session.State.HsCircles.ContainsKey(h.Anchor.Value))
-            .Select(h => (Hit: h, Lane: h.Lane, Time: h.Time + QuantizeStrength / 100 * (m.Snap(h.Time, Divisor) - h.Time)))
+            .Select(h => (Hit: h, Lane: h.Lane, Time: h.Time + QuantizeStrength / 100 * (m.Snap(h.Time, Spacing) - h.Time)))
             .Where(x => Math.Abs(x.Time - x.Hit.Time) > 1e-6).ToList();
         if (moves.Count == 0) return 0;
         var moved = session.MoveEach(moves, "Quantize");
@@ -270,7 +271,7 @@ internal sealed class HitEditor
         // Each copy's offset once, counted on from the previous copy: n × gap grid steps after the first hit.
         var shifts = new double[copies];
         double at = start;
-        for (int n = 0; n < copies; n++) shifts[n] = (at = m.StepsAfter(at, gap, Divisor)) - start;
+        for (int n = 0; n < copies; n++) shifts[n] = (at = m.StepsAfter(at, gap, Spacing)) - start;
         var source = Selected.ToList();
         var hits = new List<EditHit>();
         bool ownGesture = !session.IsGestureActive;
@@ -288,7 +289,7 @@ internal sealed class HitEditor
         if (Selected.RemoveWhere(h => !present.Contains(h)) > 0) Notify();
     }
 
-    private double StepAt(double time) => (model?.RedLineAt(time)?.BeatLength ?? 500) / Divisor;
+    private double StepAt(double time) => Spacing.Step(model?.RedLineAt(time)?.BeatLength ?? 500);
 
     /// <summary>The lane <paramref name="shift"/> visible lane rows away (group rows skipped), clamped to the list.</summary>
     public static Lane ShiftLane(ArrangeModel model, Lane lane, int shift)

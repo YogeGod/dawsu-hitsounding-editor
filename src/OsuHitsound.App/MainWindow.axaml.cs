@@ -16,9 +16,9 @@ namespace OsuHitsound.App;
 /// </summary>
 public partial class MainWindow : Window
 {
-    // Beat snap divisors, as in osu!'s editor plus 1/5, 1/7 and 1/9.
-    private static readonly int[] Divisors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16];
-    private static readonly int[] StraightDivisors = [1, 2, 4, 8, 16], TripletDivisors = [1, 3, 6, 12];
+    internal static readonly SnapSpacing[] SnapOptions = [new(4, 1), new(3, 1), new(2, 1), .. new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16 }.Select(d => new SnapSpacing(1, d))];
+    private static readonly SnapSpacing[] StraightSnaps = [new(4, 1), new(2, 1), new(1, 1), new(1, 2), new(1, 4), new(1, 8), new(1, 16)],
+        TripletSnaps = [new(3, 1), new(1, 1), new(1, 3), new(1, 6), new(1, 12)];
 
     private AudioEngine? audio;
     private string? audioError;
@@ -112,11 +112,11 @@ public partial class MainWindow : Window
             SavedText.IsVisible = !Volume.IsVisible;
         };
         SizeChanged += (_, _) => UpdateVolumePanelHeight();
-        SnapBox.ItemsSource = Divisors.Select(d => $"1/{d}").ToList();
-        SnapBox.SelectedIndex = Array.IndexOf(Divisors, 4);
+        SnapBox.ItemsSource = SnapOptions.Select(s => s.ToString()).ToList();
+        SnapBox.SelectedIndex = Array.IndexOf(SnapOptions, new SnapSpacing(1, 4));
         SnapBox.SelectionChanged += (_, _) =>
         {
-            Lanes.Divisor = Divisors[Math.Max(0, SnapBox.SelectedIndex)];
+            Lanes.Spacing = SnapOptions[Math.Max(0, SnapBox.SelectedIndex)];
             Lanes.InvalidateVisual();
             UpdateLcd();
         };
@@ -129,8 +129,8 @@ public partial class MainWindow : Window
             Lanes.Edits.SnapMode = SnapModeBox.SelectedIndex == 1 ? SnapMode.GridRelative : SnapMode.Grid;
             UpdateStatus();
         };
-        Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(Divisors,
-            NextWheelDivisor(Lanes.Divisor, step, TripletSnapToggle.IsChecked == true));
+        Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(SnapOptions,
+            NextWheelSnap(Lanes.Spacing, step, TripletSnapToggle.IsChecked == true));
         // V6.39 header and toolbar buttons.
         GenerateButton.Click += async (_, _) => await Generate();
         PreferencesButton.Click += (_, _) => Run("preferences");
@@ -385,11 +385,12 @@ public partial class MainWindow : Window
 
     internal ArrangeView ArrangeArea => Lanes;
 
-    internal static int NextWheelDivisor(int current, int direction, bool triplets)
+    internal static SnapSpacing NextWheelSnap(SnapSpacing current, int direction, bool triplets)
     {
-        var choices = triplets ? TripletDivisors : StraightDivisors;
-        return direction > 0 ? choices.FirstOrDefault(d => d > current, choices[^1])
-            : direction < 0 ? choices.LastOrDefault(d => d < current, choices[0]) : current;
+        var choices = triplets ? TripletSnaps : StraightSnaps;
+        double length = current.Step(1);
+        return direction > 0 ? choices.FirstOrDefault(s => s.Step(1) < length, choices[^1])
+            : direction < 0 ? choices.LastOrDefault(s => s.Step(1) > length, choices[0]) : current;
     }
 
     /// <summary>Asks before a command switches to another map while this one has unsaved edits.</summary>
@@ -557,7 +558,7 @@ public partial class MainWindow : Window
             case "first": JumpToEnd(first: true); break;
             case "last": JumpToEnd(first: false); break;
             case ['s', 'n', 'a', 'p', var digit] when char.IsAsciiDigit(digit):
-                SnapBox.SelectedIndex = Array.IndexOf(Divisors, digit - '0');
+                SnapBox.SelectedIndex = Array.IndexOf(SnapOptions, new SnapSpacing(1, digit - '0'));
                 break;
             case "stop": StopPressed(); break;
             case "cycle": ToggleCycle(); break;
@@ -890,7 +891,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (await Dialogs.Repeat(this, Lanes.Edits.DefaultRepeatGap(), Lanes.Divisor) is { } r) Lanes.Edits.Repeat(r.Copies, r.Gap);
+        if (await Dialogs.Repeat(this, Lanes.Edits.DefaultRepeatGap(), Lanes.Spacing) is { } r) Lanes.Edits.Repeat(r.Copies, r.Gap);
     }
 
     /// <summary>Edit → Edit range: copies, moves or deletes the hits in the range marked with the Range tool.</summary>
@@ -1327,20 +1328,21 @@ public partial class MainWindow : Window
         double t = Lanes.Playhead;
 
         LcdTime.Text = FormatTime(t);
-        int divisor = Divisors[Math.Max(0, SnapBox.SelectedIndex)];
+        var spacing = SnapOptions[Math.Max(0, SnapBox.SelectedIndex)];
+        string snapLabel = spacing.IsLong ? spacing.ToString() : $"/{spacing.Divisions}";
         if (model?.RedLineAt(t) is { } red)
         {
             var (bar, beat, tick) = model.BarBeatTick(t);
             LcdBar.Text = $"{bar}.{beat}.{tick}";
             LcdBpm.Text = (60000 / red.BeatLength).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
             var (n, d) = model.SignatureAt(t);
-            LcdMeter.Text = $"{n}/{d} /{divisor}";
+            LcdMeter.Text = $"{n}/{d} {snapLabel}";
         }
         else
         {
             LcdBar.Text = "1.1.1";
             LcdBpm.Text = "—";
-            LcdMeter.Text = $"4/4 /{divisor}";
+            LcdMeter.Text = $"4/4 {snapLabel}";
         }
     }
 
@@ -1375,7 +1377,7 @@ public partial class MainWindow : Window
 
         Volume.SelectedMoments = Lanes.SelectedMoments;
         Volume.InvalidateVisual();
-        string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap 1/{Lanes.Divisor}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}" : ", snap off")}";
+        string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap {Lanes.Spacing}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}" : ", snap off")}";
         string selection = Lanes.Selection.Count switch
         {
             0 => "",

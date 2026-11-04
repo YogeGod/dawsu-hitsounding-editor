@@ -159,28 +159,39 @@ internal sealed partial class ArrangeModel
     ];
 
     /// <summary>The nearest snap position: the beat divided by <paramref name="divisor"/>, from the red line in force.</summary>
-    public double Snap(double time, int divisor)
+    public double Snap(double time, int divisor) => Snap(time, new SnapSpacing(1, divisor));
+
+    public double Snap(double time, SnapSpacing spacing)
     {
         if (SegmentAt(time) is not { } s) return time;
-        double step = s.BeatLength / divisor;
-        return s.GridStart + Math.Round((time - s.GridStart) / step) * step;
+        double step = spacing.Step(s.BeatLength), origin = spacing.IsLong ? s.RedTime : s.GridStart;
+        double snapped = origin + Math.Round((time - origin) / step) * step;
+        if (!spacing.IsLong) return snapped;
+        // Signature splits share the same red-line grid; only a red line bounds a long step.
+        double start = s.RedTime == segments[0].RedTime ? double.NegativeInfinity : s.RedTime;
+        double end = NextRedTime(s.RedTime);
+        snapped = Math.Clamp(snapped, start, end);
+        return Math.Abs(end - time) < Math.Abs(snapped - time) ? end : snapped;
     }
 
     /// <summary>The time <paramref name="steps"/> snap steps (beat / divisor) after <paramref name="time"/>, each step as long as the red line in force there says.</summary>
-    public double StepsAfter(double time, int steps, int divisor)
+    public double StepsAfter(double time, int steps, int divisor) => StepsAfter(time, steps, new SnapSpacing(1, divisor));
+
+    public double StepsAfter(double time, int steps, SnapSpacing spacing)
     {
         // Grid line to grid line: a step that would cross a red line stops on it, so the rest follow that red line's grid.
         for (int n = 0; n < steps; n++)
         {
+            if (spacing.IsLong) { time = AdjacentLongSnap(time, 1, spacing); continue; }
             int i = SegmentIndex(time);
             if (i < 0)
             {
-                time += 500.0 / divisor;
+                time += spacing.Step(500);
                 continue;
             }
 
             var s = segments[i];
-            double step = s.BeatLength / divisor;
+            double step = spacing.Step(s.BeatLength);
             double next = s.GridStart + (Math.Floor((time - s.GridStart) / step + 1e-6) + 1) * step;
             int red = i + 1;
             while (red < segments.Length && segments[red].GridStart == s.GridStart) red++; // splits share their red line's grid
@@ -189,6 +200,38 @@ internal sealed partial class ArrangeModel
         }
 
         return time;
+    }
+
+    public double AdjacentLongSnap(double time, int direction, SnapSpacing spacing)
+    {
+        if (segments.Length == 0) return time + direction * spacing.Step(500);
+        var s = segments[Math.Max(0, SegmentIndex(time - (direction < 0 ? 1e-6 : 0)))];
+        double step = spacing.Step(s.BeatLength), position = (time - s.RedTime) / step;
+        double next = s.RedTime + (direction > 0 ? Math.Floor(position + 1e-6) + 1 : Math.Ceiling(position - 1e-6) - 1) * step;
+        if (direction < 0) return s.RedTime == segments[0].RedTime ? next : Math.Max(next, s.RedTime);
+        return Math.Min(next, NextRedTime(s.RedTime));
+    }
+
+    private double NextRedTime(double redTime)
+    {
+        for (int i = Math.Max(0, SegmentIndex(redTime)) + 1; i < segments.Length; i++)
+            if (segments[i].RedTime > redTime) return segments[i].RedTime;
+        return double.PositiveInfinity;
+    }
+
+    /// <summary>Active long-snap positions, bounded by red lines but not time-signature changes.</summary>
+    public IEnumerable<double> LongSnapLines(double from, double to, SnapSpacing spacing)
+    {
+        if (!spacing.IsLong) yield break;
+        for (int i = Math.Max(0, SegmentIndex(from)); i < segments.Length; i++)
+        {
+            var s = segments[i];
+            if (s.Start > to) yield break;
+            double step = spacing.Step(s.BeatLength);
+            double first = s.RedTime + Math.Ceiling((Math.Max(from, s.Start) - s.RedTime) / step - 1e-9) * step;
+            for (double t = first; t < s.End && t <= to; t += step)
+                if (t >= from && t >= s.Start) yield return t;
+        }
     }
 
     /// <summary>
@@ -431,7 +474,7 @@ internal sealed partial class ArrangeModel
     /// on a whole bar at or before 0, so bars before the first red line are counted too. BeatLength is the map's beat
     /// (snapping); Unit is the time signature's beat (Meter of them make a bar).
     /// </summary>
-    private readonly record struct Segment(double Start, double End, double BeatLength, int Meter, double Unit, int Denominator, int FirstBar, double GridStart);
+    private readonly record struct Segment(double Start, double End, double BeatLength, int Meter, double Unit, int Denominator, int FirstBar, double GridStart, double RedTime);
 
     private Segment? SegmentAt(double time) => segments.Length == 0 ? null : segments[Math.Max(0, SegmentIndex(time))];
 
@@ -489,12 +532,12 @@ internal sealed partial class ArrangeModel
                 double split = next > 0 ? start + (next - bar) * barLength : double.PositiveInfinity;
                 if (split < end - 1e-6)
                 {
-                    segments.Add(new Segment(start, split, beatLength, n, unit, d, bar, grid));
+                    segments.Add(new Segment(start, split, beatLength, n, unit, d, bar, grid, reds[i].Time));
                     (start, bar) = (split, next);
                     continue;
                 }
 
-                segments.Add(new Segment(start, end, beatLength, n, unit, d, bar, grid));
+                segments.Add(new Segment(start, end, beatLength, n, unit, d, bar, grid, reds[i].Time));
                 if (!double.IsInfinity(end)) bar += (int)Math.Ceiling((end - start) / barLength - 1e-6);
                 break;
             }

@@ -104,3 +104,7 @@ The earlier broad Q33 is now refined by concrete cases rather than a single blan
 Confirmed Q39C: offer green-line and per-object export styles, defaulting to green lines. Per-object mode is conditional on verified supported behavior and ranking constraints. Preserve settings on untouched objects; slider behavior must use verified supported routes, not assumptions from circles.
 
 The current concrete proposal is 2026-11-04-revised-implementation-plan.md. It requires explicit implementation approval. No application code has been changed.
+
+## Follow-up after 33b0acb
+
+The owner requested continuing the remaining feedback. Q40A confirms that 2/1, 3/1 and 4/1 snap grids start at each red timing point, rather than restarting every measure or starting at a chosen hit. Scope and verification are in 2026-11-04-long-snap-plan.md. The owner approved implementation and committing to feature/electron-lane-grouping; this follow-up is implemented and tested. Earlier implementation-status statements above are historical; the first approved update was implemented and pushed as 33b0acb.

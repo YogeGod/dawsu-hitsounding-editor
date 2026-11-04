@@ -44,7 +44,7 @@ Implementation update: the approved subset is complete locally; see [verificatio
 
 ### Rhythm and sample workflow
 
-- [ ] F07. Evaluate 2/1, 3/1 and 4/1 snap options for repeated or alternating rhythmic patterns.
+- [x] F07. Evaluate 2/1, 3/1 and 4/1 snap options for repeated or alternating rhythmic patterns. Implemented in the approved follow-up, anchored at each red timing point; see 2026-11-04-long-snap-verification.md.
 - [x] F08. Add sample pairing that produces separate numbered variants when separate copies are needed, rather than merging inputs into one sound. Finish fusion preserves a separate hitnormal.
 
 ### Export and timing investigations

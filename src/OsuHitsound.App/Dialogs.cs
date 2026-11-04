@@ -82,8 +82,8 @@ internal static partial class Dialogs
             }, "OK");
         });
 
-    /// <summary>The Repeat dialog: how many copies, and the gap between them in snap steps (1/<paramref name="divisor"/>).</summary>
-    public static async Task<(int Copies, int Gap)?> Repeat(Window owner, int gap, int divisor) =>
+    /// <summary>The Repeat dialog: how many copies, and the gap between them in the selected snap steps.</summary>
+    public static async Task<(int Copies, int Gap)?> Repeat(Window owner, int gap, SnapSpacing spacing) =>
         await Show<(int, int)?>(owner, "Repeat", (body, close) =>
         {
             var copies = new TextBox { Text = "1", Width = 80 };
@@ -91,7 +91,7 @@ internal static partial class Dialogs
             var problem = new TextBlock { Foreground = Brushes.OrangeRed };
             body.Children.AddRange([
                 new TextBlock { Text = "Copies (1–64)" }, copies,
-                new TextBlock { Text = $"Gap in snap steps of 1/{divisor} (from one copy's start to the next)" }, steps,
+                new TextBlock { Text = $"Gap in snap steps of {spacing} (from one copy's start to the next)" }, steps,
                 new TextBlock { Text = "The gap is counted on the grid, so it follows tempo changes.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);

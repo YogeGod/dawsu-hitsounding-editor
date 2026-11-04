@@ -56,6 +56,7 @@ internal static class Paint
     };
 
     private static readonly Dictionary<string, IPen> SnapPens = [];
+    public static IPen LongSnapPen { get; } = new ImmutablePen(Brush(Color.Parse("#b46ef0"), 0.75), 2);
     public static IPen DividerPen => P("divider", 1);
     public static IPen PlayheadPen => P("playhead.color", T.Number("playhead.width"));
     public static IPen NoteRingPen => P("note.ring", 1);

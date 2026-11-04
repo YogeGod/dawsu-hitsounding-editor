@@ -161,8 +161,8 @@ internal sealed class ArrangeView : Control
     /// <summary>How far (px) the pointer must move before a press counts as a drag.</summary>
     private const double DragThreshold = 3;
 
-    /// <summary>Snap divisor (1/n of a beat) and whether snapping is on (J).</summary>
-    public int Divisor { get => Edits.Divisor; set => Edits.Divisor = value; }
+    /// <summary>Snap spacing in osu! beats and whether snapping is on (J).</summary>
+    public SnapSpacing Spacing { get => Edits.Spacing; set => Edits.Spacing = value; }
 
     public bool SnapOn { get => Edits.SnapOn; set => Edits.SnapOn = value; }
 
@@ -496,8 +496,8 @@ internal sealed class ArrangeView : Control
     /// <summary>Bar, beat and (with snap on, when at least 6 px apart) snap lines between two heights.</summary>
     private void DrawGridLines(DrawingContext ctx, ArrangeModel model, List<GridLine> lines, double from, double to, double top, double bottom)
     {
-        if (SnapOn && lines.Count > 0 && Axis.Zoom * lines[0].BeatLength / Divisor >= 6)
-            foreach (var (t, fraction) in model.SubLines(from, to, Divisor))
+        if (SnapOn && !Spacing.IsLong && lines.Count > 0 && Axis.Zoom * Spacing.Step(lines[0].BeatLength) >= 6)
+            foreach (var (t, fraction) in model.SubLines(from, to, Spacing.Divisions))
             {
                 double x = GridLeft + Axis.X(t);
                 ctx.DrawLine(Paint.SnapPen(fraction), new Point(x, top), new Point(x, bottom));
@@ -508,6 +508,12 @@ internal sealed class ArrangeView : Control
             double x = GridLeft + Axis.X(line.Time);
             ctx.DrawLine(line.IsBar ? Paint.BarPen : Paint.BeatPen, new Point(x, top), new Point(x, bottom));
         }
+        if (SnapOn && Spacing.IsLong)
+            foreach (double time in model.LongSnapLines(from, to, Spacing))
+            {
+                double x = GridLeft + Axis.X(time);
+                ctx.DrawLine(Paint.LongSnapPen, new Point(x, top), new Point(x, bottom));
+            }
     }
 
     private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),

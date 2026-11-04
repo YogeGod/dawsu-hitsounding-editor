@@ -26,6 +26,8 @@ In the inspector, **Channel** follows the active lane. Choose an existing sample
 
 Choose your main **Hitsound folder** in Preferences. Open it from File or the inspector's folder buttons; the inspector also has a **Map folder** button. Sample pickers remember the last folder globally, falling back to the active mapset when it no longer exists. **Z** and **V** seek the first/last gameplay object or placed hit, including muted and folded lanes; a quick second press seeks the song start/end.
 
+The snap selector includes **2/1, 3/1 and 4/1**: every 2, 3 or 4 osu! beats. These grids start at each red timing point; green lines and editor-only time-signature changes keep the same grid. Purple lines mark the active long-snap positions while beat/bar lines remain visible. Drawing, moving, quantize, duplicate and repeat use the selected spacing. Repeat crosses onto a new red line before following its new grid. Alt+wheel includes 4/1 and 2/1 in the straight cycle, or 3/1 with Triplets on. Shift+1–9 still chooses 1/n.
+
 Click a base sound's disclosure arrow to fold or unfold its numbered sample lanes above index 1. Folded notes still play and export normally; the folded state is saved with the project. Searching the lane list reveals matching numbered lanes even while the family is folded.
 
 Save, Generate and Copy hitsounds share the same pairing rules. Distinct sound types stay separate through compatible numbered copies. Simultaneous finishes fuse into a new **hitfinish** sample; the kick/hitnormal stays separate. Source samples remain unchanged. The editor project retains the original editable layers.
