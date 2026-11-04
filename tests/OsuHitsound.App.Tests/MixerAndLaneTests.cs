@@ -133,19 +133,23 @@ public class MixerAndLaneTests
         model.ToggleFamily(parent);
         Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Lane == child);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == parent);
+        Assert.Equal(child, Assert.Single(model.CollapsedChildren(parent)).Lane);
         Assert.Same(before, model.Session.State);
         Assert.True(model.IsAudible(child));
         model.SetFilter("hitclap2");
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == child);
+        Assert.Empty(model.CollapsedChildren(parent)); // visible search results must not also be projected onto the parent
         model.SetFilter("");
         model.ToggleFamily(parent);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == child);
+        Assert.Empty(model.CollapsedChildren(parent));
         model.Session.Remove(model.Session.State.Hits.Where(h => h.Lane == parent).ToList());
         model.HideLane(parent);
         var extra = new Lane(LaneSource.BeatmapFile, "soft-hitclap3.wav"); model.AddLane(extra);
         model.ToggleFamily(child);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == child); // replacing/hiding the base must not hide the whole family
         Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Lane == extra);
+        Assert.Equal(extra, Assert.Single(model.CollapsedChildren(child)).Lane);
     }
 
     [Fact]
@@ -157,8 +161,8 @@ public class MixerAndLaneTests
         model.RenameLane(skin[0], "Big clap");
         Assert.Equal("Big clap", model.NameOf(skin[0]));
 
-        model.MoveLane(skin[1], -1);
-        Assert.Equal(skin[1], model.LaneRows.First(r => r.Group == LaneGroup.SoftSet).Lane);
+        model.MoveLane(skin[2], -1);
+        Assert.Equal(skin[2], model.LaneRows.Where(r => r.Group == LaneGroup.SoftSet).Skip(1).First().Lane);
 
         var boom = new Lane(LaneSource.BeatmapFile, "boom.wav");
         model.AddLane(boom);
@@ -168,7 +172,7 @@ public class MixerAndLaneTests
         Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Lane == boom);
 
         model.SetFilter("clap2");
-        Assert.Equal(["soft-hitclap2.wav"], model.Rows.OfType<LaneRow>().Select(r => r.Lane.Name));
+        Assert.Equal(["soft-hitclap", "soft-hitclap2.wav"], model.Rows.OfType<LaneRow>().Select(r => r.Lane.Name)); // Parent context stays visible.
         Assert.Equal(Enumerable.Range(1, model.LaneRows.Count), model.LaneRows.Select(r => r.Number));
     }
 
@@ -263,7 +267,7 @@ public class MixerAndLaneTests
         var session = model.Session;
         var before = model.LaneRows.Select(r => r.Lane).ToList();
         var hit = session.State.Hits[0];
-        model.MoveLaneTo(before[0], before[1], true);
+        model.MoveLaneTo(before[2], before[1], false);
         var reordered = model.LaneRows.Select(r => r.Lane).ToList();
         Assert.False(session.IsEdited); // layout is saved in the project, not the beatmap
         session.Remove([hit]);
@@ -288,8 +292,8 @@ public class MixerAndLaneTests
     {
         var model = Model();
         var session = model.Session;
-        var first = model.LaneRows[0].Lane;
-        var second = model.LaneRows[1].Lane;
+        var first = model.LaneRows[1].Lane;
+        var second = model.LaneRows[2].Lane;
         var other = model.LaneRows.First(r => r.Group == LaneGroup.DrumSet).Lane;
         var hits = session.State.Hits;
         model.MoveLaneTo(first, first, true);
@@ -302,8 +306,8 @@ public class MixerAndLaneTests
         Assert.Equal(1, session.StepCount);
         Assert.Same(hits, session.State.Hits);
         session.GoTo(0);
-        Assert.Equal(first, model.LaneRows[0].Lane);
-        session.GoTo(1);
         Assert.Equal(first, model.LaneRows[1].Lane);
+        session.GoTo(1);
+        Assert.Equal(first, model.LaneRows[2].Lane);
     }
 }

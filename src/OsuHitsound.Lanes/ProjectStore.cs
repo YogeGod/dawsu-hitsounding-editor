@@ -33,6 +33,7 @@ public sealed record ProjectData
     public List<ProjectHit> Unanchored { get; init; } = [];
 
     public Dictionary<string, string> LaneNames { get; init; } = [];
+    public Dictionary<string, string> LaneSlots { get; init; } = [];
 
     public List<string> LaneOrder { get; init; } = [];
 

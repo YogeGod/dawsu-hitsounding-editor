@@ -157,12 +157,12 @@ public partial class MainWindow
 
     /// <summary>
     /// A lane's +: copies a picked audio file into the mapset as a new index of that lane's sound ("drum-hitclap5.wav"),
-    /// above every index any difficulty uses, so no existing hit anywhere in the mapset changes sound.
+    /// using the next editor index in that family and an isolated backing file when other maps need protection.
     /// </summary>
     private async Task AddSampleTo(Lane lane)
     {
-        if (doc is null || model is null) return;
-        if (lane.Sample is not (var set, var sound, _))
+        if (doc is not { } current || model is null || session?.IsGestureActive == true) return;
+        if (model.SlotOf(lane).Sample is not (var set, var sound, _))
         {
             await AddLaneDialog(lane); // a file outside osu!'s naming: pick one of the mapset's files instead
             return;
@@ -174,7 +174,13 @@ public partial class MainWindow
             AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType("Audio") { Patterns = [.. HitsoundRules.SampleExtensions.Select(e => "*" + e)] }],
         });
-        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } source) return;
+        if (!ReferenceEquals(doc, current) || files.Count == 0 || files[0].TryGetLocalPath() is not { } source) return;
+        AddSampleFile(lane, source);
+    }
+
+    private void AddSampleFile(Lane lane, string source)
+    {
+        if (doc is null || model is null || session?.IsGestureActive == true || model.SlotOf(lane).Sample is null) return;
         if (!HitsoundRules.SampleExtensions.Contains(Path.GetExtension(source).ToLowerInvariant()))
         {
             flash = "osu! only plays .wav, .ogg and .mp3 samples.";
@@ -185,13 +191,18 @@ public partial class MainWindow
         try
         {
             var mapDir = Path.GetDirectoryName(doc.Path)!;
-            int index = HitsoundDiff.FirstFreeIndex(doc.Folder);
-            var name = $"{HitsoundRules.SampleName(set, sound)}{index}{Path.GetExtension(source).ToLowerInvariant()}";
+            var fresh = MapFolder.FromDirectory(mapDir);
+            var slot = model.NextSlot(lane, fresh);
+            var name = SampleSlots.BackingFile(fresh, slot, Path.GetExtension(source));
             File.Copy(source, Path.Combine(mapDir, name), overwrite: false);
-            RefreshFolder();
-            flash = $"Added {name} to the mapset (index {index}, which no difficulty used yet).";
+            doc.RescanFolder();
+            var addedLane = new Lane(LaneSource.BeatmapFile, name);
+            model.AddSlotLane(addedLane, slot);
+            audio?.LoadLane(addedLane, doc.Folder.ReadBytes(name));
+            ScheduleProjectSave(); SyncScrollBars();
+            flash = $"Added {slot.Name}. Existing samples and other difficulties were kept.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or ArgumentException)
         {
             flash = $"Couldn't add the sample: {ex.Message}";
         }
@@ -300,6 +311,7 @@ public partial class MainWindow
         {
             Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time) { Volume = session.State.LayerVolumes.TryGetValue(h, out int volume) ? volume : null })],
             LaneNames = names,
+            LaneSlots = model.SlotLayout(),
             LaneOrder = order,
             ActiveLane = model.ActiveLane is { } active ? ProjectStore.KeyOf(active) : null,
             AddedLanes = added,
@@ -341,7 +353,7 @@ public partial class MainWindow
 
         model.ApplyLaneLayout(project, lane => lane.Source != LaneSource.BeatmapFile || folder.Find(lane.Name) is not null);
         foreach (string family in project.CollapsedFamilies)
-            if (model.LaneRows.FirstOrDefault(r => ArrangeModel.FamilyOf(r.Lane) == family) is { } row && !model.IsFamilyCollapsed(row.Lane)) model.ToggleFamily(row.Lane);
+            if (model.LaneRows.FirstOrDefault(r => model.FamilyKey(r.Lane) == family) is { } row && !model.IsFamilyCollapsed(row.Lane)) model.ToggleFamily(row.Lane);
         foreach (var lane in project.AddedLanes.Select(ProjectStore.LaneOf).OfType<Lane>())
             if (folder.Find(lane.Name) is { } f) audio?.LoadLane(lane, folder.ReadBytes(f));
 

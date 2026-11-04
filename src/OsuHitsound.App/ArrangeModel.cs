@@ -56,12 +56,16 @@ internal sealed partial class ArrangeModel
         // In each sampleset group, as in V6.39: hitnormal, whistle, finish, clap (then slider sounds), each starting with
         // the default sound and followed by the map's numbered files. Other files keep their place at the end.
         int number = 1;
-        foreach (var group in session.Lanes.GroupBy(DisplayGroup).OrderBy(g => g.Key))
+        foreach (var group in session.Lanes.GroupBy(DisplayGroup).OrderBy(g => g.Key switch
+            { LaneGroup.NormalSet => 0, LaneGroup.SoftSet => 1, LaneGroup.DrumSet => 2, _ => 3 }))
         {
             int i = 0;
             foreach (var lane in group.OrderBy(SoundOrder).ThenBy(l => l.Sample?.Index ?? int.MaxValue))
                 laneRows.Add(new LaneRow(group.Key, lane, number++, i++, IndexOf(lane)));
         }
+        var initial = NormalizeFamilies(laneRows).ToList();
+        laneRows.Clear(); laneRows.AddRange(initial);
+        for (int i = 0; i < laneRows.Count; i++) laneRows[i] = laneRows[i] with { Number = i + 1 };
 
         double offset = Map.Settings.TimeOffset;
         (this.file, timeOffset) = (file, offset);
@@ -304,7 +308,7 @@ internal sealed partial class ArrangeModel
         ? Array.IndexOf(HitSounds, sound) is >= 0 and var i ? i : HitSounds.Length
         : HitSounds.Length + 1;
 
-    private static readonly string[] HitSounds = ["hitnormal", "hitwhistle", "hitfinish", "hitclap"];
+    private static readonly string[] HitSounds = ["hitnormal", "hitwhistle", "hitfinish", "hitclap", "slidertick", "sliderslide", "sliderwhistle"];
 
     public static Color ShadeOf(LaneGroup group, int shade)
     {
@@ -338,13 +342,15 @@ internal sealed partial class ArrangeModel
     private readonly HashSet<string> collapsedFamilies = [];
     private readonly Dictionary<string, Lane> familyParents = [];
     private readonly HashSet<string> familiesWithChildren = [];
+    private readonly Dictionary<Lane, IReadOnlyList<LaneRow>> collapsedChildren = [];
+    public IReadOnlyList<LaneRow> CollapsedChildren(Lane parent) => collapsedChildren.GetValueOrDefault(parent) ?? [];
     internal static string? FamilyOf(Lane lane) => lane.Sample is { } s ? $"{s.Set}:{s.Sound}" : null;
     public IReadOnlyCollection<string> CollapsedFamilies => collapsedFamilies;
-    public bool IsFamilyCollapsed(Lane lane) => FamilyOf(lane) is { } key && collapsedFamilies.Contains(key);
-    public bool IsFamilyParent(Lane lane) => FamilyOf(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
+    public bool IsFamilyCollapsed(Lane lane) => FamilyKey(lane) is { } key && collapsedFamilies.Contains(key);
+    public bool IsFamilyParent(Lane lane) => FamilyKey(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
     public void ToggleFamily(Lane lane)
     {
-        if (FamilyOf(lane) is not { } key) return;
+        if (FamilyKey(lane) is not { } key) return;
         Relayout(() => { if (!collapsedFamilies.Remove(key)) collapsedFamilies.Add(key); });
     }
 
@@ -511,28 +517,7 @@ internal sealed partial class ArrangeModel
         Changed?.Invoke();
     }
 
-    private List<Row> BuildRows()
-    {
-        // Hidden lanes (deleted) stay out unless they still have hits; the filter (Ctrl+F) matches names.
-        var withHits = Session.State.Hits.Select(h => h.Lane).ToHashSet();
-        var visible = laneRows.Where(r => !hidden.Contains(r.Lane) || withHits.Contains(r.Lane)).ToList();
-        familyParents.Clear(); familiesWithChildren.Clear();
-        foreach (var family in visible.Where(r => FamilyOf(r.Lane) is not null).GroupBy(r => FamilyOf(r.Lane)!))
-        {
-            var parent = family.FirstOrDefault(r => r.Lane.Sample is { Index: <= 1 }) ?? family.First();
-            familyParents[family.Key] = parent.Lane;
-            if (family.Any(r => r.Lane != parent.Lane && r.Lane.Sample is { Index: > 1 })) familiesWithChildren.Add(family.Key);
-        }
-        var rows = new List<Row>();
-        foreach (var group in visible.Where(r => MatchesFilter(r.Lane)).GroupBy(r => r.Group))
-        {
-            rows.Add(new GroupRow(group.Key, group.Count()));
-            if (!collapsed.Contains(group.Key)) rows.AddRange(group.Where(r => Filter.Length > 0 || r.Lane.Sample is not { Index: > 1 } ||
-                !IsFamilyCollapsed(r.Lane) || FamilyOf(r.Lane) is { } key && familyParents.GetValueOrDefault(key) == r.Lane));
-        }
-
-        return rows;
-    }
+    private List<Row> BuildRows() => BuildGroupedRows();
 
     // ---------------------------------------------------------------- lane management (kept in the project file)
 
@@ -543,7 +528,7 @@ internal sealed partial class ArrangeModel
     public string Filter { get; private set; } = "";
 
     /// <summary>The name shown for a lane: its display name if renamed, else its file or skin name.</summary>
-    public string NameOf(Lane lane) => names.TryGetValue(lane, out var n) ? n : lane.Name;
+    public string NameOf(Lane lane) => names.TryGetValue(lane, out var n) ? n : SlotOf(lane).Name;
 
     private bool MatchesFilter(Lane lane) =>
         Filter.Length == 0 || NameOf(lane).Contains(Filter, StringComparison.OrdinalIgnoreCase) || lane.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase);
@@ -560,21 +545,13 @@ internal sealed partial class ArrangeModel
     /// <summary>Moves a lane up (-1) or down (+1) within its group.</summary>
     public void MoveLane(Lane lane, int direction)
     {
-        int i = laneRows.FindIndex(r => r.Lane == lane), j = i + direction;
-        if (i < 0 || j < 0 || j >= laneRows.Count || laneRows[j].Group != laneRows[i].Group) return;
-        MoveLaneTo(lane, laneRows[j].Lane, direction > 0);
+        var ordered = NormalizeFamilies(laneRows).ToList();
+        int i = ordered.FindIndex(r => r.Lane == lane), j = i + direction;
+        if (i < 0 || j < 0 || j >= ordered.Count || ordered[j].Group != ordered[i].Group) return;
+        MoveLaneTo(lane, ordered[j].Lane, direction > 0);
     }
 
-    public void MoveLaneTo(Lane lane, Lane target, bool after)
-    {
-        var source = laneRows.FirstOrDefault(r => r.Lane == lane);
-        var destination = laneRows.FirstOrDefault(r => r.Lane == target);
-        if (source is null || destination is null || source.Group != destination.Group || lane == target) return;
-        var order = laneRows.Select(r => r.Lane).ToList();
-        order.Remove(lane);
-        order.Insert(order.IndexOf(target) + (after ? 1 : 0), lane);
-        Session.SetLaneOrder(order, "Move lane");
-    }
+    public void MoveLaneTo(Lane lane, Lane target, bool after) => MoveGroupedLane(lane, target, after);
 
     public void MoveFolderTo(LaneGroup folder, LaneGroup target, bool after)
     {
@@ -595,11 +572,11 @@ internal sealed partial class ArrangeModel
     {
         var ordered = order.DistinctBy(ProjectStore.KeyOf).ToList();
         var ranks = ordered.Select((lane, i) => (Key: ProjectStore.KeyOf(lane), i)).ToDictionary(x => x.Key, x => x.i);
-        var groups = ordered.Select(DisplayGroup).Distinct().Select((group, i) => (group, i)).ToDictionary(x => x.group, x => x.i);
+        var groups = ordered.Select(l => DisplayGroup(SlotOf(l))).Distinct().Select((group, i) => (group, i)).ToDictionary(x => x.group, x => x.i);
         var sorted = laneRows.GroupBy(r => r.Group).OrderBy(g => groups.GetValueOrDefault(g.Key, int.MaxValue))
             .SelectMany(g => g.OrderBy(r => ranks.GetValueOrDefault(ProjectStore.KeyOf(r.Lane), int.MaxValue))).ToList();
         laneRows.Clear();
-        laneRows.AddRange(sorted);
+        laneRows.AddRange(NormalizeFamilies(sorted));
     }
 
     /// <summary>
@@ -611,12 +588,12 @@ internal sealed partial class ArrangeModel
         hidden.Remove(lane);
         if (laneRows.Any(r => r.Lane == lane)) return;
         added.Add(lane);
-        var group = DisplayGroup(lane);
-        var place = (SoundOrder(lane), lane.Sample?.Index ?? int.MaxValue);
+        var group = DisplayGroup(SlotOf(lane));
+        var place = (SoundOrder(SlotOf(lane)), SlotOf(lane).Sample?.Index ?? int.MaxValue);
         int last = laneRows.FindLastIndex(r => r.Group == group && (SoundOrder(r.Lane), r.Lane.Sample?.Index ?? int.MaxValue).CompareTo(place) <= 0);
         if (last < 0) last = laneRows.FindIndex(r => r.Group == group) is >= 0 and var first ? first - 1 : laneRows.Count - 1;
         int shade = laneRows.Count(r => r.Group == group);
-        laneRows.Insert(last + 1, new LaneRow(group, lane, 0, shade, IndexOf(lane)));
+        laneRows.Insert(last + 1, new LaneRow(group, lane, 0, shade, IndexOf(SlotOf(lane))));
         Session.RestoreLaneOrder(laneRows.Select(r => r.Lane));
     });
 
@@ -654,14 +631,21 @@ internal sealed partial class ArrangeModel
         foreach (var lane in project.AddedLanes.Select(ProjectStore.LaneOf).OfType<Lane>().Where(exists)) AddLane(lane);
         Relayout(() =>
         {
+            RestoreSlots(project.LaneSlots);
             foreach (var (key, name) in project.LaneNames)
                 if (ProjectStore.LaneOf(key) is { } lane) names[lane] = name;
             foreach (var lane in project.HiddenLanes.Select(ProjectStore.LaneOf).OfType<Lane>()) hidden.Add(lane);
+            // Reopening or reverting an unsaved replacement restores the map's original sounds.
+            var played = Session.State.Hits.Select(h => h.Lane).ToHashSet();
+            var occupied = played.Select(SlotOf).ToHashSet();
+            foreach (var source in laneSlots.Keys)
+                if (!played.Contains(source) && occupied.Contains(SlotOf(source))) hidden.Add(source);
             // A version 1 order is the old alphabetical layout, saved whether or not lanes were moved: it's dropped.
             var saved = project.Version >= 2 ? project.LaneOrder : [];
             OrderRows(saved.Select(ProjectStore.LaneOf).OfType<Lane>());
             Session.RestoreLaneOrder(laneRows.Select(r => r.Lane));
-            if (project.ActiveLane is { } activeKey && ProjectStore.LaneOf(activeKey) is { } active && laneRows.Any(r => r.Lane == active)) ActiveLane = active;
+            if (project.ActiveLane is { } activeKey && ProjectStore.LaneOf(activeKey) is { } active && laneRows.Any(r => r.Lane == active))
+                ActiveLane = hidden.Contains(active) ? played.FirstOrDefault(l => SlotOf(l) == SlotOf(active)) ?? active : active;
         });
     }
 

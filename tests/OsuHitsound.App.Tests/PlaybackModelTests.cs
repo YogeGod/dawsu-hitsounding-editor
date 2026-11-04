@@ -78,7 +78,7 @@ public class PlaybackModelTests
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
 
         // The default sounds sit in their own set's group: no separate skin group.
-        Assert.Equal([LaneGroup.SoftSet, LaneGroup.NormalSet, LaneGroup.DrumSet], model.Rows.OfType<GroupRow>().Select(g => g.Group));
+        Assert.Equal([LaneGroup.NormalSet, LaneGroup.SoftSet, LaneGroup.DrumSet], model.Rows.OfType<GroupRow>().Select(g => g.Group));
         Assert.Equal(Enumerable.Range(1, model.LaneRows.Count), model.LaneRows.Select(r => r.Number));
         Assert.Equal(3, model.LaneRows.Single(r => r.Lane.Name == "drum-hitclap3.ogg").Index);
         Assert.All(model.LaneRows.Where(r => r.Lane.Source == LaneSource.Skin), r => Assert.Equal(0, r.Index));

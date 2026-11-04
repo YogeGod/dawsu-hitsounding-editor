@@ -167,7 +167,7 @@ public sealed partial class EditSession
         MoveEach([.. hits.Select(h => (h, laneOf(h), h.Time + offset))], label);
 
     /// <summary>Changes only the lane, retaining each object's anchor. Companion editor state shares undo/redo.</summary>
-    public void RetargetLane(Lane original, Lane replacement, Action? undo = null, Action? redo = null)
+    public void RetargetLane(Lane original, Lane replacement, Action? undo = null, Action? redo = null, IReadOnlyList<Lane>? laneOrder = null)
     {
         if (original == replacement || gestureStart is not null) return;
         Change("Replace lane sample", s =>
@@ -175,8 +175,15 @@ public sealed partial class EditSession
             var next = PlaceLayers(s, s.Hits.Where(h => h.Lane == original).Select(h =>
                 (h with { Lane = replacement }, Volume: s.HsMode || s.LayerVolumes.ContainsKey(h) ? (int?)VolumeOf(s, h) : null)),
                 s.Hits.Where(h => h.Lane == original).ToHashSet(), out _);
+            if (laneOrder is not null) next = next with { LaneOrder = [.. laneOrder] };
             return ReferenceEquals(next, s) ? s with { } : next; // Empty lanes still change companion layout state.
         }, undo, redo);
+    }
+
+    public void ChangeLaneLayout(string label, IReadOnlyList<Lane> order, Action undoLayout, Action redoLayout)
+    {
+        if (IsGestureActive) return;
+        Change(label, s => s with { LaneOrder = [.. order] }, undoLayout, redoLayout);
     }
 
     /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>

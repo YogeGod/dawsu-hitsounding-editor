@@ -20,7 +20,14 @@ public partial class MainWindow
     private void AssignChannelChoice(Lane lane, Lane choice)
     {
         if (!ArrangeModel.CanChooseChannelSample(choice)) return;
-        if (choice.Source == LaneSource.Skin) { ReplaceChannelLane(lane, choice); return; }
+        if (lane == choice) return;
+        if (choice.Source == LaneSource.Skin)
+        {
+            if (skin.Value.TryGetValue(choice.Name, out var bytes))
+                ImportChannelSample(lane, ".wav", destination =>
+                { using var stream = new FileStream(destination, FileMode.CreateNew, FileAccess.Write); stream.Write(bytes); });
+            return;
+        }
         if (doc?.Folder.Find(choice.Name) is { } found)
             AssignChannelFile(lane, Path.Combine(Path.GetDirectoryName(doc.Path)!, found));
     }
@@ -34,27 +41,30 @@ public partial class MainWindow
             UpdateStatus();
             return;
         }
+        ImportChannelSample(lane, Path.GetExtension(source), destination => File.Copy(source, destination, overwrite: false));
+    }
+
+    private void ImportChannelSample(Lane lane, string extension, Action<string> write)
+    {
+        if (doc is null || model is null || session is null || session.IsGestureActive || !model.CanReplaceSample(lane)) return;
         try
         {
-            string extension = Path.GetExtension(source).ToLowerInvariant();
-            if (!HitsoundRules.SampleExtensions.Contains(extension)) throw new IOException("Choose a WAV, OGG or MP3 sample.");
             var fresh = MapFolder.FromDirectory(Path.GetDirectoryName(doc.Path)!);
-            int index = HitsoundDiff.FirstFreeIndex(fresh);
-            string slot = lane.Sample is { } sample ? HitsoundRules.SampleName(sample.Set, sample.Sound) : "soft-hitnormal";
-            string name = $"{slot}{index}{extension}";
-            File.Copy(source, Path.Combine(Path.GetDirectoryName(doc.Path)!, name), overwrite: false);
+            var slot = model.SlotOf(lane);
+            string name = SampleSlots.BackingFile(fresh, slot, extension);
+            write(Path.Combine(Path.GetDirectoryName(doc.Path)!, name));
             doc.RescanFolder();
             ReplaceChannelLane(lane, new Lane(LaneSource.BeatmapFile, name));
-            flash = $"Sample assigned: {name}. Existing sample files were kept.";
+            flash = $"Sample assigned to {slot.Name}. Existing sample files were kept.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or FormatException)
         { flash = $"Could not assign sample: {ex.Message}"; }
         UpdateStatus();
     }
 
     private void ReplaceChannelLane(Lane original, Lane replacement)
     {
-        if (model is null || session is null || !model.ReplaceSample(original, replacement)) return;
+        if (model is null || session is null || !model.ReplaceSample(original, replacement, preserveSlot: true)) return;
         if (doc is not null && replacement.Source == LaneSource.BeatmapFile && doc.Folder.Find(replacement.Name) is { } f)
             audio?.LoadLane(replacement, doc.Folder.ReadBytes(f));
         ScheduleProjectSave();

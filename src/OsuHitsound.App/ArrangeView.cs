@@ -370,6 +370,13 @@ internal sealed class ArrangeView : Control
                 {
                     double y = HeaderHeight + RowTop(i) - scrollY;
                     if (y > size.Height) break;
+                    if (model.Rows[i] is GroupRow folder)
+                    {
+                        using (ctx.PushOpacity(0.3))
+                            foreach (var child in model.FolderChildren(folder.Group))
+                                DrawLaneNotes(ctx, model, child, y, from, to, HeightOf(folder));
+                        continue;
+                    }
                     if (model.Rows[i] is not LaneRow lane) continue;
                     if (lane.Lane == hoveredLane)
                         ctx.FillRectangle(HoverFill, new Rect(GridLeft, y, gridWidth, RowHeight));
@@ -706,13 +713,14 @@ internal sealed class ArrangeView : Control
                 // disclosure dot at 36, the sample dot at 49 and the name at 55; the lanes under it shift 18 px right, with
                 // the tree line at 21 (down to the row's middle for the last one, then across to 31).
                 var rows = model.Rows;
-                bool first = index == 0 || rows[index - 1] is not LaneRow, last = index + 1 >= rows.Count || rows[index + 1] is not LaneRow;
-                double indent = first ? 0 : ChildIndent, cy = y + RowHeight / 2;
+                bool last = index + 1 >= rows.Count || rows[index + 1] is not LaneRow;
+                double indent = (model.DepthOf(lane.Lane) - 1) * ChildIndent, cy = y + RowHeight / 2;
                 Paint.DrawText(ctx, "⠿", new Point(GripX + indent, y + (RowHeight - 16) / 2), 12, Paint.Dim, 0);
-                if (!first)
+                if (indent > 0)
                 {
-                    ctx.DrawLine(TreePen, new Point(TreeX, y), new Point(TreeX, last ? cy : y + RowHeight));
-                    ctx.DrawLine(TreePen, new Point(TreeX, cy), new Point(TreeX + 10, cy));
+                    double branch = TreeX + indent - ChildIndent;
+                    ctx.DrawLine(TreePen, new Point(branch, y), new Point(branch, last ? cy : y + RowHeight));
+                    ctx.DrawLine(TreePen, new Point(branch, cy), new Point(branch + 10, cy));
                 }
                 else if (!last) ctx.DrawLine(TreePen, new Point(TreeX, y + RowHeight * 0.6), new Point(TreeX, y + RowHeight));
                 if (model.IsFamilyParent(lane.Lane))
@@ -722,13 +730,14 @@ internal sealed class ArrangeView : Control
                 bool silent = lane.Lane.Missing || model.Silent.Contains(lane.Lane);
                 string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.NameOf(lane.Lane);
                 if (silent) name += lane.Lane.Missing ? "  (missing)" : "  (no sound)";
+                if (model.SlotOf(lane.Lane).Source == LaneSource.Skin) name += lane.Lane.Source == LaneSource.Skin ? " · skin" : " · slot 0";
                 if (ShowIndexes && lane.Index is { } idx) name += $"  · idx {idx}";
                 ctx.DrawEllipse(silent ? MissingDot : LoadedDot, null, new Point(DotX + indent, cy), 2.5, 2.5);
                 double nameWidth = GridLeft - IconFromRight - 14 - NameX - indent;
                 if (nameWidth > 12) // collapsed (‹): no room for names, the icon says which sound it is
                     Paint.DrawText(ctx, name, new Point(NameX + indent, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, silent ? Paint.MissingText : Paint.Text,
-                        nameWidth, first ? Paint.UiBold : Paint.Ui);
-                DrawSoundIcon(ctx, lane.Lane.Sample?.Sound, new Point(NumberWidth + ListWidth - IconFromRight, cy), IconTone);
+                        nameWidth, model.IsFamilyBase(lane.Lane) ? Paint.UiBold : Paint.Ui);
+                DrawSoundIcon(ctx, model.SlotOf(lane.Lane).Sample?.Sound, new Point(NumberWidth + ListWidth - IconFromRight, cy), IconTone);
                 DrawToggle(ctx, "+", NumberWidth + ListWidth - AddFromRight, y, AddFill);
                 DrawToggle(ctx, "●", NumberWidth + ListWidth - PreviewFromRight, y, null);
                 DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsMuted(lane.Lane) ? Paint.MuteOn : null);
@@ -829,12 +838,22 @@ internal sealed class ArrangeView : Control
 
     private void DrawNotes(DrawingContext ctx, ArrangeModel model, LaneRow row, double y, double from, double to)
     {
+        // Draw summaries behind the parent's own notes, so real notes at the same time stay clear.
+        using (ctx.PushOpacity(0.3))
+            foreach (var child in model.CollapsedChildren(row.Lane))
+                DrawLaneNotes(ctx, model, child, y, from, to);
+        DrawLaneNotes(ctx, model, row, y, from, to);
+    }
+
+    private void DrawLaneNotes(DrawingContext ctx, ArrangeModel model, LaneRow row, double y, double from, double to, double? height = null)
+    {
         if (!model.Notes.TryGetValue(row.Lane, out var notes)) return;
         bool greyed = !model.IsAudible(row.Lane);
         var color = greyed ? ArrangeModel.MutedColor : Paint.Brighten(row.Color);
         var fill = Paint.Brush(color);
         var span = Paint.Brush(color, 0.45);
-        double cy = y + RowHeight / 2;
+        double cy = y + (height ?? RowHeight) / 2;
+        double noteSize = Math.Min(NoteSize, (height ?? RowHeight) * 0.4);
 
         // Notes are sorted by start; slider body spans can start before the view, so look back one visible width.
         for (int i = Sorted.LowerBound(notes, from - Axis.VisibleDuration, n => n.Time); i < notes.Count; i++)
@@ -846,17 +865,17 @@ internal sealed class ArrangeView : Control
             if (n.EndTime > n.Time)
                 ctx.DrawRectangle(span, null, new Rect(x, cy - 3, Math.Max(2, (n.EndTime - n.Time) * Axis.Zoom), 6), 3, 3);
             else if (n.Passive)
-                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize - 4, fill, Paint.NoteRingPen);
+                Paint.DrawDiamond(ctx, new Point(x, cy), Math.Max(2, noteSize - 4), fill, Paint.NoteRingPen);
             else if (n.Hit is { } hit && selection.Contains(hit))
-                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, Paint.SelectedRingPen);
+                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, Paint.SelectedRingPen);
             else if (model.IsProblem(n.Hit!))
-                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, ConflictRing);
+                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, ConflictRing);
             else if (model.IsPreviewMuted(n.Hit!))
-                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.MutedFill, Paint.NoteRingPen);
+                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.MutedFill, Paint.NoteRingPen);
             else if (ColourByVolume && !greyed && Session is { } session)
-                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, VolumeFills[Math.Clamp(session.VolumeOf(n.Hit!), 0, 100)], Paint.NoteRingPen);
+                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, VolumeFills[Math.Clamp(session.VolumeOf(n.Hit!), 0, 100)], Paint.NoteRingPen);
             else
-                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, fill, Paint.NoteRingPen);
+                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, fill, Paint.NoteRingPen);
         }
     }
 
@@ -944,9 +963,7 @@ internal sealed class ArrangeView : Control
     private bool OnLaneGrip(Row row, Point p)
     {
         if (p.X >= GridLeft) return false;
-        int i = RowIndexAt(p.Y);
-        bool first = i == 0 || Model?.Rows.ElementAtOrDefault(i - 1) is not LaneRow;
-        double x = row is GroupRow ? 12 : GripX + (first ? 0 : ChildIndent);
+        double x = row is GroupRow ? 12 : GripX + (row is LaneRow lane ? (Model!.DepthOf(lane.Lane) - 1) * ChildIndent : 0);
         return p.X >= x - 4 && p.X < x + 14;
     }
 
@@ -960,6 +977,20 @@ internal sealed class ArrangeView : Control
         if (draggedRow is LaneRow lane)
         {
             if (target is not LaneRow other || other.Group != lane.Group) return;
+            string? family = model.FamilyKey(lane.Lane), targetFamily = model.FamilyKey(other.Lane);
+            if (family == targetFamily && family is not null && (model.IsFamilyBase(lane.Lane) || model.IsFamilyBase(other.Lane))) return;
+            if (family != targetFamily)
+            {
+                if (family is null || targetFamily is null || model.SlotOf(lane.Lane).Sample?.Sound == "hitnormal"
+                    || model.SlotOf(other.Lane).Sample?.Sound == "hitnormal") return;
+                int start = i, end = i;
+                while (start > 0 && model.Rows[start - 1] is LaneRow a && model.FamilyKey(a.Lane) == targetFamily) start--;
+                while (end + 1 < model.Rows.Count && model.Rows[end + 1] is LaneRow b && model.FamilyKey(b.Lane) == targetFamily) end++;
+                dropAfter = p.Y >= HeaderHeight + RowTop(i) - scrollY + RowHeight / 2;
+                laneDropY = HeaderHeight + RowTop(dropAfter ? end + 1 : start) - scrollY;
+                dropRow = target;
+                return;
+            }
             double top = HeaderHeight + RowTop(i) - scrollY;
             dropAfter = p.Y >= top + RowHeight / 2;
             laneDropY = top + (dropAfter ? RowHeight : 0);
@@ -1007,6 +1038,19 @@ internal sealed class ArrangeView : Control
         if (Model?.Notes.TryGetValue(row.Lane, out var notes) != true) return null;
         int i = Sorted.Nearest(notes!, Axis.Time(gridX), NoteSize / Axis.Zoom, n => n.Time, n => n.Hit is not null);
         return i >= 0 ? notes![i].Hit : null;
+    }
+
+    internal Lane? SummaryLaneUnder(Row row, double gridX)
+    {
+        if (Model is not { } model) return null;
+        var children = row is GroupRow folder ? model.FolderChildren(folder.Group)
+            : row is LaneRow parent ? model.CollapsedChildren(parent.Lane) : [];
+        double time = Axis.Time(gridX), tolerance = Math.Max(3, NoteSize) / Axis.Zoom;
+        foreach (var child in children)
+            if (model.Notes.TryGetValue(child.Lane, out var notes) && notes.Any(n =>
+                Math.Abs(n.Time - time) <= tolerance || n.EndTime > n.Time && time >= n.Time && time <= n.EndTime))
+                return child.Lane;
+        return null;
     }
 
     private double SnapTime(double time) => Edits.SnapTime(time);
@@ -1131,9 +1175,7 @@ internal sealed class ArrangeView : Control
         {
             if (point.Properties.IsLeftButtonPressed && row is LaneRow family && model.IsFamilyParent(family.Lane))
             {
-                int rowIndex = RowIndexAt(p.Y);
-                bool first = rowIndex == 0 || model.Rows[rowIndex - 1] is not LaneRow;
-                double disclosure = DisclosureX + (first ? 0 : ChildIndent);
+                double disclosure = DisclosureX + (model.DepthOf(family.Lane) - 1) * ChildIndent;
                 if (Math.Abs(p.X - disclosure) <= 7)
                 {
                     model.ToggleFamily(family.Lane);
@@ -1182,6 +1224,16 @@ internal sealed class ArrangeView : Control
 
         double gridX = p.X - GridLeft;
         var under = row is LaneRow lr ? HitUnder(lr, gridX) : null;
+
+        if ((point.Properties.IsLeftButtonPressed || point.Properties.IsRightButtonPressed)
+            && under is null && SummaryLaneUnder(row, gridX) is { } summary)
+        {
+            model.RevealLane(summary);
+            int revealed = model.Rows.ToList().FindIndex(r => r is LaneRow l && l.Lane == summary);
+            if (revealed >= 0) ScrollY = RowTop(revealed) - (p.Y - HeaderHeight);
+            LaneLayoutChanged?.Invoke(); ScrollChanged?.Invoke(); InvalidateVisual();
+            return;
+        }
 
         // Right-click deletes a hit, whatever the tool.
         if (point.Properties.IsRightButtonPressed)

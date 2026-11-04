@@ -175,6 +175,8 @@ internal sealed class InspectorPanel : Border
             }
             channelName.Text = active is null ? "No lane selected" : model!.NameOf(active);
             sampleFile.Text = active is null ? "Select a lane to choose its sample." : active.Source == LaneSource.Skin ? "Default hitsound" : $"Sample: {active.Name}";
+            if (active is not null && model!.SlotOf(active) != active)
+                sampleFile.Text = $"Slot: {model.SlotOf(active).Name} · Audio: {active.Name}";
             previewSample.IsEnabled = active is not null;
             channelSample.IsEnabled = replaceSample.IsEnabled = active is not null && model!.CanReplaceSample(active);
             if (active is not null && !model!.CanReplaceSample(active)) sampleFile.Text += " (read-only; preview available)";
