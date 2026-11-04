@@ -63,6 +63,11 @@ public partial class MainWindow
         {
             ItemsSource = new object[]
             {
+                Item("Preview sample", () => audio?.Preview(lane)),
+                Item(model.IsMuted(lane) ? "Unmute lane (listening only)" : "Mute lane (listening only)", () => model.ToggleMute(lane)),
+                Item(model.IsSoloed(lane) ? "Unsolo lane" : "Solo lane (listening only)", () => model.ToggleSolo(lane)),
+                Item("Select lane hits", () => Lanes.Edits.Select(session.State.Hits.Where(h => h.Lane == lane))),
+                new Separator(),
                 Item("Rename…", async () =>
                 {
                     if (await Dialogs.Prompt(this, "Rename lane", $"Display name for {lane.Name} (blank restores it). The file and what it saves as don't change.",

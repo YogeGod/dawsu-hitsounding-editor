@@ -41,7 +41,6 @@ public partial class MainWindow : Window
     private EditSession? session => doc?.Session;
     private CancellationTokenSource? compileCancel;
     private (CompileResult Result, OsuFile File)? lastCompile;
-    private bool closeConfirmed;
     private string? flash; // a one-off message (saved, not saved, close warning) shown until the next edit
     private object? drawnHits; // the hit list the notes were last built from
 
@@ -143,7 +142,7 @@ public partial class MainWindow : Window
         foreach (var (item, speed) in speedItems)
         {
             item.Click += (_, _) => SetSpeed(speed);
-            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = false, Padding = new Avalonia.Thickness(6, 2) };
+            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = true, Padding = new Avalonia.Thickness(6, 2) };
             button.Classes.Add("viewToggle");
             button.Click += (_, _) => SetSpeed(speed);
             speedButtons.Add((button, speed));
@@ -186,7 +185,8 @@ public partial class MainWindow : Window
         VolumeModeBox.SelectedIndex = 1;
         VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
-        SaveButton.Click += (_, _) => Save();
+        SaveButton.Click += async (_, _) => await Save();
+        SaveIssuesButton.Click += (_, _) => ShowSaveIssues();
         menuCommands =
         [
             (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
@@ -215,13 +215,10 @@ public partial class MainWindow : Window
 
         Closing += (_, e) =>
         {
-            // Unsaved edits: the first close only warns; closing again discards them.
-            if (session is { IsEdited: true } && !closeConfirmed)
+            if (session is { IsEdited: true } && !allowClose)
             {
                 e.Cancel = true;
-                closeConfirmed = true;
-                flash = "You have unsaved edits: Ctrl+S saves them, or close again to discard them.";
-                UpdateStatus();
+                _ = CloseSafely();
             }
         };
         Closed += (_, _) =>
@@ -231,6 +228,7 @@ public partial class MainWindow : Window
             frameTimer.Stop();
             UiTheme.Current.Changed -= OnThemeChanged;
             inspector?.Close();
+            saveIssuesWindow?.Close();
             audio?.Dispose();
         };
 
@@ -298,7 +296,8 @@ public partial class MainWindow : Window
 
             compileCancel?.Cancel();
             if (session is not null) session.Changed -= OnEdited;
-            (doc, lastCompile, closeConfirmed, flash) = (opened, null, false, null);
+            (doc, lastCompile, flash) = (opened, null, null);
+            saveIssuesWindow?.Close();
 
             // Load every drawable lane's sample, not only the ones the map uses, so new hits sound at once.
             audio?.Load(map with { Lanes = editing.Lanes }, mapFolder, skin.Value);
@@ -471,8 +470,25 @@ public partial class MainWindow : Window
     protected override void OnKeyDown(KeyEventArgs e)
     {
         if (e.Key is Key.LeftAlt or Key.RightAlt) UpdateToolCursors(e.KeyModifiers | KeyModifiers.Alt);
+        if (e.Handled) return;
+        if (e.Key == Key.F6 && e.KeyModifiers == KeyModifiers.None)
+        {
+            Lanes.Focus();
+            e.Handled = true;
+            return;
+        }
         // Typing in a text box (volume value, offset…) must not trigger editor shortcuts like 5 (Mute) or Backspace (delete hits).
         if (FocusManager?.GetFocusedElement() is TextBox)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        var focused = FocusManager?.GetFocusedElement();
+        // Space, arrows and single-letter commands belong to a focused native control.
+        // F6 always returns to the editing canvas; modified file/help shortcuts still work.
+        if (focused is not null && !ReferenceEquals(focused, Lanes) && !ReferenceEquals(focused, Volume)
+            && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == KeyModifiers.None && e.Key != Key.F1)
         {
             base.OnKeyDown(e);
             return;
@@ -892,7 +908,6 @@ public partial class MainWindow : Window
 
         UpdateCues();
         Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
-        closeConfirmed = false;
         flash = null;
         UpdateStatus();
         ScheduleCompile();
@@ -904,6 +919,8 @@ public partial class MainWindow : Window
     {
         if (session is null || originalBytes is null || folder is null) return;
         compileCancel?.Cancel();
+        lastCompile = null;
+        UpdateSaveReadiness();
         var cancel = compileCancel = new CancellationTokenSource();
         var state = session.State; // immutable: the wish list is built off the UI thread
         var (document, editing) = (doc!, session);
@@ -923,42 +940,49 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Saves the edits: compiles a fresh copy of the map as opened, refuses if the file changed on disk since, keeps a
-    /// timestamped backup in the editor's app-data folder (never in the mapset), writes the .osu and reloads it.
+    /// timestamped backup in the editor's app-data folder (never in the mapset), and retains the edit session.
     /// </summary>
-    private async Task Save()
+    private Task<bool> Save()
     {
-        if (session is null || mapPath is null || originalBytes is null || folder is null) return;
+        if (session is null || doc is null || model is null) return Task.FromResult(false);
         try
         {
-            int unanchored = session.Unanchored.Count();
-            var saved = doc!.Save(MapSaver.DefaultBackupRoot());
-            var result = saved.Compile;
-            if (!saved.Written)
+            // Always compile synchronously here; the debounced visual check may still be pending.
+            compileCancel?.Cancel();
+            lastCompile = doc.Compile(session.State);
+            model.SetConflicts(lastCompile.Value.Result.Conflicts.Select(c => c.Moment).ToHashSet());
+            var issues = SaveIssue.Find(session, session.State, lastCompile.Value.Result);
+            if (issues.Count > 0)
             {
-                flash = "Nothing to save: the map already plays like this." + Problems(result.Conflicts.Count, unanchored);
+                flash = "Not saved. Resolve the save issues; your edits are still here.";
+                UpdateStatus();
+                ShowSaveIssues();
+                return Task.FromResult(false);
             }
-            else
-            {
-                // Reload so the editor starts again from what is now on disk (and its undo history starts fresh).
-                double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom;
-                await Open(mapPath); // awaited: the reload would otherwise clear this message and the view when it finishes
-                (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
-                flash = string.Join(' ', [
-                    $"Saved. {result.TimingPointsAdded} green line{(result.TimingPointsAdded == 1 ? "" : "s")} added, {result.TimingPointsChanged} changed."
-                        + Problems(result.Conflicts.Count, unanchored),
-                    .. result.Notes, $"Backup: {saved.Backup}"]);
-            }
+            var saved = doc.Save(MapSaver.DefaultBackupRoot());
+            // Keep this session, selection, viewport and undo history. The document updates its disk baseline.
+            lastCompile = doc.Compile(session.State);
+            model.SetConflicts(lastCompile.Value.Result.Conflicts.Select(c => c.Moment).ToHashSet());
+            Title = $"{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
+            flash = saved.Written
+                ? $"Saved all edits. Backup: {saved.Backup}"
+                : "All edits are saved. The map already matches this arrangement.";
+            if (saved.Compile.Notes.Count > 0) flash += " " + string.Join(" ", saved.Compile.Notes);
+            UpdateStatus();
+            return Task.FromResult(true);
+        }
+        catch (SaveBlockedException ex)
+        {
+            flash = ex.Message;
+            UpdateStatus();
+            ShowSaveIssues();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             flash = $"Not saved: {ex.Message}";
+            UpdateStatus();
         }
-
-        UpdateStatus();
-
-        static string Problems(int conflicts, int unanchored) =>
-            (conflicts > 0 ? $" {conflicts} moment{(conflicts == 1 ? "" : "s")} kept their old sounds (conflicts)." : "")
-            + (unanchored > 0 ? $" {unanchored} hit{(unanchored == 1 ? "" : "s")} with no object weren't saved." : "");
+        return Task.FromResult(false);
     }
 
     /// <summary>Opens the UI inspector beside the editor, owned by it so it stays in front; closes it if open.</summary>
@@ -1232,6 +1256,7 @@ public partial class MainWindow : Window
     {
         RefreshInspector();
         UpdateInfoBar();
+        UpdateSaveReadiness();
         if (SnapToggle.IsChecked != Lanes.SnapOn) SnapToggle.IsChecked = Lanes.SnapOn;
         if (model is null)
         {

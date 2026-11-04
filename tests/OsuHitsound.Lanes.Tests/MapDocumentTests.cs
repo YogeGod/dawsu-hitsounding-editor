@@ -25,6 +25,72 @@ public class MapDocumentTests : IDisposable
     private static Lane Clap => new(LaneSource.Skin, "soft-hitclap");
 
     [Fact]
+    public void Save_blocks_unanchored_hits_before_writing_any_other_edits()
+    {
+        var path = Map();
+        var doc = MapDocument.Load(path);
+        doc.Session.Add([doc.Session.HitAt(Clap, 1000), doc.Session.HitAt(Clap, 1250)]);
+        var state = doc.Session.State;
+        int history = doc.Session.Position;
+        string backups = Path.Combine(dir, "backups");
+
+        var error = Assert.Throws<SaveBlockedException>(() => doc.Save(backups));
+
+        Assert.Null(Assert.Single(error.Issues).Moment);
+        Assert.Equal(Text, File.ReadAllText(path));
+        Assert.False(Directory.Exists(backups));
+        Assert.Same(state, doc.Session.State);
+        Assert.Equal(history, doc.Session.Position);
+        Assert.True(doc.Session.IsEdited);
+    }
+
+    [Fact]
+    public void Save_blocks_a_conflict_without_losing_the_intended_arrangement()
+    {
+        var path = Map();
+        var doc = MapDocument.Load(path);
+        doc.Session.Remove(doc.Session.State.Hits); // osu! requires a hitnormal
+        var state = doc.Session.State;
+
+        var error = Assert.Throws<SaveBlockedException>(() => doc.Save(Path.Combine(dir, "backups")));
+
+        Assert.NotNull(Assert.Single(error.Issues).Moment);
+        Assert.Equal(Text, File.ReadAllText(path));
+        Assert.Same(state, doc.Session.State);
+        Assert.True(doc.Session.CanUndo);
+    }
+
+    [Fact]
+    public void Saving_keeps_undo_and_redo_and_tracks_the_saved_state()
+    {
+        var path = Map();
+        var doc = MapDocument.Load(path);
+        doc.Session.Add([doc.Session.HitAt(Clap, 1000)]);
+        var desired = doc.Session.State;
+        doc.Save(Path.Combine(dir, "backups"));
+        var savedBytes = File.ReadAllBytes(path);
+
+        Assert.Same(desired, doc.Session.State);
+        Assert.True(doc.Session.CanUndo);
+        Assert.False(doc.Session.IsEdited);
+        doc.Session.Undo();
+        Assert.True(doc.Session.IsEdited);
+        doc.Session.Redo();
+        Assert.False(doc.Session.IsEdited);
+        Assert.False(doc.Save(Path.Combine(dir, "backups")).Written);
+        Assert.Equal(savedBytes, File.ReadAllBytes(path));
+
+        doc.Session.Undo();
+        Assert.True(doc.Save(Path.Combine(dir, "backups")).Written);
+        Assert.DoesNotContain(MapDocument.Load(path).Session.State.Hits, h => h.Lane == Clap);
+        Assert.True(doc.Session.CanRedo);
+        doc.Session.Redo();
+        Assert.True(doc.Session.IsEdited);
+        doc.Save(Path.Combine(dir, "backups"));
+        Assert.Contains(MapDocument.Load(path).Session.State.Hits, h => h.Lane == Clap);
+    }
+
+    [Fact]
     public void A_sample_added_to_the_folder_is_found_and_a_hit_on_it_saves_with_its_index()
     {
         var path = Map();

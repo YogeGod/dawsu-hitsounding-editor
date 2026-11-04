@@ -1,0 +1,36 @@
+name: Trusted save review
+
+on:
+  push:
+    branches: [codex/trusted-save-keyboard-access]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/Snapshot/**'
+      - '.github/workflows/trusted-save-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-review:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test
+        run: dotnet test OsuHitsoundEditor.slnx --configuration Release --logger "trx;LogFilePrefix=tests" --results-directory artifacts/test-results
+      - name: Verify UI and render screenshots
+        run: dotnet run --project tools/Snapshot --configuration Release -- --trust-review artifacts/ui-review
+      - name: Upload screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-save-review
+          path: artifacts/
+          if-no-files-found: warn

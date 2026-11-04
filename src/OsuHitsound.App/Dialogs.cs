@@ -14,6 +14,34 @@ namespace OsuHitsound.App;
 /// <summary>Small modal dialogs: confirm, a text prompt, and picking one item from a list.</summary>
 internal static class Dialogs
 {
+    internal static Window ClosePrompt()
+    {
+        var window = new Window
+        {
+            Title = "Unsaved edits", Width = 480, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark,
+            Background = Paint.Brush("#252529"),
+        };
+        var body = new StackPanel { Spacing = 16, Margin = new Thickness(24) };
+        body.Children.Add(new TextBlock { Text = "Save your edits before closing?", FontSize = 22, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text = "Save keeps this window open if an issue needs attention. Discard closes without saving your map edits.", TextWrapping = TextWrapping.Wrap, Foreground = Paint.Brush("#c4c4cf") });
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, HorizontalAlignment = HorizontalAlignment.Right };
+        var save = new Button { Content = "Save", Name = "CloseSave" };
+        var discard = new Button { Content = "Discard", Name = "CloseDiscard" };
+        var cancel = new Button { Content = "Cancel", Name = "CloseCancel", IsCancel = true, IsDefault = true };
+        save.Click += (_, _) => window.Close(CloseDecision.Save);
+        discard.Click += (_, _) => window.Close(CloseDecision.Discard);
+        cancel.Click += (_, _) => window.Close(CloseDecision.Cancel);
+        buttons.Children.AddRange([save, discard, cancel]);
+        body.Children.Add(buttons);
+        window.Content = body;
+        window.Opened += (_, _) => cancel.Focus();
+        return window;
+    }
+
+    internal static Task<CloseDecision> UnsavedChanges(Window owner) => ClosePrompt().ShowDialog<CloseDecision>(owner);
+
     public static async Task<bool> Confirm(Window owner, string title, string text, string ok = "OK") =>
         await Show<bool>(owner, title, (body, close) =>
         {

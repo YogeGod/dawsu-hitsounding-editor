@@ -25,7 +25,7 @@ internal enum Tool
 /// drag to move), Draw (click or drag to paint; starting on a hit erases instead), Erase (drag across hits), right-click
 /// deletes a hit, Alt draws temporarily. Hits that won't be saved are drawn white with a red ring on red stripes.
 /// </summary>
-internal sealed class ArrangeView : Control
+internal sealed partial class ArrangeView : Control
 {
     private static UiTheme Theme_ => UiTheme.Current;
 
@@ -298,14 +298,15 @@ internal sealed class ArrangeView : Control
 
     public void SetModel(ArrangeModel? model)
     {
-        if (Model is not null) Model.Changed -= InvalidateVisual;
+        if (Model is not null) Model.Changed -= OnAccessibleModelChanged;
         Model = model;
-        if (model is not null) model.Changed += InvalidateVisual;
+        if (model is not null) model.Changed += OnAccessibleModelChanged;
         scrollY = 0;
         Edits.Model = model;
         drag = Drag.None;
         Axis.End = model?.LastTime ?? 0;
         InvalidateVisual();
+        RefreshAutomation();
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -801,7 +802,7 @@ internal sealed class ArrangeView : Control
         double w = add ? 17 : ToggleWidth, h = Math.Min(17, row - 2), size = add ? 12 : 9;
         var rect = new Rect(x, y + (row - h) / 2, w, h);
         ctx.DrawRectangle(lit ?? Paint.Button, ToggleBorder, rect, add ? 3 : 4, add ? 3 : 4);
-        Paint.DrawText(ctx, letter, new Point(x + (w - size * 0.62) / 2, rect.Y + (h - size * 1.35) / 2), size, lit is null ? Paint.Dim : Paint.White, 0, Paint.UiBold);
+        Paint.DrawText(ctx, letter, new Point(x + (w - size * 0.62) / 2, rect.Y + (h - size * 1.35) / 2), size, lit is null ? Paint.Text : letter == "S" ? Paint.Divider : Paint.White, 0, Paint.UiBold);
     }
 
     private static readonly IPen ToggleBorder = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#55556a"), 1);

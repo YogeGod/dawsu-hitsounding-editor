@@ -23,7 +23,7 @@ public sealed class MapDocument
     public string Path { get; }
 
     /// <summary>The .osu's bytes as opened.</summary>
-    public byte[] Opened { get; }
+    public byte[] Opened { get; private set; }
 
     /// <summary>The parsed map as opened; the session's moments refer to its objects. Never written to.</summary>
     public OsuFile File { get; }
@@ -63,8 +63,17 @@ public sealed class MapDocument
 
     /// <summary>Saves the current edits and bookmarks; see <see cref="MapSaver.Save"/>.</summary>
     /// <exception cref="IOException">The file changed on disk since it was opened, or couldn't be written.</exception>
-    public SaveResult Save(string backupRoot) =>
-        MapSaver.Save(Path, Opened, Folder, Session.Wanted(), backupRoot, Session.State.Bookmarks);
+    public SaveResult Save(string backupRoot)
+    {
+        var (result, _) = Compile(Session.State);
+        var issues = SaveIssue.Find(Session, Session.State, result);
+        if (issues.Count > 0) throw new SaveBlockedException(issues);
+
+        var saved = MapSaver.Save(Path, Opened, Folder, Session.Wanted(), backupRoot, Session.State.Bookmarks);
+        if (saved.Written) Opened = System.IO.File.ReadAllBytes(Path);
+        Session.MarkSaved();
+        return saved;
+    }
 
     /// <summary>
     /// Plans the [Hitsounds] diff from a fresh look at the folder (another difficulty may have changed since the map was

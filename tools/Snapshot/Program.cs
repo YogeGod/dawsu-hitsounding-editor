@@ -23,6 +23,8 @@ AppBuilder.Configure<App>()
     .WithInterFont()
     .SetupWithoutStarting();
 
+if (args[0] == "--trust-review") return TrustReview.Run(outDir);
+
 // Before a map is opened: the default lanes in their sampleset groups.
 var empty = new MainWindow(null, startAudio: false, showInspector: false, usePreferences: false) { Width = 1920, Height = 1080 };
 empty.Show();

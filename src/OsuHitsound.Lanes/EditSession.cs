@@ -52,6 +52,7 @@ public sealed class EditSession
             Moments.ToImmutableDictionary(x => x.Key, x => x.Moment.Volume),
             [.. file.Bookmarks.Order()]);
         announced = State;
+        savedState = State;
         timeOffset = map.Settings.TimeOffset;
         Lanes = AllLanes(map, folder);
     }
@@ -72,7 +73,16 @@ public sealed class EditSession
 
     public bool CanRedo => redo.Count > 0;
 
-    public bool IsEdited => undo.Count > 0 || gestureStart is not null;
+    private EditState savedState;
+
+    public bool IsEdited => !ReferenceEquals(State, savedState) || gestureStart is not null;
+
+    /// <summary>Records a successful save without clearing undo or redo.</summary>
+    public void MarkSaved()
+    {
+        savedState = State;
+        Changed?.Invoke();
+    }
 
     /// <summary>The name of every undo step, oldest first: those done, then those undone (Recent edits).</summary>
     public IReadOnlyList<string> Steps => [.. undo.Select(u => u.Label), .. redo.AsEnumerable().Reverse().Select(r => r.Label)];
