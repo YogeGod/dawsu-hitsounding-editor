@@ -42,7 +42,28 @@ public partial class MainWindow
             UpdateStatus();
             return;
         }
-        ImportChannelSample(lane, Path.GetExtension(source), destination => File.Copy(source, destination, overwrite: false));
+        try
+        {
+            if (!HitsoundRules.SampleExtensions.Contains(Path.GetExtension(source).ToLowerInvariant()))
+                throw new ArgumentException("Choose a WAV, OGG or MP3 sample.");
+            var fresh = MapFolder.FromDirectory(Path.GetDirectoryName(doc.Path)!);
+            var relative = Path.GetRelativePath(Path.GetDirectoryName(doc.Path)!, Path.GetFullPath(source));
+            if (fresh.Find(relative) is { } existing)
+            {
+                var replacement = new Lane(LaneSource.BeatmapFile, existing);
+                if (replacement == lane) return;
+                // A lane with its own hits must stay independent; sharing it would merge the two timelines.
+                if (model.CanReplaceSample(replacement) && !session.State.Hits.Any(h => h.Lane == replacement))
+                {
+                    doc.RescanFolder();
+                    ReplaceChannelLane(lane, replacement);
+                    return;
+                }
+            }
+            ImportChannelSample(lane, Path.GetExtension(source), destination => File.Copy(source, destination, overwrite: false));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or FormatException)
+        { flash = $"Could not assign sample: {ex.Message}"; UpdateStatus(); }
     }
 
     private void ImportChannelSample(Lane lane, string extension, Action<string> write)

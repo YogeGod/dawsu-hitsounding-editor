@@ -380,6 +380,7 @@ public partial class MainWindow : Window
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             UpdateActiveLaneText();
+            UpdateCues(); // project restoration may have changed layers and preview mutes
             model.PreviewMutesChanged += ScheduleProjectSave;
             model.Changed += UpdateSongMute; // soloing a lane silences the song
 
@@ -677,9 +678,14 @@ public partial class MainWindow : Window
     private void UpdateCues()
     {
         if (model is null || session is null || audio is null) return;
-        audio.SetCues(session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h => HitScheduler.HitCue(h.Time, h.Lane, session.VolumeOf(h)))
-            .Concat(HitScheduler.PassiveCues(session.Map)));
+        audio.SetCues(PlaybackCues(model));
     }
+
+    internal static IEnumerable<Cue> PlaybackCues(ArrangeModel model) =>
+        model.Session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h => h.SetPlacement == Guid.Empty
+            ? HitScheduler.HitCue(h.Time, h.Lane, model.Session.VolumeOf(h))
+            : new Cue(h.Time, h.Lane, Math.Clamp(model.Session.VolumeOf(h), 0, 100) / 100f))
+        .Concat(HitScheduler.PassiveCues(model.Session.Map));
 
     /// <summary>Sets the locators from their boxes; a box that isn't a number goes back to the locator as it was.</summary>
     private void ApplyLocatorBoxes()

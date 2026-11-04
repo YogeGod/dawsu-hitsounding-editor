@@ -163,6 +163,7 @@ public partial class MainWindow
             (audio.Speed, audio.SongVolume) = (speed, (float)(SongVolumeSlider.Value / 100));
             UpdateSongMute();
             UpdateCues();
+            UpdateLoop();
         }
 
         ApplyOffsets(); // the waveform follows preferences even when no audio device could start
