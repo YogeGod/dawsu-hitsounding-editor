@@ -291,10 +291,10 @@ public partial class MainWindow
         projectTimer.Start();
     }
 
-    private void SaveProject()
+    private bool SaveProject()
     {
         projectTimer?.Stop();
-        if (model is null || session is null || mapPath is null) return;
+        if (model is null || session is null || mapPath is null) return true;
         var (names, order, added, hidden) = model.LaneLayout();
         var data = new ProjectData
         {
@@ -305,6 +305,7 @@ public partial class MainWindow
             AddedLanes = added,
             HiddenLanes = hidden,
             CollapsedFamilies = [.. model.CollapsedFamilies],
+            HsMode = doc!.HsProject,
             LocatorLeft = Lanes.LocatorLeft,
             LocatorRight = Lanes.LocatorRight,
             Cycle = Lanes.Cycle,
@@ -315,19 +316,28 @@ public partial class MainWindow
         try
         {
             ProjectStore.Save(ProjectStore.DefaultRoot(), mapPath, data);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             flash = $"Couldn't save the editor project: {ex.Message}";
             UpdateStatus();
+            return false;
         }
     }
 
     /// <summary>Puts back what the project file kept for this map: lanes, hits with no object, locators, mutes, offset.</summary>
-    private void RestoreProject(bool restoreUnanchored = true)
+    private void RestoreProject(bool restoreUnanchored = true, HsProject? hsOverride = null)
     {
         if (model is null || session is null || mapPath is null || folder is null) return;
-        if (ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) is not { } project) return;
+        var project = ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) ?? new ProjectData();
+
+        doc!.RestoreHsProject(hsOverride ?? project.HsMode);
+        foreach (var lane in session.State.Hits.Select(h => h.Lane).Distinct())
+        {
+            if (!model.LaneRows.Any(r => r.Lane == lane)) model.AddLane(lane);
+            if (lane.Source == LaneSource.BeatmapFile && folder.Find(lane.Name) is { } sample) audio?.LoadLane(lane, folder.ReadBytes(sample));
+        }
 
         model.ApplyLaneLayout(project, lane => lane.Source != LaneSource.BeatmapFile || folder.Find(lane.Name) is not null);
         foreach (string family in project.CollapsedFamilies)
@@ -339,7 +349,7 @@ public partial class MainWindow
         if (restoreUnanchored) session.Restore(project.Unanchored
             .Select(h => ProjectStore.LaneOf(h.Lane) is { } lane ? session.HitAt(lane, h.Time) : null)
             .OfType<EditHit>()
-            .Where(h => h.Anchor is null));
+            .Where(h => h.Anchor is null || h.Anchor is { ObjectIndex: < 0 } key && !session.MomentByKey.ContainsKey(key)));
 
         foreach (var muted in project.PreviewMuted)
             if (session.State.Hits.FirstOrDefault(h => ProjectStore.KeyOf(h.Lane) == muted.Lane && Math.Abs(h.Time - muted.Time) < 0.5) is { } hit)
@@ -351,6 +361,7 @@ public partial class MainWindow
         mapSongOffset = double.IsFinite(project.SongOffset) ? Math.Clamp(project.SongOffset, -10000, 10000) : 0;
         ApplyOffsets();
 
+        model.RebuildNotes();
         SyncScrollBars();
     }
 

@@ -21,7 +21,7 @@ public sealed class OsuLine
     }
 
     /// <summary>"\r\n", "\n", "\r", or empty for a last line with no newline.</summary>
-    public byte[] Terminator { get; }
+    public byte[] Terminator { get; internal set; }
 
     /// <summary>The section this line belongs to, without brackets. Empty before the first section header.</summary>
     public string Section { get; }

@@ -16,6 +16,17 @@ public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volu
 
     internal static string SlotSuffix(string? slot) => slot is null or "soft-hitnormal" ? "" : "|slot:" + slot;
 
+    internal WantedSound Wanted()
+    {
+        var lanes = new List<Lane> { new(LaneSource.BeatmapFile, FileName) };
+        if (DestinationSlot is { } slot && !slot.EndsWith("-hitnormal", StringComparison.Ordinal))
+        {
+            var sample = HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(FileName))!.Value;
+            lanes.Add(new(LaneSource.BeatmapFile, $"{HitsoundRules.SampleName(sample.Set, "hitnormal")}{sample.Index}.wav"));
+        }
+        return new(lanes, 100);
+    }
+
     public static string SignatureOf(IEnumerable<(Lane Lane, int Volume)> layers, IEnumerable<(Lane Lane, int Volume, double Duration)>? loops = null)
     {
         var single = string.Join(';', layers.Select(l => $"{ProjectStore.KeyOf(l.Lane)}@{l.Volume}"));
@@ -135,14 +146,7 @@ public static class HitsoundDiff
         for (int i = 0; i < groups.Count; i++)
         {
             if (!needsMix.Contains(i) || layered[i].Count + looped[i].Count == 0) { wishes.Add(Wish(groups[i].Layers)); continue; }
-            var mix = mixer.MixFor(layered[i], looped[i]);
-            var lanes = new List<Lane> { new(LaneSource.BeatmapFile, mix.FileName) };
-            if (mix.DestinationSlot is { } slot && !slot.EndsWith("-hitnormal", StringComparison.Ordinal))
-            {
-                var sample = HitsoundRules.ParseSampleName(Path.GetFileNameWithoutExtension(mix.FileName))!.Value;
-                lanes.Add(new Lane(LaneSource.BeatmapFile, $"{HitsoundRules.SampleName(sample.Set, "hitnormal")}{sample.Index}.wav"));
-            }
-            wishes.Add(new WantedSound(lanes, 100));
+            wishes.Add(mixer.MixFor(layered[i], looped[i]).Wanted());
         }
 
         // 4. The final diff, compiled against the folder as it will be (with the mixes in it).

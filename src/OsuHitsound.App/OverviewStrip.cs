@@ -18,6 +18,7 @@ internal sealed class OverviewStrip : Control
     // Which groups play in each pixel column, rebuilt when the width or map changes rather than every frame.
     private (int Column, int Group)[] marks = [];
     private double marksWidth = -1;
+    private object? marksFrom;
 
     public double Playhead { get; set; }
 
@@ -37,12 +38,13 @@ internal sealed class OverviewStrip : Control
         if (model is null || axis is null) return;
 
         double scale = size.Width / length;
-        if (marksWidth != size.Width)
+        if (marksWidth != size.Width || !ReferenceEquals(marksFrom, model.Session.State))
         {
-            marks = [.. model.Map.Moments
-                .SelectMany(m => m.Hits.Select(h => ((int)(m.Time * scale), Array.IndexOf(Groups, ArrangeModel.DisplayGroup(h.Lane)))))
+            marks = [.. model.Session.State.Hits
+                .Select(h => ((int)(h.Time * scale), Array.IndexOf(Groups, ArrangeModel.DisplayGroup(h.Lane))))
                 .Distinct()];
             marksWidth = size.Width;
+            marksFrom = model.Session.State;
         }
 
         double bandHeight = (size.Height - 6) / Groups.Length;

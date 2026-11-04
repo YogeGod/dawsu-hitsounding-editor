@@ -40,10 +40,11 @@ public partial class MainWindow : Window
     private MapFolder? folder => doc?.Folder;
     private EditSession? session => doc?.Session;
     private CancellationTokenSource? compileCancel;
-    private (CompileResult Result, OsuFile File)? lastCompile;
+    private MapCompilation? lastCompile;
     private bool closeConfirmed;
     private string? flash; // a one-off message (saved, not saved, close warning) shown until the next edit
     private object? drawnHits; // the hit list the notes were last built from
+    private object? drawnHsCircles;
 
     public MainWindow() : this(null, startAudio: true)
     {
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
     public MainWindow(string? path, bool startAudio = true, bool showInspector = false, bool usePreferences = true)
     {
         InitializeComponent();
+        SetupHsMode();
 
         (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
         if (usePreferences && prefs.SongsFolder is null) prefs = prefs with { SongsFolder = Preferences.FindSongsFolder() };
@@ -239,6 +241,7 @@ public partial class MainWindow : Window
 
         Closing += (_, e) =>
         {
+            if (savingHs) { e.Cancel = true; return; }
             // Unsaved edits: the first close only warns; closing again discards them.
             if (session is { IsEdited: true } && !closeConfirmed)
             {
@@ -302,7 +305,7 @@ public partial class MainWindow : Window
     /// <summary>Opens a map: reading and decoding run off the UI thread. Errors are shown in the status bar, never thrown.</summary>
     public Task Open(string path) => Loading = OpenAsync(path);
 
-    private async Task<bool> OpenAsync(string path, bool restoreUnanchored = true)
+    private async Task<bool> OpenAsync(string path, bool restoreUnanchored = true, HsProject? hsOverride = null)
     {
         // The current map's project first: a save still waiting for its timer must not be lost or land on the new map.
         SaveProject();
@@ -344,7 +347,7 @@ public partial class MainWindow : Window
             LoadWaveform();
             mapSongOffset = 0; // a map without a project has none of its own
             ApplyOffsets();
-            RestoreProject(restoreUnanchored);
+            RestoreProject(restoreUnanchored, hsOverride);
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             UpdateActiveLaneText();
@@ -367,6 +370,7 @@ public partial class MainWindow : Window
             UpdateStatus();
             ScheduleCompile();
             RevertItem.IsEnabled = true;
+            RefreshHsMode();
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException)
@@ -389,8 +393,8 @@ public partial class MainWindow : Window
 
     /// <summary>Asks before a command switches to another map while this one has unsaved edits.</summary>
     private async Task<bool> MayLeaveMap() =>
-        session is not { IsEdited: true }
-        || await Dialogs.Confirm(this, "Unsaved edits", "This map has edits that aren't saved. Open the other map and discard them?", "Discard and open");
+        !savingHs && (session is not { IsEdited: true }
+        || await Dialogs.Confirm(this, "Unsaved edits", "This map has edits that aren't saved. Open the other map and discard them?", "Discard and open"));
 
     /// <summary>File → Import .osz…: unpacks into a new folder in the Songs folder, then opens a difficulty from it.</summary>
     private async Task ImportOsz()
@@ -533,6 +537,7 @@ public partial class MainWindow : Window
     /// <summary>Runs a command from <see cref="EditorCommands"/>, from a key press or a menu item.</summary>
     private void Run(string id)
     {
+        if (savingHs) return;
         switch (id)
         {
             case "open": _ = PickMap(); break;
@@ -853,7 +858,7 @@ public partial class MainWindow : Window
         if (session is null) return;
         if (Lanes.Edits.Quantize(strength) == 0)
         {
-            flash = "Quantize moves selected hits that have no circle under them; none are selected.";
+            flash = "Quantize moves loose hits or HS-mode circles; select an off-grid hit to quantize.";
             UpdateStatus();
         }
     }
@@ -968,16 +973,20 @@ public partial class MainWindow : Window
     private void OnEdited()
     {
         if (model is null || session is null) return;
-        if (!ReferenceEquals(session.State.Hits, drawnHits))
+        if (!ReferenceEquals(session.State.Hits, drawnHits) || !ReferenceEquals(session.State.HsCircles, drawnHsCircles))
         {
             // Volume-only edits (bar drags, ramps) skip this: the notes and the selection only depend on the hits.
             drawnHits = session.State.Hits;
+            drawnHsCircles = session.State.HsCircles;
             Lanes.Edits.Prune();
             model.RebuildNotes();
             if (model.HasHiddenLanes) model.RefreshRows(); // a deleted lane whose hits came back (undo) shows again
         }
         else Lanes.InvalidateVisual();
 
+        Lanes.Axis.End = Math.Max(audio?.Length ?? 0, model.LastTime);
+        Overview.Attach(model, Lanes.Axis, Lanes.Axis.End);
+        RefreshHsMode();
         UpdateCues();
         Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
         closeConfirmed = false;
@@ -998,12 +1007,12 @@ public partial class MainWindow : Window
         _ = Task.Run(async () =>
         {
             await Task.Delay(150, cancel.Token);
-            var (result, copy) = document.Compile(state);
+            var compiled = document.Compile(state);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (cancel.IsCancellationRequested || !ReferenceEquals(editing, session) || model is null) return;
-                lastCompile = (result, copy);
-                model.SetConflicts(result.Conflicts.Select(c => c.Moment).ToHashSet());
+                lastCompile = compiled;
+                model.SetConflicts(compiled.Result.Conflicts.Select(c => c.Moment).ToHashSet());
                 UpdateStatus();
             });
         }, cancel.Token).ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
@@ -1015,7 +1024,9 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task Save()
     {
+        if (savingHs) return;
         if (session is null || mapPath is null || originalBytes is null || folder is null) return;
+        if (session.State.HsMode || session.HasHsObjects) { await SaveHs(); return; }
         try
         {
             int unanchored = session.Unanchored.Count();
@@ -1368,8 +1379,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var moment = session.MomentByKey[key];
-        var line = compiled.File.HitObjects[key.ObjectIndex].Line.Text;
+        if (!session.MomentByKey.TryGetValue(key, out var moment) || !compiled.Keys.TryGetValue(key, out var savedKey))
+        { SavedText.Text = "Checking the current objects…"; return; }
+        var line = compiled.File.HitObjects[savedKey.ObjectIndex].Line.Text;
         var point = new TimingPointIndex(compiled.File.TimingPoints).SamplePointAt(moment.Time - session.Map.Settings.TimeOffset);
         var conflict = compiled.Result.Conflicts.FirstOrDefault(c => c.Moment == key);
         SavedText.Text = $"{Describe(moment)}\nObject line: {line}\nTiming point it reads: {point?.Line.Text ?? "none"}"

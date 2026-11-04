@@ -27,7 +27,7 @@ internal sealed record TimeRange(double Start, double End, IReadOnlySet<Lane> La
 internal sealed class HitEditor
 {
     private ArrangeModel? model;
-    private List<(Lane Lane, double Offset)> clipboard = [];
+    private List<(Lane Lane, double Offset, int Volume)> clipboard = [];
 
     /// <summary>The selected hits. Mouse gestures change it directly while dragging and call <see cref="Notify"/> after.</summary>
     public HashSet<EditHit> Selected { get; } = [];
@@ -144,7 +144,7 @@ internal sealed class HitEditor
     {
         if (Selected.Count == 0) return;
         double start = Selected.Min(h => h.Time);
-        clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start))];
+        clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start, Session?.VolumeOf(h) ?? 100))];
     }
 
     public void Cut()
@@ -159,7 +159,21 @@ internal sealed class HitEditor
         if (Session is not { } session || clipboard.Count == 0) return;
         double at = SnapTime(time);
         var hits = clipboard.Select(c => session.HitAt(c.Lane, at + c.Offset)).Distinct().ToList();
-        session.Add(hits, "Paste");
+        bool ownGesture = !session.IsGestureActive;
+        var before = session.State.HsCircles;
+        if (ownGesture) session.BeginGesture("Paste");
+        try
+        {
+            session.Add(hits, "Paste");
+            if (session.State.HsMode)
+            {
+                var volumes = clipboard.Select(c => (Hit: session.HitAt(c.Lane, at + c.Offset), c.Volume))
+                    .Where(c => c.Hit.Anchor is { ObjectIndex: < 0 } key && !before.ContainsKey(key))
+                    .GroupBy(c => c.Hit.Anchor!.Value).ToDictionary(g => g.Key, g => g.First().Volume);
+                session.SetVolumes(volumes, "Paste");
+            }
+        }
+        finally { if (ownGesture) session.EndGesture(); }
         Select(hits);
     }
 
@@ -243,7 +257,7 @@ internal sealed class HitEditor
         QuantizeStrength = Math.Clamp(strength, 1, 100);
         if (Session is not { } session || model is not { } m) return 0;
         // Only loose hits that are off the grid: a Q on hits already there is not an edit.
-        var moves = Selected.Where(h => h.Anchor is null)
+        var moves = Selected.Where(h => h.Anchor is null || session.State.HsMode && session.State.HsCircles.ContainsKey(h.Anchor.Value))
             .Select(h => (Hit: h, Lane: h.Lane, Time: h.Time + QuantizeStrength / 100 * (m.Snap(h.Time, Divisor) - h.Time)))
             .Where(x => Math.Abs(x.Time - x.Hit.Time) > 1e-6).ToList();
         if (moves.Count == 0) return 0;
@@ -272,8 +286,12 @@ internal sealed class HitEditor
         var shifts = new double[copies];
         double at = start;
         for (int n = 0; n < copies; n++) shifts[n] = (at = m.StepsAfter(at, gap, Divisor)) - start;
-        var hits = shifts.SelectMany(shift => Selected.Select(h => session.HitAt(h.Lane, h.Time + shift))).Distinct().ToList();
-        session.Add(hits, "Repeat");
+        var source = Selected.ToList();
+        var hits = new List<EditHit>();
+        bool ownGesture = !session.IsGestureActive;
+        if (ownGesture) session.BeginGesture("Repeat");
+        try { foreach (double shift in shifts) hits.AddRange(session.Copy(source, shift, "Repeat")); }
+        finally { if (ownGesture) session.EndGesture(); }
         Select(hits);
     }
 

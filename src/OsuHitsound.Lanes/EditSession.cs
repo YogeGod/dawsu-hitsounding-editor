@@ -17,6 +17,8 @@ public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor);
 public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks)
 {
     public ImmutableList<Lane> LaneOrder { get; init; } = [];
+    public bool HsMode { get; init; }
+    public ImmutableDictionary<MomentKey, double> HsCircles { get; init; } = ImmutableDictionary<MomentKey, double>.Empty;
 }
 
 /// <summary>What a range edit does with the hits in a time range.</summary>
@@ -32,7 +34,7 @@ public enum RangeOperation
 /// a hit placed within <see cref="AnchorTolerance"/> of a moment plays on it; elsewhere it is a hit with no object.
 /// <see cref="Wanted"/> turns the state into the compiler's input.
 /// </summary>
-public sealed class EditSession
+public sealed partial class EditSession
 {
     /// <summary>How close (ms) a hit must be to a moment to play on it. Slider nodes land on fractional times.</summary>
     public const double AnchorTolerance = 2;
@@ -47,28 +49,30 @@ public sealed class EditSession
 
     public EditSession(OsuFile file, MapFolder folder, DecompiledMap map)
     {
-        Map = map;
+        baseMap = map;
+        sourceFile = file;
         var objectIndex = file.HitObjects.Select((o, i) => (o, i)).ToDictionary(x => x.o, x => x.i); // HitObject compares by reference
-        Moments = [.. map.Moments.Select(m => (m, new MomentKey(objectIndex[m.Object], m.Node)))];
-        MomentByKey = Moments.ToDictionary(x => x.Key, x => x.Moment);
+        baseMoments = [.. map.Moments.Select(m => (m, new MomentKey(objectIndex[m.Object], m.Node)))];
         State = new EditState(
-            [.. Moments.SelectMany(x => x.Moment.Hits.Select(h => new EditHit(h.Lane, x.Moment.Time, x.Key)))],
-            Moments.ToImmutableDictionary(x => x.Key, x => x.Moment.Volume),
+            [.. baseMoments.SelectMany(x => x.Moment.Hits.Select(h => new EditHit(h.Lane, x.Moment.Time, x.Key)))],
+            baseMoments.ToImmutableDictionary(x => x.Key, x => x.Moment.Volume),
             [.. file.Bookmarks.Order()]);
         announced = State;
         timeOffset = map.Settings.TimeOffset;
-        Lanes = AllLanes(map, folder);
+        baseLanes = AllLanes(map, folder);
+        HsStartedEmpty = file.HitObjects.Count == 0;
     }
 
-    public DecompiledMap Map { get; }
+    public DecompiledMap Map => State.HsCircles.Count == 0 && ownedOriginals.Count == 0 ? baseMap
+        : baseMap with { Moments = Moments.Select(m => m.Moment).ToList() };
 
-    public IReadOnlyDictionary<MomentKey, Moment> MomentByKey { get; }
+    public IReadOnlyDictionary<MomentKey, Moment> MomentByKey { get { RefreshMoments(); return currentByKey; } }
 
     /// <summary>Every moment with its key, in time order.</summary>
-    public IReadOnlyList<(Moment Moment, MomentKey Key)> Moments { get; }
+    public IReadOnlyList<(Moment Moment, MomentKey Key)> Moments { get { RefreshMoments(); return currentMoments; } }
 
     /// <summary>The lanes you can draw in: the map's, every set-named sample file in the folder, and all 12 skin sounds.</summary>
-    public IReadOnlyList<Lane> Lanes { get; }
+    public IReadOnlyList<Lane> Lanes => baseLanes;
 
     public EditState State { get; private set; }
 
@@ -81,7 +85,8 @@ public sealed class EditSession
     public bool IsEdited => undo.Any(u => MapChanged(u.State, State)) || gestureStart is { } start && MapChanged(start, State);
 
     private static bool MapChanged(EditState a, EditState b) =>
-        !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks);
+        !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks)
+        || !ReferenceEquals(a.HsCircles, b.HsCircles);
 
     /// <summary>Seeds the editor-only layout on load or after adding lanes, without creating an edit.</summary>
     public void RestoreLaneOrder(IEnumerable<Lane> lanes)
@@ -120,15 +125,16 @@ public sealed class EditSession
 
     /// <summary>The moment a hit at <paramref name="time"/> plays on, or null when no object is that close.</summary>
     public MomentKey? MomentAt(double time) =>
-        Sorted.Nearest(Moments, time, AnchorTolerance, x => x.Moment.Time) is >= 0 and var i ? Moments[i].Key : null;
+        Sorted.Nearest(Moments, time, AnchorTolerance, x => x.Moment.Time,
+            x => !State.HsMode || !State.HsCircles.ContainsKey(x.Key) || HsTime(x.Moment.Time) == HsTime(time)) is >= 0 and var i ? Moments[i].Key : null;
 
     /// <summary>A hit in a lane at a time, placed on the moment there if any.</summary>
     public EditHit HitAt(Lane lane, double time) => MomentAt(time) is { } key
         ? new EditHit(lane, MomentByKey[key].Time, key)
-        : new EditHit(lane, time, null);
+        : State.HsMode ? HsHit(lane, time) : new EditHit(lane, time, null);
 
     /// <summary>Volume of a moment, or of a hit with no object (100).</summary>
-    public int VolumeOf(EditHit hit) => hit.Anchor is { } key ? State.Volumes[key] : 100;
+    public int VolumeOf(EditHit hit) => hit.Anchor is { } key ? State.Volumes.GetValueOrDefault(key, 100) : 100;
 
     // ---- edits; each call outside a gesture is one undo step ----
 
@@ -172,7 +178,12 @@ public sealed class EditSession
             var gone = moves.Select(m => m.Hit).ToHashSet();
             var kept = s.Hits.RemoveAll(gone.Contains);
             var present = kept.ToHashSet();
-            return s with { Hits = kept.AddRange(moved.Where(present.Add)) };
+            var volumes = s.Volumes;
+            if (s.HsMode)
+                for (int i = 0; i < moved.Count; i++)
+                    if (moved[i].Anchor is { ObjectIndex: < 0 } key && !s.HsCircles.ContainsKey(key) && !volumes.ContainsKey(key))
+                        volumes = volumes.SetItem(key, moves[i].Hit.Anchor is { } from ? s.Volumes.GetValueOrDefault(from, 100) : 100);
+            return s with { Hits = kept.AddRange(moved.Where(present.Add)), Volumes = volumes };
         });
         return moved.Distinct().ToList();
     }
@@ -215,9 +226,21 @@ public sealed class EditSession
     /// <summary>Copies hits by a time offset, in their lanes (one undo step); each lands on the moment there, if any. Returns the copies.</summary>
     public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset, string label = "Copy")
     {
-        var copies = hits.Select(h => HitAt(h.Lane, h.Time + offset)).Distinct().ToList();
-        Add(copies, label);
-        return copies;
+        var originals = hits.ToList();
+        var copies = originals.Select(h => HitAt(h.Lane, h.Time + offset)).ToList();
+        Change(label, s =>
+        {
+            var existing = s.Hits.ToHashSet();
+            var added = copies.Where(existing.Add).ToList();
+            if (added.Count == 0) return s;
+            var volumes = s.Volumes;
+            if (s.HsMode)
+                for (int i = 0; i < copies.Count; i++)
+                    if (copies[i].Anchor is { ObjectIndex: < 0 } key && !s.HsCircles.ContainsKey(key) && !volumes.ContainsKey(key))
+                        volumes = volumes.SetItem(key, originals[i].Anchor is { } from ? s.Volumes.GetValueOrDefault(from, 100) : 100);
+            return s with { Hits = s.Hits.AddRange(added), Volumes = volumes };
+        });
+        return copies.Distinct().ToList();
     }
 
     public void SetVolume(IEnumerable<MomentKey> keys, int volume, string label = "Volume")
@@ -232,7 +255,7 @@ public sealed class EditSession
         var existing = State.Hits.ToHashSet();
         var added = hits.Where(existing.Add).ToList();
         if (added.Count == 0) return;
-        State = State with { Hits = State.Hits.AddRange(added) };
+        State = MaintainHsCircles(State with { Hits = State.Hits.AddRange(added) });
         Announce();
     }
 
@@ -295,7 +318,7 @@ public sealed class EditSession
     public Dictionary<MomentKey, WantedSound> Wanted(EditState state)
     {
         var lanes = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value, h => h.Lane);
-        return Moments.ToDictionary(x => x.Key, x => new WantedSound([.. lanes[x.Key]], state.Volumes[x.Key]));
+        return MomentsFor(state).ToDictionary(x => x.Key, x => new WantedSound([.. lanes[x.Key]], state.Volumes.GetValueOrDefault(x.Key, 100)));
     }
 
 
@@ -345,6 +368,7 @@ public sealed class EditSession
     private void Change(string label, Func<EditState, EditState> edit, Action? undoCompanion = null, Action? redoCompanion = null)
     {
         var next = edit(State);
+        if (!ReferenceEquals(next, State)) next = MaintainHsCircles(next);
         if (!ReferenceEquals(next, State))
         {
             if (gestureStart is null)

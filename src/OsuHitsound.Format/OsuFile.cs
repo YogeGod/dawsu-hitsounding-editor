@@ -10,13 +10,14 @@ public sealed class OsuFile
 {
     private readonly List<OsuLine> lines;
     private readonly List<TimingPoint> timingPoints;
+    private readonly List<HitObject> hitObjects;
 
     private OsuFile(bool hasBom, List<OsuLine> lines, List<TimingPoint> timingPoints, List<HitObject> hitObjects)
     {
         HasBom = hasBom;
         this.lines = lines;
         this.timingPoints = timingPoints;
-        HitObjects = hitObjects;
+        this.hitObjects = hitObjects;
     }
 
     public bool HasBom { get; }
@@ -27,7 +28,42 @@ public sealed class OsuFile
     public IReadOnlyList<TimingPoint> TimingPoints => timingPoints;
 
     /// <summary>In file order.</summary>
-    public IReadOnlyList<HitObject> HitObjects { get; }
+    public IReadOnlyList<HitObject> HitObjects => hitObjects;
+
+    /// <summary>Inserts a centred circle without rewriting other object lines.</summary>
+    public HitObject InsertHitCircle(int time)
+    {
+        var newline = lines.FirstOrDefault(l => l.Terminator.Length > 0)?.Terminator ?? "\r\n"u8.ToArray();
+        int header = lines.FindIndex(l => l.Section == "HitObjects" && l.Text.Trim() == "[HitObjects]");
+        void EnsureNewline(int index)
+        {
+            if (index > 0 && lines[index - 1].Terminator.Length == 0)
+            { lines[index - 1].Terminator = newline; removedLines = true; }
+        }
+        if (header < 0)
+        {
+            EnsureNewline(lines.Count);
+            header = lines.Count;
+            InsertLine(header, "[HitObjects]", "HitObjects", newline);
+        }
+        int objectIndex = hitObjects.FindIndex(o => o.Time > time);
+        if (objectIndex < 0) objectIndex = hitObjects.Count;
+        int lineIndex = objectIndex < hitObjects.Count ? lines.IndexOf(hitObjects[objectIndex].Line)
+            : hitObjects.Count > 0 ? lines.IndexOf(hitObjects[^1].Line) + 1 : header + 1;
+        EnsureNewline(lineIndex);
+        var line = InsertLine(lineIndex, $"256,192,{time.ToString(System.Globalization.CultureInfo.InvariantCulture)},1,0,0:0:0:0:", "HitObjects", newline);
+        var circle = new HitObject(line);
+        hitObjects.Insert(objectIndex, circle);
+        return circle;
+    }
+
+    /// <summary>Removes exactly this object, preserving other lines and their original bytes.</summary>
+    public void RemoveHitObject(HitObject obj)
+    {
+        if (!hitObjects.Remove(obj)) return;
+        lines.Remove(obj.Line);
+        removedLines = true;
+    }
 
     public bool IsEdited => removedLines || Lines.Any(l => l.IsEdited);
 

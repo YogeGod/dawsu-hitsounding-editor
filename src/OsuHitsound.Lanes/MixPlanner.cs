@@ -33,7 +33,7 @@ public sealed class MixPlanner
         this.destinations = destinations ?? new Dictionary<string, string>();
         if (this.destinations.Values.Any(slot => !ExportMergeSettings.Slots.Contains(slot)))
             throw new ArgumentException("Unknown destination hitsound slot.", nameof(destinations));
-        var required = needed.Where(l => l.Count > 0).ToList();
+        var required = needed.ToList();
         var fingerprints = new Dictionary<Lane, string?>();
         string? Fingerprint(Lane lane)
         {

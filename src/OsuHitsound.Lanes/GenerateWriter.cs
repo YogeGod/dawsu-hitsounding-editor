@@ -13,12 +13,22 @@ public static class GenerateWriter
 {
     /// <param name="render">Renders a mix to WAV bytes; null when none of its sounds can be read.</param>
     /// <exception cref="IOException">Nothing (or nothing lasting) was written.</exception>
-    public static GenerateResult Write(GeneratePlan plan, Func<MixFile, byte[]?> render, string backupRoot)
+    public static GenerateResult Write(GeneratePlan plan, Func<MixFile, byte[]?> render, string backupRoot, byte[]? expectedOriginal = null)
     {
         var dir = Path.GetDirectoryName(plan.OsuPath)!;
         var removable = plan.Removes.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var mixes = plan.Mixes.Select(m => (Mix: m, Path: Path.Combine(dir, m.FileName),
             Bytes: render(m) ?? throw new IOException($"Couldn't make {m.FileName}: none of its sounds could be read."))).ToList();
+        void CheckOriginal()
+        {
+            if (expectedOriginal is not null && !File.ReadAllBytes(plan.OsuPath).AsSpan().SequenceEqual(expectedOriginal))
+                throw new IOException("The .osu changed on disk. Reopen it before saving; no map edits were overwritten.");
+            if (expectedOriginal is not null)
+                foreach (var mix in plan.Reused)
+                    if (!File.Exists(Path.Combine(dir, mix.FileName)) || GenerateManifest.Hash(File.ReadAllBytes(Path.Combine(dir, mix.FileName))) != mix.Sha256)
+                        throw new IOException("A reused generated sample changed on disk. Prepare Save again before writing the map.");
+        }
+        CheckOriginal();
         if (mixes.FirstOrDefault(m => File.Exists(m.Path) && !removable.Contains(m.Mix.FileName)) is { Path: { } taken })
             throw new IOException($"{Path.GetFileName(taken)} already exists in the mapset; not overwriting it.");
 
@@ -32,6 +42,7 @@ public static class GenerateWriter
                 written.Add((path, before));
             }
 
+            CheckOriginal();
             string? backup = File.Exists(plan.OsuPath) ? SafeFile.Backup(backupRoot, plan.OsuPath, File.ReadAllBytes(plan.OsuPath)) : null;
             SafeFile.WriteAllBytes(plan.OsuPath, plan.Diff.ToBytes());
 

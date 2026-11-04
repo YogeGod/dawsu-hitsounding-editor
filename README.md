@@ -14,6 +14,7 @@ The editor also has a built-in tour: **File → Tutorial**.
 
 - **Open…** (Ctrl+O): open a `.osu` from your Songs folder, or drag a `.osu` or `.osz` onto the window. Each sample file in the mapset becomes a lane you can draw in.
 - **Save .osu** (Ctrl+S): write your hitsounds back into the map. A backup of the old file is kept outside the mapset.
+- **HS mode** beside Save: available for difficulties that started empty or whose difficulty name contains the word **HS** or **hitsounds**. Turning it on backfills loose sounds and creates a centred circle whenever a new time needs one. Layers at the same time share a circle; deleting its last sound deletes a circle created by this mode. Existing objects are protected. Off keeps the circles, and enabling resumes maintenance. Undo/Redo includes object changes; normal Save writes this difficulty and offers merge priorities when a mix is needed. Mode, eligibility and ownership are kept in the editor project; externally changed maps lose old ownership to protect their objects.
 - **File → Revert to last saved…**: reload the saved `.osu` after confirmation, discarding unsaved hits and bookmarks and clearing undo history. Lane layout, playback settings, playhead and timeline view are kept. You can assign a shortcut in Preferences → Keys.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready to copy into the other difficulties with **Map → Copy hitsounds…** (see [Copy hitsounds](#copy-hitsounds)).
 

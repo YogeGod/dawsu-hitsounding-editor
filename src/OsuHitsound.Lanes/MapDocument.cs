@@ -2,12 +2,17 @@ using OsuHitsound.Format;
 
 namespace OsuHitsound.Lanes;
 
+public sealed record MapCompilation(CompileResult Result, OsuFile File, IReadOnlyDictionary<MomentKey, MomentKey> Keys)
+{
+    public void Deconstruct(out CompileResult result, out OsuFile file) => (result, file) = (Result, File);
+}
+
 /// <summary>
 /// One opened map and what the editor does with it, without any UI: its bytes as opened (Save and the background
 /// compile always start again from these), its folder, the decompiled map and the edit session. Save writes only the
 /// .osu; Generate plans from a fresh look at the folder.
 /// </summary>
-public sealed class MapDocument
+public sealed partial class MapDocument
 {
     private readonly TimingPointIndex timing;
 
@@ -17,8 +22,7 @@ public sealed class MapDocument
         Opened = opened;
         File = file;
         Folder = folder;
-        Map = Decompiler.Decompile(file, folder);
-        Session = new EditSession(file, folder, Map);
+        Session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
         timing = new TimingPointIndex(file.TimingPoints);
     }
 
@@ -42,7 +46,7 @@ public sealed class MapDocument
         return [.. Folder.Files.Where(f => !before.Contains(f))];
     }
 
-    public DecompiledMap Map { get; }
+    public DecompiledMap Map => Session.Map;
 
     public EditSession Session { get; }
 
@@ -73,16 +77,21 @@ public sealed class MapDocument
     }
 
     /// <summary>Compiles an edit state on a fresh copy of the map as opened (safe off the UI thread: the state is immutable).</summary>
-    public (CompileResult Result, OsuFile File) Compile(EditState state)
+    public MapCompilation Compile(EditState state)
     {
-        var copy = OsuFile.Parse(Opened);
-        return (Compiler.Apply(copy, Folder, Session.Wanted(state)), copy);
+        var projection = Session.ProjectHs(state, Opened);
+        var result = Compiler.Apply(projection.File, Folder, projection.Wanted);
+        var reverse = projection.Keys.ToDictionary(p => p.Value, p => p.Key);
+        return new(result with { Conflicts = result.Conflicts.Select(c => c with { Moment = reverse[c.Moment] }).ToList() }, projection.File, projection.Keys);
     }
 
     /// <summary>Saves the current edits and bookmarks; see <see cref="MapSaver.Save"/>.</summary>
     /// <exception cref="IOException">The file changed on disk since it was opened, or couldn't be written.</exception>
-    public SaveResult Save(string backupRoot) =>
-        MapSaver.Save(Path, Opened, Folder, Session.Wanted(), backupRoot, Session.State.Bookmarks);
+    public SaveResult Save(string backupRoot)
+    {
+        if (Session.HasHsObjects) throw new InvalidOperationException("Use the HS save plan to preserve generated circles and mix incompatible sounds.");
+        return MapSaver.Save(Path, Opened, Folder, Session.Wanted(), backupRoot, Session.State.Bookmarks);
+    }
 
     /// <summary>
     /// Plans the [Hitsounds] diff from a fresh look at the folder (another difficulty may have changed since the map was

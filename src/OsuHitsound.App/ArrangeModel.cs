@@ -51,7 +51,6 @@ internal sealed partial class ArrangeModel
     public ArrangeModel(EditSession session, OsuFile file, IReadOnlySet<Lane> silent)
     {
         Session = session;
-        Map = session.Map;
         Silent = silent;
 
         // In each sampleset group, as in V6.39: hitnormal, whistle, finish, clap (then slider sounds), each starting with
@@ -83,7 +82,7 @@ internal sealed partial class ArrangeModel
 
     public EditSession Session { get; }
 
-    public DecompiledMap Map { get; }
+    public DecompiledMap Map => Session.Map;
 
     public IReadOnlySet<Lane> Silent { get; set; }
 
@@ -134,6 +133,9 @@ internal sealed partial class ArrangeModel
         foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
         previewMuted.IntersectWith(Session.State.Hits); // forget mutes of hits that were moved or removed
         (Notes, MomentGroups) = (notes, groups);
+        Objects = BuildObjects(Session, timeOffset);
+        LastTime = Math.Max(Session.Moments.Select(m => m.Moment.Time).Concat(Session.State.Hits.Select(h => h.Time)).DefaultIfEmpty(0).Max(),
+            Map.Passive.Select(p => p.EndTime).DefaultIfEmpty(0).Max());
         UpdateProblemTimes();
         Changed?.Invoke();
     }
@@ -237,11 +239,11 @@ internal sealed partial class ArrangeModel
 
     public IReadOnlyList<Section> Sections { get; }
 
-    public double LastTime { get; }
+    public double LastTime { get; private set; }
 
 
     /// <summary>Every gameplay object, in time order, for the object strip.</summary>
-    public IReadOnlyList<ObjectSpan> Objects { get; }
+    public IReadOnlyList<ObjectSpan> Objects { get; private set; } = [];
 
     private static List<ObjectSpan> BuildObjects(EditSession session, double offset) =>
     [

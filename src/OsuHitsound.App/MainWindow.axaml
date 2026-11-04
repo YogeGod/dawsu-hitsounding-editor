@@ -227,6 +227,8 @@
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Name="OpenButton" Classes="flat" Content="Open…" ToolTip.Tip="Open a map (Ctrl+O)" />
           <Button Name="SaveButton" Classes="flat" Content="Save .osu" ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
+          <ToggleButton Name="HsModeButton" Classes="wide" Content="HS mode" IsEnabled="False" Height="28" MinHeight="28"
+                        ToolTip.Tip="Open an empty difficulty or one named HS / hitsounds to create circles as you place sounds." />
           <Button Name="GenerateButton" Classes="flat" Content="Generate…" ToolTip.Tip="Generate a hitsound diff from the hits (circles where sounds have no object)" />
           <Menu Name="HeaderMenu" VerticalAlignment="Center" Margin="4,0,0,0">
             <MenuItem Header="File">

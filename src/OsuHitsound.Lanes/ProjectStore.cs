@@ -10,6 +10,9 @@ public sealed record TimeSignature(int Bar, int Numerator, int Denominator);
 /// <summary>A hit stored in a project: its lane and timeline time.</summary>
 public sealed record ProjectHit(string Lane, double Time);
 
+public sealed record HsMoment(int ObjectIndex, int Node, double Time, List<string> Hits, int Volume, bool Owned);
+public sealed record HsProject(bool Enabled, bool StartedEmpty, string FileHash, List<HsMoment> Moments);
+
 /// <summary>
 /// What a .osu can't hold, kept per map by the editor: hits with no object, lane names, order, added and hidden
 /// lanes, cycle locators, preview mutes and the song offset. Lanes are stored as keys (see <see cref="ProjectStore.KeyOf"/>).
@@ -34,6 +37,7 @@ public sealed record ProjectData
 
     public List<string> HiddenLanes { get; init; } = [];
     public List<string> CollapsedFamilies { get; init; } = [];
+    public HsProject? HsMode { get; init; }
 
     public double? LocatorLeft { get; init; }
 
