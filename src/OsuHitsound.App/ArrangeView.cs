@@ -27,6 +27,19 @@ internal enum Tool
 /// </summary>
 internal sealed class ArrangeView : Control
 {
+    public bool ShowMissingObjectWarnings { get; set; }
+    public bool ShowExportWarnings { get; set; } = true;
+    public IReadOnlyList<Conflict> ExportProblems { get; set; } = [];
+
+    internal IEnumerable<(double Time, string Reason)> VisibleWarnings()
+    {
+        if (ShowExportWarnings)
+            foreach (var problem in ExportProblems) yield return (problem.Time, problem.Reason);
+        if (ShowMissingObjectWarnings && Model is { } model)
+            foreach (var hit in model.Session.Unanchored.DistinctBy(h => h.Time)) yield return (hit.Time, "No hit object here. Use HS mode or Generate to create one.");
+    }
+
+    private bool VisibleProblem(EditHit hit) => hit.Anchor is null ? ShowMissingObjectWarnings : ShowExportWarnings && Model?.Conflicted.Contains(hit.Anchor.Value) == true;
     private static UiTheme Theme_ => UiTheme.Current;
 
     /// <summary>The column of drag handles (⠿) left of the lane names; the lane list's own width is themable.</summary>
@@ -51,7 +64,6 @@ internal sealed class ArrangeView : Control
     public const double DefaultWaveHeight = 44, ObjectsHeight = 26;
     public const double MinRowHeight = 16, MaxRowHeight = 64;
 
-    private static readonly IBrush StripeA = Paint.Brush("#3a1517"), StripeB = Paint.Brush("#6b1f24");
     private static readonly IPen ConflictRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
     private static readonly IPen MarqueePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#2f6fd0"), 1);
     private static readonly IBrush MarqueeFill = Paint.Brush(Color.Parse("#2f6fd0"), 0.15);
@@ -359,8 +371,6 @@ internal sealed class ArrangeView : Control
 
             using (ctx.PushClip(new Rect(GridLeft, HeaderHeight, gridWidth, size.Height - HeaderHeight)))
             {
-                DrawConflictColumns(ctx, model, from, to, size.Height);
-
                 DrawGridLines(ctx, model, lines, from, to, HeaderHeight, size.Height);
 
                 var range = Edits.Range;
@@ -400,39 +410,22 @@ internal sealed class ArrangeView : Control
         }
 
         DrawHeader(ctx, model, lines, size.Width, gridWidth);
+        DrawWarningMarkers(ctx, from, to);
         ctx.DrawLine(Paint.DividerPen, new Point(GridLeft - 0.5, 0), new Point(GridLeft - 0.5, size.Height));
         if (IsPreview)
             Paint.DrawText(ctx, "Open a map to start drawing (Ctrl+O). Click a lane's ● to hear its sound.", new Point(GridLeft + 20, HeaderHeight + 20), Paint.BaseSize, Paint.Dim, 0);
     }
 
-    /// <summary>The design's conflict marking: red 135° stripes down the whole column of a moment that won't save.</summary>
-    private void DrawConflictColumns(DrawingContext ctx, ArrangeModel model, double from, double to, double height)
+    /// <summary>Small warning marks above the lanes, coalesced at wide zoom.</summary>
+    private void DrawWarningMarkers(DrawingContext ctx, double from, double to)
     {
-        const double half = 6;
-        var times = model.ProblemTimes;
-        for (int i = Sorted.LowerBound(times, from - 20, t => t); i < times.Count && times[i] <= to + 20; i++)
+        double lastX = double.NegativeInfinity;
+        foreach (var warning in VisibleWarnings().Where(w => w.Time >= from && w.Time <= to).OrderBy(w => w.Time))
         {
-            double t = times[i];
-            double x = GridLeft + Axis.X(t);
-            var column = new Rect(x - half, HeaderHeight, half * 2, height - HeaderHeight);
-            using (ctx.PushClip(column))
-            {
-                ctx.FillRectangle(StripeA, column);
-                for (double y = HeaderHeight - half * 2; y < height; y += 10)
-                {
-                    var g = new StreamGeometry();
-                    using (var c = g.Open())
-                    {
-                        c.BeginFigure(new Point(x - half, y), true);
-                        c.LineTo(new Point(x - half, y + 5));
-                        c.LineTo(new Point(x + half, y + 5 + half * 2));
-                        c.LineTo(new Point(x + half, y + half * 2));
-                        c.EndFigure(true);
-                    }
-
-                    ctx.DrawGeometry(StripeB, null, g);
-                }
-            }
+            double x = GridLeft + Axis.X(warning.Time);
+            if (x - lastX < 8) continue;
+            lastX = x;
+            ctx.DrawRectangle(Paint.Brush("#f0aa70"), null, new Rect(x - 3, HeaderHeight - 9, 6, 6), 1, 1);
         }
     }
 
@@ -607,7 +600,7 @@ internal sealed class ArrangeView : Control
             var o = objects[i];
             if (o.End < from) continue;
             double x0 = GridLeft + Axis.X(o.Start), x1 = GridLeft + Axis.X(o.End);
-            bool conflict = o.Nodes.Any(n => model.Conflicted.Contains(n.Key));
+            bool conflict = ShowExportWarnings && o.Nodes.Any(n => model.Conflicted.Contains(n.Key));
             var outline = conflict ? ObjectConflictPen : null;
             switch (o.Kind)
             {
@@ -868,7 +861,7 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), Math.Max(2, noteSize - 4), fill, Paint.NoteRingPen);
             else if (n.Hit is { } hit && selection.Contains(hit))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, Paint.SelectedRingPen);
-            else if (model.IsProblem(n.Hit!))
+            else if (VisibleProblem(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, ConflictRing);
             else if (model.IsPreviewMuted(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.MutedFill, Paint.NoteRingPen);
@@ -1349,6 +1342,13 @@ internal sealed class ArrangeView : Control
     {
         var previousHover = HoveredLane;
         pointer = e.GetPosition(this);
+        string? warningTip = null;
+        if (pointer is { } hover && hover.X >= GridLeft && hover.Y >= HeaderHeight - 12 && hover.Y < HeaderHeight)
+        {
+            var warnings = VisibleWarnings().Where(w => Math.Abs(GridLeft + Axis.X(w.Time) - hover.X) <= 7).ToList();
+            if (warnings.Count > 0) warningTip = string.Join("\n", warnings.Take(8).Select(w => $"{w.Time:0.###} ms: {w.Reason}")) + (warnings.Count > 8 ? $"\n…and {warnings.Count - 8} more." : "");
+        }
+        ToolTip.SetTip(this, warningTip);
         if (previousHover != HoveredLane) InvalidateVisual();
         UpdateCursor(e.KeyModifiers);
         if (drag == Drag.None || Model is not { } model || Session is not { } session) return;

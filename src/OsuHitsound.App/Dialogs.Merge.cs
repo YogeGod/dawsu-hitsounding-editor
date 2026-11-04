@@ -25,11 +25,13 @@ internal static partial class Dialogs
         { status.Text = $"Could not save preset: {ex.Message}"; }
     }
 
-    public static Task<ExportMergeSettings?> MergePriorities(Window owner, IReadOnlyList<MergeCombination> combinations, Action<MixFile>? preview = null) =>
+    public static Task<ExportMergeSettings?> MergePriorities(Window owner, IReadOnlyList<MergeCombination> combinations, Action<MixFile>? preview = null, ExportMergeSettings? initial = null) =>
         Show<ExportMergeSettings?>(owner, "Export merge priorities", (body, close) =>
         {
-            var settings = new ExportMergeSettings();
-            body.Children.Add(MergeText("The highest-priority participating addition chooses the output slot for every overlap. All input sounds are kept. Loaded combination rules override this order. Slider ticks and loops are exported separately. This order is separate from your editor lanes."));
+            var settings = initial?.Copy() ?? new ExportMergeSettings();
+            body.Children.Add(MergeText(settings.PairSamples
+                ? "Priority chooses the addition sampleset for paired output. Sound types stay separate; competing finishes fuse into finish. Loaded combination rules override this order. This order is separate from your editor lanes."
+                : "The highest-priority participating addition chooses the output slot for every overlap. All input sounds are kept. Loaded combination rules override this order. Slider ticks and loops are exported separately. This order is separate from your editor lanes."));
             var list = new ListBox { ItemsSource = settings.Priorities.ToList(), SelectedIndex = 0, Height = 250, Width = 440 };
             var combinationPicker = new ComboBox
             {
@@ -61,6 +63,7 @@ internal static partial class Dialogs
                     { Title = "Load merge preset", FileTypeFilter = [new("Merge preset") { Patterns = ["*.json"] }] });
                     if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path) return;
                     var loaded = ExportMergeSettings.Load(path);
+                    loaded.PairSamples = settings.PairSamples;
                     settings = loaded;
                     list.ItemsSource = settings.Priorities.ToList(); list.SelectedIndex = 0;
                     var keys = combinations.Select(c => c.Key).ToHashSet();

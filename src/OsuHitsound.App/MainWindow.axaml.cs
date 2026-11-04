@@ -215,7 +215,7 @@ public partial class MainWindow : Window
         SaveButton.Click += (_, _) => Save();
         menuCommands =
         [
-            (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
+            (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (OpenHitsoundFolderItem, "openHitsoundFolder"), (ReviewOutputItem, "reviewOutput"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
             (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (QuantizeItem, "quantizeDialog"), (RepeatItem, "repeat"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
         ];
@@ -232,6 +232,7 @@ public partial class MainWindow : Window
         SetColourByVolume(prefs.ColourByVolume);
         SetupInspector();
         SetupTutorial();
+        SetupOutput();
         Deactivated += (_, _) => UpdateToolCursors(KeyModifiers.None);
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
@@ -543,6 +544,8 @@ public partial class MainWindow : Window
             case "open": _ = PickMap(); break;
             case "importOsz": _ = ImportOsz(); break;
             case "openFolder": OpenMapFolder(); break;
+            case "openHitsoundFolder": OpenHitsoundFolder(); break;
+            case "reviewOutput": _ = ReviewOutput(); break;
             case "newDiff": _ = NewHitsoundDiff(); break;
             case "save": _ = Save(); break;
             case "revert": _ = RevertToLastSaved(); break;
@@ -619,7 +622,11 @@ public partial class MainWindow : Window
         bool twice = lastJump is { } j && j.Id == id && now - j.At <= 400;
         lastJump = twice ? null : (id, now);
         if (twice) Seek(first ? 0 : Lanes.Axis.End);
-        else if (session.Moments.Count > 0) Seek(first ? session.Moments.Min(m => m.Moment.Time) : session.Moments.Max(m => m.Moment.Time)); // a slider end can come after the next object starts
+        else
+        {
+            var times = session.Moments.Select(m => m.Moment.Time).Concat(session.State.Hits.Select(h => h.Time)).ToList();
+            Seek(times.Count == 0 ? first ? 0 : Lanes.Axis.End : first ? times.Min() : times.Max());
+        }
     }
 
     private void SetTool(Tool tool)
@@ -1004,15 +1011,25 @@ public partial class MainWindow : Window
         var cancel = compileCancel = new CancellationTokenSource();
         var state = session.State; // immutable: the wish list is built off the UI thread
         var (document, editing) = (doc!, session);
+        var output = exportSettings;
         _ = Task.Run(async () =>
         {
             await Task.Delay(150, cancel.Token);
-            var compiled = document.Compile(state);
+            MapCompilation compiled;
+            try { compiled = document.Compile(state, output, skin.Value); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or FormatException)
+            {
+                compiled = document.Compile(state);
+                compiled = compiled with { Result = compiled.Result with { Conflicts = compiled.Result.Conflicts.Concat(
+                    state.Hits.Where(h => h.Anchor is not null).GroupBy(h => h.Anchor!.Value)
+                        .Select(g => new Conflict(g.First().Time, g.Key, ex.Message))).DistinctBy(c => c.Moment).ToList() } };
+            }
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (cancel.IsCancellationRequested || !ReferenceEquals(editing, session) || model is null) return;
                 lastCompile = compiled;
                 model.SetConflicts(compiled.Result.Conflicts.Select(c => c.Moment).ToHashSet());
+                Lanes.ExportProblems = compiled.Result.Conflicts;
                 UpdateStatus();
             });
         }, cancel.Token).ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
@@ -1026,7 +1043,7 @@ public partial class MainWindow : Window
     {
         if (savingHs) return;
         if (session is null || mapPath is null || originalBytes is null || folder is null) return;
-        if (session.State.HsMode || session.HasHsObjects) { await SaveHs(); return; }
+        if (exportSettings.PairSamples || session.State.HsMode || session.HasHsObjects) { await SaveHs(); return; }
         try
         {
             int unanchored = session.Unanchored.Count();

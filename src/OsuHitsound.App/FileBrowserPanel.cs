@@ -18,6 +18,7 @@ internal sealed class FileBrowserPanel : StackPanel
     private readonly TextBlock status = new() { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 11 };
     private readonly Button use = new() { Content = "Use sample" }, preview = new() { Content = "Preview" };
     private string? samplesRoot, mapsRoot;
+    private string? activeMapRoot, libraryRoot;
     private int scanNumber;
     public event Action<string>? OpenMapRequested;
     public event Action<string>? SampleRequested;
@@ -31,6 +32,15 @@ internal sealed class FileBrowserPanel : StackPanel
         var go = new Button { Content = "Go" };
         var navigation = new WrapPanel { Orientation = Orientation.Horizontal };
         navigation.Children.AddRange([browse, up, go]);
+        var mapFolder = new Button { Content = "Map folder" };
+        var library = new Button { Content = "Hitsound folder" };
+        navigation.Children.AddRange([mapFolder, library]);
+        mapFolder.Click += (_, _) => SetFolder(activeMapRoot);
+        library.Click += (_, _) =>
+        {
+            if (!Directory.Exists(libraryRoot)) { status.Text = "Choose an existing hitsound folder in Preferences."; return; }
+            SetFolder(libraryRoot);
+        };
         var actions = new WrapPanel { Orientation = Orientation.Horizontal };
         actions.Children.AddRange([use, preview]);
         Children.AddRange([mode, location, navigation, entries, actions, status]);
@@ -61,6 +71,8 @@ internal sealed class FileBrowserPanel : StackPanel
         (samplesRoot, mapsRoot) = (samples, maps);
         SetFolder(mode.SelectedIndex == 0 ? samples : maps);
     }
+
+    public void SetShortcuts(string? map, string? library) => (activeMapRoot, libraryRoot) = (map, library);
 
     private void Activate()
     {

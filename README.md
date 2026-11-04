@@ -14,8 +14,8 @@ The editor also has a built-in tour: **File → Tutorial**.
 
 - **Open…** (Ctrl+O): open a `.osu` from your Songs folder, or drag a `.osu` or `.osz` onto the window. Each sample file in the mapset becomes a lane you can draw in.
 - **Save .osu** (Ctrl+S): write your hitsounds back into the map. A backup of the old file is kept outside the mapset.
-- **HS mode** beside Save: available for difficulties that started empty or whose difficulty name contains the word **HS** or **hitsounds**. Turning it on backfills loose sounds and creates a centred circle whenever a new time needs one. Layers at the same time share a circle; deleting its last sound deletes a circle created by this mode. Existing objects are protected. Off keeps the circles, and enabling resumes maintenance. Undo/Redo includes object changes; normal Save writes this difficulty and offers merge priorities when a mix is needed. Mode, eligibility and ownership are kept in the editor project; externally changed maps lose old ownership to protect their objects.
-- **File → Revert to last saved…**: reload the saved `.osu` after confirmation, discarding unsaved hits and bookmarks and clearing undo history. Lane layout, playback settings, playhead and timeline view are kept. You can assign a shortcut in Preferences → Keys.
+- **HS mode** beside Save: available for difficulties that started empty or whose difficulty name contains the word **HS** or **hitsounds**. Turning it on backfills loose sounds and creates a centred circle whenever a new time needs one. Layers at the same time share a circle; deleting its last sound deletes a circle created by this mode. Existing objects are protected. Off keeps the circles, and enabling resumes maintenance. Undo/Redo includes object changes; normal Save writes this difficulty using the current export settings. Mode, eligibility and ownership are kept in the editor project; externally changed maps lose old ownership to protect their objects.
+- **File → Revert to last saved… (Ctrl+L)**: reload the saved `.osu` after confirmation, discarding unsaved hits and bookmarks and clearing undo history. Lane layout, playback settings, playhead and timeline view are kept. Change the shortcut in Preferences → Keys.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready to copy into the other difficulties with **Map → Copy hitsounds…** (see [Copy hitsounds](#copy-hitsounds)).
 
 Opening a difficulty automatically creates a separate working mapset in the **osu! Songs folder configured in Preferences**, then edits that copy. Later opens reuse it without overwriting your work. Copied beatmap IDs are cleared; the source mapset is kept intact. The map title's tooltip shows the opened path.
@@ -24,11 +24,17 @@ The **Audition** toggle beside the snap controls switches sample playback on/off
 
 In the inspector, **Channel** follows the active lane. Choose an existing sample or **Browse sample…** to replace that lane's sample; its notes move to the replacement and can be undone. Imported audio gets a fresh sample index, keeping existing shared files intact. **File browser** switches between sample browsing/auditioning and map/difficulty browsing. Select a lane before using a sample. Its folder controls let you browse external sample libraries too.
 
+Choose your main **Hitsound folder** in Preferences. Open it from File or the inspector's folder buttons; the inspector also has a **Map folder** button. Sample pickers remember the last folder globally, falling back to the active mapset when it no longer exists. **Z** and **V** seek the first/last gameplay object or placed hit, including muted and folded lanes; a quick second press seeks the song start/end.
+
 Click a base sound's disclosure arrow to fold or unfold its numbered sample lanes above index 1. Folded notes still play and export normally; the folded state is saved with the project. Searching the lane list reveals matching numbered lanes even while the family is folded.
 
-Generate reuses unchanged mixed samples and continues new filenames after its last generated index. It skips occupied numbers without jumping past unrelated high indexes. Existing sample files keep their names.
+Save, Generate and Copy hitsounds share the same pairing rules. Distinct sound types stay separate through compatible numbered copies. Simultaneous finishes fuse into a new **hitfinish** sample; the kick/hitnormal stays separate. Source samples remain unchanged. The editor project retains the original editable layers.
 
-When layers overlap, Generate offers a separate **export priority** list. The highest-priority participating addition automatically chooses the output slot, including combinations of different additions; loaded combination rules override that choice. All input sounds and their relative volumes are retained. Slider ticks and slide/whistle loops remain as separate timed hits in the generated difficulty and never enter the regular merge combinations. **Save merge preset…** and **Load preset…** explicitly reuse priorities and overrides; presets are not loaded automatically. New or changed combinations follow the priority order. Cancelling before Generate writes nothing to the mapset. This workflow applies to Generate, not Copy hitsounds.
+**File → Review output…** shows prepared filenames and lets you preview each output or the original combination. Choose the addition sampleset for one timestamp or matching combinations in this map. Matching includes input audio and relative balance. Existing sampleset priorities and explicit presets remain available. Keeping incompatible original files blocks export with an explanation. Changed choices are planned on the next review or save.
+
+**File → Export settings** offers **Green lines** (default) and **Per-object settings**. Unchanged objects retain their existing fields. Slider nodes use green lines; a circle inside an active slider can use object fields to protect the slider's sound. Review output explains these exceptions. Slider ticks and slide/whistle loops retain their separate timed rendering path in Generate.
+
+Unchanged prepared audio is reused. New sample indexes start at the smallest available number from 2, protecting occupied indexes and other difficulties. Changed inputs invalidate reuse. Canceling the export confirmation writes no map or output samples. Older generated files are conservatively retained in pairing mode; check for unused assets before submitting a mapset.
 
 Slider ticks and slide or whistle segments are rendered into timed samples in the generated difficulty. Generate stops and names the sample if a required sound cannot be read or decoded.
 
@@ -102,7 +108,7 @@ Drag a dotted lane grip to reorder that lane inside its folder. Drag a folder gr
 - **Sample lanes**: grouped by sampleset. Each group starts with osu!'s default sounds (hitnormal, whistle, finish, clap), with the map's own sample files under the sound they replace. The default sounds are built in, so they play even without osu! installed. Use the filter to find a lane. Above the list, **+** adds a lane for a sample file already in the mapset, **−** deletes the highlighted lane (the one you touched last, marked with a blue bar), and **‹** hides or shows the lane names.
 - **Lane buttons**: **+** picks an audio file and copies it into the mapset as a new sample for that sound (e.g. `drum-hitclap5.wav`, using a number no difficulty uses yet), **●** plays the sample, **M** mutes the lane and **S** solos it. The **Song audio** row has **M** and **S** too: solo the song to hear it without hitsounds.
 - **Song audio**: the song's waveform, coloured by frequency: blue for lows (kicks, bass), purple for mids (snares, vocals) and yellow for highs (hi-hats, cymbals), so you can see where each drum hits. The colours can be changed in the UI inspector (Ctrl+Shift+I).
-- **The grid**: your hitsounds in time, left to right. Red-striped columns can't be saved as drawn yet.
+- **The grid**: your hitsounds in time, left to right. Small markers above the lanes explain save/export problems on hover. **File → Warning markers** controls export problems (shown initially) and hits without objects (hidden initially) separately. Hiding markers does not bypass export validation.
 
 ![The song waveform, coloured by frequency](docs/tutorial/waveform.png)
 
@@ -141,7 +147,7 @@ One bar per circle or slider end. Drag a bar to change its volume, Alt-drag to p
 
 Each target is saved with a backup, like **Save .osu**, and only the lines that change are rewritten. A slider body's index and volume follow the target's own green lines.
 
-When several source hits at exactly the same time land on one target hit, their sounds are combined into a new sample. This also preserves the separate slider sounds from Generate. Keep **Copy sample sets and indexes** enabled for these combinations. If a required sample cannot be rendered, that target is left unchanged and the editor reports the problem.
+When several source hits at exactly the same time land on one target hit, compatible copies keep distinct sound types separate and finish layers fuse into finish. Keep **Copy sample sets and indexes** enabled for prepared source sounds. Copy includes unsaved edits from the open source without saving that source. If a required sample cannot be rendered, that target is left unchanged and the editor reports the problem.
 
 The editor previews slider-slide and whistle loops, including sample and volume changes inside a slider. Tick copies keep the slider's sample bank, and **Copy volumes** and **Always keep 5 % volumes** also apply to generated samples. Copying to ticks or slides requires **Copy sample sets and indexes**, since each generated sample needs a new index.
 

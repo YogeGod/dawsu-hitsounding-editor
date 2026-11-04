@@ -139,6 +139,7 @@ public partial class MainWindow
         prefs = edited with { GlobalVolume = GlobalVolumeSlider.Value };
         SavePrefs();
         ApplyKeys();
+        RefreshOutputSettings();
         if (skinChanged) skin = NewSkin();
         if (audioChanged || skinChanged) RestartAudio();
         else ApplyOffsets(); // the offset for all maps may have changed

@@ -77,15 +77,34 @@ public sealed partial class MapDocument
     }
 
     /// <summary>Compiles an edit state on a fresh copy of the map as opened (safe off the UI thread: the state is immutable).</summary>
-    public MapCompilation Compile(EditState state)
+    public MapCompilation Compile(EditState state, ExportMergeSettings? settings = null, IReadOnlyDictionary<string, byte[]>? skin = null)
     {
         var projection = Session.ProjectHs(state, Opened);
-        var result = Compiler.Apply(projection.File, Folder, projection.Wanted);
+        var wanted = new Dictionary<MomentKey, WantedSound>(projection.Wanted);
+        PairingPlanner? pairing = null;
+        var preparationProblems = new List<Conflict>();
+        if (settings?.PairSamples == true)
+        {
+            var direct = Compiler.Apply(OsuFile.Parse(projection.File.ToBytes()), Folder, projection.Wanted);
+            var needsPreparation = direct.Conflicts.Select(c => c.Moment).ToHashSet();
+            pairing = new(Folder, skin, settings);
+            var hits = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value);
+            foreach (var (key, projected) in projection.Keys)
+                try
+                {
+                    var layers = hits[key].Select(h => (h.Lane, Volume: EditSession.VolumeOf(state, h))).ToList();
+                    bool encoded = !needsPreparation.Contains(projected) && layers.Select(l => l.Volume).Distinct().Count() <= 1 && layers.Select(l => l.Lane).Distinct().Count() == layers.Count;
+                    wanted[projected] = pairing.For(layers, hits[key].FirstOrDefault()?.Time ?? double.NaN, projected, encoded);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or FormatException)
+                { preparationProblems.Add(new(hits[key].FirstOrDefault()?.Time ?? 0, projected, ex.Message)); }
+        }
+        var result = Compiler.Apply(projection.File, pairing is null ? Folder : Folder.With(pairing.Files.Select(m => m.FileName)), wanted, settings?.Style ?? ExportStyle.PerObject);
         var reverse = projection.Keys.ToDictionary(p => p.Value, p => p.Key);
-        var conflicts = result.Conflicts.Select(c => c with { Moment = reverse[c.Moment] }).ToList();
+        var conflicts = preparationProblems.Concat(pairing?.Conflicts ?? []).Concat(result.Conflicts).DistinctBy(c => c.Moment).Select(c => c with { Moment = reverse[c.Moment] }).ToList();
         var conflicted = conflicts.Select(c => c.Moment).ToHashSet();
         foreach (var group in state.Hits.Where(h => h.Anchor is not null).GroupBy(h => h.Anchor!.Value))
-            if (!conflicted.Contains(group.Key) && (group.Select(h => EditSession.VolumeOf(state, h)).Distinct().Count() > 1
+            if (pairing is null && !conflicted.Contains(group.Key) && (group.Select(h => EditSession.VolumeOf(state, h)).Distinct().Count() > 1
                 || group.Select(h => h.Lane).Distinct().Count() != group.Count()))
                 conflicts.Add(new(group.First().Time, group.Key, "These layers need a mix to preserve their individual volumes or repeated sounds."));
         return new(result with { Conflicts = conflicts.OrderBy(c => c.Time).ToList() }, projection.File, projection.Keys);

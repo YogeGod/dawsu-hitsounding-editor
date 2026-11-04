@@ -171,10 +171,12 @@ public partial class MainWindow
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = $"Add a sample for {HitsoundRules.SampleName(set, sound)}",
+            SuggestedStartLocation = await SampleStartLocation(),
             AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType("Audio") { Patterns = [.. HitsoundRules.SampleExtensions.Select(e => "*" + e)] }],
         });
         if (!ReferenceEquals(doc, current) || files.Count == 0 || files[0].TryGetLocalPath() is not { } source) return;
+        RememberSampleFolder(source);
         AddSampleFile(lane, source);
     }
 
@@ -318,6 +320,7 @@ public partial class MainWindow
             HiddenLanes = hidden,
             CollapsedFamilies = [.. model.CollapsedFamilies],
             HsMode = doc!.HsProject,
+            ExportSettings = exportSettings,
             LocatorLeft = Lanes.LocatorLeft,
             LocatorRight = Lanes.LocatorRight,
             Cycle = Lanes.Cycle,
@@ -343,6 +346,11 @@ public partial class MainWindow
     {
         if (model is null || session is null || mapPath is null || folder is null) return;
         var project = ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) ?? new ProjectData();
+        exportSettings = project.ExportSettings ?? new ExportMergeSettings { PairSamples = true, Style = prefs.ExportStyle };
+        try { exportSettings.Validate(); }
+        catch (FormatException) { exportSettings = new ExportMergeSettings { PairSamples = true, Style = prefs.ExportStyle }; }
+        exportSettings.PairSamples = true;
+        RefreshOutputSettings();
 
         doc!.RestoreHsProject(hsOverride ?? project.HsMode);
         foreach (var lane in session.State.Hits.Select(h => h.Lane).Distinct())
@@ -424,6 +432,8 @@ public partial class MainWindow
         flash = "Copying hitsounds…";
         UpdateStatus();
         IReadOnlyList<HitsoundCopyTarget> results;
+        bool wasEnabled = Root.IsEnabled;
+        Root.IsEnabled = false;
         try
         {
             results = await Task.Run(() =>
@@ -447,16 +457,51 @@ public partial class MainWindow
                     }
                     return SampleMixer.Mix(mix, Decode);
                 }
-
-                return HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), Render);
+                var sourceSamples = new List<MixFile>();
+                GeneratePlan? sourcePlan = null;
+                if (fromOpen)
+                {
+                    (GeneratePlan Plan, MapFolder Folder) planned;
+                    if (document.Session.Unanchored.Any()) planned = document.PlanGenerate(GenerateManifest.DefaultRoot(), skinSounds, exportSettings);
+                    else
+                    {
+                        var savedSource = document.PlanHsSave(GenerateManifest.DefaultRoot(), skinSounds, exportSettings);
+                        planned = (savedSource.Plan.Storage, savedSource.Folder);
+                    }
+                    sourcePlan = planned.Plan;
+                    if (sourcePlan.Conflicts.Count > 0) throw new IOException(sourcePlan.Conflicts[0].Reason);
+                    if (!options.CopySampleSets && sourcePlan.Mixes.Count > 0)
+                        throw new IOException("Enable Copy sample sets and indexes to preserve the unsaved source's paired or fused sounds.");
+                    folder = planned.Folder;
+                    foreach (var sample in sourcePlan.Mixes)
+                    {
+                        var rendered = Render(sample) ?? throw new IOException($"Could not render {sample.FileName}.");
+                        sourceSamples.Add(sample with { CopyBytes = sample.CopyBytes ?? rendered });
+                    }
+                    var fresh = folder;
+                    var assets = sourceSamples.ToDictionary(m => m.FileName, m => m.CopyBytes!, StringComparer.OrdinalIgnoreCase);
+                    folder = new MapFolder(fresh.Files.Concat(assets.Keys), name => assets.TryGetValue(name, out var raw) ? raw : fresh.ReadBytes(name));
+                    source = sourcePlan.Diff;
+                }
+                var copied = HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), Render, exportSettings, skinSounds, sourceSamples, sourcePlan?.InputFiles);
+                if (sourcePlan is not null && copied.Any(r => r.Error is null))
+                {
+                    // Reuse these generated assets next time even though Copy did not save the source difficulty.
+                    var records = sourceSamples.Where(m => File.Exists(Path.Combine(dir, m.FileName)) && File.ReadAllBytes(Path.Combine(dir, m.FileName)).AsSpan().SequenceEqual(m.CopyBytes))
+                        .Select(m => new GeneratedMix(m.FileName, m.Signature, GenerateManifest.Hash(m.CopyBytes!)) { InputHash = sourcePlan.InputHashes.GetValueOrDefault(m.Signature) });
+                    try { new GenerateManifest(sourcePlan.Reused.Concat(records).ToList()) { LastIndex = sourcePlan.LastMixIndex }.Save(GenerateManifest.DefaultRoot(), sourcePlan.OsuPath); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                }
+                return copied;
             });
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException or OverflowException)
         {
             flash = $"Couldn't read the source: {ex.Message}";
             UpdateStatus();
             return;
         }
+        finally { Root.IsEnabled = wasEnabled; }
 
         if (openIsTarget) await Open(mapPath); // show what was written
         int written = results.Count(r => r.Backup is not null), conflicts = results.Sum(r => r.Conflicts);
@@ -471,7 +516,18 @@ public partial class MainWindow
         UpdateStatus();
     }
 
+    private bool generating;
     private async Task Generate()
+    {
+        if (generating || savingHs || !Loading.IsCompleted) return;
+        generating = true;
+        bool wasEnabled = Root.IsEnabled;
+        Root.IsEnabled = false;
+        try { await GenerateCore(); }
+        finally { Root.IsEnabled = wasEnabled; generating = false; }
+    }
+
+    private async Task GenerateCore()
     {
         if (doc is not { } document || session is null || mapPath is null) return;
         if (session.State.Hits.Count == 0)
@@ -483,13 +539,14 @@ public partial class MainWindow
 
         // Plan from a fresh look at the mapset (another difficulty may have changed since the map was opened), off the UI thread.
         var path = mapPath;
+        var generatingState = session.State;
         GeneratePlan plan;
         MapFolder fresh;
         try
         {
             flash = "Planning the hitsound diff…";
             UpdateStatus();
-            (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value));
+            (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, exportSettings));
         }
         catch (Exception ex)
         {
@@ -507,7 +564,7 @@ public partial class MainWindow
         }
 
         ExportMergeSettings? mergeSettings = null;
-        if (plan.MergeCombinations.Count > 0)
+        if (!exportSettings.PairSamples && plan.MergeCombinations.Count > 0)
         {
             var previewDecoded = new Dictionary<Lane, float[]?>();
             void Preview(MixFile mix)
@@ -539,6 +596,8 @@ public partial class MainWindow
         }
 
         bool exists = File.Exists(plan.OsuPath);
+        if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
+        { flash = "The edits changed while Generate was being prepared. Generate again; nothing was written."; UpdateStatus(); return; }
         string summary =
             $"Write {Path.GetFileName(plan.OsuPath)}{(exists ? " (replacing the existing one; a backup is kept in the editor's app data)" : "")} " +
             $"with {plan.Circles} circle{(plan.Circles == 1 ? "" : "s")}.\n\n" +
@@ -557,6 +616,8 @@ public partial class MainWindow
             if (!await Dialogs.Confirm(this, "Generate hitsound diff", summary, "Generate")) return;
         }
         else if (await Dialogs.ConfirmMergeGenerate(this, summary, mergeSettings) != true) return;
+        if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
+        { flash = "The edits changed before Generate was confirmed. Generate again; nothing was written."; UpdateStatus(); return; }
 
         var skinSounds = skin.Value;
         try
@@ -590,7 +651,7 @@ public partial class MainWindow
             flash = $"Generated {Path.GetFileName(plan.OsuPath)}: {plan.Circles} circles, {plan.Mixes.Count} new and {plan.Reused.Count} reused mixed sample(s)." +
                     (plan.Conflicts.Count > 0 ? $" {plan.Conflicts.Count} moment(s) couldn't be written." : "") + note;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException or OverflowException)
         {
             flash = $"Generate stopped, nothing was written: {ex.Message}";
             UpdateStatus();

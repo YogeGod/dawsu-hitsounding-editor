@@ -20,6 +20,7 @@ namespace OsuHitsound.App;
 /// </summary>
 internal sealed class VolumeLane : Control
 {
+    public bool ShowExportWarnings { get; set; } = true;
     private static readonly double[] GuideLines = [0.25, 0.5, 0.75, 1.0];
     private static readonly IBrush ConflictBar = Paint.Brush("#ff453a");
     private static readonly IPen RampPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ffffff"), 1.5, new Avalonia.Media.Immutable.ImmutableDashStyle([4, 3], 0));
@@ -107,7 +108,7 @@ internal sealed class VolumeLane : Control
                 double h = height * Math.Clamp(volume, 0, 100) / 100.0;
                 var color = ArrangeModel.GroupColor(group);
                 bool selected = SelectedMoments.Contains(key);
-                bool conflict = model.Conflicted.Contains(key);
+                bool conflict = ShowExportWarnings && model.Conflicted.Contains(key);
                 var stem = selected ? Paint.White : conflict ? ConflictBar : Paint.Brush(color, 0.75);
                 ctx.FillRectangle(stem, new Rect(x - 2.5, bottom - h, 5, h));
                 ctx.FillRectangle(selected ? Paint.Selection : Paint.Brush(Paint.Brighten(color, 0.45)), new Rect(x - 2.5, bottom - h - 2, 5, 5));

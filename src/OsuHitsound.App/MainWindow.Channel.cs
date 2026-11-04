@@ -12,9 +12,10 @@ public partial class MainWindow
         var files = await StorageProvider.OpenFilePickerAsync(new()
         {
             Title = "Choose sample for selected lane", AllowMultiple = false,
+            SuggestedStartLocation = await SampleStartLocation(),
             FileTypeFilter = [new("Audio samples") { Patterns = ["*.wav", "*.ogg", "*.mp3"] }],
         });
-        if (ReferenceEquals(doc, current) && files.FirstOrDefault()?.TryGetLocalPath() is { } path) AssignChannelFile(lane, path);
+        if (ReferenceEquals(doc, current) && files.FirstOrDefault()?.TryGetLocalPath() is { } path) { RememberSampleFolder(path); AssignChannelFile(lane, path); }
     }
 
     private void AssignChannelChoice(Lane lane, Lane choice)

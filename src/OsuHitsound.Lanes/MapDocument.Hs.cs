@@ -32,7 +32,8 @@ public sealed partial class MapDocument
         var needsMix = first.Conflicts.Select(c => c.Moment).ToHashSet();
         var inputs = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value);
         var layers = projection.Keys.ToDictionary(p => p.Value,
-            p => MixPlanner.Normalize(inputs[p.Key].Select(h => (h.Lane, EditSession.VolumeOf(state, h))), includeMissing: true));
+            p => settings?.PairSamples == true ? inputs[p.Key].Select(h => (h.Lane, Volume: EditSession.VolumeOf(state, h))).ToList()
+                : MixPlanner.Normalize(inputs[p.Key].Select(h => (h.Lane, EditSession.VolumeOf(state, h))), includeMissing: true));
         foreach (var (key, sounds) in layers)
             if (sounds.Select(l => l.Volume).Distinct().Count() > 1 || sounds.Select(l => l.Lane).Distinct().Count() != sounds.Count)
                 needsMix.Add(key);
@@ -61,16 +62,24 @@ public sealed partial class MapDocument
         // An object intentionally kept while HS mode is off still needs an explicitly silent normal.
         foreach (var key in needsMix.Where(k => layers[k].Count == 0)) destinations[MixFile.SignatureOf(layers[key])] = "soft-hitnormal";
         var previous = GenerateManifest.Load(manifestRoot, Path);
+        PairingPlanner? pairing = settings?.PairSamples == true ? new(folder, skin, settings, previous) : null;
         var mixer = new MixPlanner(folder, previous, System.IO.Path.GetFileName(Path), needsMix.Select(k => layers[k]), skin,
             liveLanes: state.Hits.Select(h => h.Lane).Concat(Map.Passive.Select(p => p.Lane)), destinations: destinations);
         var wishes = new Dictionary<MomentKey, WantedSound>(projection.Wanted);
-        foreach (var key in needsMix)
-            wishes[key] = mixer.MixFor(layers[key]).Wanted();
-        var result = Compiler.Apply(projection.File, folder.With(mixer.All.Select(m => m.FileName)), wishes);
-        var storage = new GeneratePlan(Path, projection.File, mixer.ToWrite, state.HsCircles.Count, result.Conflicts)
+        if (pairing is not null)
+            foreach (var (key, projected) in projection.Keys)
+                wishes[projected] = pairing.For(layers[projected], inputs[key].FirstOrDefault()?.Time ?? double.NaN, projected, alreadyEncoded: !needsMix.Contains(projected));
+        else
+            foreach (var key in needsMix) wishes[key] = mixer.MixFor(layers[key]).Wanted();
+        var outputFiles = pairing?.Files ?? mixer.ToWrite;
+        var allNames = pairing is not null ? pairing.Files.Select(m => m.FileName).Concat(pairing.Reused.Select(m => m.FileName)) : mixer.All.Select(m => m.FileName);
+        var result = Compiler.Apply(projection.File, folder.With(allNames), wishes, settings?.Style ?? ExportStyle.PerObject);
+        if (pairing is not null) result = result with { Conflicts = pairing.Conflicts.Concat(result.Conflicts).DistinctBy(c => c.Moment).ToList() };
+        var storage = new GeneratePlan(Path, projection.File, outputFiles, state.HsCircles.Count, result.Conflicts)
         {
-            Reused = mixer.Reused, Removes = mixer.Removes, InputHashes = mixer.InputHashes, LastMixIndex = mixer.LastIndex,
-            MergeCombinations = candidates.Select(k => combinations[k]).DistinctBy(c => c.Key).ToList(),
+            Reused = pairing?.Reused ?? mixer.Reused, Removes = pairing is null ? mixer.Removes : [], InputHashes = pairing?.InputHashes ?? mixer.InputHashes, LastMixIndex = pairing?.LastIndex ?? mixer.LastIndex,
+            MergeCombinations = pairing?.Combinations ?? candidates.Select(k => combinations[k]).DistinctBy(c => c.Key).ToList(),
+            InputFiles = pairing?.InputFiles ?? new Dictionary<string, string>(), Notes = result.Notes,
         };
         var saved = new HsProject(state.HsMode, Session.HsStartedEmpty, GenerateManifest.Hash(projection.File.ToBytes()),
             Session.MomentsFor(state).Select(m => new HsMoment(projection.Keys[m.Key].ObjectIndex, m.Key.Node,

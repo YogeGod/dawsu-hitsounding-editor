@@ -363,6 +363,7 @@ internal static partial class Dialogs
             }
 
             var songs = PathRow(general, "osu! Songs folder (Open starts here)", prefs.SongsFolder, "Not found yet", filePattern: null);
+            var hitsounds = PathRow(general, "Hitsound library folder", prefs.HitsoundFolder, "Choose your sample library", filePattern: null);
             var lazer = PathRow(general, "Default sounds: lazer's osu.Game.Resources.dll", prefs.LazerResources, "Blank: the usual lazer install, else the built-in sounds", "osu.Game.Resources.dll");
 
             // Audio output: the kind, then that kind's devices (refilled when the kind changes).
@@ -416,6 +417,7 @@ internal static partial class Dialogs
             return (() => close(editedKeys() with
             {
                 SongsFolder = Blank(songs.Text),
+                HitsoundFolder = Blank(hitsounds.Text),
                 LazerResources = Blank(lazer.Text),
                 AudioOutput = kinds[Math.Max(0, kind.SelectedIndex)],
                 OutputDevice = shown.Count > 0 && device.SelectedIndex >= 0 && shown[device.SelectedIndex].Id is { Length: > 0 } id ? id : null,

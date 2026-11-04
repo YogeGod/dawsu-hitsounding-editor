@@ -4,6 +4,8 @@ using OsuHitsound.Format;
 
 namespace OsuHitsound.Lanes;
 
+public enum ExportStyle { GreenLines, PerObject }
+
 /// <summary>A hit position: an object (by its place in [HitObjects]) and, for sliders, the node (0 = head).</summary>
 public readonly record struct MomentKey(int ObjectIndex, int Node);
 
@@ -46,8 +48,8 @@ public static partial class Compiler
     /// Changes <paramref name="file"/> in place so each moment in <paramref name="wanted"/> plays those lanes; moments
     /// not listed keep what they play now. Pass a copy (OsuFile.Parse(file.ToBytes())) to keep the original.
     /// </summary>
-    public static CompileResult Apply(OsuFile file, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted) =>
-        new Run(file, folder, wanted).Apply();
+    public static CompileResult Apply(OsuFile file, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, ExportStyle style = ExportStyle.PerObject) =>
+        new Run(file, folder, wanted, style).Apply();
 
     private static int IndexOf(OsuFile file, HitObject obj)
     {
@@ -76,7 +78,7 @@ public static partial class Compiler
         return new Parsed(lane, set, sound, index);
     }
 
-    private sealed class Run(OsuFile file, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted)
+    private sealed class Run(OsuFile file, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, ExportStyle style)
     {
         private readonly MapSettings settings = MapSettings.Read(file);
         private readonly List<Conflict> conflicts = [];
@@ -85,12 +87,15 @@ public static partial class Compiler
         private TimingPointIndex timing = new(file.TimingPoints);
         private bool timingChanged;
         private int added, changed;
+        private IReadOnlyList<PassiveSound> passive = [];
+        private int protectedCircles;
 
         private MomentKey Key(Moment m) => new(objectIndex[m.Object], m.Node);
 
         public CompileResult Apply()
         {
             var original = Decompiler.Decompile(file, folder);
+            passive = original.Passive;
             var wish = original.Moments.ToDictionary(Key, m => wanted.GetValueOrDefault(Key(m)) ?? AsWanted(m));
 
             double previousLookup = double.NegativeInfinity;
@@ -129,6 +134,7 @@ public static partial class Compiler
             }
 
             var notes = new List<string>();
+            if (protectedCircles > 0) notes.Add($"{protectedCircles} circle/spinner change(s) use per-object settings to preserve an overlapping slider's sounds.");
             int bodyChanges = PassiveChanges(original, result);
             if (bodyChanges > 0)
                 notes.Add($"{bodyChanges} slider body or tick sound{(bodyChanges == 1 ? "" : "s")} changed with the new green lines (osu! reads them from the timing points too).");
@@ -172,6 +178,24 @@ public static partial class Compiler
                 var hs = obj.HitSample ?? default;
                 if (hs.Filename is not null)
                     throw new ConflictException("This object plays a custom file (filename field), which this editor never writes.");
+
+                bool protectSlider = passive.Any(p => p.Kind is PassiveKind.SliderSlide or PassiveKind.SliderWhistle && p.Time - settings.TimeOffset <= time + HitsoundRules.ControlPointLeniency && p.EndTime - settings.TimeOffset >= time);
+                if (style == ExportStyle.GreenLines && protectSlider) protectedCircles++;
+                if (style == ExportStyle.GreenLines && !protectSlider)
+                {
+                    int inheritedIndex = Works(point.Index) ? point.Index
+                        : FirstWorkingIndex(Works, fixedIndex, allowZero: true) ?? throw new ConflictException("No index plays these sounds together.");
+                    if (point.Index != inheritedIndex || point.Volume != want.Volume)
+                    {
+                        if (want.Volume < 1) throw new ConflictException("Volume 0 cannot be written as a timing-point volume.");
+                        SetGreenLine(time, previousLookup, inheritedIndex, want.Volume);
+                        point = Decompiler.PointState(timing.SamplePointAt(time), settings);
+                    }
+                    var banks = Banks(hs.NormalSet, hs.AdditionSet, normalSet, additionSet, point.Set);
+                    obj.HitSound = flags;
+                    obj.HitSample = hs with { NormalSet = banks.Normal, AdditionSet = banks.Addition, Index = 0, Volume = 0 };
+                    return;
+                }
 
                 int effective = hs.Index > 0 ? hs.Index : point.Index;
                 int indexField = Works(effective) ? hs.Index
@@ -244,7 +268,7 @@ public static partial class Compiler
                 throw new ConflictException("Another sound within 5 ms reads the same timing point, so a green line here would change it too.");
 
             var inForce = timing.PointAt(at) ?? throw new ConflictException("No timing point before this slider to copy from.");
-            if (inForce.Time == at)
+            if (inForce.Time == at && !inForce.Uninherited)
             {
                 // A point is already at this time and is the last one there: change it rather than adding another.
                 inForce.SampleIndex = index;

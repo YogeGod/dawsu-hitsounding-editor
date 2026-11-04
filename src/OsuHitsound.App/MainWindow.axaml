@@ -235,12 +235,22 @@
               <MenuItem Name="OpenItem" Header="Open…" />
               <MenuItem Name="ImportOszItem" Header="Import .osz…" />
               <MenuItem Name="OpenFolderItem" Header="Open map folder" />
+              <MenuItem Name="OpenHitsoundFolderItem" Header="Open hitsound folder" />
               <MenuItem Name="NewDiffItem" Header="New hitsound diff…" />
               <MenuItem Name="RecentItem" Header="Recent maps" />
               <MenuItem Name="SaveItem" Header="Save" />
               <MenuItem Name="RevertItem" Header="Revert to last saved…" IsEnabled="False" />
               <Separator />
               <MenuItem Name="GenerateFileItem" Header="Generate hitsound diff…" />
+              <MenuItem Name="ReviewOutputItem" Header="Review output…" />
+              <MenuItem Header="Export settings">
+                <MenuItem Name="GreenLinesItem" Header="Green lines (default)" ToggleType="Radio" GroupName="exportStyle" />
+                <MenuItem Name="PerObjectItem" Header="Per-object settings (sliders use green lines)" ToggleType="Radio" GroupName="exportStyle" />
+              </MenuItem>
+              <MenuItem Header="Warning markers">
+                <MenuItem Name="MissingWarningsItem" Header="No hit object here" ToggleType="CheckBox" />
+                <MenuItem Name="ConflictWarningsItem" Header="Save/export problems" ToggleType="CheckBox" />
+              </MenuItem>
               <Separator />
               <MenuItem Name="PreferencesItem" Header="Preferences…" />
               <Separator />

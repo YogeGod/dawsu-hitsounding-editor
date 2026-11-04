@@ -7,12 +7,14 @@ namespace OsuHitsound.Lanes;
 /// <summary>One generated sample: these lanes mixed at these volumes into a new file in the mapset.</summary>
 public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volume)> Layers)
 {
+    public byte[]? CopyBytes { get; init; }
+    public string? PairSignature { get; init; }
     public IReadOnlyList<(Lane Lane, int Volume, double Duration)> Loops { get; init; } = [];
     public string? DestinationSlot { get; init; }
     public string? SilenceFor { get; init; }
     /// <summary>What the mix contains, as text: equal signatures make equal files.</summary>
-    public string Signature => SilenceFor is { } parent ? parent + "|silent-normal" :
-        SignatureOf(Layers, Loops) + SlotSuffix(DestinationSlot);
+    public string Signature => PairSignature ?? (SilenceFor is { } parent ? parent + "|silent-normal" :
+        SignatureOf(Layers, Loops) + SlotSuffix(DestinationSlot));
 
     internal static string SlotSuffix(string? slot) => slot is null or "soft-hitnormal" ? "" : "|slot:" + slot;
 
@@ -41,6 +43,9 @@ public sealed record MixFile(string FileName, IReadOnlyList<(Lane Lane, int Volu
 /// </summary>
 public sealed record GeneratePlan(string OsuPath, OsuFile Diff, IReadOnlyList<MixFile> Mixes, int Circles, IReadOnlyList<Conflict> Conflicts)
 {
+    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyDictionary<string, string> InputFiles { get; init; } = new Dictionary<string, string>();
+    public string? ExpectedOutputHash { get; init; }
     public IReadOnlyList<MergeCombination> MergeCombinations { get; init; } = [];
     public int LastMixIndex { get; init; }
     public IReadOnlyDictionary<string, string?> InputHashes { get; init; } = new Dictionary<string, string?>();
@@ -135,6 +140,32 @@ public static class HitsoundDiff
             }
 
         var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(sourcePath))!, FileNameFor(source, sourcePath));
+
+        if (mergeSettings?.PairSamples == true)
+        {
+            // Passive slider samples retain their timed rendering path, outside ordinary pairing/fusion.
+            var passiveMixer = new MixPlanner(folder, previous, Path.GetFileName(path), [], skin,
+                groups.Where(g => g.Slider).Select(g => ((IReadOnlyList<(Lane Lane, int Volume)>)MixPlanner.Normalize(g.Layers, true),
+                    (IReadOnlyList<(Lane Lane, int Volume, double Duration)>)g.Loops)));
+            var passiveWishes = groups.Select(g => g.Slider ? passiveMixer.MixFor(MixPlanner.Normalize(g.Layers, true), g.Loops).Wanted() : null).ToList();
+            var pairing = new PairingPlanner(folder.With(passiveMixer.All.Select(m => m.FileName)), skin, mergeSettings, previous);
+            var pairWishes = groups.Select((g, i) => passiveWishes[i] ?? pairing.For(g.Layers, g.Time + offset, new(i, 0))).ToList();
+            // Passive names may share indexes with paired outputs only if no filenames collide.
+            if (pairing.Files.Select(m => m.FileName).Intersect(passiveMixer.All.Select(m => m.FileName), StringComparer.OrdinalIgnoreCase).Any())
+                throw new IOException("A slider rendering conflicts with a paired sample filename. No files were written.");
+            var all = pairing.Files.Concat(passiveMixer.All).ToList();
+            var finalPair = OsuFile.Parse(diffBytes);
+            var pairedFolder = folder.With(all.Select(m => m.FileName).Concat(pairing.Reused.Select(m => m.FileName)));
+            var compiled = Compiler.Apply(finalPair, pairedFolder, Wishes(finalPair, pairedFolder, pairWishes), mergeSettings.Style);
+            return new GeneratePlan(path, finalPair, pairing.Files.Concat(passiveMixer.ToWrite).ToList(), groups.Count, pairing.Conflicts.Concat(compiled.Conflicts).DistinctBy(c => c.Moment).ToList())
+            {
+                Reused = pairing.Reused.Concat(passiveMixer.Reused).ToList(), LastMixIndex = Math.Max(pairing.LastIndex, passiveMixer.LastIndex),
+                InputHashes = pairing.InputHashes.Concat(passiveMixer.InputHashes).ToDictionary(p => p.Key, p => p.Value),
+                MergeCombinations = pairing.Combinations, Notes = compiled.Notes,
+                InputFiles = pairing.InputFiles,
+                ExpectedOutputHash = folder.Find(Path.GetFileName(path)) is { } oldOutput ? GenerateManifest.Hash(folder.ReadBytes(oldOutput)) : "missing",
+            };
+        }
 
         // 3. Mix files ("fusing") for the moments that need one; see MixPlanner for reuse and fresh indexes.
         var layered = groups.Select(g => MixPlanner.Normalize(g.Layers, includeMissing: true)).ToList();

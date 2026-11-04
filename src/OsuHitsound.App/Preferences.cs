@@ -15,6 +15,11 @@ internal sealed record Preferences
 
     /// <summary>Where Open starts; null until found or chosen.</summary>
     public string? SongsFolder { get; init; }
+    public string? HitsoundFolder { get; init; }
+    public string? LastSampleFolder { get; init; }
+    public bool ShowMissingObjectWarnings { get; init; }
+    public bool ShowExportWarnings { get; init; } = true;
+    public ExportStyle ExportStyle { get; init; } = ExportStyle.GreenLines;
 
     /// <summary>How the sound reaches the speakers: WASAPI shared (the default), WASAPI exclusive, ASIO, DirectSound or MME.</summary>
     public OutputKind AudioOutput { get; init; } = OutputKind.WasapiShared;

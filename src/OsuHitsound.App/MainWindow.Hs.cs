@@ -43,12 +43,16 @@ public partial class MainWindow
         var view = model?.CaptureViewState();
         double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom, position = audio?.Position ?? Lanes.Playhead;
         var decoded = new Dictionary<Lane, float[]?>();
+        int loose = session.Unanchored.Count();
+        bool hs = session.State.HsMode || session.HasHsObjects;
         try
         {
-            if (!SaveProject()) throw new IOException("The editor project could not be written. Fix its folder permissions before saving HS objects.");
+            if (!SaveProject()) throw new IOException("The editor project could not be written. Fix its folder permissions before saving.");
+            if (loose > 0 && !session.State.Hits.Any(h => h.Anchor is not null))
+            { flash = $"{loose} hitsound(s) have no hit object and cannot be saved into this difficulty. Use HS mode or Generate. Their editor project is kept."; UpdateStatus(); return; }
             string manifests = GenerateManifest.DefaultRoot();
             var defaults = skin.Value;
-            var (plan, fresh) = await Task.Run(() => document.PlanHsSave(manifests, defaults));
+            var (plan, fresh) = await Task.Run(() => document.PlanHsSave(manifests, defaults, exportSettings));
             float[]? Decode(Lane lane)
             {
                 if (decoded.TryGetValue(lane, out var samples)) return samples;
@@ -56,7 +60,7 @@ public partial class MainWindow
                     : fresh.Find(lane.Name) is { } file ? fresh.ReadBytes(file) : null;
                 return decoded[lane] = bytes is null ? null : SampleMixer.Decode(bytes);
             }
-            if (plan.Storage.MergeCombinations.Count > 0)
+            if (!exportSettings.PairSamples && plan.Storage.MergeCombinations.Count > 0)
             {
                 ExportMergeSettings? settings;
                 try
@@ -74,8 +78,9 @@ public partial class MainWindow
             }
             if (plan.Storage.Conflicts.Count > 0)
                 throw new IOException(plan.Storage.Conflicts[0].Reason);
-            if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0) && !await Dialogs.Confirm(this, "Save HS difficulty",
-                $"Save this difficulty with {plan.Storage.Circles} HS circle(s), {plan.Storage.Mixes.Count} new mixed sample(s), and {plan.Storage.Removes.Count} unused generated sample(s) removed? All input sounds are kept. Existing shared samples are protected."
+            if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0 || loose > 0) && !await Dialogs.Confirm(this, hs ? "Save HS difficulty" : "Save difficulty",
+                $"Save this difficulty with {plan.Storage.Mixes.Count} new paired/fused sample(s)? Original layers remain editable; existing shared samples are protected."
+                    + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
                     + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return;
             var written = await Task.Run(() => document.WriteHsSave(plan, mix => SampleMixer.Mix(mix, Decode), MapSaver.DefaultBackupRoot(), manifests));
             bool projectSaved = SaveProject();
@@ -84,14 +89,15 @@ public partial class MainWindow
             if (view is not null) model?.RestoreViewState(view);
             (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
             Seek(position);
-            flash = $"Saved this HS difficulty: {plan.Storage.Circles} managed circle(s). Backup: {written.Backup}"
+            flash = $"Saved this difficulty. Backup: {written.Backup ?? "no map changes"}"
+                + (loose > 0 ? $" {loose} loose hitsound(s) remain in the editor project only." : "")
                 + (plan.Notes.Count > 0 ? " " + string.Join(" ", plan.Notes) : "")
                 + (projectSaved ? "" : " Editor state could not be persisted. Keep this window open and retry Save before closing.");
             UpdateStatus();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or FormatException)
         {
-            flash = $"HS Save stopped: {ex.Message}";
+            flash = $"Save stopped: {ex.Message}";
             UpdateStatus();
         }
         finally

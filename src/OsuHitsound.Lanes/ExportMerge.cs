@@ -4,13 +4,17 @@ using OsuHitsound.Format;
 
 namespace OsuHitsound.Lanes;
 
-/// <summary>A complete overlap. Identity includes multiplicity and loop lanes, but not volumes or durations.</summary>
+/// <summary>A complete overlap. Pairing can include relative balance in its override identity.</summary>
 public sealed record MergeCombination(IReadOnlyList<(Lane Lane, int Volume)> Layers,
     IReadOnlyList<(Lane Lane, int Volume, double Duration)> Loops)
 {
+    public double Time { get; init; } = double.NaN;
+    public bool MatchBalance { get; init; }
+    public string OccurrenceKey => Time.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "|" + Key;
     public IReadOnlyDictionary<Lane, string> Fingerprints { get; init; } = new Dictionary<Lane, string>();
     private string InputIdentity(Lane lane) => Identity(lane) + "@" + Fingerprints.GetValueOrDefault(lane, "unknown");
-    public string Key => JsonSerializer.Serialize(Layers.Select(l => "hit:" + InputIdentity(l.Lane))
+    private string Balance(int volume) => MatchBalance ? "@balance:" + ((decimal)volume / Math.Max(1, Layers.Max(l => l.Volume))).ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+    public string Key => JsonSerializer.Serialize(Layers.Select(l => "hit:" + InputIdentity(l.Lane) + Balance(l.Volume))
         .Concat(Loops.Select(l => "loop:" + InputIdentity(l.Lane))).Order(StringComparer.Ordinal));
 
     public static string Identity(Lane lane) => $"{lane.Source}:{lane.Name.Replace('\\', '/').ToLowerInvariant()}";
@@ -38,14 +42,30 @@ public sealed class ExportMergeSettings
         .SelectMany(set => new[] { "hitnormal", "hitwhistle", "hitfinish", "hitclap" }.Select(sound => HitsoundRules.SampleName(set, sound))).ToArray();
 
     public int Version { get; set; } = 1;
+    public bool PairSamples { get; set; }
+    public ExportStyle Style { get; set; } = ExportStyle.GreenLines;
+    public Dictionary<string, string> OccurrenceRules { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, bool> KeepOriginalRules { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, bool> OccurrenceKeepOriginal { get; set; } = new(StringComparer.Ordinal);
     public List<string> Priorities { get; set; } = [.. Slots];
     public Dictionary<string, string> Rules { get; set; } = new(StringComparer.Ordinal);
 
     public string? Destination(MergeCombination combination) => Rules.GetValueOrDefault(combination.Key) ?? combination.AutomaticSlot(this);
+    public string? RuleFor(MergeCombination combination) => OccurrenceRules.GetValueOrDefault(combination.OccurrenceKey) ?? Rules.GetValueOrDefault(combination.Key);
+    public bool HasRule(MergeCombination combination) => RuleFor(combination) is not null;
+    public bool KeepOriginal(MergeCombination combination) => OccurrenceKeepOriginal.TryGetValue(combination.OccurrenceKey, out bool local) ? local : KeepOriginalRules.GetValueOrDefault(combination.Key);
+    public ExportMergeSettings Copy() => new()
+    {
+        Version = Version, PairSamples = PairSamples, Style = Style, Priorities = [.. Priorities],
+        Rules = new(Rules, StringComparer.Ordinal), OccurrenceRules = new(OccurrenceRules, StringComparer.Ordinal),
+        KeepOriginalRules = new(KeepOriginalRules, StringComparer.Ordinal), OccurrenceKeepOriginal = new(OccurrenceKeepOriginal, StringComparer.Ordinal),
+    };
 
     public void Validate()
     {
-        if (Version != 1 || Priorities is null || Rules is null || Priorities.Count != Slots.Count ||
+        if (KeepOriginalRules is null || OccurrenceKeepOriginal is null || KeepOriginalRules.Count > 10000 || OccurrenceKeepOriginal.Count > 10000 ||
+            KeepOriginalRules.Keys.Concat(OccurrenceKeepOriginal.Keys).Any(k => k.Length > 131072)) throw new FormatException("Invalid output overrides.");
+        if (Version != 1 || !Enum.IsDefined(Style) || OccurrenceRules is null || OccurrenceRules.Count > 10000 || OccurrenceRules.Any(p => p.Key.Length > 131072 || !Slots.Contains(p.Value)) || Priorities is null || Rules is null || Priorities.Count != Slots.Count ||
             !Priorities.ToHashSet(StringComparer.Ordinal).SetEquals(Slots) || Rules.Count > 10000)
             throw new FormatException("Invalid merge preset: expected each hitsound slot exactly once and a supported version.");
         foreach (var (key, slot) in Rules)
