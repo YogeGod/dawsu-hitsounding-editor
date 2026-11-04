@@ -3,7 +3,11 @@ using OsuHitsound.Format;
 namespace OsuHitsound.Lanes;
 
 /// <summary>What <see cref="MapSaver.Save"/> did: the compile result, and the backup path (null when nothing was written).</summary>
-public sealed record SaveResult(CompileResult Compile, string? Backup, bool Written);
+public sealed record SaveResult(CompileResult Compile, string? Backup, bool Written)
+{
+    /// <summary>The exact bytes written, so a later external write cannot silently become the document's baseline.</summary>
+    public byte[]? WrittenBytes { get; init; }
+}
 
 /// <summary>
 /// Saves wanted sounds into a .osu: compiles a fresh copy of the map as it was opened, refuses when the file changed on
@@ -32,7 +36,8 @@ public static class MapSaver
         if (!copy.IsEdited) return new SaveResult(result, null, false);
 
         var backup = SafeFile.Backup(backupRoot, osuPath, opened);
-        SafeFile.WriteAllBytes(osuPath, copy.ToBytes());
-        return new SaveResult(result, backup, true);
+        var bytes = copy.ToBytes();
+        SafeFile.WriteAllBytes(osuPath, bytes);
+        return new SaveResult(result, backup, true) { WrittenBytes = bytes };
     }
 }

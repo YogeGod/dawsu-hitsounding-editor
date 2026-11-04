@@ -22,7 +22,7 @@ public sealed class MapDocument
     /// <summary>The .osu's full path.</summary>
     public string Path { get; }
 
-    /// <summary>The .osu's bytes as opened.</summary>
+    /// <summary>The .osu's bytes as opened or last successfully saved; the external-change guard compares these.</summary>
     public byte[] Opened { get; private set; }
 
     /// <summary>The parsed map as opened; the session's moments refer to its objects. Never written to.</summary>
@@ -70,7 +70,7 @@ public sealed class MapDocument
         if (issues.Count > 0) throw new SaveBlockedException(issues);
 
         var saved = MapSaver.Save(Path, Opened, Folder, Session.Wanted(), backupRoot, Session.State.Bookmarks);
-        if (saved.Written) Opened = System.IO.File.ReadAllBytes(Path);
+        if (saved.Written) Opened = saved.WrittenBytes!;
         Session.MarkSaved();
         return saved;
     }

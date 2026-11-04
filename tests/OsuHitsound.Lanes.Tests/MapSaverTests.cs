@@ -33,6 +33,7 @@ public class MapSaverTests : IDisposable
         var saved = MapSaver.Save(path, bytes, folder, session.Wanted(), Path.Combine(dir, "backups"));
 
         Assert.True(saved.Written);
+        Assert.Equal(File.ReadAllBytes(path), saved.WrittenBytes);
         Assert.Contains("256,192,1000,1,8,0:0:0:0:", File.ReadAllText(path));
         Assert.Equal(bytes, File.ReadAllBytes(saved.Backup!));
         Assert.StartsWith(Path.Combine(dir, "backups"), saved.Backup);
