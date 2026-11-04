@@ -57,7 +57,7 @@ public partial class MainWindow
             var settings = exportSettings.Copy();
             var state = document.Session.State;
             var (plan, fresh) = session!.Unanchored.Any()
-                ? await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, settings))
+                ? await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, settings, includeSliderAudio: true))
                 : await Task.Run(() => { var result = document.PlanHsSave(GenerateManifest.DefaultRoot(), skin.Value, settings); return (result.Plan.Storage, result.Folder); });
             var decoded = new Dictionary<Lane, float[]?>();
             void Preview(MixFile mix)

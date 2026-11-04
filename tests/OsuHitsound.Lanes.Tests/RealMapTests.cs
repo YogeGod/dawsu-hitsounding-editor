@@ -65,7 +65,7 @@ public class RealMapTests
         var folder = MapFolder.FromDirectory(Path.GetDirectoryName(Catalyst)!);
         var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
 
-        var plan = HitsoundDiff.Plan(file, Catalyst, folder, session);
+        var plan = HitsoundDiff.Plan(file, Catalyst, folder, session, includeSliderAudio: true);
 
         var requiredTimes = session.State.Hits.Select(h => h.Time)
             .Concat(session.Map.Passive.Where(p => p.Kind == PassiveKind.SliderTick).Select(p => p.Time))

@@ -107,14 +107,4 @@ internal static partial class Dialogs
             return (() => close(settings), "Continue");
         }, scroll: true);
 
-    public static Task<bool?> ConfirmMergeGenerate(Window owner, string summary, ExportMergeSettings settings) =>
-        Show<bool?>(owner, "Generate hitsound diff", (body, close) =>
-        {
-            body.Children.Add(MergeText(summary));
-            var status = MergeText($"{settings.Rules.Count} combination rules. Save a preset to reuse these choices in another export.");
-            var save = new Button { Content = "Save merge preset…" };
-            save.Click += async (_, _) => await SaveMergePreset((Window)TopLevel.GetTopLevel(body)!, settings, status);
-            body.Children.AddRange([save, status]);
-            return (() => close(true), "Generate");
-        }, "Cancel export", scroll: true);
 }

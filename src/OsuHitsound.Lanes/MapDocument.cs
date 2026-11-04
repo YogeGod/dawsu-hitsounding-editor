@@ -124,13 +124,14 @@ public sealed partial class MapDocument
     /// <summary>
     /// Plans the [Hitsounds] diff from a fresh look at the folder (another difficulty may have changed since the map was
     /// opened), with what the last Generate for that diff recorded. Returns the folder it planned against.
+    /// Slider body/tick audio is excluded unless explicitly requested; heads, repeats and tails remain included.
     /// </summary>
     /// <exception cref="IOException">A difficulty or storyboard in the folder couldn't be read.</exception>
-    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null)
+    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null, bool includeSliderAudio = false)
     {
         var current = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
         if (Session.SoundSetInputProblems(current).FirstOrDefault().Error is { } problem) throw new IOException(problem);
         var previous = GenerateManifest.Load(manifestRoot, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path)!, HitsoundDiff.FileNameFor(File, Path)));
-        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin, mergeSettings), current);
+        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin, mergeSettings, includeSliderAudio), current);
     }
 }

@@ -28,6 +28,43 @@ public class GenerateTests
         0x64, 0x61, 0x74, 0x61, 0, 0, 0, 0,
     ];
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Default_generate_preserves_node_hits_and_volumes_without_rendering_slider_audio(bool pairing)
+    {
+        var (session, file, folder) = Load("256,192,1000,2,0,B|356:192,2,560,2|4|8\n256,192,4000,1,8,0:0:0:0:\n256,192,4500,8,4,5000");
+        Assert.Contains(session.Map.Moments, m => m.Position == HitPosition.SliderHead);
+        Assert.Contains(session.Map.Moments, m => m.Position == HitPosition.SliderRepeat);
+        Assert.Contains(session.Map.Moments, m => m.Position == HitPosition.SliderTail);
+        Assert.Contains(session.Map.Passive, p => p.Kind == PassiveKind.SliderTick);
+        Assert.Contains(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
+        var skin = session.State.Hits.Select(h => h.Lane.Name).Distinct().ToDictionary(n => n, _ => EmptyWav);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: skin, mergeSettings: new() { PairSamples = pairing });
+        Assert.Empty(plan.Mixes);
+        Assert.Empty(plan.Conflicts);
+        var generated = Decompiler.Decompile(plan.Diff, folder);
+        Assert.Equal(session.Map.Moments.Count, generated.Moments.Count);
+        foreach (var original in session.Map.Moments)
+        {
+            var output = Assert.Single(generated.Moments, m => m.Time == Math.Round(original.Time - session.Map.Settings.TimeOffset));
+            Assert.Equal(original.PlayedVolume, output.PlayedVolume);
+            Assert.Equal(original.Hits.Select(h => h.Lane).OrderBy(l => l.Name), output.Hits.Select(h => h.Lane).OrderBy(l => l.Name));
+        }
+    }
+
+    [Fact]
+    public void Default_generate_also_excludes_explicit_slider_audio_lanes_but_keeps_loose_hits()
+    {
+        var (session, file, folder) = Load("256,192,1000,1,0,0:0:0:0:");
+        session.Add([session.HitAt(Skin("soft-slidertick"), 2000), session.HitAt(Skin("soft-sliderslide"), 2100),
+            session.HitAt(Skin("soft-sliderwhistle"), 2200), session.HitAt(Skin("soft-hitnormal"), 3000)]);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        Assert.Equal(new double[] { 1000, 3000 }, plan.Diff.HitObjects.Select(o => o.Time));
+        Assert.Empty(plan.Mixes);
+        Assert.Empty(plan.Conflicts);
+    }
+
     [Fact]
     public void Empty_slider_loop_does_not_force_a_mix_but_ticks_and_audible_loops_remain()
     {
@@ -35,14 +72,14 @@ public class GenerateTests
         var slide = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
         var tick = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderTick);
         var blankSkin = new Dictionary<string, byte[]> { [slide.Lane.Name] = [.. EmptyWav, 1, 2] };
-        var blank = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: blankSkin);
+        var blank = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: blankSkin, includeSliderAudio: true);
         Assert.DoesNotContain(blank.Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
         Assert.Contains(blank.Diff.HitObjects, o => o.Time == tick.Time);
         var audible = EmptyWav.ToArray();
         audible[40] = 4; // This data chunk is no longer empty.
-        var nonempty = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: new Dictionary<string, byte[]> { [slide.Lane.Name] = audible });
+        var nonempty = HitsoundDiff.Plan(file, "map.osu", folder, session, skin: new Dictionary<string, byte[]> { [slide.Lane.Name] = audible }, includeSliderAudio: true);
         Assert.Contains(nonempty.Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
-        Assert.Contains(HitsoundDiff.Plan(file, "map.osu", folder, session).Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
+        Assert.Contains(HitsoundDiff.Plan(file, "map.osu", folder, session, includeSliderAudio: true).Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
     }
 
     [Fact]
@@ -54,7 +91,7 @@ public class GenerateTests
         var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
         var slide = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
         Assert.Equal(LaneSource.BeatmapFile, slide.Lane.Source);
-        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session, includeSliderAudio: true);
         Assert.DoesNotContain(plan.Mixes.SelectMany(m => m.Loops), l => l.Lane == slide.Lane);
         Assert.Empty(plan.Conflicts);
     }
@@ -65,7 +102,7 @@ public class GenerateTests
         var (session, file, folder) = Load("256,192,1000,2,0,B|356:192,1,560");
         var slide = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderSlide);
         var tick = Assert.Single(session.Map.Passive, p => p.Kind == PassiveKind.SliderTick);
-        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session, includeSliderAudio: true);
         Assert.Contains(plan.Diff.HitObjects, o => o.Time == tick.Time);
         var loop = Assert.Single(plan.Mixes.SelectMany(m => m.Loops));
         Assert.Equal(slide.Lane, loop.Lane);
@@ -79,7 +116,7 @@ public class GenerateTests
     {
         var (session, file, folder) = Load("256,192,1000,2,0,B|356:192,1,560\n256,192,1000,2,0,B|356:192,1,560");
         var tick = session.Map.Passive.First(p => p.Kind == PassiveKind.SliderTick);
-        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session, includeSliderAudio: true);
         Assert.Contains(plan.Mixes, m => m.Loops.Count == 2);
         Assert.Contains(plan.Mixes, m => m.Layers.Count(l => l.Lane == tick.Lane) == 2);
         Assert.Empty(plan.Conflicts);

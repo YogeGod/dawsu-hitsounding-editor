@@ -642,7 +642,7 @@ internal static partial class Dialogs
         return () => edited with { CubaseKeyFile = Blank(file.Text) };
     }
 
-    private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build, string cancelText = "Cancel", bool scroll = false)
+    private static Task<T?> Show<T>(Window owner, string title, Func<StackPanel, Action<T>, (Action Ok, string OkText)> build, string cancelText = "Cancel", bool scroll = false, Action<Button>? configureOk = null)
     {
         var window = new Window
         {
@@ -663,6 +663,7 @@ internal static partial class Dialogs
         var body = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         var (ok, okText) = build(body, Close);
         var okButton = new Button { Content = okText, IsDefault = true };
+        configureOk?.Invoke(okButton);
         var cancel = new Button { Content = cancelText, IsCancel = true };
         okButton.Click += (_, _) => ok();
         cancel.Click += (_, _) => window.Close();

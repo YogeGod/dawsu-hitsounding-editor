@@ -466,7 +466,7 @@ public partial class MainWindow
                 if (fromOpen)
                 {
                     (GeneratePlan Plan, MapFolder Folder) planned;
-                    if (document.Session.Unanchored.Any()) planned = document.PlanGenerate(GenerateManifest.DefaultRoot(), skinSounds, exportSettings);
+                    if (document.Session.Unanchored.Any()) planned = document.PlanGenerate(GenerateManifest.DefaultRoot(), skinSounds, exportSettings, includeSliderAudio: true);
                     else
                     {
                         var savedSource = document.PlanHsSave(GenerateManifest.DefaultRoot(), skinSounds, exportSettings);
@@ -599,11 +599,10 @@ public partial class MainWindow
             }
         }
 
-        bool exists = File.Exists(plan.OsuPath);
         if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
         { flash = "The edits changed while Generate was being prepared. Generate again; nothing was written."; UpdateStatus(); return; }
-        string summary =
-            $"Write {Path.GetFileName(plan.OsuPath)}{(exists ? " (replacing the existing one; a backup is kept in the editor's app data)" : "")} " +
+        string Summary(GeneratePlan plan) =>
+            $"Write {Path.GetFileName(plan.OsuPath)}{(File.Exists(plan.OsuPath) ? " (replacing the existing one; a backup is kept in the editor's app data)" : "")} " +
             $"with {plan.Circles} circle{(plan.Circles == 1 ? "" : "s")}.\n\n" +
             (plan.Mixes.Count > 0
                 ? $"{plan.Mixes.Count} mixed sample{(plan.Mixes.Count == 1 ? "" : "s")} will be written to the mapset ({string.Join(", ", plan.Mixes.Take(4).Select(m => m.FileName))}{(plan.Mixes.Count > 4 ? ", …" : "")}). " +
@@ -615,11 +614,11 @@ public partial class MainWindow
                 : "") +
             (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
             "Your opened map is not changed.";
-        if (mergeSettings is null)
-        {
-            if (!await Dialogs.Confirm(this, "Generate hitsound diff", summary, "Generate")) return;
-        }
-        else if (await Dialogs.ConfirmMergeGenerate(this, summary, mergeSettings) != true) return;
+        var confirmed = await Dialogs.ConfirmGenerate(this, (plan, fresh), Summary,
+            includeSliderAudio => Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value,
+                mergeSettings ?? exportSettings, includeSliderAudio)), mergeSettings);
+        if (confirmed is null) return;
+        (plan, fresh) = confirmed.Value;
         if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
         { flash = "The edits changed before Generate was confirmed. Generate again; nothing was written."; UpdateStatus(); return; }
 

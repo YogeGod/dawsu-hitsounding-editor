@@ -58,10 +58,10 @@ public sealed record GeneratePlan(string OsuPath, OsuFile Diff, IReadOnlyList<Mi
 }
 
 /// <summary>
-/// Generate mode: every placed sound becomes a circle at its time in a separate [Hitsounds] difficulty, for Mapping
-/// Tools' Hitsound Copier. Circles are encoded by the <see cref="Compiler"/>; a moment whose sounds osu! can't play
-/// together (two indexes or volumes, no hitnormal, own files) is mixed into one WAV played as the hitnormal of a fresh
-/// index that no difficulty, storyboard or sample file in the folder uses. Identical mixes share one file.
+/// Generate mode: hits at circles, slider heads/repeats/tails and spinner ends become circles in a separate
+/// [Hitsounds] difficulty. Slider body/tick audio is opt-in. The compiler encodes compatible hits directly;
+/// pairing mode prepares incompatible combinations without changing their roles, fusing finishes into finish.
+/// Legacy non-pairing mode uses mixed WAVs. Identical combinations share prepared samples.
 /// </summary>
 public static class HitsoundDiff
 {
@@ -69,7 +69,7 @@ public static class HitsoundDiff
     internal const string GeneratedIndexMarker = "//dawsu-generated-index:";
 
     public static GeneratePlan Plan(OsuFile source, string sourcePath, MapFolder folder, EditSession session, GenerateManifest? previous = null,
-        IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null)
+        IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null, bool includeSliderAudio = false)
     {
         mergeSettings?.Validate();
         double offset = session.Map.Settings.TimeOffset;
@@ -91,8 +91,9 @@ public static class HitsoundDiff
 
         // 1. Every placed sound, grouped by its time as written (whole ms) with its volume.
         var placed = session.State.Hits.Select(h => (h.Time, h.Lane, Volume: session.VolumeOf(h), Duration: 0.0,
-            Slider: h.Lane.Sample?.Sound is "slidertick" or "sliderslide" or "sliderwhistle"));
-        var passive = session.Map.Passive.Where(p => p.Kind is PassiveKind.SliderTick or PassiveKind.SliderSlide or PassiveKind.SliderWhistle)
+            Slider: h.Lane.Sample?.Sound is "slidertick" or "sliderslide" or "sliderwhistle"))
+            .Where(h => includeSliderAudio || !h.Slider);
+        var passive = session.Map.Passive.Where(p => includeSliderAudio && p.Kind is (PassiveKind.SliderTick or PassiveKind.SliderSlide or PassiveKind.SliderWhistle))
             .Where(p => p.Kind == PassiveKind.SliderTick || !IsEmptyLoop(p.Lane))
             .Select(p => (p.Time, p.Lane, p.Volume, Duration: Math.Max(0, p.EndTime - p.Time), Slider: true));
         var groups = placed.Concat(passive)

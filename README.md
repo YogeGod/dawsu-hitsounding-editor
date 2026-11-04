@@ -40,11 +40,11 @@ The inspector's **Sound sets** card saves reusable combinations of sounds and re
 
 Sound sets retain frozen audio copies. **Save to library** writes a self-contained `.dawsuset` under `Sound sets` in your configured hitsound folder. **Import…** creates a map-local copy; **Update…** explicitly applies a newer library version while retaining placement overrides. Library changes do not alter other maps automatically. Audio trimming/effects remain outside this feature. Original source samples are retained, and snapshot files are conservatively kept after Undo.
 
-**File → Export settings** offers **Green lines** (default) and **Per-object settings**. Unchanged objects retain their existing fields. Slider nodes use green lines; a circle inside an active slider can use object fields to protect the slider's sound. Review output explains these exceptions. Slider ticks and slide/whistle loops retain their separate timed rendering path in Generate.
+**File → Export settings** offers **Green lines** (default) and **Per-object settings**. Unchanged objects retain their existing fields. Slider nodes use green lines; a circle inside an active slider can use object fields to protect the slider's sound. Review output explains these exceptions.
 
 Unchanged prepared audio is reused. New sample indexes start at the smallest available number from 2, protecting occupied indexes and other difficulties. Changed inputs invalidate reuse. Canceling the export confirmation writes no map or output samples. Older generated files are conservatively retained in pairing mode; check for unused assets before submitting a mapset.
 
-Slider ticks and slide or whistle segments are rendered into timed samples in the generated difficulty. Generate stops and names the sample if a required sound cannot be read or decoded.
+**Generate…** defaults to normal, whistle, finish and clap hitsounds at circles, slider heads/repeats/tails and spinner ends. Slider-body sounds and ticks are excluded by default to avoid creating unnecessary samples for a hitsound-copying difficulty. Enable **Include slider-body sounds and ticks** in the confirmation to render that audio into timed samples. Counts update before export; Generate is unavailable while planning or when the selected export has conflicts. Cancel writes nothing. Save and Copy retain their existing slider-audio behavior. Generate stops and names the sample if a required sound cannot be read or decoded.
 
 You can also import an `.osz`, reopen a recent map, or open the map's folder (**File → Open map folder**, Ctrl+Shift+O) from the **File** menu. Sample files you put in that folder show up as lanes as soon as you switch back to the editor.
 

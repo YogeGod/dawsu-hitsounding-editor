@@ -112,7 +112,7 @@ public class ExportMergeTests
         var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
         session.Add([session.HitAt(Lane("soft-hitclap"), 1000), session.HitAt(Lane("drum-hitwhistle"), 1000)]);
         var settings = new ExportMergeSettings();
-        var plan = HitsoundDiff.Plan(file, "source.osu", folder, session, mergeSettings: settings);
+        var plan = HitsoundDiff.Plan(file, "source.osu", folder, session, mergeSettings: settings, includeSliderAudio: true);
         Assert.Empty(plan.Conflicts);
         var combo = Assert.Single(plan.MergeCombinations);
         Assert.Empty(combo.Loops);
