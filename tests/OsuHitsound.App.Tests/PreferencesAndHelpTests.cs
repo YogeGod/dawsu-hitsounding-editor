@@ -47,6 +47,8 @@ public class PreferencesAndHelpTests : IDisposable
         File.WriteAllText(broken, "{ not json");
         var loaded = Preferences.Load(broken);
         Assert.Equal(30, loaded.BufferMs);
+        Assert.Equal(20, loaded.GlobalVolume);
+        Assert.Equal(20, Preferences.Load(Path.Combine(dir, "none.json")).GlobalVolume);
         Assert.Empty(loaded.RecentMaps);
     }
 
