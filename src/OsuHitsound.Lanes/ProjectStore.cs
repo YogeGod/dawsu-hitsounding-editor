@@ -8,9 +8,15 @@ namespace OsuHitsound.Lanes;
 public sealed record TimeSignature(int Bar, int Numerator, int Denominator);
 
 /// <summary>A hit stored in a project: its lane and timeline time.</summary>
-public sealed record ProjectHit(string Lane, double Time);
+public sealed record ProjectHit(string Lane, double Time)
+{
+    public int? Volume { get; init; }
+}
 
-public sealed record HsMoment(int ObjectIndex, int Node, double Time, List<string> Hits, int Volume, bool Owned);
+public sealed record HsMoment(int ObjectIndex, int Node, double Time, List<string> Hits, int Volume, bool Owned)
+{
+    public List<int>? LayerVolumes { get; init; }
+}
 public sealed record HsProject(bool Enabled, bool StartedEmpty, string FileHash, List<HsMoment> Moments);
 
 /// <summary>

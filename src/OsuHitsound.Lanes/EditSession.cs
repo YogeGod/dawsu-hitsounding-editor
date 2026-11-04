@@ -8,7 +8,11 @@ namespace OsuHitsound.Lanes;
 /// no object is at its time: such a hit can't be saved in Apply mode (Generate mode will add a circle for it).
 /// Times are timeline milliseconds, like <see cref="Moment.Time"/>.
 /// </summary>
-public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor);
+public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor)
+{
+    /// <summary>Distinguishes overlapping copies of one sample that need different layer volumes.</summary>
+    public int Voice { get; init; }
+}
 
 /// <summary>
 /// The editable state: every placed hit, the volume of each moment (one per object or node in osu!), and the editor
@@ -19,6 +23,7 @@ public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<
     public ImmutableList<Lane> LaneOrder { get; init; } = [];
     public bool HsMode { get; init; }
     public ImmutableDictionary<MomentKey, double> HsCircles { get; init; } = ImmutableDictionary<MomentKey, double>.Empty;
+    public ImmutableDictionary<EditHit, int> LayerVolumes { get; init; } = ImmutableDictionary<EditHit, int>.Empty;
 }
 
 /// <summary>What a range edit does with the hits in a time range.</summary>
@@ -86,7 +91,7 @@ public sealed partial class EditSession
 
     private static bool MapChanged(EditState a, EditState b) =>
         !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks)
-        || !ReferenceEquals(a.HsCircles, b.HsCircles);
+        || !ReferenceEquals(a.HsCircles, b.HsCircles) || !ReferenceEquals(a.LayerVolumes, b.LayerVolumes);
 
     /// <summary>Seeds the editor-only layout on load or after adding lanes, without creating an edit.</summary>
     public void RestoreLaneOrder(IEnumerable<Lane> lanes)
@@ -134,7 +139,10 @@ public sealed partial class EditSession
         : State.HsMode ? HsHit(lane, time) : new EditHit(lane, time, null);
 
     /// <summary>Volume of a moment, or of a hit with no object (100).</summary>
-    public int VolumeOf(EditHit hit) => hit.Anchor is { } key ? State.Volumes.GetValueOrDefault(key, 100) : 100;
+    public int VolumeOf(EditHit hit) => VolumeOf(State, hit);
+
+    internal static int VolumeOf(EditState state, EditHit hit) => state.LayerVolumes.TryGetValue(hit, out int volume)
+        ? volume : hit.Anchor is { } key ? state.Volumes.GetValueOrDefault(key, 100) : 100;
 
     // ---- edits; each call outside a gesture is one undo step ----
 
@@ -162,30 +170,26 @@ public sealed partial class EditSession
     public void RetargetLane(Lane original, Lane replacement, Action? undo = null, Action? redo = null)
     {
         if (original == replacement || gestureStart is not null) return;
-        Change("Replace lane sample", s => s with
+        Change("Replace lane sample", s =>
         {
-            Hits = s.Hits.Select(h => h.Lane == original ? h with { Lane = replacement } : h).Distinct().ToImmutableList(),
+            var next = PlaceLayers(s, s.Hits.Where(h => h.Lane == original).Select(h =>
+                (h with { Lane = replacement }, Volume: s.HsMode || s.LayerVolumes.ContainsKey(h) ? (int?)VolumeOf(s, h) : null)),
+                s.Hits.Where(h => h.Lane == original).ToHashSet(), out _);
+            return ReferenceEquals(next, s) ? s with { } : next; // Empty lanes still change companion layout state.
         }, undo, redo);
     }
 
     /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>
     public IReadOnlyList<EditHit> MoveEach(IReadOnlyList<(EditHit Hit, Lane Lane, double Time)> moves, string label)
     {
-        var moved = moves.Select(m => HitAt(m.Lane, m.Time)).ToList();
-        if (moved.SequenceEqual(moves.Select(m => m.Hit))) return moved.Distinct().ToList(); // nothing moves: not an edit
-        Change(label, s =>
-        {
-            var gone = moves.Select(m => m.Hit).ToHashSet();
-            var kept = s.Hits.RemoveAll(gone.Contains);
-            var present = kept.ToHashSet();
-            var volumes = s.Volumes;
-            if (s.HsMode)
-                for (int i = 0; i < moved.Count; i++)
-                    if (moved[i].Anchor is { ObjectIndex: < 0 } key && !s.HsCircles.ContainsKey(key) && !volumes.ContainsKey(key))
-                        volumes = volumes.SetItem(key, moves[i].Hit.Anchor is { } from ? s.Volumes.GetValueOrDefault(from, 100) : 100);
-            return s with { Hits = kept.AddRange(moved.Where(present.Add)), Volumes = volumes };
-        });
-        return moved.Distinct().ToList();
+        var targets = moves.Select(m => HitAt(m.Lane, m.Time) with { Voice = m.Hit.Voice }).ToList();
+        if (targets.SequenceEqual(moves.Select(m => m.Hit))) return targets.Distinct().ToList();
+        IReadOnlyList<EditHit> moved = [];
+        Change(label, s => PlaceLayers(s, moves.Select((m, i) =>
+            (targets[i],
+             Volume: s.HsMode || s.LayerVolumes.ContainsKey(m.Hit) ? (int?)VolumeOf(s, m.Hit) : null)),
+            moves.Select(m => m.Hit).ToHashSet(), out moved));
+        return moved;
     }
 
     /// <summary>The hits in a time range (its end excluded; the ends may come in either order) and in the given lanes.</summary>
@@ -227,20 +231,11 @@ public sealed partial class EditSession
     public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset, string label = "Copy")
     {
         var originals = hits.ToList();
-        var copies = originals.Select(h => HitAt(h.Lane, h.Time + offset)).ToList();
-        Change(label, s =>
-        {
-            var existing = s.Hits.ToHashSet();
-            var added = copies.Where(existing.Add).ToList();
-            if (added.Count == 0) return s;
-            var volumes = s.Volumes;
-            if (s.HsMode)
-                for (int i = 0; i < copies.Count; i++)
-                    if (copies[i].Anchor is { ObjectIndex: < 0 } key && !s.HsCircles.ContainsKey(key) && !volumes.ContainsKey(key))
-                        volumes = volumes.SetItem(key, originals[i].Anchor is { } from ? s.Volumes.GetValueOrDefault(from, 100) : 100);
-            return s with { Hits = s.Hits.AddRange(added), Volumes = volumes };
-        });
-        return copies.Distinct().ToList();
+        IReadOnlyList<EditHit> copies = [];
+        Change(label, s => PlaceLayers(s, originals.Select(h =>
+            (HitAt(h.Lane, h.Time + offset) with { Voice = h.Voice },
+             Volume: s.HsMode || s.LayerVolumes.ContainsKey(h) ? (int?)VolumeOf(s, h) : null)), [], out copies));
+        return copies;
     }
 
     public void SetVolume(IEnumerable<MomentKey> keys, int volume, string label = "Volume")
@@ -250,12 +245,13 @@ public sealed partial class EditSession
     }
 
     /// <summary>Puts back hits from a saved project (hits with no object): not an edit, so not an undo step.</summary>
-    public void Restore(IEnumerable<EditHit> hits)
+    public void Restore(IEnumerable<EditHit> hits, IReadOnlyDictionary<EditHit, int>? layerVolumes = null)
     {
         var existing = State.Hits.ToHashSet();
         var added = hits.Where(existing.Add).ToList();
         if (added.Count == 0) return;
-        State = MaintainHsCircles(State with { Hits = State.Hits.AddRange(added) });
+        State = MaintainHsCircles(State with { Hits = State.Hits.AddRange(added),
+            LayerVolumes = layerVolumes is null ? State.LayerVolumes : State.LayerVolumes.SetItems(layerVolumes) });
         Announce();
     }
 
@@ -265,7 +261,9 @@ public sealed partial class EditSession
         // Only the values that differ: a drag that stays on the same value is not an edit (no redraw, no recompile).
         var changed = volumes.Select(kv => new KeyValuePair<MomentKey, int>(kv.Key, Math.Clamp(kv.Value, 0, 100)))
             .Where(kv => !s.Volumes.TryGetValue(kv.Key, out int old) || old != kv.Value).ToList();
-        return changed.Count == 0 ? s : s with { Volumes = s.Volumes.SetItems(changed) };
+        var layers = s.LayerVolumes.RemoveRange(s.LayerVolumes.Keys.Where(h => h.Anchor is { } key && volumes.ContainsKey(key)));
+        return changed.Count == 0 && ReferenceEquals(layers, s.LayerVolumes) ? s
+            : s with { Volumes = s.Volumes.SetItems(changed), LayerVolumes = layers };
     });
 
     /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step, named <paramref name="label"/>.</summary>
@@ -317,8 +315,9 @@ public sealed partial class EditSession
     /// </summary>
     public Dictionary<MomentKey, WantedSound> Wanted(EditState state)
     {
-        var lanes = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value, h => h.Lane);
-        return MomentsFor(state).ToDictionary(x => x.Key, x => new WantedSound([.. lanes[x.Key]], state.Volumes.GetValueOrDefault(x.Key, 100)));
+        var hits = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value);
+        return MomentsFor(state).ToDictionary(x => x.Key, x => new WantedSound([.. hits[x.Key].Select(h => h.Lane)],
+            hits[x.Key].FirstOrDefault() is { } first ? VolumeOf(state, first) : state.Volumes.GetValueOrDefault(x.Key, 100)));
     }
 
 
@@ -368,7 +367,15 @@ public sealed partial class EditSession
     private void Change(string label, Func<EditState, EditState> edit, Action? undoCompanion = null, Action? redoCompanion = null)
     {
         var next = edit(State);
-        if (!ReferenceEquals(next, State)) next = MaintainHsCircles(next);
+        if (!ReferenceEquals(next, State))
+        {
+            next = MaintainHsCircles(next);
+            if (next.LayerVolumes.Count > 0)
+            {
+                var present = next.Hits.ToHashSet();
+                next = next with { LayerVolumes = next.LayerVolumes.RemoveRange(next.LayerVolumes.Keys.Where(h => !present.Contains(h))) };
+            }
+        }
         if (!ReferenceEquals(next, State))
         {
             if (gestureStart is null)

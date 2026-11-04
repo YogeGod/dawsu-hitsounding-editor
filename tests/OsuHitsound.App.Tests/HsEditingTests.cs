@@ -6,6 +6,35 @@ namespace OsuHitsound.App.Tests;
 
 public class HsEditingTests
 {
+    [Fact]
+    public void Clipboard_preserves_repeated_sample_layers_after_a_shared_volume_edit()
+    {
+        var (model, editor) = Setup(); var s = model.Session;
+        var lane = new Lane(LaneSource.Skin, "soft-hitnormal");
+        var a = s.HitAt(lane, 1000); var b = s.HitAt(lane, 2000);
+        s.Add([a,b]); s.SetVolume([a.Anchor!.Value],30); s.SetVolume([b.Anchor!.Value],80);
+        s.Move([a],1000,h=>h.Lane); s.SetVolume([b.Anchor.Value],50);
+        editor.Select(s.State.Hits); editor.Copy(); editor.Paste(3000);
+        Assert.Equal(2, editor.Selected.Count);
+        Assert.All(editor.Selected,h=>Assert.Equal(50,s.VolumeOf(h)));
+    }
+
+    [Fact]
+    public void Paste_onto_an_occupied_circle_keeps_source_and_target_volumes_and_selection()
+    {
+        var (model, editor) = Setup(); var session = model.Session;
+        var a = session.HitAt(new Lane(LaneSource.Skin, "soft-hitnormal"), 1000);
+        var b = session.HitAt(new Lane(LaneSource.Skin, "soft-hitclap"), 2000);
+        session.Add([a, b]); session.SetVolume([a.Anchor!.Value], 30); session.SetVolume([b.Anchor!.Value], 80);
+        editor.Select([a]); editor.Copy(); editor.Paste(2000);
+        var pasted = Assert.Single(editor.Selected);
+        Assert.Equal(30, session.VolumeOf(pasted)); Assert.Equal(80, session.VolumeOf(b));
+        session.SetVolume([b.Anchor.Value], 50); editor.Prune();
+        Assert.Contains(pasted, editor.Selected);
+        session.Undo(); Assert.Equal(30, session.VolumeOf(pasted)); Assert.Equal(80, session.VolumeOf(b));
+        session.Undo(); Assert.DoesNotContain(pasted, session.State.Hits);
+    }
+
     private static (ArrangeModel Model, HitEditor Editor) Setup()
     {
         var file = OsuFile.Parse(Encoding.UTF8.GetBytes("osu file format v14\n[General]\nSampleSet: Soft\n[TimingPoints]\n0,500,4,2,0,100,1,0\n[HitObjects]\n"));

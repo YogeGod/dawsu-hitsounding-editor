@@ -82,7 +82,13 @@ public sealed partial class MapDocument
         var projection = Session.ProjectHs(state, Opened);
         var result = Compiler.Apply(projection.File, Folder, projection.Wanted);
         var reverse = projection.Keys.ToDictionary(p => p.Value, p => p.Key);
-        return new(result with { Conflicts = result.Conflicts.Select(c => c with { Moment = reverse[c.Moment] }).ToList() }, projection.File, projection.Keys);
+        var conflicts = result.Conflicts.Select(c => c with { Moment = reverse[c.Moment] }).ToList();
+        var conflicted = conflicts.Select(c => c.Moment).ToHashSet();
+        foreach (var group in state.Hits.Where(h => h.Anchor is not null).GroupBy(h => h.Anchor!.Value))
+            if (!conflicted.Contains(group.Key) && (group.Select(h => EditSession.VolumeOf(state, h)).Distinct().Count() > 1
+                || group.Select(h => h.Lane).Distinct().Count() != group.Count()))
+                conflicts.Add(new(group.First().Time, group.Key, "These layers need a mix to preserve their individual volumes or repeated sounds."));
+        return new(result with { Conflicts = conflicts.OrderBy(c => c.Time).ToList() }, projection.File, projection.Keys);
     }
 
     /// <summary>Saves the current edits and bookmarks; see <see cref="MapSaver.Save"/>.</summary>

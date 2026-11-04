@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>OsuHitsoundEditor</AssemblyName>
+    <Version>1.1.0</Version>
+    <Product>dawsu! hitsound studio</Product>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
   </PropertyGroup>

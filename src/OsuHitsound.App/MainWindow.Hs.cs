@@ -74,8 +74,9 @@ public partial class MainWindow
             }
             if (plan.Storage.Conflicts.Count > 0)
                 throw new IOException(plan.Storage.Conflicts[0].Reason);
-            if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0) && !await Dialogs.Confirm(this, "Save HS difficulty",
-                $"Save this difficulty with {plan.Storage.Circles} HS circle(s), {plan.Storage.Mixes.Count} new mixed sample(s), and {plan.Storage.Removes.Count} unused generated sample(s) removed? All input sounds are kept. Existing shared samples are protected.", "Save")) return;
+            if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0) && !await Dialogs.Confirm(this, "Save HS difficulty",
+                $"Save this difficulty with {plan.Storage.Circles} HS circle(s), {plan.Storage.Mixes.Count} new mixed sample(s), and {plan.Storage.Removes.Count} unused generated sample(s) removed? All input sounds are kept. Existing shared samples are protected."
+                    + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return;
             var written = await Task.Run(() => document.WriteHsSave(plan, mix => SampleMixer.Mix(mix, Decode), MapSaver.DefaultBackupRoot(), manifests));
             bool projectSaved = SaveProject();
             // Preserve editable layers in this window even if a sidecar write unexpectedly fails after the .osu save.
@@ -84,6 +85,7 @@ public partial class MainWindow
             (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
             Seek(position);
             flash = $"Saved this HS difficulty: {plan.Storage.Circles} managed circle(s). Backup: {written.Backup}"
+                + (plan.Notes.Count > 0 ? " " + string.Join(" ", plan.Notes) : "")
                 + (projectSaved ? "" : " Editor state could not be persisted. Keep this window open and retry Save before closing.");
             UpdateStatus();
         }

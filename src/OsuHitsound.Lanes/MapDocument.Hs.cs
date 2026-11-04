@@ -2,7 +2,10 @@ using OsuHitsound.Format;
 
 namespace OsuHitsound.Lanes;
 
-public sealed record HsSavePlan(GeneratePlan Storage, HsProject Project, EditState State);
+public sealed record HsSavePlan(GeneratePlan Storage, HsProject Project, EditState State)
+{
+    public IReadOnlyList<string> Notes { get; init; } = [];
+}
 
 public sealed partial class MapDocument
 {
@@ -27,7 +30,12 @@ public sealed partial class MapDocument
         var folder = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
         var first = Compiler.Apply(OsuFile.Parse(projection.File.ToBytes()), folder, projection.Wanted);
         var needsMix = first.Conflicts.Select(c => c.Moment).ToHashSet();
-        var layers = projection.Wanted.ToDictionary(p => p.Key, p => MixPlanner.Normalize(p.Value.Lanes.Select(l => (l, p.Value.Volume)), includeMissing: true));
+        var inputs = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value);
+        var layers = projection.Keys.ToDictionary(p => p.Value,
+            p => MixPlanner.Normalize(inputs[p.Key].Select(h => (h.Lane, EditSession.VolumeOf(state, h))), includeMissing: true));
+        foreach (var (key, sounds) in layers)
+            if (sounds.Select(l => l.Volume).Distinct().Count() > 1 || sounds.Select(l => l.Lane).Distinct().Count() != sounds.Count)
+                needsMix.Add(key);
         var fingerprints = new Dictionary<Lane, string>();
         string Fingerprint(Lane lane)
         {
@@ -64,13 +72,13 @@ public sealed partial class MapDocument
             Reused = mixer.Reused, Removes = mixer.Removes, InputHashes = mixer.InputHashes, LastMixIndex = mixer.LastIndex,
             MergeCombinations = candidates.Select(k => combinations[k]).DistinctBy(c => c.Key).ToList(),
         };
-        var logical = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value, h => ProjectStore.KeyOf(h.Lane));
         var saved = new HsProject(state.HsMode, Session.HsStartedEmpty, GenerateManifest.Hash(projection.File.ToBytes()),
             Session.MomentsFor(state).Select(m => new HsMoment(projection.Keys[m.Key].ObjectIndex, m.Key.Node,
                 m.Moment.Time - Map.Settings.TimeOffset,
-                logical[m.Key].ToList(),
-                state.Volumes.GetValueOrDefault(m.Key, 100), state.HsCircles.ContainsKey(m.Key))).ToList());
-        return (new(storage, saved, state), folder);
+                inputs[m.Key].Select(h => ProjectStore.KeyOf(h.Lane)).ToList(),
+                state.Volumes.GetValueOrDefault(m.Key, 100), state.HsCircles.ContainsKey(m.Key))
+                { LayerVolumes = inputs[m.Key].Select(h => EditSession.VolumeOf(state, h)).ToList() }).ToList());
+        return (new HsSavePlan(storage, saved, state) { Notes = result.Notes }, folder);
     }
 
     public GenerateResult WriteHsSave(HsSavePlan plan, Func<MixFile, byte[]?> render, string backupRoot, string manifestRoot)

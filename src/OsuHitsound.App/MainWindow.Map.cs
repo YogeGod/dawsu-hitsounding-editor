@@ -298,7 +298,7 @@ public partial class MainWindow
         var (names, order, added, hidden) = model.LaneLayout();
         var data = new ProjectData
         {
-            Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time))],
+            Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time) { Volume = session.State.LayerVolumes.TryGetValue(h, out int volume) ? volume : null })],
             LaneNames = names,
             LaneOrder = order,
             ActiveLane = model.ActiveLane is { } active ? ProjectStore.KeyOf(active) : null,
@@ -346,10 +346,15 @@ public partial class MainWindow
             if (folder.Find(lane.Name) is { } f) audio?.LoadLane(lane, folder.ReadBytes(f));
 
         // Hits with no object: only those that still have no object (the map may have changed since).
-        if (restoreUnanchored) session.Restore(project.Unanchored
-            .Select(h => ProjectStore.LaneOf(h.Lane) is { } lane ? session.HitAt(lane, h.Time) : null)
-            .OfType<EditHit>()
-            .Where(h => h.Anchor is null || h.Anchor is { ObjectIndex: < 0 } key && !session.MomentByKey.ContainsKey(key)));
+        if (restoreUnanchored)
+        {
+            var loose = project.Unanchored.Select(h => (Project: h,
+                    Hit: ProjectStore.LaneOf(h.Lane) is { } lane ? session.HitAt(lane, h.Time) : null))
+                .Where(p => p.Hit is not null && (p.Hit.Anchor is null || p.Hit.Anchor is { ObjectIndex: < 0 } key && !session.MomentByKey.ContainsKey(key)))
+                .GroupBy(p => p.Hit).SelectMany(g => g.Select((p, i) => (p.Project, Hit: p.Hit! with { Voice = i }))).ToList();
+            session.Restore(loose.Select(p => p.Hit!), loose.Where(p => p.Project.Volume is >= 0 and <= 100)
+                .ToDictionary(p => p.Hit!, p => p.Project.Volume!.Value));
+        }
 
         foreach (var muted in project.PreviewMuted)
             if (session.State.Hits.FirstOrDefault(h => ProjectStore.KeyOf(h.Lane) == muted.Lane && Math.Abs(h.Time - muted.Time) < 0.5) is { } hit)

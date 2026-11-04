@@ -27,7 +27,7 @@ internal sealed record TimeRange(double Start, double End, IReadOnlySet<Lane> La
 internal sealed class HitEditor
 {
     private ArrangeModel? model;
-    private List<(Lane Lane, double Offset, int Volume)> clipboard = [];
+    private List<(Lane Lane, double Offset, int Volume, int Voice)> clipboard = [];
 
     /// <summary>The selected hits. Mouse gestures change it directly while dragging and call <see cref="Notify"/> after.</summary>
     public HashSet<EditHit> Selected { get; } = [];
@@ -144,7 +144,7 @@ internal sealed class HitEditor
     {
         if (Selected.Count == 0) return;
         double start = Selected.Min(h => h.Time);
-        clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start, Session?.VolumeOf(h) ?? 100))];
+        clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start, Session?.VolumeOf(h) ?? 100, h.Voice))];
     }
 
     public void Cut()
@@ -158,22 +158,7 @@ internal sealed class HitEditor
     {
         if (Session is not { } session || clipboard.Count == 0) return;
         double at = SnapTime(time);
-        var hits = clipboard.Select(c => session.HitAt(c.Lane, at + c.Offset)).Distinct().ToList();
-        bool ownGesture = !session.IsGestureActive;
-        var before = session.State.HsCircles;
-        if (ownGesture) session.BeginGesture("Paste");
-        try
-        {
-            session.Add(hits, "Paste");
-            if (session.State.HsMode)
-            {
-                var volumes = clipboard.Select(c => (Hit: session.HitAt(c.Lane, at + c.Offset), c.Volume))
-                    .Where(c => c.Hit.Anchor is { ObjectIndex: < 0 } key && !before.ContainsKey(key))
-                    .GroupBy(c => c.Hit.Anchor!.Value).ToDictionary(g => g.Key, g => g.First().Volume);
-                session.SetVolumes(volumes, "Paste");
-            }
-        }
-        finally { if (ownGesture) session.EndGesture(); }
+        var hits = session.AddWithVolumes(clipboard.Select(c => (session.HitAt(c.Lane, at + c.Offset) with { Voice = c.Voice }, c.Volume)), "Paste");
         Select(hits);
     }
 
