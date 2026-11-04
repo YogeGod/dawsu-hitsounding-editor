@@ -24,6 +24,7 @@ internal sealed class TutorialOverlay : Panel
     private readonly Button back = new() { Content = "Back" }, next = new() { Content = "Next" }, skip = new() { Content = "Skip tour" };
     private IReadOnlyList<TutorialStep> steps = [];
     private int index;
+    private bool interactive;
 
     public const double BubbleWidth = 340;
 
@@ -67,13 +68,16 @@ internal sealed class TutorialOverlay : Panel
 
     public bool IsRunning => IsVisible;
 
-    public void Start(IReadOnlyList<TutorialStep> tour)
+    public void Start(IReadOnlyList<TutorialStep> tour, bool interactive = false)
     {
         if (tour.Count == 0) return;
+        this.interactive = interactive;
+        Background = interactive ? null : Brushes.Transparent;
+        layer.IsVisible = !interactive;
         steps = tour;
         IsVisible = true;
         Go(0);
-        Focus();
+        if (!interactive) Focus();
     }
 
     /// <summary>Goes straight to a step (0-based), for the snapshot tool.</summary>
@@ -88,6 +92,11 @@ internal sealed class TutorialOverlay : Panel
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (interactive)
+        {
+            if (e.Key == Key.Escape) { Close(); e.Handled = true; }
+            return;
+        }
         switch (e.Key)
         {
             case Key.Right or Key.Enter or Key.Space: Go(index + 1); break;
@@ -100,6 +109,7 @@ internal sealed class TutorialOverlay : Panel
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        if (interactive) return;
         Focus(); // a click on the dimmed window does nothing but keeps the keys working
         e.Handled = true;
     }

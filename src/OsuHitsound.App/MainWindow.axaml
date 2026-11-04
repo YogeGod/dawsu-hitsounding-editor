@@ -20,7 +20,7 @@
       <Setter Property="Padding" Value="10,4" />
       <Setter Property="MinHeight" Value="28" />
       <Setter Property="FontSize" Value="{DynamicResource ButtonFontSize}" />
-      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Focusable" Value="True" />
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
@@ -224,7 +224,7 @@
     </Style>
   </Window.Styles>
 
-  <Grid Name="Root" RowDefinitions="44,46,46,20,*,160,56" ColumnDefinitions="250,4,*">
+  <Grid Name="Root" RowDefinitions="44,46,46,20,*,160,56,Auto" ColumnDefinitions="250,4,*">
     <!-- 1. Header (V6.39: logo, title, file buttons, menus; map name and settings on the right) -->
     <Border Grid.Row="0" Grid.ColumnSpan="3" Name="TitleBar" Classes="header" BorderThickness="0,0,0,1">
       <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -261,7 +261,8 @@
               <Separator />
               <MenuItem Name="PreferencesItem" Header="Preferences…" />
               <Separator />
-              <MenuItem Name="TutorialItem" Header="Tutorial" />
+              <MenuItem Name="QuickStartItem" Header="Quick start" />
+              <MenuItem Name="TutorialItem" Header="Full interface tour" />
             </MenuItem>
             <MenuItem Header="Edit">
               <MenuItem Name="UndoItem" Header="Undo" />
@@ -349,8 +350,8 @@
         </Border>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <ToggleButton Name="SnapToggle" Content="▥ Snap" IsChecked="True" ToolTip.Tip="Snapping on / off (J)" />
-          <ComboBox Name="SnapModeBox" Width="120" Focusable="False" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
-          <ComboBox Name="SnapBox" Width="70" Focusable="False" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." />
+          <ComboBox Name="SnapModeBox" Width="120" Focusable="True" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
+          <ComboBox Name="SnapBox" Width="70" Focusable="True" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." />
           <ToggleButton Name="TripletSnapToggle" Content="Triplets" ToolTip.Tip="Alt+wheel: on cycles 3/1, 1/1, 1/3, 1/6, 1/12; off cycles 4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16. The drop-down offers every spacing; Shift+number still selects 1/n." />
           <ToggleButton Name="AuditionPlacementButton" Content="Audition" Height="28" MinHeight="28" Padding="6,0" FontSize="11" Margin="6,0,0,0"
                         ToolTip.Tip="Play a sample whenever you draw a new note, including while painting. Saved for all projects." />
@@ -360,9 +361,9 @@
           <ToggleButton Name="LaneDetailsToggle" Classes="viewToggle" Content="Info" IsChecked="False" ToolTip.Tip="Show each lane's file index after its name" />
           <ToggleButton Name="VolumeToggle" Classes="viewToggle" Content="Controller" IsChecked="True" ToolTip.Tip="Show the volume controller at the bottom" />
           <TextBlock Text="Colour" Classes="toolLabel" Margin="6,0,0,0" />
-          <ComboBox Name="ColourBox" Width="96" Focusable="False" ToolTip.Tip="Colour notes by lane, or by volume (quiet dark, loud bright)" />
+          <ComboBox Name="ColourBox" Width="96" Focusable="True" ToolTip.Tip="Colour notes by lane, or by volume (quiet dark, loud bright)" />
           <TextBlock Text="Zoom" Classes="toolLabel" Margin="6,0,0,0" />
-          <Slider Name="ZoomSlider" Width="100" Minimum="0" Maximum="1" Value="0.5" Focusable="False" VerticalAlignment="Center" />
+          <Slider Name="ZoomSlider" Width="100" Minimum="0" Maximum="1" Value="0.5" Focusable="True" VerticalAlignment="Center" />
           <Button Name="FitButton" Content="Fit" ToolTip.Tip="Zoom out to the whole map" />
         </StackPanel>
       </Grid>
@@ -386,12 +387,12 @@
           <TextBlock Text="VOLUME · %" Classes="fieldLabel" />
           <StackPanel Orientation="Horizontal" Spacing="4">
             <TextBox Name="VolumeValueBox" Width="60" Watermark="0-100" ToolTip.Tip="A value for the selected moments; Enter or Apply" />
-            <Button Name="VolumeApplyButton" Content="Apply" Focusable="False" />
+            <Button Name="VolumeApplyButton" Content="Apply" Focusable="True" />
           </StackPanel>
         </StackPanel>
         <StackPanel Classes="field">
           <TextBlock Text="VALUE EDIT" Classes="fieldLabel" />
-          <ComboBox Name="VolumeModeBox" Width="100" Focusable="False" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
+          <ComboBox Name="VolumeModeBox" Width="100" Focusable="True" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
         </StackPanel>
         <StackPanel Classes="field" MinWidth="200">
           <TextBlock Text="GAMEPLAY OBJECT" Classes="fieldLabel" />
@@ -400,7 +401,7 @@
         </StackPanel>
         <StackPanel Grid.Column="2" Name="SongControls" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <TextBlock Text="SONG" Classes="fieldLabel" VerticalAlignment="Center" />
-          <Slider Name="SongVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" Focusable="False" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
+          <Slider Name="SongVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" Focusable="True" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
           <ToggleButton Name="SongMuteButton" Content="Mute" ToolTip.Tip="Mute the song. Soloing a lane also silences it." />
           <TextBlock Text="Offset" Classes="toolLabel" />
           <TextBox Name="SongOffsetBox" Width="60" Text="0" VerticalAlignment="Center" ToolTip.Tip="Song offset in ms: positive plays the song later. Enter applies. Not saved into the map." />
@@ -437,12 +438,12 @@
         <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0,12,0">
         <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <TextBlock Text="Controller" Classes="toolLabel" Margin="0,0,6,0" />
-          <RadioButton Name="VolumeTab" Classes="tab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="False" />
-          <RadioButton Name="SavedTab" Classes="tab" Content="What gets saved" GroupName="bottom" Focusable="False" />
+          <RadioButton Name="VolumeTab" Classes="tab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="True" />
+          <RadioButton Name="SavedTab" Classes="tab" Content="What gets saved" GroupName="bottom" Focusable="True" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
           <TextBlock Text="Ramp" Classes="toolLabel" />
-          <ComboBox Name="RampShapeBox" Width="110" Focusable="False" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
+          <ComboBox Name="RampShapeBox" Width="110" Focusable="True" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
         </StackPanel>
         <TextBlock Grid.Column="2" Name="ActiveLaneText" Classes="fieldLabel" VerticalAlignment="Center" Margin="16,0,0,0" ToolTip.Tip="The active lane: the one touched last (highlighted in the lane list)" />
         <TextBlock Grid.Column="3" Text="Drag bars · Alt = paint · Shift = ramp · one volume per moment, shared by all lanes" Classes="fieldLabel" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -458,7 +459,7 @@
               <TextBox Name="VolumeMinBox" Width="46" Watermark="min" />
               <TextBlock Text="to" Classes="toolLabel" />
               <TextBox Name="VolumeMaxBox" Width="46" Watermark="max" />
-              <Button Name="VolumeSelectButton" Content="Select" Focusable="False" ToolTip.Tip="Select every hit whose moment volume is in this range" />
+              <Button Name="VolumeSelectButton" Content="Select" Focusable="True" ToolTip.Tip="Select every hit whose moment volume is in this range" />
             </StackPanel>
           </StackPanel>
           </ScrollViewer>
@@ -476,11 +477,11 @@
           <!-- V6.39's locator boxes: L◀ / R◀ go to a locator; the boxes show and set it in ms (Enter). -->
           <StackPanel Name="LocatorPanel" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
             <StackPanel Orientation="Horizontal" Spacing="3">
-              <Button Name="GoLeftButton" Content="L ◀" FontSize="11" Padding="5,0" Height="20" MinHeight="20" Focusable="False" ToolTip.Tip="Go to the left locator (Ctrl+click the ruler sets it)" />
+              <Button Name="GoLeftButton" Content="L ◀" FontSize="11" Padding="5,0" Height="20" MinHeight="20" Focusable="True" ToolTip.Tip="Go to the left locator (Ctrl+click the ruler sets it)" />
               <TextBox Name="LeftLocatorBox" Width="74" Height="20" MinHeight="20" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="L · ms" ToolTip.Tip="Left locator in ms: type a time and press Enter" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="3">
-              <Button Name="GoRightButton" Content="R ◀" FontSize="11" Padding="5,0" Height="20" MinHeight="20" Focusable="False" ToolTip.Tip="Go to the right locator (Alt+click the ruler sets it)" />
+              <Button Name="GoRightButton" Content="R ◀" FontSize="11" Padding="5,0" Height="20" MinHeight="20" Focusable="True" ToolTip.Tip="Go to the right locator (Alt+click the ruler sets it)" />
               <TextBox Name="RightLocatorBox" Width="74" Height="20" MinHeight="20" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="R · ms" ToolTip.Tip="Right locator in ms: type a time and press Enter" />
             </StackPanel>
           </StackPanel>
@@ -522,14 +523,44 @@
         <StackPanel Grid.Column="5" Name="GlobalVolumePanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
                     ToolTip.Tip="Global volume: the song, hitsounds and previews together (20–100 %)">
           <TextBlock Text="Global volume" Classes="toolLabel" />
-          <Slider Name="GlobalVolumeSlider" Width="88" Minimum="20" Maximum="100" Value="20" Focusable="False" VerticalAlignment="Center" />
+          <Slider Name="GlobalVolumeSlider" Width="88" Minimum="20" Maximum="100" Value="20" Focusable="True" VerticalAlignment="Center" />
           <TextBlock Name="GlobalVolumeText" Text="20%" Classes="fieldValue" Width="36" VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
       </ScrollViewer>
     </Border>
 
+    <Border Name="WorkflowFooter" Grid.Row="7" Grid.ColumnSpan="3" Background="{DynamicResource HeaderBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
+      <StackPanel Margin="12,6" Spacing="4">
+        <Grid Name="WorkingCopyRow" ColumnDefinitions="Auto,*,Auto,Auto">
+          <TextBlock Name="WorkingCopyLabel" Text="Working copy:" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <TextBlock Grid.Column="1" Name="WorkingCopyPath" Foreground="{DynamicResource LcdCaption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <ToggleButton Grid.Column="2" Name="WorkflowHelpToggle" Content="Save / Generate / Copy" Margin="8,0,0,0" />
+          <Button Grid.Column="3" Name="WorkingFolderButton" Content="Open working folder" Margin="8,0,0,0" />
+        </Grid>
+        <Grid Name="WorkflowMessageRow" ColumnDefinitions="*,Auto" IsVisible="False">
+          <ScrollViewer Name="WorkflowMessageScroll" MaxHeight="88" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="4">
+              <TextBlock Name="WorkflowWarning" TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" />
+              <TextBlock Name="WorkflowMessage" TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" />
+            </StackPanel>
+          </ScrollViewer>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Top">
+            <Button Name="WorkflowDetailsButton" Content="Details…" />
+            <Button Name="WorkflowPreferencesButton" Content="Preferences…" />
+            <Button Name="DismissWorkflowButton" Content="Dismiss" />
+          </StackPanel>
+        </Grid>
+          <StackPanel Name="WorkflowHelpPanel" Spacing="4" IsVisible="False">
+            <TextBlock Text="Save .osu updates the difficulty shown above. Generate creates a separate [Hitsounds] difficulty. Copy hitsounds applies a source difficulty's sounds to chosen difficulties." TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Name="WorkflowBackupsButton" Content="Open backups" />
+              <Button Name="QuickStartButton" Content="Quick start" />
+            </StackPanel>
+          </StackPanel>
+      </StackPanel>
+    </Border>
     <!-- The tutorial: over everything, hidden until it runs -->
-    <app:TutorialOverlay Name="Tutorial" Grid.RowSpan="7" Grid.ColumnSpan="3" ZIndex="100" />
+    <app:TutorialOverlay Name="Tutorial" Grid.RowSpan="8" Grid.ColumnSpan="3" ZIndex="100" />
   </Grid>
 </Window>

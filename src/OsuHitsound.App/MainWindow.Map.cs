@@ -504,7 +504,10 @@ public partial class MainWindow
                 (results.Sum(r => r.OnTicksAndSlides) is > 0 and var onSliders ? $" {onSliders} hits put on slider ticks and slides ({results.Sum(r => r.Generated)} new samples)." : "") +
                 (conflicts > 0 ? $" {conflicts} couldn't be saved as copied and kept their old sounds." : "") +
                 (failed.Count > 0 ? $" Not written: {string.Join("; ", failed.Select(f => $"{Path.GetFileName(f.Path)} ({f.Error})"))}." : "") +
-                " Backups are in the editor's backups folder.";
+                " Backups are in the editor's backups folder.\n" +
+                string.Join("\n", results.Select(r => $"{Path.GetFileName(r.Path)}: " +
+                    (r.Error is not null ? $"Not written — {r.Error}" : $"{r.Changed} hit points changed; {r.Conflicts} conflicts; " +
+                        (r.Backup is not null ? $"backup: {r.Backup}" : "no map backup created (unchanged or not written)."))));
         UpdateStatus();
     }
 
@@ -657,8 +660,13 @@ public partial class MainWindow
         }
 
         UpdateStatus();
-        if (await Dialogs.Confirm(this, "Hitsound diff generated", $"Open {Path.GetFileName(plan.OsuPath)} now?", "Open", "Stay here")
-            && await MayLeaveMap())
+        var next = await Dialogs.Choose(this, "Hitsound diff generated", $"Generated {Path.GetFileName(plan.OsuPath)}. What next?",
+            ["Stay here", "Open generated difficulty", "Copy into other difficulties…"], "Stay here", accept: "Continue");
+        if (next is "Open generated difficulty" or "Copy into other difficulties…" && await MayLeaveMap())
+        {
             await Open(plan.OsuPath);
+            if (next == "Copy into other difficulties…" && string.Equals(doc?.Path, plan.OsuPath, StringComparison.OrdinalIgnoreCase))
+                await CopyHitsounds();
+        }
     }
 }

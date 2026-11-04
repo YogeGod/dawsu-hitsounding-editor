@@ -6,7 +6,7 @@ A Windows editor for dawsu! hitsounds, with sample lanes, a song waveform and a 
 
 ## Tutorial
 
-The editor also has a built-in tour: **File → Tutorial**.
+First launch offers a seven-step **Quick start**: open a map, choose a lane, assign a sample, place a hit, listen, and choose an output. You can use the editor while the guide is open, skip it, or reopen it from **File → Quick start**. **File → Full interface tour** keeps the complete control reference; **F1** lists shortcuts.
 
 ### Open, save and generate
 
@@ -19,6 +19,10 @@ The editor also has a built-in tour: **File → Tutorial**.
 - **Generate…**: make a separate hitsound difficulty from your hits, ready to copy into the other difficulties with **Map → Copy hitsounds…** (see [Copy hitsounds](#copy-hitsounds)).
 
 Opening a difficulty automatically creates a separate working mapset in the **osu! Songs folder configured in Preferences**, then edits that copy. Later opens reuse it without overwriting your work. Copied beatmap IDs are cleared; the source mapset is kept intact. The map title's tooltip shows the opened path.
+
+The **Working copy** path below the editor shows the actual save destination. **Open working folder** opens it in Explorer. **Save / Generate / Copy** explains the output choices and offers backups and Quick start. Errors that need setup show a **Preferences…** action. Operation results remain below the editor until dismissed or replaced by a later message, including per-difficulty Copy results.
+
+In **Copy hitsounds**, choose the source, destinations and replacement mode first. The summary shows how many difficulties will be affected. **Advanced: timing, sliders and storyboard** contains the existing detailed options; their defaults and export behavior are unchanged. Destination choices are retained when you change the source. After Generate, you can stay in the editor, open the generated difficulty, or open it and copy its sounds into other difficulties.
 
 The **Audition** toggle beside the snap controls switches sample playback on/off when drawing or painting new notes. Its state is saved globally. Lane preview buttons and normal playback remain available.
 

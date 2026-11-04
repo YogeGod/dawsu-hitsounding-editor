@@ -42,7 +42,17 @@ public partial class MainWindow : Window
     private CancellationTokenSource? compileCancel;
     private MapCompilation? lastCompile;
     private bool closeConfirmed;
-    private string? flash; // a one-off message (saved, not saved, close warning) shown until the next edit
+    private string? flashMessage, workflowResult;
+    private string? flash
+    {
+        get => flashMessage;
+        set
+        {
+            flashMessage = value;
+            // Editing clears the compact status, but operation results remain available until dismissed or replaced.
+            if (value is not null) workflowResult = value;
+        }
+    }
     private object? drawnHits; // the hit list the notes were last built from
     private object? drawnHsCircles;
 
@@ -57,6 +67,7 @@ public partial class MainWindow : Window
         SetupHsMode();
 
         (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
+        SetupWorkflowFeedback();
         if (usePreferences && prefs.SongsFolder is null) prefs = prefs with { SongsFolder = Preferences.FindSongsFolder() };
         ArrangeView.NamesCollapsed = prefs.LaneNamesCollapsed;
         skin = NewSkin();
@@ -111,7 +122,7 @@ public partial class MainWindow : Window
             VolumeControlScroller.IsVisible = Volume.IsVisible;
             SavedText.IsVisible = !Volume.IsVisible;
         };
-        SizeChanged += (_, _) => { UpdateChromeHeights(); UpdateVolumePanelHeight(); };
+        SizeChanged += (_, _) => { RefreshWorkflowFeedback(); UpdateChromeHeights(); UpdateVolumePanelHeight(); };
         SnapBox.ItemsSource = SnapOptions.Select(s => s.ToString()).ToList();
         SnapBox.SelectedIndex = Array.IndexOf(SnapOptions, new SnapSpacing(1, 4));
         SnapBox.SelectionChanged += (_, _) =>
@@ -169,7 +180,7 @@ public partial class MainWindow : Window
         foreach (var (item, speed) in speedItems)
         {
             item.Click += (_, _) => SetSpeed(speed);
-            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = false, Padding = new Avalonia.Thickness(4, 2), FontSize = 11 };
+            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = true, Padding = new Avalonia.Thickness(4, 2), FontSize = 11 };
             button.Classes.Add("viewToggle");
             button.Click += (_, _) => SetSpeed(speed);
             speedButtons.Add((button, speed));
@@ -394,6 +405,9 @@ public partial class MainWindow : Window
             ToolTip.SetTip(FileTitle, full);
             Inspector.Browser.SetRoots(Path.GetDirectoryName(full), prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : Path.GetDirectoryName(full)));
             Title = $"{Path.GetFileNameWithoutExtension(full)} — osu! Hitsound Editor";
+            flash = usePreferences
+                ? $"Opened working copy: {Path.GetFileName(full)}. Save .osu updates this difficulty; your source mapset is kept intact."
+                : $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty.";
             UpdateLoop();
             SyncScrollBars();
             UpdateLcd();
@@ -549,7 +563,12 @@ public partial class MainWindow : Window
     {
         if (e.Key is Key.LeftAlt or Key.RightAlt) UpdateToolCursors(e.KeyModifiers | KeyModifiers.Alt);
         // Typing in a text box (volume value, offset…) must not trigger editor shortcuts like 5 (Mute) or Backspace (delete hits).
-        if (FocusManager?.GetFocusedElement() is TextBox)
+        var focused = FocusManager?.GetFocusedElement();
+        bool controlKey = (focused is Button or Avalonia.Controls.Primitives.ToggleButton && e.Key is Key.Space or Key.Enter)
+            || (focused is ComboBox or Slider && e.Key is Key.Space or Key.Enter or Key.Escape
+                or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown);
+        if (e.Handled || focused is TextBox
+            || (e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift && controlKey))
         {
             base.OnKeyDown(e);
             return;
@@ -1256,9 +1275,9 @@ public partial class MainWindow : Window
     {
         var rows = Root.RowDefinitions;
         double chrome = rows[0].Height.Value + rows[1].Height.Value + rows[2].Height.Value
-                        + rows[3].Height.Value + rows[6].Height.Value;
+                        + rows[3].Height.Value + rows[6].Height.Value + WorkflowFooter.Bounds.Height;
         // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
-        double available = Math.Max(100, Bounds.Height - chrome - Lanes.HeaderHeight - 80);
+        double available = Math.Max(0, Bounds.Height - chrome - Lanes.HeaderHeight - 80);
         rows[5].Height = new GridLength(VolumeToggle.IsChecked == true
             ? Math.Min(UiTheme.Current.Number("volume.height"), available) : 0);
     }
@@ -1412,6 +1431,8 @@ public partial class MainWindow : Window
             var open = EditorCommands.Get("open");
             StatusLeft.Text = flash ?? (audioError is null ? $"Open a .osu file ({(open.Keys.Count > 0 ? open.KeysText : "File menu")})." : $"No sound: {audioError}");
             StatusRight.Text = "";
+            workflowWarning = null;
+            RefreshWorkflowFeedback();
             return;
         }
 
@@ -1427,9 +1448,11 @@ public partial class MainWindow : Window
         int silent = model.Silent.Count(model.Notes.ContainsKey);
         if (silent > 0) notes.Add($"{silent} used lane{(silent == 1 ? "" : "s")} with no sound");
         if (map.Warnings.Count > 0) notes.Add($"{map.Warnings.Count} warning{(map.Warnings.Count == 1 ? "" : "s")}: {map.Warnings[0]}");
+        workflowWarning = notes.Count > 0 ? string.Join("  ·  ", notes) : null;
         if (notes.Count == 0) notes.Add(model.Session.IsEdited ? "Edited: Ctrl+S saves." : "Everything here can be saved.");
         StatusLeft.Text = flash ?? string.Join("  ·  ", notes);
         ToolTip.SetTip(StatusLeft, string.Join("\n", conflicts.Take(20).Select(c => $"{FormatTime(c.Time)}: {c.Reason}").Concat(map.Warnings.Take(20))));
+        RefreshWorkflowFeedback();
 
         Volume.SelectedMoments = Lanes.SelectedMoments;
         Volume.InvalidateVisual();

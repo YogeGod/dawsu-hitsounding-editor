@@ -32,7 +32,7 @@ internal static partial class Dialogs
             return (() => close(box.Text ?? ""), "OK");
         });
 
-    public static async Task<string?> Choose(Window owner, string title, string label, IReadOnlyList<string> items, string? initial = null) =>
+    public static async Task<string?> Choose(Window owner, string title, string label, IReadOnlyList<string> items, string? initial = null, string accept = "Add") =>
         await Show<string?>(owner, title, (body, close) =>
         {
             var list = new ListBox { ItemsSource = items, Height = 260, Width = 400, SelectedItem = initial };
@@ -41,7 +41,7 @@ internal static partial class Dialogs
             list.DoubleTapped += (_, _) => { if (list.SelectedItem is string s) close(s); };
             body.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap, MaxWidth = 400 });
             body.Children.Add(list);
-            return (() => { if (list.SelectedItem is string s) close(s); }, "Add");
+            return (() => { if (list.SelectedItem is string s) close(s); }, accept);
         });
 
     /// <summary>
@@ -144,24 +144,37 @@ internal static partial class Dialogs
             };
             var targets = new StackPanel { Spacing = 2 };
             var boxes = new List<(CheckBox Box, string Path)>();
+            var targetChoices = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            var mode = new ComboBox { ItemsSource = new[] { "Overwrite everything", "Overwrite only defined" }, SelectedIndex = 0, Width = 360 };
+            var scope = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 420, FontWeight = FontWeight.SemiBold };
+            void UpdateScope()
+            {
+                int count = boxes.Count(b => b.Box.IsChecked == true);
+                scope.Text = mode.SelectedIndex == 0
+                    ? $"Replace hitsounds in {count} selected difficult{(count == 1 ? "y" : "ies")}. Their existing hitsounds are cleared first."
+                    : $"Copy defined hit points into {count} selected difficult{(count == 1 ? "y" : "ies")}. Other hit points stay unchanged.";
+            }
             void FillTargets()
             {
+                foreach (var (box, path) in boxes) targetChoices[path] = box.IsChecked == true;
                 targets.Children.Clear();
                 boxes.Clear();
                 foreach (var (path, name) in difficulties.Where((_, i) => i != source.SelectedIndex))
                 {
-                    var box = new CheckBox { Content = name, IsChecked = true };
+                    var box = new CheckBox { Content = name, IsChecked = targetChoices.GetValueOrDefault(path, true) };
+                    box.IsCheckedChanged += (_, _) => UpdateScope();
                     boxes.Add((box, path));
                     targets.Children.Add(box);
                 }
 
                 if (boxes.Count == 0) targets.Children.Add(new TextBlock { Text = "This mapset has no other difficulty to copy into.", Opacity = 0.7 });
+                UpdateScope();
             }
 
             source.SelectionChanged += (_, _) => FillTargets();
             FillTargets();
 
-            var mode = new ComboBox { ItemsSource = new[] { "Overwrite everything", "Overwrite only defined" }, SelectedIndex = 0, Width = 360 };
+            mode.SelectionChanged += (_, _) => UpdateScope();
             var leniency = new TextBox { Text = defaults.Leniency.ToString(CultureInfo.InvariantCulture), Width = 80 };
             CheckBox Option(string text, bool on, string tip)
             {
@@ -239,14 +252,20 @@ internal static partial class Dialogs
             var leniencyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             leniencyRow.Children.AddRange([leniency, new TextBlock { Text = "ms", VerticalAlignment = VerticalAlignment.Center }]);
 
+            var advanced = new StackPanel { Spacing = 8 };
+            advanced.Children.AddRange([
+                new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
+                bodySounds, onSliders, storyboard, storyboardOptions, mute, muteGrid,
+            ]);
             body.Children.AddRange([
                 new TextBlock { Text = "Copy from", FontWeight = FontWeight.SemiBold }, source,
                 new TextBlock { Text = "Copy into", FontWeight = FontWeight.SemiBold },
                 new ScrollViewer { Content = targets, MaxHeight = 180 },
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
-                new TextBlock { Text = "Temporal leniency", FontWeight = FontWeight.SemiBold }, leniencyRow,
-                hitsounds, bodySounds, sets, volumes, keep5, onSliders, storyboard, storyboardOptions, mute, muteGrid,
+                scope,
+                hitsounds, sets, volumes, keep5,
+                new Expander { Header = "Advanced: timing, sliders and storyboard", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
                 new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);
@@ -282,8 +301,8 @@ internal static partial class Dialogs
                         MutedIndex = OsuNumber.TryParseInt(mutedIndex.Text ?? "", out int index) ? index : -1,
                         MutedSampleSet = mutedSets[Math.Max(0, mutedSet.SelectedIndex)].Set,
                     }));
-            }, "Copy");
-        });
+            }, "Copy to selected difficulties");
+        }, scroll: true);
 
     /// <summary>
     /// The Scale by volume dialog. <paramref name="count"/> says how many circles and slider ends a choice changes, for

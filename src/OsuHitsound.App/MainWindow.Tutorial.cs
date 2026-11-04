@@ -3,12 +3,14 @@ using Avalonia.Controls;
 
 namespace OsuHitsound.App;
 
-/// <summary>The tutorial: shown once on the first launch, and from File → Tutorial (<see cref="TutorialOverlay"/>).</summary>
+/// <summary>The tutorial: shown once on the first launch, and from File → Full interface tour (<see cref="TutorialOverlay"/>).</summary>
 public partial class MainWindow
 {
     private void SetupTutorial()
     {
         TutorialItem.Click += (_, _) => StartTutorial();
+        QuickStartItem.Click += (_, _) => StartQuickStart();
+        QuickStartButton.Click += (_, _) => StartQuickStart();
         Tutorial.Finished += () =>
         {
             if (prefs.TutorialSeen) return;
@@ -16,10 +18,23 @@ public partial class MainWindow
             SavePrefs();
         };
         // The first launch only: once the window is laid out, so every spotlight lands where its control is.
-        if (usePreferences && !prefs.TutorialSeen) Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(StartTutorial, Avalonia.Threading.DispatcherPriority.Background);
+        if (usePreferences && !prefs.TutorialSeen) Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(StartQuickStart, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private void StartTutorial() => Tutorial.Start(TutorialSteps());
+
+    internal void StartQuickStart() => Tutorial.Start(QuickStartSteps(), interactive: true);
+
+    private IReadOnlyList<TutorialStep> QuickStartSteps() =>
+    [
+        new("Open a difficulty", "Open a .osu or drop a .osu/.osz here. Set your osu! Songs folder in Preferences first. The editor creates or reuses a working copy there; your source mapset stays intact. You can use the editor during this quick start.", () => On(OpenButton)),
+        new("Choose a lane", "Click the name of the lane you want to work on. It becomes the active lane in Channel. Use the lane filter to find a sample; + adds a numbered layer with a default sound.", () => InLanes(Lanes.LaneListHeaderRect)),
+        new("Assign a sample", "In the inspector's Channel card, choose a sample or Browse sample…. This changes the active lane and its hits, not every selected lane. Use the preview button to hear the sample; Undo restores the previous assignment.", () => On(Inspector)),
+        new("Place a hit", "Choose Draw (3), then click in that lane on the timeline. Snap keeps the hit on the beat grid. Select (1) moves hits; Ctrl+Z undoes your last edit.", () => On(DrawTool)),
+        new("Listen", "Press Space to play, or use Play below. Audition previews newly drawn hits. Lane M/S and song volume affect listening only; they do not remove saved sounds.", () => On(PlayButton)),
+        new("Choose your output", "Save .osu updates the open working difficulty. Generate creates a separate [Hitsounds] difficulty, including circles for loose hits. Copy hitsounds applies a source difficulty to chosen difficulties. Check the destination and results below.", () => Around(SaveButton, GenerateButton)),
+        new("Keep working", "The working path and latest operation result stay below the editor. Open working folder shows your files. File → Full interface tour explains the remaining controls; F1 lists shortcuts. Finish closes this guide.", () => On(WorkflowFooter)),
+    ];
 
     internal void ShowTutorialStepForSnapshot(int step)
     {
@@ -52,11 +67,11 @@ public partial class MainWindow
     private IReadOnlyList<TutorialStep> TutorialSteps() =>
     [
         new("Welcome to the osu! hitsound editor",
-            "This short tour points at every part of the screen and says what it's for. Use Next and Back (or the arrow keys); Esc ends the tour. You can see it again any time from File → Tutorial.",
+            "This short tour points at every part of the screen and says what it's for. Use Next and Back (or the arrow keys); Esc ends the tour. You can see it again any time from File → Full interface tour.",
             () => null),
         new("Open a map", "Opens a .osu from your Songs folder (Ctrl+O), or drag a .osu or .osz onto the window. Each sample file in the mapset becomes a lane you can draw in. The File menu also has Recent maps, Import .osz… and Open map folder (Ctrl+Shift+O): sample files you put in that folder show up as lanes.",
             () => On(OpenButton)),
-        new("Save .osu", "Writes your hitsounds back into the map (Ctrl+S). Only the lines you changed are rewritten, and a backup of the old file is kept outside the mapset.",
+        new("Save .osu", "Writes your hitsounds into the open working difficulty (Ctrl+S), whose path is shown below the editor. Only changed lines are rewritten; a backup is kept outside the mapset. Generate creates a separate hitsound difficulty; Copy applies sounds to chosen difficulties.",
             () => On(SaveButton)),
         new("Generate", "Makes a separate hitsound difficulty from your hits, adding circles where a sound has no object. Map → Copy hitsounds… then copies it into the other difficulties, like Mapping Tools' Hitsound Copier.",
             () => On(GenerateButton)),
@@ -89,7 +104,7 @@ public partial class MainWindow
             () => On(InfoBarLeft)),
         new("Song", "The song's own volume, mute, and an offset in ms if it sounds early or late. None of this is saved into the map.",
             () => On(SongControls)),
-        new("Inspector", "Cards for the selection (shift time, set volume), the map's bookmarks, and Recent edits — click an edit to go back to it. Fold a card by its title; drag ⠿ to reorder.",
+        new("Inspector", "Channel shows the active lane: choose its sample or Browse sample…. File browser auditions samples and browses maps. Sound sets stores reusable combinations. Selection, Bookmarks and Recent edits support timeline work. Fold a card by its title; drag ⠿ to reorder.",
             () => On(Inspector)),
         new("Sample lanes", "Every sample you can use, grouped by sampleset: hitnormal, whistle, finish and clap, each with the default sound first and the map's own files under it. Type in the filter to find one. Above it, + adds a lane for a sample file already in the mapset, − deletes the highlighted lane (the one you touched last), and ‹ hides or shows the names.",
             () => InLanes(Lanes.LaneListHeaderRect)),
@@ -106,6 +121,6 @@ public partial class MainWindow
         new("Position", "Where the playhead is: time, bar.beat.tick, tempo, and the time signature with the snap divisor.", () => On(Lcd)),
         new("Playback speed", "Plays slower or faster without changing the pitch: 25 % to 150 % (also Playback → Speed).", () => On(SpeedPanel)),
         new("Global volume", "Turns the song, hitsounds and previews up or down together. It never goes below 20 %.", () => On(GlobalVolumePanel)),
-        new("That's everything", "Open a map and start drawing. File → Tutorial shows this tour again whenever you like.", () => null),
+        new("That's everything", "Open a map and start drawing. File → Full interface tour shows this tour again whenever you like.", () => null),
     ];
 }
