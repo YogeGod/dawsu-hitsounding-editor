@@ -165,7 +165,7 @@ internal sealed class InspectorPanel : Border
             if (changed)
             {
                 channelFrom = source;
-                channelChoices = model is null ? [] : model.LaneRows.Select(r => r.Lane).Where(l => l.Source != LaneSource.StoryboardFile).Distinct().ToList();
+                channelChoices = model is null ? [] : model.LaneRows.Select(r => r.Lane).Where(ArrangeModel.CanChooseChannelSample).Distinct().ToList();
                 channelSample.ItemsSource = channelChoices.Select(l => l.Source == LaneSource.Skin ? $"Default: {l.Name}" : l.Name).ToList();
             }
             if (active != channelLane || changed)

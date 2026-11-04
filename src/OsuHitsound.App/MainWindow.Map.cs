@@ -256,9 +256,12 @@ public partial class MainWindow
 
             double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom, scroll = Lanes.ScrollY;
             double position = audio?.Position ?? Lanes.Playhead;
+            var viewState = model?.CaptureViewState();
             var reload = OpenAsync(current.Path, restoreUnanchored: false);
             Loading = reload;
             if (!await reload) return;
+
+            if (viewState is not null) model?.RestoreViewState(viewState);
 
             (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
             Lanes.ScrollY = scroll;
@@ -405,17 +408,16 @@ public partial class MainWindow
                 var decoded = new Dictionary<Lane, float[]?>();
                 byte[]? Render(MixFile mix)
                 {
-                    var layers = mix.Layers.Select(l =>
+                    float[]? Decode(Lane lane)
                     {
-                        if (!decoded.TryGetValue(l.Lane, out var stereo))
+                        if (!decoded.TryGetValue(lane, out var stereo))
                         {
-                            var bytes = l.Lane.Source == LaneSource.Skin ? skinSounds.GetValueOrDefault(l.Lane.Name) : folder.Find(l.Lane.Name) is { } f ? folder.ReadBytes(f) : null;
-                            decoded[l.Lane] = stereo = bytes is null ? null : SampleMixer.Decode(bytes);
+                            var bytes = lane.Source == LaneSource.Skin ? skinSounds.GetValueOrDefault(lane.Name) : folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null;
+                            decoded[lane] = stereo = bytes is null ? null : SampleMixer.Decode(bytes);
                         }
-
-                        return (Stereo: stereo, Gain: l.Volume / 100f);
-                    }).Where(l => l.Stereo is not null).Select(l => (l.Stereo!, l.Gain)).ToList();
-                    return layers.Count == 0 ? null : SampleMixer.Mix(layers);
+                        return stereo;
+                    }
+                    return SampleMixer.Mix(mix, Decode);
                 }
 
                 return HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), Render);

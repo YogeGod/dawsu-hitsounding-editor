@@ -19,6 +19,7 @@ public partial class MainWindow
 
     private void AssignChannelChoice(Lane lane, Lane choice)
     {
+        if (!ArrangeModel.CanChooseChannelSample(choice)) return;
         if (choice.Source == LaneSource.Skin) { ReplaceChannelLane(lane, choice); return; }
         if (doc?.Folder.Find(choice.Name) is { } found)
             AssignChannelFile(lane, Path.Combine(Path.GetDirectoryName(doc.Path)!, found));
@@ -53,15 +54,7 @@ public partial class MainWindow
 
     private void ReplaceChannelLane(Lane original, Lane replacement)
     {
-        if (model is null || session is null || original == replacement || !model.CanReplaceSample(original)) return;
-        string display = model.NameOf(original);
-        model.AddLane(replacement);
-        session.Move(session.State.Hits.Where(h => h.Lane == original).ToList(), 0, _ => replacement, "Replace lane sample");
-        if (model.IsMuted(original) && !model.IsMuted(replacement)) model.ToggleMute(replacement);
-        if (model.IsSoloed(original)) { model.ToggleSolo(original); if (!model.IsSoloed(replacement)) model.ToggleSolo(replacement); }
-        model.RenameLane(replacement, display);
-        model.HideLane(original);
-        model.SetActive(replacement);
+        if (model is null || session is null || !model.ReplaceSample(original, replacement)) return;
         if (doc is not null && replacement.Source == LaneSource.BeatmapFile && doc.Folder.Find(replacement.Name) is { } f)
             audio?.LoadLane(replacement, doc.Folder.ReadBytes(f));
         ScheduleProjectSave();

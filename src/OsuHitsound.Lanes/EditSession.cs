@@ -38,8 +38,9 @@ public sealed class EditSession
     public const double AnchorTolerance = 2;
 
     // Each entry is the state on one side of a step and the step's name: undo holds the state before it, redo the state after.
-    private readonly List<(EditState State, string Label)> undo = [];
-    private readonly List<(EditState State, string Label)> redo = [];
+    private sealed record HistoryStep(EditState State, string Label, Action? Undo = null, Action? Redo = null);
+    private readonly List<HistoryStep> undo = [];
+    private readonly List<HistoryStep> redo = [];
     private EditState? gestureStart;
     private string gestureLabel = "Edit";
     private readonly double timeOffset; // v3/v4 maps show 24 ms later than written; bookmarks are stored as written
@@ -74,6 +75,8 @@ public sealed class EditSession
     public bool CanUndo => undo.Count > 0;
 
     public bool CanRedo => redo.Count > 0;
+
+    public bool IsGestureActive => gestureStart is not null;
 
     public bool IsEdited => undo.Any(u => MapChanged(u.State, State)) || gestureStart is { } start && MapChanged(start, State);
 
@@ -148,6 +151,16 @@ public sealed class EditSession
     /// </summary>
     public IReadOnlyList<EditHit> Move(IReadOnlyCollection<EditHit> hits, double offset, Func<EditHit, Lane> laneOf, string label = "Move") =>
         MoveEach([.. hits.Select(h => (h, laneOf(h), h.Time + offset))], label);
+
+    /// <summary>Changes only the lane, retaining each object's anchor. Companion editor state shares undo/redo.</summary>
+    public void RetargetLane(Lane original, Lane replacement, Action? undo = null, Action? redo = null)
+    {
+        if (original == replacement || gestureStart is not null) return;
+        Change("Replace lane sample", s => s with
+        {
+            Hits = s.Hits.Select(h => h.Lane == original ? h with { Lane = replacement } : h).Distinct().ToImmutableList(),
+        }, undo, redo);
+    }
 
     /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>
     public IReadOnlyList<EditHit> MoveEach(IReadOnlyList<(EditHit Hit, Lane Lane, double Time)> moves, string label)
@@ -250,7 +263,7 @@ public sealed class EditSession
     {
         if (gestureStart is { } start && !ReferenceEquals(start, State))
         {
-            undo.Add((start, gestureLabel));
+            undo.Add(new(start, gestureLabel));
             redo.Clear();
         }
 
@@ -313,32 +326,35 @@ public sealed class EditSession
 
     private void StepBack()
     {
-        var (before, label) = undo[^1];
+        var step = undo[^1];
         undo.RemoveAt(undo.Count - 1);
-        redo.Add((State, label));
-        State = before;
+        redo.Add(step with { State = State });
+        State = step.State;
+        step.Undo?.Invoke();
     }
 
     private void StepForward()
     {
-        var (after, label) = redo[^1];
+        var step = redo[^1];
         redo.RemoveAt(redo.Count - 1);
-        undo.Add((State, label));
-        State = after;
+        undo.Add(step with { State = State });
+        State = step.State;
+        step.Redo?.Invoke();
     }
 
-    private void Change(string label, Func<EditState, EditState> edit)
+    private void Change(string label, Func<EditState, EditState> edit, Action? undoCompanion = null, Action? redoCompanion = null)
     {
         var next = edit(State);
         if (!ReferenceEquals(next, State))
         {
             if (gestureStart is null)
             {
-                undo.Add((State, label));
+                undo.Add(new(State, label, undoCompanion, redoCompanion));
                 redo.Clear();
             }
 
             State = next;
+            redoCompanion?.Invoke();
         }
 
         Announce(); // also after a drag went back to its start and then made no change

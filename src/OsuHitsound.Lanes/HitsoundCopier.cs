@@ -89,7 +89,7 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
     /// <summary>Slider bodies to set (by the target object's place in [HitObjects]): the slider's own sound flags and sets.</summary>
     public IReadOnlyList<(int Object, HitSound Sound, SampleSet Normal, SampleSet Addition)> Bodies { get; init; } = [];
 
-    /// <summary>New mixed samples for slider ticks and slides (written into the mapset before the .osu).</summary>
+    /// <summary>New mixed samples for simultaneous hits, slider ticks and slides (written before the .osu).</summary>
     public IReadOnlyList<MixFile> Mixes { get; init; } = [];
 
     /// <summary>Green lines for those samples: at a tick or inside a slide; ticks get the old settings back after lookup.</summary>
@@ -140,7 +140,7 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
 }
 
 /// <summary>
-/// Custom indexes for Copy hitsounds' new tick and slide samples: from the start index up, skipping every index the
+/// Custom indexes for Copy hitsounds' new mixed samples: from the start index up, skipping every index the
 /// mapset's difficulties and files use, and one per mix (equal mixes share a file, across all the targets).
 /// </summary>
 public sealed class CustomSampleIndexes(MapFolder folder, int start)
@@ -149,15 +149,18 @@ public sealed class CustomSampleIndexes(MapFolder folder, int start)
     private readonly Dictionary<string, (MixFile Mix, int Index)> mixes = [];
     private int next = Math.Max(start, 2);
 
-    /// <summary>The sample for these sounds as a slider tick or slide in a sample set: a new file name and index, or the one given before.</summary>
+    /// <summary>The sample for these sounds in a hit slot or slider role: a new file name and index, or the one given before.</summary>
     public (MixFile Mix, int Index) For(IEnumerable<Lane> lanes, string role, SampleSet set)
+        => For(lanes.Select(l => (l, 100)), role, set);
+
+    public (MixFile Mix, int Index) For(IEnumerable<(Lane Lane, int Volume)> layers, string role, SampleSet set)
     {
-        var layers = MixPlanner.Normalize(lanes.Select(l => (l, 100)));
-        string key = $"{HitsoundRules.SampleName(set, role)}|{MixFile.SignatureOf(layers)}";
+        var normalized = MixPlanner.Normalize(layers, includeMissing: true);
+        string key = $"{HitsoundRules.SampleName(set, role)}|{MixFile.SignatureOf(normalized)}";
         if (mixes.TryGetValue(key, out var found)) return found;
         while (used.Contains(next)) next++;
         used.Add(next);
-        return mixes[key] = (new MixFile($"{HitsoundRules.SampleName(set, role)}{next}.wav", layers), next++);
+        return mixes[key] = (new MixFile($"{HitsoundRules.SampleName(set, role)}{next}.wav", normalized), next++);
     }
 }
 
@@ -198,6 +201,7 @@ public static class HitsoundCopier
         var targets = to.Moments.OrderBy(m => m.Time).ToArray();
         var times = targets.Select(m => m.Time - to.Settings.TimeOffset).ToArray();
         var matched = new Dictionary<int, Moment>();
+        var simultaneous = new Dictionary<int, List<Moment>>();
         var unmatched = new List<Moment>();
         int matches = 0;
         if (options.CopyHitsounds)
@@ -206,6 +210,9 @@ public static class HitsoundCopier
                 double time = s.Time - from.Settings.TimeOffset;
                 if (Nearest(times, time) is { } i && Math.Abs(Math.Round(time) - Math.Round(times[i])) <= options.Leniency)
                 {
+                    if (!matched.TryGetValue(i, out var previous) || previous.Time != s.Time)
+                        simultaneous[i] = [];
+                    simultaneous[i].Add(s);
                     matched[i] = s;
                     matches++;
                 }
@@ -213,6 +220,7 @@ public static class HitsoundCopier
             }
 
         var wanted = new Dictionary<MomentKey, WantedSound>();
+        var hitMixes = new List<MixFile>();
         for (int i = 0; i < targets.Length; i++)
         {
             var m = targets[i];
@@ -226,6 +234,21 @@ public static class HitsoundCopier
             {
                 lanes = options.CopySampleSets ? [.. s.Hits.Select(h => h.Lane)] : Retarget(s.Hits.Select(h => h.Lane), targetState.Set, targetState.Index, targetFolder);
                 volume = options.CopyVolumes ? s.Volume : m.Volume;
+                if (simultaneous[i].Count > 1)
+                {
+                    var layers = simultaneous[i].SelectMany(moment => moment.Hits.Select(h =>
+                        (h.Lane, Volume: options.CopyVolumes ? moment.PlayedVolume : 100))).ToList();
+                    if (options.CopySampleSets)
+                    {
+                        indexes ??= new CustomSampleIndexes(targetFolder, options.StartIndex);
+                        var (mix, _) = indexes.For(layers, "hitnormal", SampleSet.Soft);
+                        if (!hitMixes.Contains(mix)) hitMixes.Add(mix);
+                        lanes = [new Lane(LaneSource.BeatmapFile, mix.FileName)];
+                        volume = options.CopyVolumes ? 100 : m.Volume;
+                    }
+                    else
+                        throw new InvalidOperationException("Enable Copy sample sets and indexes to preserve simultaneous source sounds in one target hit.");
+                }
             }
             else if (options.Mode == CopyMode.OverwriteEverything)
             {
@@ -267,7 +290,8 @@ public static class HitsoundCopier
                 else wanted[key] = mute;
             }
 
-        var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted) { Bodies = Bodies(targets, matched, objectIndex, options) };
+        var plan = new HitsoundCopyPlan(wanted, matches, wanted.Count, muted)
+            { Bodies = Bodies(targets, matched, objectIndex, options), Mixes = hitMixes };
         // A generated sample needs its own index; keeping target indexes means no tick/slide reassignment.
         if (indexes is not null && options is { Mode: CopyMode.OverwriteOnlyDefined, CopyHitsounds: true, CopySampleSets: true } && (options.CopyToSliderTicks || options.CopyToSliderSlides))
             plan = TicksAndSlides(plan, unmatched, from.Settings.TimeOffset, to, targetTiming, objectIndex, options, indexes);
@@ -312,39 +336,42 @@ public static class HitsoundCopier
         var mixes = new List<MixFile>();
         var lines = new List<(double, SampleSet, int, int, bool)>();
         var bodySets = plan.Bodies.ToDictionary(b => b.Object, b => b.Normal);
-        var later = new List<(Moment Hit, double Time)>();
+        var later = new List<(List<Moment> Hits, double Time)>();
 
-        void Add(Moment hit, double at, HitObject slider, string role, bool revert)
+        void Add(List<Moment> hits, double at, HitObject slider, string role, bool revert)
         {
             var state = Decompiler.PointState(revert ? timing.SamplePointAt(at) : timing.PointAt(at), to.Settings);
             // Put the mix in the bank this slider already reads. Making the whole slider auto would change earlier sounds.
             var ownSet = bodySets.GetValueOrDefault(objectIndex[slider], (slider.HitSample ?? default).NormalSet);
             var set = Decompiler.DecodeSet(ownSet, state.Set);
-            var (mix, index) = indexes.For(hit.Hits.Select(h => h.Lane), role, set);
+            bool combineVolumes = hits.Count > 1 && options.CopyVolumes;
+            var (mix, index) = indexes.For(hits.SelectMany(hit => hit.Hits.Select(h =>
+                (h.Lane, Volume: combineVolumes ? hit.PlayedVolume : 100))), role, set);
             if (mix.Layers.Count == 0) return;
             if (!mixes.Contains(mix)) mixes.Add(mix);
             // Switch at the last whole millisecond before the tick's lookup, after any intervening original green line.
             double when = revert ? Math.Floor(at + HitsoundRules.ControlPointLeniency) : Math.Round(at);
-            int volume = !options.CopyVolumes || options.AlwaysPreserve5Volume && state.Volume == 5 ? state.Volume : hit.Volume;
+            int volume = !options.CopyVolumes || options.AlwaysPreserve5Volume && state.Volume == 5 ? state.Volume : combineVolumes ? 100 : hits[0].Volume;
             lines.Add((when, state.Set, index, volume, revert));
         }
 
-        foreach (var hit in unmatched)
+        foreach (var group in unmatched.GroupBy(h => h.Time))
         {
-            double time = hit.Time - sourceOffset;
+            var hits = group.ToList();
+            double time = group.Key - sourceOffset;
             if (options.CopyToSliderTicks && ticks.FirstOrDefault(t => Math.Abs(t.Time - time) <= options.Leniency && !taken.Contains((int)t.Time)) is { Slider: not null } tick)
             {
                 taken.Add((int)tick.Time);
-                Add(hit, tick.Time, tick.Slider, "slidertick", revert: true);
+                Add(hits, tick.Time, tick.Slider, "slidertick", revert: true);
             }
-            else if (options.CopyToSliderSlides) later.Add((hit, time));
+            else if (options.CopyToSliderSlides) later.Add((hits, time));
         }
 
-        foreach (var (hit, time) in later)
+        foreach (var (hits, time) in later)
             if (!taken.Contains((int)time) && slides.FirstOrDefault(s => s.Start < time && s.End > time) is { Slider: not null } slide)
-                Add(hit, time, slide.Slider, "sliderslide", revert: false);
+                Add(hits, time, slide.Slider, "sliderslide", revert: false);
 
-        return plan with { Mixes = mixes, GreenLines = lines };
+        return plan with { Mixes = plan.Mixes.Concat(mixes).Distinct().ToList(), GreenLines = lines };
     }
 
     /// <summary>
@@ -409,7 +436,7 @@ public static class HitsoundCopier
     /// Copies into each target .osu and saves it like Save .osu: refused when it changed on disk, with a backup outside
     /// the mapset, and only when something changes. A target that can't be read or written is reported, not thrown.
     /// </summary>
-    /// <param name="render">Mixes a new tick or slide sample into WAV bytes (null when it can't); without it none are made.</param>
+    /// <param name="render">Renders a new mixed sample into WAV bytes. Required when simultaneous hits need a mix.</param>
     public static IReadOnlyList<HitsoundCopyTarget> CopyTo(OsuFile source, MapFolder sourceFolder, IEnumerable<string> targetPaths, HitsoundCopyOptions options, string backupRoot,
         Func<MixFile, byte[]?>? render = null)
     {
@@ -424,6 +451,9 @@ public static class HitsoundCopier
                 if (render is not null) indexes ??= new CustomSampleIndexes(doc.Folder, options.StartIndex); // one set of indexes for the mapset
                 var plan = Plan(source, sourceFolder, doc.File, doc.Folder, options, indexes);
 
+                if (render is null && plan.Mixes.Count > 0)
+                    throw new IOException("Simultaneous source sounds require a sample renderer; the target was not changed.");
+
                 // New tick and slide samples go into the mapset first. If one can't be made, this target gets none of them
                 // (a green line to a missing file would play the skin, and the sliders would lose their own sample set).
                 int generated = 0;
@@ -434,16 +464,16 @@ public static class HitsoundCopier
                         .ToDictionary(m => m, _ => (byte[]?)null);
                     foreach (var mix in plan.Mixes.Where(m => !made.ContainsKey(m))) made[mix] = render(mix);
                     if (made.Any(kv => kv.Value is null && !written.Contains(kv.Key.FileName) && !File.Exists(Path.Combine(dir, kv.Key.FileName))))
-                        plan = plan with { Mixes = [], GreenLines = [] };
-                    else
-                        foreach (var (mix, bytes) in made.Where(kv => kv.Value is not null))
-                        {
-                            SafeFile.WriteAllBytes(Path.Combine(dir, mix.FileName), bytes!);
-                            written.Add(mix.FileName);
-                            generated++;
-                        }
+                        throw new IOException("A required sample could not be rendered; the target was not changed.");
+                    foreach (var (mix, bytes) in made.Where(kv => kv.Value is not null))
+                    {
+                        SafeFile.WriteAllBytes(Path.Combine(dir, mix.FileName), bytes!);
+                        written.Add(mix.FileName);
+                        generated++;
+                    }
                 }
 
+                doc.RescanFolder();
                 var saved = MapSaver.Save(doc.Path, doc.Opened, doc.Folder, plan.Wanted, backupRoot, alsoEdit: plan.ApplyExtras);
                 results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, saved.Compile.Conflicts.Count, saved.Backup, null, plan.Muted)
                     { Generated = generated, OnTicksAndSlides = plan.GreenLines.Count });
