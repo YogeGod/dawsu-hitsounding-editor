@@ -76,12 +76,22 @@ internal sealed partial class ArrangeModel
         Objects = BuildObjects(session, Map.Settings.TimeOffset);
     }
 
-    // The map's read-only sounds never change, so their notes are built once.
+    // Read-only sounds follow the last saved map; green-line changes can affect slider ticks and loops.
     private readonly Dictionary<Lane, List<Note>> passive;
 
     public EditSession Session { get; }
 
-    public DecompiledMap Map { get; }
+    public DecompiledMap Map { get; private set; }
+
+    /// <summary>Refreshes saved slider/storyboard sounds without replacing the session or its presentation state.</summary>
+    public void RefreshSavedSounds(DecompiledMap saved)
+    {
+        Map = saved;
+        passive.Clear();
+        foreach (var group in saved.Passive.GroupBy(p => p.Lane))
+            passive[group.Key] = group.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList();
+        RebuildNotes();
+    }
 
     public IReadOnlySet<Lane> Silent { get; set; }
 

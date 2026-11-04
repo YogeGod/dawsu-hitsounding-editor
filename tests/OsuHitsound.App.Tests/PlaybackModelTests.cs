@@ -8,6 +8,33 @@ namespace OsuHitsound.App.Tests;
 
 public class PlaybackModelTests
 {
+    [Fact]
+    public void Saved_slider_sounds_refresh_without_replacing_history_or_lane_state()
+    {
+        var (map, file) = Load("0,500,4,2,0,5,1,0", "100,100,1000,2,0,L|380:100,1,280");
+        var session = Session(map, file);
+        var model = new ArrangeModel(session, file, new HashSet<Lane>());
+        var lane = session.State.Hits[0].Lane;
+        model.SetActive(lane);
+        model.ToggleSolo(lane);
+        model.RenameLane(lane, "My sample");
+        session.SetVolume(session.Moments.Select(m => m.Key), 50);
+        var intended = session.State;
+        var copy = OsuFile.Parse(file.ToBytes());
+        Assert.Empty(Compiler.Apply(copy, new MapFolder([]), session.Wanted()).Conflicts);
+
+        model.RefreshSavedSounds(Decompiler.Decompile(copy, new MapFolder([])));
+
+        Assert.Same(session, model.Session);
+        Assert.Same(intended, session.State);
+        Assert.True(session.CanUndo);
+        Assert.Equal(lane, model.ActiveLane);
+        Assert.True(model.IsSoloed(lane));
+        Assert.Equal("My sample", model.NameOf(lane));
+        Assert.All(model.Map.Passive.Where(p => p.Kind == PassiveKind.SliderTick), p => Assert.Equal(50, p.Volume));
+        Assert.Contains(HitScheduler.PassiveCues(model.Map), c => c.Lane.Name == "soft-slidertick" && c.Volume == 0.5f);
+    }
+
     private static (DecompiledMap Map, OsuFile File) Load(string timingPoints, string hitObjects, string[]? files = null)
     {
         var text = "osu file format v14\r\n\r\n[General]\r\nAudioFilename: song.mp3\r\nSampleSet: Soft\r\n\r\n" +

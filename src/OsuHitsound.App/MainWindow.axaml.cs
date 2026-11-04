@@ -610,7 +610,7 @@ public partial class MainWindow : Window
     {
         if (model is null || session is null || audio is null) return;
         audio.SetCues(session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h => HitScheduler.HitCue(h.Time, h.Lane, session.VolumeOf(h)))
-            .Concat(HitScheduler.PassiveCues(session.Map)));
+            .Concat(HitScheduler.PassiveCues(model.Map)));
     }
 
     /// <summary>Sets the locators from their boxes; a box that isn't a number goes back to the locator as it was.</summary>
@@ -963,6 +963,8 @@ public partial class MainWindow : Window
             // Keep this session, selection, viewport and undo history. The document updates its disk baseline.
             lastCompile = doc.Compile(session.State);
             model.SetConflicts(lastCompile.Value.Result.Conflicts.Select(c => c.Moment).ToHashSet());
+            model.RefreshSavedSounds(Decompiler.Decompile(lastCompile.Value.File, doc.Folder));
+            UpdateCues();
             Title = $"{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
             flash = saved.Written
                 ? $"Saved all edits. Backup: {saved.Backup}"
