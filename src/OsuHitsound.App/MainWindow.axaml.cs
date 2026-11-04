@@ -292,7 +292,20 @@ public partial class MainWindow : Window
         await Task.Run(() => _ = skinSounds.Value); // reading lazer's sounds can take a moment
         if (number != loadNumber || doc is not null) return; // a map was opened meanwhile
 
-        audio?.Load(map with { Lanes = placeholder.Lanes }, folder, skin.Value);
+        if (audio is not null)
+        {
+            var sounds = skinSounds.Value;
+            var prepared = await Task.Run(() => AudioEngine.Prepare(map with { Lanes = placeholder.Lanes }, folder, sounds));
+            if (number != loadNumber || doc is not null)
+            {
+                prepared.Dispose();
+                return;
+            }
+
+            audio.Apply(prepared);
+        }
+
+        if (number != loadNumber || doc is not null) return;
         var preview = new ArrangeModel(placeholder, file, audio?.SilentLanes ?? new HashSet<Lane>());
         if (audio is not null) audio.IsAudible = preview.IsAudible;
         Lanes.IsPreview = true;
@@ -317,9 +330,11 @@ public partial class MainWindow : Window
         var skinSounds = skin;
         try
         {
+            bool withAudio = audio is not null;
+            PreparedLoad? prepared = null;
             var opened = await Task.Run(() =>
             {
-                _ = skinSounds.Value; // read the default sounds here too, the first time
+                var sounds = skinSounds.Value; // read the default sounds here too, the first time
                 var loadPath = path;
                 if (usePreferences)
                 {
@@ -331,9 +346,18 @@ public partial class MainWindow : Window
                         !File.Exists(ProjectStore.PathFor(projects, loadPath)) && ProjectStore.Load(projects, path) is { } previousProject)
                         ProjectStore.Save(projects, loadPath, previousProject);
                 }
-                return MapDocument.Load(loadPath);
+
+                var document = MapDocument.Load(loadPath);
+                // Decode every drawable lane off the UI thread. The window only publishes the buffers afterwards.
+                if (withAudio)
+                    prepared = AudioEngine.Prepare(document.Map with { Lanes = document.Session.Lanes }, document.Folder, sounds);
+                return document;
             });
-            if (number != loadNumber) return false;
+            if (number != loadNumber)
+            {
+                prepared?.Dispose();
+                return false;
+            }
             var (full, file, mapFolder, map, editing) = (opened.Path, opened.File, opened.Folder, opened.Map, opened.Session);
 
             compileCancel?.Cancel();
@@ -341,7 +365,10 @@ public partial class MainWindow : Window
             (doc, lastCompile, closeConfirmed, flash) = (opened, null, false, null);
 
             // Load every drawable lane's sample, not only the ones the map uses, so new hits sound at once.
-            audio?.Load(map with { Lanes = editing.Lanes }, mapFolder, skin.Value);
+            if (audio is not null && prepared is not null)
+                audio.Apply(prepared);
+            else
+                prepared?.Dispose();
             model = new ArrangeModel(editing, file, audio?.SilentLanes ?? new HashSet<Lane>());
             if (audio is not null) audio.IsAudible = model.IsAudible;
             editing.Changed += OnEdited;
@@ -1307,13 +1334,13 @@ public partial class MainWindow : Window
             }
         }
 
-        // Redraw only when the playhead moved: axis, theme and model changes redraw through their own events.
+        // The scene (notes, names, bars, overview hits) stays cached. Only the playhead layer moves.
         if (Lanes.Playhead == lastDrawnPlayhead) return;
         lastDrawnPlayhead = Lanes.Playhead;
         Overview.Playhead = Volume.Playhead = Lanes.Playhead;
-        Lanes.InvalidateVisual();
-        Overview.InvalidateVisual();
-        if (Volume.IsEffectivelyVisible) Volume.InvalidateVisual();
+        Lanes.InvalidatePlayhead();
+        Overview.InvalidatePlayhead();
+        if (Volume.IsEffectivelyVisible) Volume.InvalidatePlayhead();
         UpdateLcd();
     }
 
@@ -1321,7 +1348,7 @@ public partial class MainWindow : Window
     {
         SyncScrollBars();
         Lanes.InvalidateVisual();
-        Overview.InvalidateVisual();
+        Overview.InvalidateViewport();
         Volume.InvalidateVisual();
     }
 

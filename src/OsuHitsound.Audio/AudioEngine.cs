@@ -15,15 +15,23 @@ public sealed class AudioEngine : IDisposable
     private readonly PlaybackMixer mixer;
     private readonly HashSet<Lane> loaded = [], silent = [];
     private readonly OpenOutput output;
+    private readonly bool ownsBass;
+    private readonly object loadGate = new();
     private BassSong? song;
     private HitScheduler? scheduler;
+    private int loadToken;
+    private bool disposed;
 
-    private AudioEngine(OpenOutput output, PlaybackMixer mixer, string? fallback)
+    private AudioEngine(OpenOutput output, PlaybackMixer mixer, string? fallback, bool ownsBass = true)
     {
-        (this.output, this.mixer) = (output, mixer);
+        (this.output, this.mixer, this.ownsBass) = (output, mixer, ownsBass);
         Fallback = fallback;
         mixer.LatencyMs = output.LatencyMs;
     }
+
+    /// <summary>An engine with no device and no BASS device init, for tests of load and publish.</summary>
+    internal static AudioEngine CreateForTests() =>
+        new(new OpenOutput(new SilentOutput(), static () => 0, "test", static () => { }), new PlaybackMixer(), null, ownsBass: false);
 
     /// <summary>Output buffer when none is chosen: small keeps the playhead close to what's heard; raise it if it crackles.</summary>
     public const int DefaultBufferMs = 30;
@@ -151,36 +159,101 @@ public sealed class AudioEngine : IDisposable
         set => mixer.SongMuted = value;
     }
 
-    /// <summary>Loads a map's song and samples, replacing what was loaded. Stops playback.</summary>
+    /// <summary>Loads a map's song and samples, replacing what was loaded. Stops playback. Decodes on the calling thread.</summary>
     public void Load(DecompiledMap map, MapFolder folder, IReadOnlyDictionary<string, byte[]> skin)
     {
-        Pause();
-        Unload();
+        int token = BeginLoad();
+        Publish(token, Prepare(map, folder, skin));
+    }
 
-        if (map.Settings.AudioFilename is { Length: > 0 } audio && folder.Find(audio) is { } songFile)
+    /// <summary>
+    /// Reads and decodes a map's song and samples. Does not touch the mixer, so it can run off the UI thread.
+    /// Publish it with <see cref="Apply"/>, or dispose it to drop the song stream.
+    /// </summary>
+    public static PreparedLoad Prepare(DecompiledMap map, MapFolder folder, IReadOnlyDictionary<string, byte[]> skin)
+    {
+        byte[]? songBytes = null;
+        BassSong? song = null;
+        var adopted = false;
+        try
         {
-            var bytes = folder.ReadBytes(songFile);
-            SongBytes = bytes;
-            song = BassSong.Open(bytes);
-            mixer.SetSong(song);
-        }
-
-        foreach (var lane in map.Lanes)
-        {
-            byte[]? data = lane.Missing ? null : lane.Source switch
+            if (map.Settings.AudioFilename is { Length: > 0 } audio && folder.Find(audio) is { } songFile)
             {
-                LaneSource.Skin => skin.GetValueOrDefault(lane.Name),
-                _ => folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null,
-            };
-            LoadLane(lane, data);
-        }
+                songBytes = folder.ReadBytes(songFile);
+                song = BassSong.Open(songBytes);
+            }
 
-        scheduler = new HitScheduler(map);
-        mixer.SetCues(scheduler);
-        songLength = song?.LengthMs ?? 0;
-        cueLength = scheduler.Cues.Count > 0 ? scheduler.EndTime + 1000 : 0;
-        UpdateLength();
-        mixer.Seek(0);
+            var samples = new List<(Lane Lane, float[]? Stereo)>();
+            var seen = new HashSet<Lane>();
+            foreach (var lane in map.Lanes)
+            {
+                if (!seen.Add(lane)) continue; // the first sample wins, as LoadLane ignores a lane already loaded
+                byte[]? data = lane.Missing ? null : lane.Source switch
+                {
+                    LaneSource.Skin => skin.GetValueOrDefault(lane.Name),
+                    _ => folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null,
+                };
+                float[]? stereo = data is { Length: > 0 } ? SampleMixer.Decode(data) : null;
+                samples.Add((lane, stereo is { Length: > 0 } ? stereo : null));
+            }
+
+            var scheduler = new HitScheduler(map);
+            double songLength = song?.LengthMs ?? 0;
+            double cueLength = scheduler.Cues.Count > 0 ? scheduler.EndTime + 1000 : 0;
+            var prepared = new PreparedLoad(song, songBytes, samples, scheduler, songLength, cueLength);
+            adopted = true;
+            return prepared;
+        }
+        finally
+        {
+            if (!adopted) song?.Dispose();
+        }
+    }
+
+    /// <summary>Stops playback, drops what was loaded, and installs <paramref name="prepared"/>. False when the engine has been disposed.</summary>
+    public bool Apply(PreparedLoad prepared) => Publish(BeginLoad(), prepared);
+
+    /// <summary>Stops playback and drops the current song and samples. The returned token is the only one <see cref="Publish"/> will accept until the next call.</summary>
+    internal int BeginLoad()
+    {
+        lock (loadGate)
+        {
+            if (disposed) return 0;
+            Pause();
+            Unload();
+            return ++loadToken;
+        }
+    }
+
+    /// <summary>Installs a prepared load. False when a newer load began or the engine was disposed; the prepared song is released either way.</summary>
+    internal bool Publish(int token, PreparedLoad prepared)
+    {
+        lock (loadGate)
+        {
+            if (disposed || token == 0 || token != loadToken)
+            {
+                prepared.Dispose();
+                return false;
+            }
+
+            SongBytes = prepared.SongBytes;
+            song = prepared.TakeSong();
+            mixer.SetSong(song);
+            foreach (var (lane, stereo) in prepared.Samples)
+            {
+                loaded.Add(lane);
+                if (stereo is not null) mixer.SetSound(lane, stereo);
+                else silent.Add(lane);
+            }
+
+            scheduler = prepared.Scheduler;
+            mixer.SetCues(scheduler);
+            songLength = prepared.SongLength;
+            cueLength = prepared.CueLength;
+            UpdateLength();
+            mixer.Seek(0);
+            return true;
+        }
     }
 
     private void UpdateLength() =>
@@ -269,9 +342,61 @@ public sealed class AudioEngine : IDisposable
 
     public void Dispose()
     {
+        lock (loadGate)
+        {
+            if (disposed) return;
+            disposed = true;
+            loadToken++; // a prepare still in flight cannot publish
+        }
+
         Pause();
         output.Close();
         Unload();
-        Bass.Free();
+        if (ownsBass) Bass.Free();
     }
+
+    /// <summary>No device: tests construct an engine without opening WASAPI.</summary>
+    private sealed class SilentOutput : IWavePlayer
+    {
+        public NAudio.Wave.PlaybackState PlaybackState => NAudio.Wave.PlaybackState.Stopped;
+        public float Volume { get; set; } = 1;
+        public NAudio.Wave.WaveFormat OutputWaveFormat { get; } = NAudio.Wave.WaveFormat.CreateIeeeFloatWaveFormat(PlaybackMixer.Rate, 2);
+        public event EventHandler<StoppedEventArgs>? PlaybackStopped { add { } remove { } }
+        public void Dispose() { }
+        public void Init(IWaveProvider waveProvider) { }
+        public void Pause() { }
+        public void Play() { }
+        public void Stop() { }
+    }
+}
+
+/// <summary>A map's song and samples already decoded to the mix format. Apply it to an engine, or dispose it to drop the song stream.</summary>
+public sealed class PreparedLoad : IDisposable
+{
+    private BassSong? song;
+
+    public PreparedLoad(BassSong? song, byte[]? songBytes, IReadOnlyList<(Lane Lane, float[]? Stereo)> samples, HitScheduler scheduler, double songLength, double cueLength)
+    {
+        this.song = song;
+        SongBytes = songBytes;
+        Samples = samples;
+        Scheduler = scheduler;
+        SongLength = songLength;
+        CueLength = cueLength;
+    }
+
+    public byte[]? SongBytes { get; }
+    public IReadOnlyList<(Lane Lane, float[]? Stereo)> Samples { get; }
+    public HitScheduler Scheduler { get; }
+    public double SongLength { get; }
+    public double CueLength { get; }
+
+    public BassSong? TakeSong()
+    {
+        var taken = song;
+        song = null;
+        return taken;
+    }
+
+    public void Dispose() => TakeSong()?.Dispose();
 }

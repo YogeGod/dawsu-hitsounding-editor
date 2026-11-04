@@ -99,7 +99,7 @@ internal static class Paint
     /// <summary>The design's note: a diamond (a square turned 45°).</summary>
     public static void DrawDiamond(DrawingContext ctx, Point centre, double size, IBrush fill, IPen ring)
     {
-        // One geometry per size, centred on 0,0 and moved into place: notes are drawn every frame.
+        // One geometry per size, centred on 0,0. Playback does not redraw notes; the transform runs only when the scene is rebuilt.
         var geometry = T.Cached($"diamond:{size}", () =>
         {
             double r = size / 2;
