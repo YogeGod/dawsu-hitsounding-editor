@@ -30,7 +30,8 @@ public sealed record CompileResult(IReadOnlyList<Conflict> Conflicts, IReadOnlyL
 /// <item>slider nodes: a green line at the node, copying the slider velocity and effects in force; the next moment
 /// that needs the old settings gets its own line back.</item>
 /// </list>
-/// Moments that can't be encoded become conflicts and keep their old sounds. The filename field is never written.
+/// A single existing file on a circle or spinner can use the filename field when bank encoding cannot represent it.
+/// Moments that can't be encoded become conflicts and keep their old sounds.
 /// The result is checked by decompiling again: any moment that doesn't come back as wanted is a conflict too.
 /// </summary>
 public static partial class Compiler
@@ -147,8 +148,26 @@ public static partial class Compiler
         {
             if (want.Volume is < 0 or > 100) throw new ConflictException($"Volume {want.Volume} is outside osu!'s 0-100.");
             var parsed = want.Lanes.Distinct().Select(l => (Lane: l, Parsed: Parse(l))).ToList();
+            // A single file needs no bank/index copies. Filename samples are object-level only;
+            // slider nodes and genuine overlaps must still use the normal encoding/mixing path.
+            if (parsed.Count == 1 && parsed[0].Lane is { Source: LaneSource.BeatmapFile, Missing: false } single
+                && moment.Object.Kind is HitObjectKind.Circle or HitObjectKind.Spinner
+                && folder.Find(single.Name) is not null && HitsoundRules.SampleExtensions.Contains(Path.GetExtension(single.Name).ToLowerInvariant())
+                && single.Name.IndexOfAny([',', '\r', '\n']) < 0
+                && (single.Sample is not { Sound: "hitnormal" } sample || moment.Object.HitSample?.Filename is not null
+                    || Resolve(sample.Set, sample.Sound, sample.Index) != single))
+            {
+                var sampleField = moment.Object.HitSample ?? default;
+                int inheritedVolume = Decompiler.PointState(timing.SamplePointAt(time), settings).Volume;
+                int effectiveVolume = sampleField.Volume > 0 ? Math.Min(sampleField.Volume, 100) : inheritedVolume;
+                int volumeField = effectiveVolume == want.Volume ? sampleField.Volume : inheritedVolume == want.Volume ? 0
+                    : want.Volume >= 1 ? want.Volume : throw new ConflictException("Volume 0 on an object inherits the timing point's volume.");
+                moment.Object.HitSound &= HitSound.Normal;
+                moment.Object.HitSample = sampleField with { Filename = single.Name, Volume = volumeField };
+                return;
+            }
             if (parsed.FirstOrDefault(p => p.Parsed is null) is { Lane: { } own })
-                throw new ConflictException($"\"{own.Name}\" isn't a set-named hitsound, so osu! could only play it through the filename field, which this editor never writes.");
+                throw new ConflictException($"\"{own.Name}\" needs a mix here: only a single file on a circle or spinner can use the filename field.");
 
             var sounds = parsed.Select(p => p.Parsed!.Value).ToList();
             var normals = sounds.Where(s => s.Sound == "hitnormal").ToList();

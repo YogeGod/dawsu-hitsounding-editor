@@ -192,7 +192,7 @@ public class CompilerTests
     }
 
     [Fact]
-    public void The_filename_field_is_never_written()
+    public void A_custom_filename_is_not_cleared_to_encode_skin_sounds()
     {
         var file = Map(Red, "256,192,1000,1,0,0:0:0:0:boom.wav");
         var (result, _, _) = Apply(file, new MapFolder(["boom.wav"]), (0, [Skin("soft-hitnormal")], 100));

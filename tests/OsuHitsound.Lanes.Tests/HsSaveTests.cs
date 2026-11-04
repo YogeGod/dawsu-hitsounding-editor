@@ -137,8 +137,11 @@ public class HsSaveTests : IDisposable
     public void Failed_render_or_external_edit_during_render_leaves_all_generated_outputs_unwritten(bool changeSource)
     {
         var doc = Open(); doc.Session.SetHsMode(true);
-        doc.Session.Add([doc.Session.HitAt(new Lane(LaneSource.BeatmapFile, "kick.wav"), 1000)]);
+        // A single file can now be referenced directly; use an actual overlap to exercise rendering failures.
+        doc.Session.Add([doc.Session.HitAt(new Lane(LaneSource.BeatmapFile, "kick.wav"), 1000),
+            doc.Session.HitAt(new Lane(LaneSource.BeatmapFile, "snare.wav"), 1000)]);
         File.WriteAllBytes(Path.Combine(root, "kick.wav"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(root, "snare.wav"), [4, 5, 6]);
         var (plan, _) = doc.PlanHsSave(Manifests);
         Assert.Single(plan.Storage.Mixes);
         Assert.Throws<IOException>(() => doc.WriteHsSave(plan, _ =>

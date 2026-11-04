@@ -44,7 +44,7 @@ A standalone hitsound editor for **osu!standard** maps that works like **Cubase'
    - Index 0 means the skin only, index 1 means no number suffix, index N≥2 adds the number.
    - Extensions are tried in the order wav, mp3, ogg.
    - A missing file falls back to the player's skin.
-   - Never write the hitSample filename field.
+   - Reuse a single existing sample through the hitSample filename field on circles/spinners when bank encoding cannot represent it directly. Slider nodes and overlaps still require compatible bank/index encoding or mixing; keep paths inside the mapset.
 5. **Stay inside the mapset folder:** a hitSample filename or storyboard sample path in someone else's map can contain `..\` or an absolute path. Never read, copy or write a sample file outside the mapset folder.
 6. **Ranking criteria:** no unused or 0-byte files, hitsound files at least 25 ms long, the official 44-byte `blank.wav` for silence, and no automatic hitsound generation from audio.
 

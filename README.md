@@ -60,6 +60,8 @@ Sound sets retain frozen audio copies. **Save to library** writes a self-contain
 
 Unchanged prepared audio is reused. New sample indexes start at the smallest available number from 2, protecting occupied indexes and other difficulties. Changed inputs invalidate reuse. Canceling the export confirmation writes no map or output samples. Older generated files are conservatively retained in pairing mode; check for unused assets before submitting a mapset.
 
+A single existing OGG, WAV or MP3 sample on a circle or spinner is referenced directly when possible, including after a volume edit. Save and Generate do not create numbered copies just to fit that sample into a sampleset. Layer combinations and slider-node sounds still use pairing or mixing when needed.
+
 **Generate…** defaults to normal, whistle, finish and clap hitsounds at circles, slider heads/repeats/tails and spinner ends. Slider-body sounds and ticks are excluded by default to avoid creating unnecessary samples for a hitsound-copying difficulty. Enable **Include slider-body sounds and ticks** in the confirmation to render that audio into timed samples. Counts update before export; Generate is unavailable while planning or when the selected export has conflicts. Cancel writes nothing. Save and Copy retain their existing slider-audio behavior. Generate stops and names the sample if a required sound cannot be read or decoded.
 
 You can also import an `.osz`, reopen a recent map, or open the map's folder (**File → Open map folder**, Ctrl+Shift+O) from the **File** menu. Sample files you put in that folder show up as lanes as soon as you switch back to the editor.
