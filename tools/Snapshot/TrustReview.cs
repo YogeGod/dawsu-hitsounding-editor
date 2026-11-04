@@ -3,6 +3,7 @@ using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using OsuHitsound.App;
@@ -41,6 +42,8 @@ internal static class TrustReview
             session.Redo();
             Check(!session.IsEdited, "Redo to saved state becomes clean");
 
+            view.Axis.Left = 500;
+            Capture(window, "00-editor-ready-to-save.png");
             byte[] before = File.ReadAllBytes(path);
             session.Remove(session.State.Hits.Where(h => h.Anchor == session.Moments[0].Key && h.Lane.Name.Contains("hitnormal")).ToList());
             session.Add([session.HitAt(clap, 1125)]);
@@ -61,8 +64,8 @@ internal static class TrustReview
             // Every primary control can receive keyboard focus. Native Space activates a tool instead of transport.
             var draw = window.FindControl<Avalonia.Controls.Primitives.ToggleButton>("DrawTool")!;
             Check(draw.Focus(), "Draw tool accepts focus");
-            window.KeyPress(Key.Space);
-            window.KeyRelease(Key.Space);
+            window.KeyPressQwerty(PhysicalKey.Space, RawInputModifiers.None);
+            window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
             Check(view.Tool == Tool.Draw, "Space activates the focused tool");
             var snap = window.FindControl<ComboBox>("SnapModeBox")!;
             Check(snap.Focus(NavigationMethod.Tab), "Snap mode accepts keyboard focus");

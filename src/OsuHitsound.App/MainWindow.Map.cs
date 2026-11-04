@@ -248,6 +248,7 @@ public partial class MainWindow
 
     private void ScheduleProjectSave()
     {
+        if (!usePreferences) return;
         projectTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
         {
             projectTimer!.Stop();
@@ -260,7 +261,7 @@ public partial class MainWindow
     private void SaveProject()
     {
         projectTimer?.Stop();
-        if (model is null || session is null || mapPath is null) return;
+        if (!usePreferences || model is null || session is null || mapPath is null) return;
         var (names, order, added, hidden) = model.LaneLayout();
         var data = new ProjectData
         {
@@ -291,6 +292,7 @@ public partial class MainWindow
     /// <summary>Puts back what the project file kept for this map: lanes, hits with no object, locators, mutes, offset.</summary>
     private void RestoreProject()
     {
+        if (!usePreferences) return;
         if (model is null || session is null || mapPath is null || folder is null) return;
         if (ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) is not { } project) return;
 

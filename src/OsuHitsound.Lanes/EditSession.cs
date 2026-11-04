@@ -84,6 +84,16 @@ public sealed class EditSession
         Changed?.Invoke();
     }
 
+    /// <summary>Explicitly discards unsaved map edits before closing; editor-only loose hits must not be restored later.</summary>
+    public void DiscardUnsaved()
+    {
+        State = savedState;
+        gestureStart = null;
+        undo.Clear();
+        redo.Clear();
+        Announce();
+    }
+
     /// <summary>The name of every undo step, oldest first: those done, then those undone (Recent edits).</summary>
     public IReadOnlyList<string> Steps => [.. undo.Select(u => u.Label), .. redo.AsEnumerable().Reverse().Select(r => r.Label)];
 

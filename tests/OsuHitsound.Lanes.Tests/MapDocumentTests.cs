@@ -91,6 +91,24 @@ public class MapDocumentTests : IDisposable
     }
 
     [Fact]
+    public void Explicit_discard_returns_to_the_last_saved_arrangement_including_loose_hits()
+    {
+        var doc = MapDocument.Load(Map());
+        doc.Session.Add([doc.Session.HitAt(Clap, 1000)]);
+        doc.Save(Path.Combine(dir, "backups"));
+        var saved = doc.Session.State;
+        doc.Session.Add([doc.Session.HitAt(Clap, 1250)]);
+        doc.Session.Remove(doc.Session.State.Hits.Where(h => h.Time == 1000));
+
+        doc.Session.DiscardUnsaved();
+
+        Assert.Same(saved, doc.Session.State);
+        Assert.Empty(doc.Session.Unanchored);
+        Assert.False(doc.Session.IsEdited);
+        Assert.False(doc.Session.CanUndo);
+    }
+
+    [Fact]
     public void A_sample_added_to_the_folder_is_found_and_a_hit_on_it_saves_with_its_index()
     {
         var path = Map();

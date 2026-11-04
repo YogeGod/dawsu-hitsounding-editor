@@ -17,6 +17,7 @@ public partial class MainWindow
             var decision = await Dialogs.UnsavedChanges(this);
             if (decision == CloseDecision.Cancel) return;
             if (decision == CloseDecision.Save && !await Save()) return;
+            if (decision == CloseDecision.Discard) session?.DiscardUnsaved();
             allowClose = true;
             Close();
         }
