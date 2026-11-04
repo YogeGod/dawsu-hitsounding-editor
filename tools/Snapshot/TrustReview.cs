@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using OsuHitsound.App;
 using OsuHitsound.Lanes;
 
@@ -80,7 +81,7 @@ internal static class TrustReview
             window.Close();
             Pump();
             var prompt = window.OwnedWindows.Single(w => w.Title == "Unsaved edits");
-            var cancel = prompt.FindControl<Button>("CloseCancel")!;
+            var cancel = prompt.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CloseCancel");
             Check(cancel.IsDefault && cancel.IsFocused, "Close defaults to Cancel");
             Capture(prompt, "03-unsaved-close-dialog.png");
             window.Close();
@@ -91,14 +92,14 @@ internal static class TrustReview
             window.Close();
             Pump();
             prompt = window.OwnedWindows.Single(w => w.Title == "Unsaved edits");
-            Click(prompt.FindControl<Button>("CloseSave")!);
+            Click(prompt.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CloseSave"));
             Pump();
             Check(window.IsVisible && before.SequenceEqual(File.ReadAllBytes(path)), "Blocked Save from close leaves window and file intact");
             foreach (var owned in window.OwnedWindows.ToList()) owned.Close();
             window.Close();
             Pump();
             prompt = window.OwnedWindows.Single(w => w.Title == "Unsaved edits");
-            Click(prompt.FindControl<Button>("CloseDiscard")!);
+            Click(prompt.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CloseDiscard"));
             Pump();
             Check(!window.IsVisible, "Explicit Discard closes");
             Console.WriteLine("PASS: save fidelity, preserved history/selection, close decisions, keyboard controls and lane automation.");

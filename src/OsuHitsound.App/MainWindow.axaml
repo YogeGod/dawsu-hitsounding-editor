@@ -29,9 +29,10 @@
       <Setter Property="BorderBrush" Value="#73b7ff" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
-    <Style Selector="Button.needsAttention">
+    <Style Selector="Button.flat.needsAttention">
       <Setter Property="Foreground" Value="#ffc78a" />
       <Setter Property="BorderBrush" Value="#b78048" />
+      <Setter Property="BorderThickness" Value="1" />
     </Style>
     <Style Selector="MenuItem">
       <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />

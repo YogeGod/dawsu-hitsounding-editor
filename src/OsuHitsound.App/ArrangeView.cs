@@ -90,6 +90,8 @@ internal sealed partial class ArrangeView : Control
     {
         ClipToBounds = true;
         Focusable = true;
+        GotFocus += (_, _) => InvalidateVisual();
+        LostFocus += (_, _) => InvalidateVisual();
         Edits.Changed += () =>
         {
             SelectionChanged?.Invoke();
@@ -376,6 +378,8 @@ internal sealed partial class ArrangeView : Control
 
         DrawHeader(ctx, model, lines, size.Width, gridWidth);
         ctx.DrawLine(Paint.DividerPen, new Point(GridLeft - 0.5, 0), new Point(GridLeft - 0.5, size.Height));
+        if (IsFocused)
+            ctx.DrawRectangle(null, Paint.SelectedRingPen, new Rect(1, 1, Math.Max(0, size.Width - 2), Math.Max(0, size.Height - 2)));
         if (IsPreview)
             Paint.DrawText(ctx, "Open a map to start drawing (Ctrl+O). Click a lane's ● to hear its sound.", new Point(GridLeft + 20, HeaderHeight + 20), Paint.BaseSize, Paint.Dim, 0);
     }
