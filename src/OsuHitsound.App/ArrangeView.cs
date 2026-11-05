@@ -1109,16 +1109,14 @@ internal sealed class ArrangeView : Control
         }
         if (draggedRow is LaneRow lane)
         {
-            if (target is not LaneRow other || other.Group != lane.Group) return;
+            if (target is not LaneRow other) return;
             string? family = model.FamilyKey(lane.Lane), targetFamily = model.FamilyKey(other.Lane);
             if (family == targetFamily && family is not null && (model.IsFamilyBase(lane.Lane) || model.IsFamilyBase(other.Lane))) return;
             if (family != targetFamily)
             {
-                if (family is null || targetFamily is null || model.SlotOf(lane.Lane).Sample?.Sound == "hitnormal"
-                    || model.SlotOf(other.Lane).Sample?.Sound == "hitnormal") return;
                 int start = i, end = i;
-                while (start > 0 && model.Rows[start - 1] is LaneRow a && model.FamilyKey(a.Lane) == targetFamily) start--;
-                while (end + 1 < model.Rows.Count && model.Rows[end + 1] is LaneRow b && model.FamilyKey(b.Lane) == targetFamily) end++;
+                while (targetFamily is not null && start > 0 && model.Rows[start - 1] is LaneRow a && model.FamilyKey(a.Lane) == targetFamily) start--;
+                while (targetFamily is not null && end + 1 < model.Rows.Count && model.Rows[end + 1] is LaneRow b && model.FamilyKey(b.Lane) == targetFamily) end++;
                 dropAfter = p.Y >= HeaderHeight + RowTop(i) - scrollY + RowHeight / 2;
                 laneDropY = HeaderHeight + RowTop(dropAfter ? end + 1 : start) - scrollY;
                 dropRow = target;

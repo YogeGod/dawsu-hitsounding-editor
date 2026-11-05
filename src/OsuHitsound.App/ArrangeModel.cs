@@ -587,12 +587,12 @@ internal sealed partial class ArrangeModel
         else names[lane] = name.Trim();
     });
 
-    /// <summary>Moves a lane up (-1) or down (+1) within its group.</summary>
+    /// <summary>Moves a lane up (-1) or down (+1) in the lane list.</summary>
     public void MoveLane(Lane lane, int direction)
     {
         var ordered = NormalizeFamilies(laneRows).ToList();
         int i = ordered.FindIndex(r => r.Lane == lane), j = i + direction;
-        if (i < 0 || j < 0 || j >= ordered.Count || ordered[j].Group != ordered[i].Group) return;
+        if (i < 0 || j < 0 || j >= ordered.Count) return;
         MoveLaneTo(lane, ordered[j].Lane, direction > 0);
     }
 
@@ -617,9 +617,7 @@ internal sealed partial class ArrangeModel
     {
         var ordered = order.DistinctBy(ProjectStore.KeyOf).ToList();
         var ranks = ordered.Select((lane, i) => (Key: ProjectStore.KeyOf(lane), i)).ToDictionary(x => x.Key, x => x.i);
-        var groups = ordered.Select(l => DisplayGroup(SlotOf(l))).Distinct().Select((group, i) => (group, i)).ToDictionary(x => x.group, x => x.i);
-        var sorted = laneRows.GroupBy(r => r.Group).OrderBy(g => groups.GetValueOrDefault(g.Key, int.MaxValue))
-            .SelectMany(g => g.OrderBy(r => ranks.GetValueOrDefault(ProjectStore.KeyOf(r.Lane), int.MaxValue))).ToList();
+        var sorted = laneRows.OrderBy(r => ranks.GetValueOrDefault(ProjectStore.KeyOf(r.Lane), int.MaxValue)).ToList();
         laneRows.Clear();
         laneRows.AddRange(NormalizeFamilies(sorted));
     }

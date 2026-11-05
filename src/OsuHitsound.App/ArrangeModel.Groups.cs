@@ -58,16 +58,14 @@ internal sealed partial class ArrangeModel
 
     private IEnumerable<LaneRow> NormalizeFamilies(IEnumerable<LaneRow> source)
     {
-        foreach (var group in source.GroupBy(r => r.Group))
-            foreach (var family in group.GroupBy(r => FamilyKey(r.Lane) ?? "file:" + ProjectStore.KeyOf(r.Lane))
-                         .OrderBy(f => SlotOf(f.First().Lane).Sample?.Sound == "hitnormal" ? 0 : 1))
-            {
-                var items = family.ToList();
-                var parent = items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 1 })
-                    ?? items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 0 }) ?? items[0];
-                yield return parent;
-                foreach (var child in items.Where(r => r != parent)) yield return child;
-            }
+        foreach (var family in source.GroupBy(r => FamilyKey(r.Lane) ?? "file:" + ProjectStore.KeyOf(r.Lane)))
+        {
+            var items = family.ToList();
+            var parent = items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 1 })
+                ?? items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 0 }) ?? items[0];
+            yield return parent;
+            foreach (var child in items.Where(r => r != parent)) yield return child;
+        }
     }
 
     private List<Row> BuildGroupedRows()
@@ -76,36 +74,27 @@ internal sealed partial class ArrangeModel
         var visible = NormalizeFamilies(laneRows.Where(r => !hidden.Contains(r.Lane) || withHits.Contains(r.Lane))).ToList();
         familyParents.Clear(); familiesWithChildren.Clear(); collapsedChildren.Clear(); closedFolders.Clear(); depths.Clear();
         var rows = new List<Row>();
-        foreach (var group in visible.GroupBy(r => r.Group))
+        foreach (var family in visible.GroupBy(r => FamilyKey(r.Lane) ?? "file:" + ProjectStore.KeyOf(r.Lane)))
         {
-            var members = new List<LaneRow>();
-            foreach (var family in group.GroupBy(r => FamilyKey(r.Lane) ?? "file:" + ProjectStore.KeyOf(r.Lane)))
+            var items = family.ToList(); var parent = items[0];
+            string? key = FamilyKey(parent.Lane);
+            depths[parent.Lane] = 1;
+            foreach (var child in items.Skip(1)) depths[child.Lane] = 2;
+            if (key is not null)
             {
-                var items = family.ToList(); var parent = items[0];
-                string? key = FamilyKey(parent.Lane);
-                int depth = key is null || SlotOf(parent.Lane).Sample?.Sound == "hitnormal" ? 1 : 2;
-                depths[parent.Lane] = depth;
-                foreach (var child in items.Skip(1)) depths[child.Lane] = depth + 1;
-                if (key is not null)
-                {
-                    familyParents[key] = parent.Lane;
-                    if (items.Count > 1) familiesWithChildren.Add(key);
-                }
-                var matches = items.Where(r => MatchesFilter(r.Lane)).ToList();
-                if (matches.Count == 0) continue;
-                if (Filter.Length > 0)
-                { members.Add(parent); members.AddRange(matches.Where(r => r != parent)); }
-                else if (key is null || !collapsedFamilies.Contains(key)) members.AddRange(matches);
-                else
-                {
-                    members.Add(parent);
-                    collapsedChildren[parent.Lane] = items.Skip(1).ToList();
-                }
+                familyParents[key] = parent.Lane;
+                if (items.Count > 1) familiesWithChildren.Add(key);
             }
-            if (members.Count == 0) continue;
-            rows.Add(new GroupRow(group.Key, group.Count()));
-            if (Filter.Length == 0 && collapsed.Contains(group.Key)) closedFolders[group.Key] = group.ToList();
-            else rows.AddRange(members);
+            var matches = items.Where(r => MatchesFilter(r.Lane)).ToList();
+            if (matches.Count == 0) continue;
+            if (Filter.Length > 0)
+            { rows.Add(parent); rows.AddRange(matches.Where(r => r != parent)); }
+            else if (key is null || !collapsedFamilies.Contains(key)) rows.AddRange(matches);
+            else
+            {
+                rows.Add(parent);
+                collapsedChildren[parent.Lane] = items.Skip(1).ToList();
+            }
         }
         return rows;
     }
@@ -125,7 +114,7 @@ internal sealed partial class ArrangeModel
     {
         var source = laneRows.FirstOrDefault(r => r.Lane == lane);
         var destination = laneRows.FirstOrDefault(r => r.Lane == target);
-        if (source is null || destination is null || source.Group != destination.Group || lane == target) return;
+        if (source is null || destination is null || lane == target) return;
         string? family = FamilyKey(lane), other = FamilyKey(target);
         var order = NormalizeFamilies(laneRows).Select(r => r.Lane).ToList();
         List<Lane> moving;
@@ -136,10 +125,9 @@ internal sealed partial class ArrangeModel
         }
         else if (family is not null)
         {
-            if (other is null || SlotOf(lane).Sample?.Sound == "hitnormal" || SlotOf(target).Sample?.Sound == "hitnormal") return;
             moving = order.Where(l => FamilyKey(l) == family).ToList();
         }
-        else { if (other is not null) return; moving = [lane]; }
+        else moving = [lane];
         order.RemoveAll(moving.Contains);
         var targets = order.Where(l => other is null || family == other ? l == target : FamilyKey(l) == other).ToList();
         int index = after ? order.IndexOf(targets[^1]) + 1 : order.IndexOf(targets[0]);

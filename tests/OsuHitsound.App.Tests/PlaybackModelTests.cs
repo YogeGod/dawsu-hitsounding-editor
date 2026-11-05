@@ -71,14 +71,14 @@ public class PlaybackModelTests
     }
 
     [Fact]
-    public void Lanes_are_grouped_and_numbered_with_their_index()
+    public void Lanes_are_flat_and_numbered_with_their_index()
     {
         var (map, file) = Load("0,500,4,3,2,100,1,0", "256,192,1000,1,8,0:0:0:0:\n256,192,1500,1,8,0:0:3:0:",
             ["drum-hitnormal2.wav", "drum-hitclap2.wav", "drum-hitclap3.ogg"]);
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
 
         // The default sounds sit in their own set's group: no separate skin group.
-        Assert.Equal([LaneGroup.NormalSet, LaneGroup.SoftSet, LaneGroup.DrumSet], model.Rows.OfType<GroupRow>().Select(g => g.Group));
+        Assert.Empty(model.Rows.OfType<GroupRow>());
         Assert.Equal(Enumerable.Range(1, model.LaneRows.Count), model.LaneRows.Select(r => r.Number));
         Assert.Equal(3, model.LaneRows.Single(r => r.Lane.Name == "drum-hitclap3.ogg").Index);
         Assert.All(model.LaneRows.Where(r => r.Lane.Source == LaneSource.Skin), r => Assert.Equal(0, r.Index));
@@ -118,7 +118,7 @@ public class PlaybackModelTests
     }
 
     [Fact]
-    public void Collapsing_a_group_hides_its_lanes_but_keeps_its_row()
+    public void Legacy_group_collapse_cannot_hide_lanes_in_the_flat_list()
     {
         var (map, file) = Load("0,500,4,2,0,100,1,0", "256,192,1000,1,14,0:0:0:0:");
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
@@ -126,9 +126,9 @@ public class PlaybackModelTests
 
         model.ToggleCollapsed(LaneGroup.SoftSet);
 
-        Assert.Contains(model.Rows.OfType<GroupRow>(), g => g.Group == LaneGroup.SoftSet);
-        Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Group == LaneGroup.SoftSet);
-        Assert.Equal(before - 4, model.Rows.Count);
+        Assert.Empty(model.Rows.OfType<GroupRow>());
+        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Group == LaneGroup.SoftSet);
+        Assert.Equal(before, model.Rows.Count);
     }
 
     [Fact]
