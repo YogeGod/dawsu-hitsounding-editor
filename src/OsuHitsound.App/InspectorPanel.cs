@@ -176,7 +176,7 @@ internal sealed class InspectorPanel : Border
         }
     }
 
-    /// <summary>Unfolds these cards and moves them to the top, in this order (the start screen's Edit samples).</summary>
+    /// <summary>Unfolds these cards and moves them to the top, in this order.</summary>
     public void Reveal(params string[] ids)
     {
         SetLayout(ids.Concat(Order), Folded.Except(ids));

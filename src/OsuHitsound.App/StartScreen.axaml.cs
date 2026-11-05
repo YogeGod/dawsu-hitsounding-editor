@@ -3,8 +3,7 @@ using Avalonia.Interactivity;
 
 namespace OsuHitsound.App;
 
-/// <summary>The start screen shown over the empty editor until a map opens: open a map, reopen a recent one,
-/// go to the sample tools, or (later) keysounding. It only raises requests; <see cref="MainWindow"/> acts on them.</summary>
+/// <summary>The screen over the empty editor until a map opens. It raises requests; <see cref="MainWindow"/> acts on them.</summary>
 public partial class StartScreen : UserControl
 {
     private IReadOnlyList<string> recent = [];
@@ -35,15 +34,16 @@ public partial class StartScreen : UserControl
         MessagePanel.IsVisible = !string.IsNullOrEmpty(message);
     }
 
-    /// <summary>The recent maps, newest first (only ones that still exist).</summary>
+    /// <summary>Recent maps, newest first.</summary>
     public void SetRecent(IReadOnlyList<string> paths)
     {
         recent = paths;
-        RecentPanel.IsEnabled = paths.Count > 0;
-        RecentCaption.Text = paths.Count == 0 ? "Nothing opened yet" : "Last opened";
-        RecentName.IsVisible = paths.Count > 0;
-        RecentName.Text = paths.Count > 0 ? Path.GetFileNameWithoutExtension(paths[0]) : "";
-        ToolTip.SetTip(RecentPanel, paths.Count > 0 ? "Choose a recent map (newest first)" : null);
+        bool any = paths.Count > 0;
+        RecentPanel.IsEnabled = any;
+        RecentCaption.Text = any ? "Last opened" : "Nothing opened yet";
+        RecentName.IsVisible = any;
+        RecentName.Text = any ? Path.GetFileNameWithoutExtension(paths[0]) : "";
+        ToolTip.SetTip(RecentPanel, any ? "Choose a recent map (newest first)" : null);
     }
 
     /// <summary>Where imported .osz files go, or that it isn't set yet.</summary>
