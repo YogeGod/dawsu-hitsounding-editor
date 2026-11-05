@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 
 namespace OsuHitsound.App;
 
@@ -18,7 +17,6 @@ public partial class StartScreen : UserControl
         PreferencesLink.Click += (_, _) => PreferencesRequested?.Invoke();
         QuickStartLink.Click += (_, _) => QuickStartRequested?.Invoke();
         KeysLink.Click += (_, _) => HelpRequested?.Invoke();
-        RecentPanel.Click += OnRecentClick;
     }
 
     public event Action? OpenRequested;
@@ -37,13 +35,22 @@ public partial class StartScreen : UserControl
     /// <summary>Recent maps, newest first.</summary>
     public void SetRecent(IReadOnlyList<string> paths)
     {
-        recent = paths;
+        bool changed = !recent.SequenceEqual(paths);
+        recent = paths.ToArray();
         bool any = paths.Count > 0;
         RecentPanel.IsEnabled = any;
         RecentCaption.Text = any ? "Last opened" : "Nothing opened yet";
         RecentName.IsVisible = any;
         RecentName.Text = any ? Path.GetFileNameWithoutExtension(paths[0]) : "";
         ToolTip.SetTip(RecentPanel, any ? "Choose a recent map (newest first)" : null);
+        if (RecentPanel.Flyout is MenuFlyout menu && (changed || menu.Items.Count != paths.Count))
+            menu.ItemsSource = paths.Select(path =>
+            {
+                var item = new MenuItem { Header = Path.GetFileNameWithoutExtension(path) };
+                ToolTip.SetTip(item, path);
+                item.Click += (_, _) => RecentRequested?.Invoke(path);
+                return item;
+            }).ToList();
     }
 
     /// <summary>Where imported .osz files go, or that it isn't set yet.</summary>
@@ -53,15 +60,4 @@ public partial class StartScreen : UserControl
         ToolTip.SetTip(SongsFolder, folder ?? "Set your osu! Songs folder in Preferences before importing an .osz");
     }
 
-    private void OnRecentClick(object? sender, RoutedEventArgs e)
-    {
-        if (RecentPanel.Flyout is not MenuFlyout menu) return;
-        menu.ItemsSource = recent.Select(path =>
-        {
-            var item = new MenuItem { Header = Path.GetFileNameWithoutExtension(path) };
-            ToolTip.SetTip(item, path);
-            item.Click += (_, _) => RecentRequested?.Invoke(path);
-            return item;
-        }).ToList();
-    }
 }

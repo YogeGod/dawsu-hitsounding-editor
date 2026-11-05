@@ -223,7 +223,7 @@
     </Style>
   </Window.Styles>
 
-  <Grid Name="Root" RowDefinitions="44,46,46,20,*,160,56,Auto" ColumnDefinitions="250,4,*,4,280">
+  <Grid Name="Root" RowDefinitions="44,46,46,20,*,160,56,Auto" ColumnDefinitions="280,4,250,4,*">
     <!-- 1. Header (V6.39: logo, title, file buttons, menus; map name and settings on the right) -->
     <Border Grid.Row="0" Grid.ColumnSpan="5" Name="TitleBar" Classes="header" BorderThickness="0,0,0,1">
       <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -428,14 +428,14 @@
     </Border>
 
     <!-- 4. Overview strip -->
-    <app:OverviewStrip Grid.Row="3" Grid.Column="2" Name="Overview" />
+    <app:OverviewStrip Grid.Row="3" Grid.Column="4" Name="Overview" />
 
     <!-- Inspector (left): Selection, Bookmarks, Recent edits; the splitter resizes it -->
-    <app:InspectorPanel Grid.Row="3" Grid.RowSpan="3" Grid.Column="0" Name="Inspector" Background="{DynamicResource VolumeSide}" />
-    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="1" Name="InspectorSplitter" ResizeDirection="Columns" Background="#1c1c1e" />
+    <app:InspectorPanel Grid.Row="3" Grid.RowSpan="3" Grid.Column="2" Name="Inspector" Background="{DynamicResource VolumeSide}" />
+    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="3" Name="InspectorSplitter" ResizeDirection="Columns" Background="#1c1c1e" />
 
     <!-- 5. Arrange area -->
-    <Grid Grid.Row="4" Grid.Column="2" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+    <Grid Grid.Row="4" Grid.Column="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <app:ArrangeView Name="Lanes" />
       <TextBox Name="LaneFilterBox" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9,22,0,0" MinHeight="20" Height="20" Padding="6,0" FontSize="9" CornerRadius="5" VerticalContentAlignment="Center" Watermark="Filter samples…" />
       <ToggleButton Name="DrumMapToggle" Width="22" Height="28" MinHeight="28" Padding="3" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True"
@@ -448,7 +448,7 @@
     </Grid>
 
     <!-- Bottom panel (V6.39 controller): Controller tabs · ramp shape · hint; bars on the right -->
-    <Border Grid.Row="5" Grid.Column="2" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
+    <Border Grid.Row="5" Grid.Column="4" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Background="{DynamicResource PaneTitle}">
         <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0,12,0">
@@ -492,8 +492,8 @@
       </DockPanel>
     </Border>
 
-    <GridSplitter Name="BrowserSplitter" Grid.Row="3" Grid.RowSpan="3" Grid.Column="3" ResizeDirection="Columns" Background="{DynamicResource ChromeBorder}" />
-    <Border Name="BrowserHost" Grid.Row="3" Grid.RowSpan="3" Grid.Column="4" Padding="10,8" Background="{DynamicResource PaneTitle}" />
+    <GridSplitter Name="BrowserSplitter" Grid.Row="3" Grid.RowSpan="3" Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource ChromeBorder}" />
+    <Border Name="BrowserHost" Grid.Row="3" Grid.RowSpan="3" Grid.Column="0" Padding="10,8" Background="{DynamicResource PaneTitle}" />
     <!-- 7. Transport (V6.39: at the bottom) · time, position, tempo and signature · status -->
     <Border Grid.Row="6" Grid.ColumnSpan="5" Name="StatusBar" Classes="transportBar" BorderThickness="0,1,0,0">
       <ScrollViewer Name="StatusBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -557,10 +557,10 @@
     <Border Name="WorkflowFooter" Grid.Row="7" Grid.ColumnSpan="5" Background="{DynamicResource HeaderBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
       <StackPanel Margin="12,6" Spacing="4">
         <Grid Name="WorkingCopyRow" ColumnDefinitions="Auto,*,Auto,Auto">
-          <TextBlock Name="WorkingCopyLabel" Text="Working copy:" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <TextBlock Name="WorkingCopyLabel" Text="Editing:" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" Margin="0,0,8,0" />
           <TextBlock Grid.Column="1" Name="WorkingCopyPath" Foreground="{DynamicResource LcdCaption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
           <ToggleButton Grid.Column="2" Name="WorkflowHelpToggle" Content="Output guide" Margin="8,0,0,0" />
-          <Button Grid.Column="3" Name="WorkingFolderButton" Content="Open working folder" Margin="8,0,0,0" />
+          <Button Grid.Column="3" Name="WorkingFolderButton" Content="Open map folder" Margin="8,0,0,0" />
         </Grid>
         <Grid Name="WorkflowMessageRow" ColumnDefinitions="*,Auto" IsVisible="False">
           <ScrollViewer Name="WorkflowMessageScroll" MaxHeight="88" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

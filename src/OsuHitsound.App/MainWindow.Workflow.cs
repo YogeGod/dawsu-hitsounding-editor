@@ -54,8 +54,8 @@ public partial class MainWindow
 
     private void RefreshWorkflowFeedback()
     {
-        WorkingCopyLabel.Text = doc is null ? "Output:" : usePreferences ? "Working copy:" : "Editing:";
-        WorkingFolderButton.Content = usePreferences ? "Open working folder" : "Open map folder";
+        WorkingCopyLabel.Text = doc is null ? "Output:" : "Editing:";
+        WorkingFolderButton.Content = "Open map folder";
         WorkingFolderButton.IsVisible = doc is not null;
         WorkingCopyPath.Text = doc?.Path ?? "Open a map to begin.";
         ToolTip.SetTip(WorkingCopyPath, doc?.Path);

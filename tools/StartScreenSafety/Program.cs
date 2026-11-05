@@ -34,6 +34,14 @@ var scroll=start.FindControl<ScrollViewer>("StartScroller")!; scroll.Offset=new 
 Check(Within(message,start),"failure message reachable by scrolling");
 start.FindControl<Button>("SamplesPanel")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));Pump();
 Check(!start.IsVisible && w.FindControl<Border>("BrowserHost")!.IsVisible,"Edit samples opens browser workspace");
+var browserHost=w.FindControl<Border>("BrowserHost")!;
+foreach(var size in new[]{(1920,1030),(1040,720),(900,500)})
+{
+    w.Width=size.Item1;w.Height=size.Item2;Pump();
+    Check(browserHost.TranslatePoint(default,w)!.Value.X < w.FindControl<InspectorPanel>("Inspector")!.TranslatePoint(default,w)!.Value.X && browserHost.Bounds.Width>=220,$"browser is usable on the left at {size}");
+    w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts,$"browser-left-{size.Item1}x{size.Item2}.png"));
+}
+w.Width=1600;w.Height=900;Pump();
 var area=w.ArrangeArea;var model=area.Model!;var row=model.Rows.OfType<LaneRow>().First();
 var p=area.TranslatePoint(new Point(140,area.HeaderHeight+area.RowHeight/2),w)!.Value;
 w.MouseDown(p,MouseButton.Left);w.MouseUp(p,MouseButton.Left);Pump();
@@ -48,7 +56,24 @@ w.Close();Pump();
 
 string source=Directory.CreateDirectory(Path.Combine(artifacts,"source")).FullName;
 string osu=Path.Combine(source,"test.osu");
-File.WriteAllText(osu,"osu file format v14\n[General]\nSampleSet:Soft\n[Metadata]\nTitle:Fix validation\nVersion:Normal\n[TimingPoints]\n0,500,4,2,0,100,1,0\n[HitObjects]\n256,192,1000,1,8,0:0:0:100:\n256,192,1500,1,8,0:0:0:100:\n");
+File.WriteAllText(osu,"osu file format v14\n[General]\nSampleSet:Soft\n[Metadata]\nTitle:Fix validation\nVersion:Normal\nBeatmapID:123\nBeatmapSetID:456\n[TimingPoints]\n0,500,4,2,0,100,1,0\n[HitObjects]\n256,192,1000,1,8,0:0:0:100:\n256,192,1500,1,8,0:0:0:100:\n");
+var sourceBytes=File.ReadAllBytes(osu);
+var foldersBefore=Directory.GetDirectories(artifacts,"*",SearchOption.AllDirectories).Order().ToArray();
+w=Window();
+string unavailableSongs=Path.Combine(artifacts,"unconfigured-songs");
+typeof(MainWindow).GetField("prefs",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(w,new Preferences{SongsFolder=unavailableSongs});
+await Open(w,osu);
+var directDoc=(MapDocument)typeof(MainWindow).GetField("doc",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(w)!;
+Check(directDoc.Path==Path.GetFullPath(osu),"Open edits the selected difficulty directly");
+Check(w.FindControl<TextBlock>("WorkingCopyPath")!.Text==Path.GetFullPath(osu),"footer shows the original save destination");
+Check(w.FindControl<TextBlock>("WorkingCopyLabel")!.Text=="Editing:","footer identifies direct editing");
+Check(Equals(w.FindControl<Button>("WorkingFolderButton")!.Content,"Open map folder"),"folder action names the opened mapset");
+Check(File.ReadAllBytes(osu).SequenceEqual(sourceBytes),"opening preserves source bytes and beatmap IDs");
+Check(!Directory.Exists(unavailableSongs),"opening does not require or create a Songs folder");
+Check(foldersBefore.SequenceEqual(Directory.GetDirectories(artifacts,"*",SearchOption.AllDirectories).Order()),"opening creates no duplicate mapset folders");
+await Open(w,osu);
+Check(((MapDocument)typeof(MainWindow).GetField("doc",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(w)!).Path==Path.GetFullPath(osu),"reopening keeps the selected file path");
+w.Close();Pump();
 string archive=Path.Combine(artifacts,"valid.osz");ZipFile.CreateFromDirectory(source,archive);
 string songs=Directory.CreateDirectory(Path.Combine(artifacts,"songs")).FullName;
 w=Window();start=w.FindControl<StartScreen>("Start")!;start.IsVisible=true;
@@ -74,8 +99,10 @@ typeof(MainWindow).GetField("prefs",BindingFlags.Instance|BindingFlags.NonPublic
 string invalid=Path.Combine(artifacts,"invalid.osz");File.WriteAllText(invalid,"not a zip");await Open(w,invalid);
 Check(start.IsVisible && start.FindControl<TextBlock>("Message")!.Text?.Contains("Couldn't import") == true,"invalid OSZ error visible on start");
 start.SetRecent(new[]{osu});var recent=start.FindControl<Button>("RecentPanel")!;
-recent.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));Pump();
-var menu=(MenuFlyout)recent.Flyout!;Check(menu.Items.Count==1,"recent chooser populated");
+Check(((MenuFlyout)recent.Flyout!).Items.Count==1,"recent entries exist before opening the popup");
+var recentPoint=recent.TranslatePoint(new Point(recent.Bounds.Width/2,recent.Bounds.Height/2),w)!.Value;
+w.MouseDown(recentPoint,MouseButton.Left);w.MouseUp(recentPoint,MouseButton.Left);Pump();
+var menu=(MenuFlyout)recent.Flyout!;Check(menu.IsOpen,"recent chooser opens on the first pointer click");Check(menu.Items.Count==1,"recent chooser populated");
 ((MenuItem)menu.Items[0]!).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));Wait(()=>!start.IsVisible);
 Check(w.ArrangeArea.Model!.Session.State.Hits.Count==4,"recent item opens a difficulty");w.Close();Pump();
 Console.WriteLine($"PASS: {checks} start-screen and flat-lane safety checks");

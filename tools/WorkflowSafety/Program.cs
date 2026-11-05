@@ -150,7 +150,7 @@ var inspector = w.GetLogicalDescendants().OfType<InspectorPanel>().Single();
 Check(!inspector.Order.Contains("selection") && !inspector.Order.Contains("browser"), "left inspector has no selection or embedded browser card");
 Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
 var browserHost = w.FindControl<Border>("BrowserHost")!;
-Check(Grid.GetColumn(browserHost) == 4 && browserHost.Bounds.Height > 400, "browser fills right sidebar");
+Check(Grid.GetColumn(browserHost) == 0 && browserHost.Bounds.Height > 400, "browser fills left sidebar");
 var stateBeforePan = s.State; int historyBeforePan = s.StepCount;
 area.Axis.Left = 1000; area.ScrollY = 100; Pump();
 Press(w, Key.D2); Check(area.Tool == Tool.Grab, "2 activates Grab");

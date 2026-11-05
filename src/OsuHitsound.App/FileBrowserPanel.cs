@@ -43,7 +43,7 @@ internal sealed class FileBrowserPanel : DockPanel
 
     public FileBrowserPanel()
     {
-        var close = new Button { Content = "›" };
+        var close = new Button { Content = "‹" };
         close.Click += (_, _) => CloseRequested?.Invoke();
         ToolTip.SetTip(close, "Hide file browser");
         var title = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };

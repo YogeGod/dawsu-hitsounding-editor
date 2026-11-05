@@ -351,19 +351,7 @@ public partial class MainWindow : Window
             var opened = await Task.Run(() =>
             {
                 var sounds = skinSounds.Value; // read the default sounds here too, the first time
-                var loadPath = path;
-                if (usePreferences)
-                {
-                    string songs = prefs.SongsFolder ?? Preferences.FindSongsFolder() ??
-                        throw new IOException("Set your osu! Songs folder in Preferences so the editor can create its working mapset.");
-                    loadPath = MapsetWorkspace.Prepare(path, songs);
-                    string projects = ProjectStore.DefaultRoot();
-                    if (!string.Equals(Path.GetFullPath(path), loadPath, StringComparison.OrdinalIgnoreCase) &&
-                        !File.Exists(ProjectStore.PathFor(projects, loadPath)) && ProjectStore.Load(projects, path) is { } previousProject)
-                        ProjectStore.Save(projects, loadPath, previousProject);
-                }
-
-                var document = MapDocument.Load(loadPath);
+                var document = MapDocument.Load(path);
                 // Decode every drawable lane off the UI thread. The window only publishes the buffers afterwards.
                 if (withAudio)
                     prepared = AudioEngine.Prepare(document.Map with { Lanes = document.Session.Lanes }, document.Folder, sounds);
@@ -412,9 +400,7 @@ public partial class MainWindow : Window
             ToolTip.SetTip(FileTitle, full);
             Inspector.Browser.SetRoots(Path.GetDirectoryName(full), prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : Path.GetDirectoryName(full)));
             Title = $"{Path.GetFileNameWithoutExtension(full)} — osu! Hitsound Editor";
-            flash = usePreferences
-                ? $"Opened working copy: {Path.GetFileName(full)}. Save .osu updates this difficulty; your source mapset is kept intact."
-                : $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty.";
+            flash = $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty.";
             UpdateLoop();
             SyncScrollBars();
             UpdateLcd();
@@ -882,9 +868,9 @@ public partial class MainWindow : Window
         inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
         void Show(bool open)
         {
-            if (!open && Root.ColumnDefinitions[0].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[0].ActualWidth;
-            Root.ColumnDefinitions[0].Width = new GridLength(open ? inspectorWidth : 0);
-            Root.ColumnDefinitions[1].Width = new GridLength(open ? 4 : 0);
+            if (!open && Root.ColumnDefinitions[2].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[2].ActualWidth;
+            Root.ColumnDefinitions[2].Width = new GridLength(open ? inspectorWidth : 0);
+            Root.ColumnDefinitions[3].Width = new GridLength(open ? 4 : 0);
             Inspector.IsVisible = InspectorSplitter.IsVisible = open;
         }
 
@@ -931,7 +917,7 @@ public partial class MainWindow : Window
     private double inspectorWidth = 250;
 
     /// <summary>The width to save: the panel's when shown, else the one it had.</summary>
-    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[0].ActualWidth > 0 ? Root.ColumnDefinitions[0].ActualWidth : inspectorWidth;
+    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[2].ActualWidth > 0 ? Root.ColumnDefinitions[2].ActualWidth : inspectorWidth;
 
     private void RefreshInspector()
     {
