@@ -67,6 +67,7 @@ internal sealed class VolumeLane : Control
 
     /// <summary>The Ramp tool (6) is active: every drag draws a ramp.</summary>
     public bool RampTool { get; set; }
+    public bool SelectedLanesOnly { get; set; }
 
     /// <summary>The editing tool, for the cursor over the bars (V6.39 shows the same cursors there as over the grid).</summary>
     public Tool Tool { get; set; } = Tool.Select;
@@ -135,6 +136,7 @@ internal sealed class VolumeLane : Control
         if (model is null || axis is null) return;
 
         var (top, bottom) = Range;
+        var scoped = model.Session.State.Hits.Where(h => h.Anchor is not null && (!SelectedLanesOnly || model.SelectedLanes.Contains(h.Lane))).ToLookup(h => h.Anchor!.Value);
         double height = bottom - top;
         double from = axis.Left - 50, to = axis.Time(size.Width - ArrangeView.GridLeft) + 50;
         using (ctx.PushClip(new Rect(ArrangeView.GridLeft, 0, size.Width - ArrangeView.GridLeft, size.Height)))
@@ -157,7 +159,9 @@ internal sealed class VolumeLane : Control
                 if (m.Time > to) break;
                 if (!groups.TryGetValue(key, out var group)) continue; // no hits: nothing plays here
                 double x = ArrangeView.GridLeft + axis.X(m.Time);
-                int volume = session.State.Volumes[key];
+                if (!scoped.Contains(key)) continue;
+                var levels = scoped[key].Select(session.VolumeOf).Distinct().ToArray();
+                int volume = levels.Max();
                 double h = height * Math.Clamp(volume, 0, 100) / 100.0;
                 var color = ArrangeModel.GroupColor(group);
                 bool selected = SelectedMoments.Contains(key);
@@ -165,6 +169,9 @@ internal sealed class VolumeLane : Control
                 var stem = selected ? Paint.White : conflict ? ConflictBar : StemBrush(color);
                 ctx.FillRectangle(stem, new Rect(x - 2.5, bottom - h, 5, h));
                 ctx.FillRectangle(selected ? Paint.Selection : CapBrush(color), new Rect(x - 2.5, bottom - h - 2, 5, 5));
+                if (levels.Length > 1)
+                    foreach (int level in levels)
+                        ctx.FillRectangle(Paint.White, new Rect(x - 3, bottom - height * level / 100.0 - 1, 6, 2));
             }
 
 
@@ -189,14 +196,28 @@ internal sealed class VolumeLane : Control
 
     private double TimeAt(double x) => axis!.Time(x - ArrangeView.GridLeft);
 
+    private HashSet<MomentKey>? ScopedMoments() => SelectedLanesOnly && model is not null
+        ? model.Session.State.Hits.Where(h => h.Anchor is not null && model.SelectedLanes.Contains(h.Lane)).Select(h => h.Anchor!.Value).ToHashSet()
+        : null;
+
+    internal void ApplyVolumes(IReadOnlyDictionary<MomentKey, int> values)
+    {
+        if (model is null) return;
+        if (!SelectedLanesOnly) { model.Session.SetVolumes(values); return; }
+        model.Session.SetLayerVolumes(model.Session.State.Hits
+            .Where(h => model.SelectedLanes.Contains(h.Lane) && h.Anchor is { } key && values.ContainsKey(key))
+            .ToDictionary(h => h, h => values[h.Anchor!.Value]));
+    }
+
     /// <summary>Moments with hits between two times (the bars that are drawn).</summary>
     private IEnumerable<(double Time, MomentKey Key)> BarsBetween(double from, double to)
     {
         if (model is null) yield break;
         if (to < from) (from, to) = (to, from);
         var moments = model.Session.Moments;
+        var scope = ScopedMoments();
         for (int i = Sorted.LowerBound(moments, from, x => x.Moment.Time); i < moments.Count && moments[i].Moment.Time <= to; i++)
-            if (model.MomentGroups.ContainsKey(moments[i].Key)) yield return (moments[i].Moment.Time, moments[i].Key);
+            if (model.MomentGroups.ContainsKey(moments[i].Key) && (scope is null || scope.Contains(moments[i].Key))) yield return (moments[i].Moment.Time, moments[i].Key);
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -213,7 +234,8 @@ internal sealed class VolumeLane : Control
         else
         {
             // The nearest bar within 6 px; with it, every selected moment when it is selected.
-            int i = Sorted.Nearest(session.Moments, TimeAt(p.X), 6 / axis.Zoom, x => x.Moment.Time, x => model.MomentGroups.ContainsKey(x.Key));
+            var scope = ScopedMoments();
+            int i = Sorted.Nearest(session.Moments, TimeAt(p.X), 6 / axis.Zoom, x => x.Moment.Time, x => model.MomentGroups.ContainsKey(x.Key) && (scope is null || scope.Contains(x.Key)));
             if (i < 0) return;
             var k = session.Moments[i].Key;
             dragging = SelectedMoments.Contains(k) ? [.. SelectedMoments] : [k];
@@ -263,14 +285,14 @@ internal sealed class VolumeLane : Control
         switch (gesture)
         {
             case Gesture.Bar when dragging is not null:
-                session.SetVolume(dragging, VolumeAt(p.Y));
+                ApplyVolumes(dragging.ToDictionary(k => k, _ => VolumeAt(p.Y)));
                 break;
 
             case Gesture.Paint:
             {
                 // Every bar the pointer swept over since the last move takes the value along the stroke.
                 double t0 = TimeAt(last.X), t1 = TimeAt(p.X);
-                session.SetVolumes(VolumeRamp.Ramp(BarsBetween(t0, t1), t0, VolumeAt(last.Y), t1, VolumeAt(p.Y), RampShape.Linear));
+                ApplyVolumes(VolumeRamp.Ramp(BarsBetween(t0, t1), t0, VolumeAt(last.Y), t1, VolumeAt(p.Y), RampShape.Linear));
                 last = p;
                 break;
             }
@@ -282,7 +304,7 @@ internal sealed class VolumeLane : Control
                 var bars = BarsBetween(t0, t1).ToList();
                 if (bars.Any(b => SelectedMoments.Contains(b.Key))) bars = [.. bars.Where(b => SelectedMoments.Contains(b.Key))];
                 session.ResetToGestureStart();
-                session.SetVolumes(VolumeRamp.Ramp(bars, t0, VolumeAt(rampStart.Y), t1, VolumeAt(p.Y), Shape));
+                ApplyVolumes(VolumeRamp.Ramp(bars, t0, VolumeAt(rampStart.Y), t1, VolumeAt(p.Y), Shape));
                 break;
             }
         }

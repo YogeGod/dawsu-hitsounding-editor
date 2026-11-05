@@ -60,11 +60,16 @@ internal sealed record Preferences
     /// <summary>The inspector on the left: shown, its width, its cards top to bottom and the folded ones.</summary>
     public bool InspectorOpen { get; init; } = true;
 
+    public bool BrowserOpen { get; init; } = true;
+    public double BrowserWidth { get; init; } = 280;
+    public bool HistoryOpen { get; init; }
+    public bool SoundSetsOpen { get; init; }
+
     public double InspectorWidth { get; init; } = 250;
 
     public List<string> InspectorCards { get; init; } = [];
 
-    public List<string> InspectorFolded { get; init; } = [];
+    public List<string> InspectorFolded { get; init; } = ["soundSets", "recent"];
 
     /// <summary>Global volume in % (20–100): the song, hitsounds and previews together.</summary>
     public double GlobalVolume { get; init; } = 20;

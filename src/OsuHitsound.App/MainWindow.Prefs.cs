@@ -67,6 +67,9 @@ public partial class MainWindow
                 InspectorOpen = narrowLayout ? wideInspectorOpen : InspectorToggle.IsChecked == true,
                 InspectorWidth = InspectorWidthToSave,
                 GlobalVolume = GlobalVolumeSlider.Value,
+                BrowserOpen = compactBrowser ? wideBrowserOpen : BrowserPanelItem.IsChecked,
+                BrowserWidth = BrowserWidthToSave,
+                HistoryOpen = HistoryPanelItem.IsChecked, SoundSetsOpen = SoundSetsPanelItem.IsChecked,
                 InspectorCards = [.. Inspector.Order], InspectorFolded = [.. Inspector.Folded],
             };
             SavePrefs();

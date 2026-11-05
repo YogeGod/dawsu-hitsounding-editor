@@ -11,6 +11,7 @@ namespace OsuHitsound.App;
 internal enum Tool
 {
     Select,
+    Grab,
     Range,
     Draw,
     Erase,
@@ -97,6 +98,7 @@ internal sealed class ArrangeView : Control
         Cycle,
         ResizeWave,
         Layout,
+        Pan,
     }
 
     private Drag drag;
@@ -105,6 +107,8 @@ internal sealed class ArrangeView : Control
     private List<EditHit> dragHits = [];
     private LaneRow? paintRow;
     private double waveHeightAtStart;
+    private double panLeft, panScroll;
+    public event Action<Lane, string>? SampleDropped;
     private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
     private HashSet<EditHit> marqueeBase = [];
     private bool seekOnClick;
@@ -112,11 +116,34 @@ internal sealed class ArrangeView : Control
     private bool layoutMoved, dropAfter;
     private double? laneDropY;
 
+#pragma warning disable CS0618
+    private Lane? SampleDropLane(DragEventArgs e) => e.Data.Get(FileBrowserPanel.SampleDragFormat) is string path
+        && HitsoundRules.SampleExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant())
+        && RowAt(e.GetPosition(this).Y) is LaneRow row && Model?.CanReplaceSample(row.Lane) == true ? row.Lane : null;
+
+    private void SampleDragOver(object? sender, DragEventArgs e)
+    {
+        if (!e.Data.Contains(FileBrowserPanel.SampleDragFormat)) return;
+        e.DragEffects = SampleDropLane(e) is null ? DragDropEffects.None : DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    private void SampleDrop(object? sender, DragEventArgs e)
+    {
+        if (!e.Data.Contains(FileBrowserPanel.SampleDragFormat)) return;
+        if (SampleDropLane(e) is { } lane && e.Data.Get(FileBrowserPanel.SampleDragFormat) is string path) SampleDropped?.Invoke(lane, path);
+        e.Handled = true;
+    }
+#pragma warning restore CS0618
+
     public ArrangeView()
     {
         playheadLayer = new DrawLayer(DrawPlayhead);
         VisualChildren.Add(playheadLayer);
         ClipToBounds = true;
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, SampleDragOver);
+        AddHandler(DragDrop.DropEvent, SampleDrop);
         Focusable = true;
         Edits.Changed += () =>
         {
@@ -490,7 +517,9 @@ internal sealed class ArrangeView : Control
     {
         ctx.FillRectangle(Paint.Chrome2, new Rect(0, 0, width, HeaderHeight));
         ctx.FillRectangle(TitleBand, new Rect(0, 0, GridLeft, RulerBottom));
-        Paint.DrawText(ctx, model.DrumMapMode ? "DRUM MAP · " + model.ActiveDrumMap?.Name : "SAMPLE LANES", new Point(10, 6), 8, Paint.Dim, Math.Max(20, GridLeft - 114), Paint.UiBold);
+        string laneTitle = model.DrumMapMode ? "DRUM MAP · " + model.ActiveDrumMap?.Name : "SAMPLE LANES";
+        if (model.SelectedLanes.Count > 1) laneTitle += $" · {model.SelectedLanes.Count} SELECTED";
+        Paint.DrawText(ctx, laneTitle, new Point(10, 6), 8, Paint.Dim, Math.Max(20, GridLeft - 114), Paint.UiBold);
         double headerY = -((RowHeight - 18) / 2) + 2;
         DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, headerY, null);
         DrawToggle(ctx, "−", GridLeft - RemoveLaneFromRight, headerY, null);
@@ -795,6 +824,8 @@ internal sealed class ArrangeView : Control
                 // sound icon, + (add a lane), ● (hear it), M and S at the right edge.
                 ctx.FillRectangle(Paint.LaneHeadA, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 ctx.FillRectangle(Tint(sound, 0.10), new Rect(0, y, NumberWidth + ListWidth, RowHeight));
+                if (model.SelectedLanes.Contains(lane.Lane))
+                    ctx.FillRectangle(LaneSelectionFill, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 if (lane.Lane == model.ActiveLane)
                 {
                     // V6.39's active lane: a brighter row with a blue bar at its left edge.
@@ -858,6 +889,7 @@ internal sealed class ArrangeView : Control
     private static readonly IPen TreePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#5a5a68"), 1);
     private static readonly Color IconTone = Color.Parse("#c9c9d6");
     private static readonly IBrush ActiveFill = Paint.Brush(Colors.White, 0.07), ActiveBar = Paint.Brush("#0a84ff");
+    private static readonly IBrush LaneSelectionFill = Paint.Brush(Color.Parse("#73b7ff"), 0.18);
     private static readonly IBrush AddFill =Paint.Brush("#324761"); // V6.39 .addLayer: #324761 with a #526b8d border
 
     /// <summary>The song is muted (drawn on the Song audio row's M); clicking that M raises <see cref="SongMuteRequested"/>.</summary>
@@ -945,7 +977,7 @@ internal sealed class ArrangeView : Control
         var fill = Paint.Brush(color);
         var span = Paint.Brush(color, 0.45);
         double cy = y + (height ?? RowHeight) / 2;
-        double noteSize = Math.Min(NoteSize, (height ?? RowHeight) * 0.4);
+        double noteSize = Math.Min(NoteSize, (height ?? RowHeight) * 0.5);
 
         // Notes are sorted by start; slider body spans can start before the view, so look back one visible width.
         for (int i = Sorted.LowerBound(notes, from - Axis.VisibleDuration, n => n.Time); i < notes.Count; i++)
@@ -1184,6 +1216,12 @@ internal sealed class ArrangeView : Control
         if (Model is not { } model || Session is not { } session) return;
         var point = e.GetCurrentPoint(this);
         var p = point.Position;
+        if (!IsPreview && Tool == Tool.Grab && p.X >= GridLeft && p.Y >= RulerBottom)
+        {
+            if (!point.Properties.IsLeftButtonPressed) { e.Handled = true; return; }
+            drag = Drag.Pan; dragStart = p; panLeft = Axis.Left; panScroll = ScrollY;
+            e.Pointer.Capture(this); e.Handled = true; return;
+        }
         bool additive = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         // Before a map is opened only the lane list's buttons work: there is nothing to draw on yet.
         // (The + − ‹ above the list still work.)
@@ -1310,7 +1348,10 @@ internal sealed class ArrangeView : Control
             }
 
             if (!point.Properties.IsLeftButtonPressed) return;
-            switch (row, ListTargetAt(row, p.X - NumberWidth))
+            var target = ListTargetAt(row, p.X - NumberWidth);
+            if (row is LaneRow mixerLane && (target is ListTarget.Mute or ListTarget.Solo)
+                && !model.SelectedLanes.Contains(mixerLane.Lane)) model.SelectLane(mixerLane.Lane);
+            switch (row, target)
             {
                 case (GroupRow g, ListTarget.Collapse): model.ToggleCollapsed(g.Group); break;
                 case (GroupRow g, ListTarget.Mute): model.ToggleGroupMute(g.Group); break;
@@ -1319,12 +1360,10 @@ internal sealed class ArrangeView : Control
                 case (LaneRow l, ListTarget.Solo): model.ToggleSolo(l.Lane); break;
                 case (LaneRow l, ListTarget.Add): AddLaneRequested?.Invoke(l.Lane); break;
                 case (LaneRow l, ListTarget.Preview): LaneListPreviewRequested?.Invoke(l.Lane); break;
-                case (LaneRow l, _) when additive:
-                    // Ctrl+click selects the lane's hits; Shift+click adds them.
-                    var laneHits = session.State.Hits.Where(h => h.Lane == l.Lane);
-                    SetSelection(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? selection.Concat(laneHits).ToList() : laneHits);
+                case (LaneRow l, _):
+                    model.SelectLane(l.Lane, e.KeyModifiers.HasFlag(KeyModifiers.Shift), e.KeyModifiers.HasFlag(KeyModifiers.Control));
+                    if (!additive) LaneListPreviewRequested?.Invoke(l.Lane);
                     break;
-                case (LaneRow l, _): LaneListPreviewRequested?.Invoke(l.Lane); break;
             }
 
             return;
@@ -1463,6 +1502,9 @@ internal sealed class ArrangeView : Control
             var warnings = VisibleWarnings().Where(w => Math.Abs(GridLeft + Axis.X(w.Time) - hover.X) <= 7).ToList();
             if (warnings.Count > 0) warningTip = string.Join("\n", warnings.Take(8).Select(w => $"{w.Time:0.###} ms: {w.Reason}")) + (warnings.Count > 8 ? $"\n…and {warnings.Count - 8} more." : "");
         }
+        if (warningTip is null && pointer is { } bookmarkHover && bookmarkHover.X >= GridLeft && bookmarkHover.Y >= SectionsHeight && bookmarkHover.Y < RulerBottom
+            && Session?.NearestBookmark(Axis.Time(bookmarkHover.X - GridLeft), 7 / Axis.Zoom) is { } bookmark)
+            warningTip = (Session.BookmarkLabel(bookmark) is { Length: > 0 } label ? label + " · " : "Bookmark · ") + $"{bookmark:0} ms";
         ToolTip.SetTip(this, warningTip);
         if (previousHover != HoveredLane) InvalidateVisual();
         UpdateCursor(e.KeyModifiers);
@@ -1473,6 +1515,7 @@ internal sealed class ArrangeView : Control
 
         switch (drag)
         {
+            case Drag.Pan: Axis.Left = panLeft - (p.X - dragStart.X) / Axis.Zoom; ScrollY = panScroll - (p.Y - dragStart.Y); InvalidateVisual(); break;
             case Drag.Layout:
                 layoutMoved |= Math.Abs(p.Y - dragStart.Y) >= DragThreshold || Math.Abs(p.X - dragStart.X) >= DragThreshold;
                 if (p.Y < HeaderHeight + 12) ScrollY -= RowHeight;
@@ -1564,7 +1607,7 @@ internal sealed class ArrangeView : Control
         if (drag == Drag.Range && Math.Abs(dragNow.X - dragStart.X) < DragThreshold) Edits.ClearRange();
 
         bool finishedSetStroke = drag == Drag.Paint;
-        Session?.EndGesture();
+        if (drag != Drag.Pan) Session?.EndGesture();
         drag = Drag.None;
         dragAnchor = null;
         paintRow = null;
@@ -1577,7 +1620,7 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         bool finishedSetStroke = drag == Drag.Paint;
-        Session?.EndGesture();
+        if (drag != Drag.Pan) Session?.EndGesture();
         drag = Drag.None;
         draggedRow = dropRow = null;
         laneDropY = null;

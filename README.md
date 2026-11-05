@@ -30,9 +30,11 @@ In **Copy hitsounds**, choose the source, destinations and replacement mode firs
 
 The **Audition** toggle beside the snap controls switches sample playback on/off when drawing or painting new notes. Its state is saved globally. Lane preview buttons and normal playback remain available.
 
-The inspector's **Active lane** card identifies the lane whose sample you are editing. Choose an existing sample or **Browse sample…** to replace that lane's sample; its notes move to the replacement and can be undone. Imported audio gets a fresh sample index, keeping existing shared files intact. **File browser** switches between sample browsing/auditioning and map/difficulty browsing. Click a lane name before choosing its sample. Selecting hits is separate; **Use selected hit's lane** explicitly activates the lane of the selected hits when they all share one lane. Its folder controls let you browse external sample libraries too.
+**Grid…**, **View…**, **Song…** and **Playback…** keep secondary settings in the same place at every window width. Snap spacing and the editing tools remain on the toolbar; locators, playback behavior and speed are grouped under Playback. Inspector sections have fold indicators and dotted drag grips. New preferences start with only Active lane expanded; existing saved layouts are retained. Transport, Help and Settings use matching icons from the supplied skin, and hit diamonds are slightly larger.
 
-The sample browser names the active lane and explains that replacement affects every hit in that lane. Double-click a sample, press Enter on its row, or use **Replace lane sample** to assign it. **Preview** only auditions the sample. Replacement is unavailable without an editable active lane; folder browsing remains available.
+The inspector's **Active lane** card identifies the lane whose sample you are editing. Choose an existing sample or **Browse samples…** to replace that lane's sample; its notes move to the replacement and can be undone. Imported audio gets a fresh sample index, keeping existing shared files intact. **File browser** switches between sample browsing/auditioning and map/difficulty browsing. Click a lane name before choosing its sample. Selecting hits is separate; **Use selected hit's lane** explicitly activates the lane of the selected hits when they all share one lane. Its folder controls let you browse external sample libraries too.
+
+The **right file browser** shows parent folders with **+ / -** controls. Selecting a sample, double-clicking it or pressing Enter only previews it. **Add to selected lane** replaces the active sample for every hit; dragging a sample onto a lane does the same for that target lane. Read-only lanes cannot be replaced. **View > File browser** shows or hides the sidebar.
 
 Choose your main **Hitsound folder** in Preferences. Open it from File or the inspector's folder buttons; the inspector also has a **Map folder** button. Sample pickers remember the last folder globally, falling back to the active mapset when it no longer exists. **Z** and **V** seek the first/last gameplay object or placed hit, including muted and folded lanes; a quick second press seeks the song start/end.
 
@@ -41,6 +43,8 @@ The snap selector includes **2/1, 3/1 and 4/1**: every 2, 3 or 4 osu! beats. The
 A sample lane's **+** immediately adds the next numbered layer, as in Electron V6.39. With a standard family selected, the header **+** and **Map → Add lane** do the same. The new lane starts with no hits and uses that family's bundled default sound, even when its parent uses a custom sample. Choose a different sound through **Active lane**. Existing files and indexes referenced by other difficulties are protected; the visible slot number can differ from its safe backing filename. Undo hides the added lane; its audio file is conservatively retained.
 
 Click a base sound's disclosure arrow to fold or unfold its numbered sample lanes above index 1. Folded notes still play and export normally; the folded state is saved with the project. Searching the lane list reveals matching numbered lanes even while the family is folded.
+
+Click a lane name to select that lane, **Ctrl-click** to toggle individual lanes, or **Shift-click** to select a range in the visible lane order. **Ctrl+Shift-click** adds a range. Selected lanes share a highlight and a selection count. **M** or **S** on any selected lane applies that button's next mute/solo state to all selected lanes, even when their previous states differ. Clicking another lane without modifiers replaces the group; Escape clears it. Deselecting leaves the current mute/solo states in place. This lane selection is separate from selected hits, and sample replacement still affects only the active lane.
 
 ### Drum maps
 
@@ -53,6 +57,8 @@ Aliases assigned to the same sample mirror its hits and play once. Existing edit
 ### Pairing and reusable sound sets
 
 Save, Generate and Copy hitsounds share the same pairing rules. Distinct sound types stay separate through compatible numbered copies. Simultaneous finishes fuse into a new **hitfinish** sample; the kick/hitnormal stays separate. Source samples remain unchanged. The editor project retains the original editable layers.
+
+Native osu! combinations take priority over saved merge overrides. When the existing hit object's banks, addition flags, sample index and shared volume can play the combination exactly, Save, Generate and Copy keep the separate samples without rendering merged audio or creating replacement files. If indexes or banks need alignment, compatible roles may be copied byte-for-byte. Fusion or volume baking remains available only where native fields cannot preserve the sounds and volumes; no extra gameplay objects are added to avoid a mix.
 
 **File → Review output…** shows prepared filenames and lets you preview each output or the original combination. Choose the addition sampleset for one timestamp or matching combinations in this map. Matching includes input audio and relative balance. Existing sampleset priorities and explicit presets remain available. Keeping incompatible original files blocks export with an explanation. Changed choices are planned on the next review or save.
 
@@ -94,7 +100,7 @@ Undo and redo with Ctrl+Z and Ctrl+Y. Pick a tool with its button or number key:
 | Tool | Key | What it does |
 |---|---|---|
 | Select | 1 | Click a hit to select it, Ctrl/Shift+click to add more, drag a box around several, drag to move them. |
-| Range | 2 | Drag a time range across lanes, then **Edit → Edit range…** to copy, move or delete it. |
+| Grab | 2 | Pan time and lane rows without changing hits. Range selection is available from View. |
 | Draw | 3 | Click or drag along a lane to place hits. Hold Alt to draw with any tool. |
 | Erase | 4 | Drag across hits to remove them. Right-click deletes a hit with any tool. |
 | Mute | 5 | Silence a hit while you listen. Mutes are never saved into the map. |
@@ -131,7 +137,7 @@ The Offset box is remembered for each map. **Preferences → Song offset for all
 
 ![The inspector](docs/tutorial/inspector.png)
 
-Shift or set the volume of the selection, add bookmarks, and click any entry under **Recent edits** to go back to it. Click a card's title to fold it; drag ⠿ to reorder cards.
+The left inspector keeps **Active lane** and **Bookmarks** handy. Optional bookmark labels stay in the editor project and appear in the list and on ruler-flag hover. **View > History** and **View > Sound sets** show optional panels. Click a card title to fold it; drag the grip to reorder cards.
 
 ### Lanes and the grid
 
@@ -213,3 +219,5 @@ dotnet test OsuHitsoundEditor.slnx
 ## Credits
 
 The built-in default hitsounds are from [osu!](https://github.com/ppy/osu-resources) by ppy and contributors, used under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Copy hitsounds follows [Mapping Tools](https://github.com/OliBomby/Mapping_Tools)' Hitsound Copier by OliBomby (MIT). Songs and samples are decoded with [BASS](https://www.un4seen.com) (free for non-commercial use), and the sound goes out through [NAudio](https://github.com/naudio/NAudio) (MIT). The waveform's frequency colours follow [osu-framework](https://github.com/ppy/osu-framework)'s Waveform (MIT).
+
+Volume scope defaults to **All lanes**. Choose **Selected lanes** beside the numeric volume edit to change only selected lanes at the affected times. Numeric edits, bar dragging, painting and ramps use that same scope. Export preserves independent levels, preparing audio only when native osu! fields cannot represent them. **Ramp** is in the controller header; shortcut **6** opens it. **Grab** pans time and lane rows without editing hits. Space remains Play/Stop. Range selection remains under View.

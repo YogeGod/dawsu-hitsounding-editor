@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using OsuHitsound.Format;
 using OsuHitsound.Lanes;
+using IconPath = Avalonia.Controls.Shapes.Path;
 
 namespace OsuHitsound.App;
 
@@ -58,7 +59,7 @@ internal sealed class InspectorPanel : Border
     private Lane? selectedLane;
     private readonly TextBlock sampleFile = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.9 };
     private readonly ComboBox channelSample = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MaxDropDownHeight = 280, Foreground = Brushes.Gainsboro };
-    private readonly Button replaceSample = new() { Content = "Browse sample…" };
+    private readonly Button replaceSample = new() { Content = "Browse samples…" };
     private readonly Button previewSample = new() { Content = "Preview" };
     public FileBrowserPanel Browser { get; } = new();
     public SoundSetPanel SoundSets { get; } = new();
@@ -70,16 +71,15 @@ internal sealed class InspectorPanel : Border
     public event Action<Lane>? PreviewChannelRequested;
     public event Action<Lane>? ActivateLaneRequested;
 
-    private readonly StackPanel cards = new() { Spacing = 8, Margin = new Thickness(8) };
-    private readonly Dictionary<string, (Border Card, Control Body)> byId = [];
-    private readonly TextBlock selectionText = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly TextBox shiftBox = new() { Width = 70, Watermark = "ms" };
-    private readonly TextBox volumeBox = new() { Width = 70, Watermark = "1–100" };
+    private readonly StackPanel cards = new() { Spacing = 4, Margin = new Thickness(12, 4) };
+    private readonly Dictionary<string, (Border Card, Control Body, IconPath Chevron)> byId = [];
+    private readonly TextBox bookmarkName = new() { Watermark = "Optional bookmark label", MaxLength = 120 };
     private readonly ListBox bookmarkList = new() { MaxHeight = 220 };
     private readonly ListBox recentList = new() { MaxHeight = 320 };
     private List<double> bookmarkTimes = [];
     private List<int> recentPositions = [];
     private bool filling;
+    private EditSession? currentSession;
 
     // What the lists were last filled from: they are rebuilt only when it changes (not on every drag step).
     private (EditSession? Session, int Position, int Steps, object? Bookmarks, ArrangeModel? Model) listsFrom;
@@ -88,8 +88,7 @@ internal sealed class InspectorPanel : Border
     private string? dragging;
 
     public event Action<double>? SeekRequested;
-    public event Action<double>? ShiftTimeRequested;
-    public event Action<int>? VolumeRequested;
+    public event Action<double, string>? RenameBookmarkRequested;
     public event Action? AddBookmarkRequested;
     public event Action<double>? RemoveBookmarkRequested;
     public event Action<int>? GoToStepRequested;
@@ -124,24 +123,36 @@ internal sealed class InspectorPanel : Border
         useSelectedLane.Click += (_, _) => { if (selectedLane is { } lane) ActivateLaneRequested?.Invoke(lane); };
         Avalonia.Automation.AutomationProperties.SetName(channelSample, "Sample for active lane");
         AddCard(ChannelCard, "Active lane", Stack(channelName, laneHelp, useSelectedLane, sampleFile, channelSample, Row(null, replaceSample, previewSample)));
-        AddCard("browser", "File browser", Browser);
-        AddCard("soundSets", "Sound sets", SoundSets);
 
-        var shift = new Button { Content = "Shift" };
-        shift.Click += (_, _) => { if (OsuNumber.TryParseDouble(shiftBox.Text ?? "", out double ms) && double.IsFinite(ms) && ms != 0) ShiftTimeRequested?.Invoke(ms); };
-        var setVolume = new Button { Content = "Set" };
-        setVolume.Click += (_, _) => { if (OsuNumber.TryParseInt(volumeBox.Text ?? "", out int v) && v is >= 1 and <= 100) VolumeRequested?.Invoke(v); };
-        AddCard(SelectionCard, "Selection", Stack(selectionText, Row("Shift time", shiftBox, shift), Row("Volume", volumeBox, setVolume)));
+        AddCard("soundSets", "Sound sets", SoundSets);
 
         var add = new Button { Content = "+ At playhead" };
         add.Click += (_, _) => AddBookmarkRequested?.Invoke();
         var remove = new Button { Content = "Remove" };
         remove.Click += (_, _) => { if (bookmarkList.SelectedIndex is >= 0 and var i && i < bookmarkTimes.Count) RemoveBookmarkRequested?.Invoke(bookmarkTimes[i]); };
         bookmarkList.SelectionChanged += (_, _) => { if (!filling && bookmarkList.SelectedIndex is >= 0 and var i && i < bookmarkTimes.Count) SeekRequested?.Invoke(bookmarkTimes[i]); };
-        AddCard(BookmarksCard, "Bookmarks", Stack(bookmarkList, Row(null, add, remove)));
+        var rename = new Button { Content = "Label", IsVisible = false };
+        bookmarkName.IsVisible = false;
+        void Rename() { if (bookmarkList.SelectedIndex is >= 0 and var i && i < bookmarkTimes.Count) RenameBookmarkRequested?.Invoke(bookmarkTimes[i], bookmarkName.Text ?? ""); }
+        rename.Click += (_, _) => Rename();
+        bookmarkName.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Rename(); e.Handled = true; } };
+        bookmarkList.SelectionChanged += (_, _) => { bool has = bookmarkList.SelectedIndex is >= 0 and var i && i < bookmarkTimes.Count; bookmarkName.IsVisible = rename.IsVisible = has; if (has) bookmarkName.Text = currentSession?.BookmarkLabel(bookmarkTimes[bookmarkList.SelectedIndex]); };
+        AddCard(BookmarksCard, "Bookmarks", Stack(bookmarkList, Row(null, add, remove), bookmarkName, rename));
 
         recentList.SelectionChanged += (_, _) => { if (!filling && recentList.SelectedIndex is >= 0 and var i && i < recentPositions.Count) GoToStepRequested?.Invoke(recentPositions[i]); };
-        AddCard(RecentCard, "Recent edits", Stack(recentList, new TextBlock { Text = "Click an edit to go back (or forward) to just after it.", TextWrapping = TextWrapping.Wrap, Opacity = 0.85, FontSize = 11 }));
+        AddCard(RecentCard, "History", Stack(recentList, new TextBlock { Text = "Click an edit to go back (or forward) to just after it.", TextWrapping = TextWrapping.Wrap, Opacity = 0.85, FontSize = 11 }));
+    }
+
+    public void SetOptionalPanels(bool history, bool soundSets)
+    {
+        Show(RecentCard, history);
+        Show("soundSets", soundSets);
+        void Show(string id, bool open)
+        {
+            var (card, body, chevron) = byId[id];
+            if (open && !card.IsVisible) { body.IsVisible = true; chevron.RenderTransform = new RotateTransform(90); }
+            card.IsVisible = open;
+        }
     }
 
     /// <summary>Card ids, top to bottom.</summary>
@@ -158,7 +169,11 @@ internal sealed class InspectorPanel : Border
         cards.Children.Clear();
         foreach (var id in wanted.Concat(rest)) cards.Children.Add(byId[id].Card);
         var fold = folded.ToHashSet();
-        foreach (var (id, (_, body)) in byId) body.IsVisible = !fold.Contains(id);
+        foreach (var (id, (_, body, chevron)) in byId)
+        {
+            body.IsVisible = !fold.Contains(id);
+            chevron.RenderTransform = new RotateTransform(body.IsVisible ? 90 : 0);
+        }
     }
 
     /// <summary>Fills the cards from the editor's state.</summary>
@@ -195,12 +210,15 @@ internal sealed class InspectorPanel : Border
                 sampleFile.Text = $"Lane: {model.SlotOf(active).Name}\nSample: {active.Name}";
             previewSample.IsEnabled = active is not null;
             channelSample.IsEnabled = replaceSample.IsEnabled = active is not null && model!.CanReplaceSample(active);
-            selectionText.Text = InspectorText.Selection(session, model, selected, time);
+            currentSession = session;
             var from = (session, session?.Position ?? 0, session?.StepCount ?? 0, (object?)session?.State.Bookmarks, model);
             if (from == listsFrom) return;
             listsFrom = from;
+            var oldBookmarkTimes = bookmarkTimes;
             bookmarkTimes = session is null ? [] : [.. session.BookmarkTimes];
-            bookmarkList.ItemsSource = bookmarkTimes.Select(t => model is { } m && m.BarBeatTick(t) is var (bar, beat, _) ? $"{bar}.{beat}   {time(t)}" : time(t)).ToList();
+            double? selectedTime = bookmarkList.SelectedIndex is >= 0 and var index && index < oldBookmarkTimes.Count ? oldBookmarkTimes[index] : null;
+            bookmarkList.ItemsSource = bookmarkTimes.Select(t => (session?.BookmarkLabel(t) is { Length: > 0 } label ? label + " · " : "") + (model is { } m && m.BarBeatTick(t) is var (bar, beat, _) ? $"{bar}.{beat}   {time(t)}" : time(t))).ToList();
+            bookmarkList.SelectedIndex = selectedTime is { } selectedBookmark ? bookmarkTimes.IndexOf(selectedBookmark) : -1;
             var recent = session is null ? [] : InspectorText.RecentEdits(session);
             recentPositions = [.. recent.Select(r => r.Position)];
             recentList.ItemsSource = recent.Select(r => r.Current ? $"▶ {r.Text}" : $"   {r.Text}").ToList();
@@ -214,21 +232,29 @@ internal sealed class InspectorPanel : Border
 
     private void AddCard(string id, string title, Control body)
     {
-        var grip = new TextBlock { Text = "⠿", Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0) };
+        var grip = new IconPath
+        {
+            Data = Geometry.Parse("M 0,0 h 2 v 2 h -2 Z M 4,0 h 2 v 2 h -2 Z M 0,4 h 2 v 2 h -2 Z M 4,4 h 2 v 2 h -2 Z M 0,8 h 2 v 2 h -2 Z M 4,8 h 2 v 2 h -2 Z"),
+            Fill = Brushes.SlateGray, Width = 8, Height = 12, Stretch = Stretch.Uniform,
+            Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
+        };
         ToolTip.SetTip(grip, "Drag to move this card");
-        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Foreground = Brushes.Gainsboro, FontWeight = FontWeight.SemiBold, HorizontalContentAlignment = HorizontalAlignment.Left };
-        header.Click += (_, _) => { body.IsVisible = !body.IsVisible; LayoutChanged?.Invoke(); };
+        var chevron = new IconPath { Data = Geometry.Parse("M 0,0 L 4,4 L 0,8"), Stroke = Brushes.LightSlateGray, StrokeThickness = 1.5, Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, RenderTransform = new RotateTransform(90) };
+        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Padding = new Thickness(6, 4), Foreground = Brushes.Gainsboro, FontWeight = FontWeight.SemiBold, HorizontalContentAlignment = HorizontalAlignment.Left };
+        header.Classes.Add("flat");
+        ToolTip.SetTip(header, $"Expand or collapse {title}");
+        header.Click += (_, _) => { body.IsVisible = !body.IsVisible; chevron.RenderTransform = new RotateTransform(body.IsVisible ? 90 : 0); LayoutChanged?.Invoke(); };
         var top = new DockPanel();
         DockPanel.SetDock(grip, Dock.Right);
-        top.Children.AddRange([grip, header]);
+        DockPanel.SetDock(chevron, Dock.Left);
+        top.Children.AddRange([grip, chevron, header]);
         var card = new Border
         {
             Tag = id,
-            Background = new SolidColorBrush(Color.Parse("#232830")),
+            Background = Brushes.Transparent,
             BorderBrush = new SolidColorBrush(Color.Parse("#3a414c")),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(0, 4, 0, 12),
             Child = new StackPanel { Spacing = 6, Children = { top, body } },
         };
 
@@ -242,7 +268,7 @@ internal sealed class InspectorPanel : Border
             LayoutChanged?.Invoke();
         };
 
-        byId[id] = (card, body);
+        byId[id] = (card, body, chevron);
         cards.Children.Add(card);
     }
 

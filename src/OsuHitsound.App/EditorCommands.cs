@@ -79,7 +79,8 @@ internal static class EditorCommands
         new("setRight", "Playback and cycle", "Set the right locator at the playhead", [K(Key.NumPad2, Ctrl)]),
 
         new("toolSelect", "Tools and snap", "Select and move", [K(Key.D1)]),
-        new("toolRange", "Tools and snap", "Range: drag a time range across lanes, then Edit range", [K(Key.D2)]),
+        new("toolGrab", "Tools and snap", "Grab: pan time and lanes", [K(Key.D2)]),
+        new("toolRange", "Tools and snap", "Range: drag a time range across lanes, then Edit range", []),
         new("toolDraw", "Tools and snap", "Draw (hold Alt to draw with any tool)", [K(Key.D3)]),
         new("toolErase", "Tools and snap", "Erase", [K(Key.D4)]),
         new("toolMute", "Tools and snap", "Mute hits while listening (never saved)", [K(Key.D5)]),
@@ -139,7 +140,7 @@ internal static class EditorCommands
         ("Mouse: ruler and strips", "Drag the line under the waveform", "Resize it; double-click resets"),
         ("Mouse: ruler and strips", "Click / double-click an object", "Select its hits / also play them"),
         ("Mouse: lanes", "Click a lane name", "Hear its sample"),
-        ("Mouse: lanes", "Ctrl+click / Shift+click a lane name", "Select / add its hits"),
+        ("Mouse: lanes", "Click / Ctrl+click / Shift+click a lane name", "Select one lane / toggle a lane / select a range; M/S applies to selected lanes"),
         ("Mouse: lanes", "Right-click a lane name", "Rename, move, delete or add lanes"),
         ("Mouse: volume lane", "Drag a bar", "Set its volume (all selected moments together)"),
         ("Mouse: volume lane", "Alt+drag", "Paint volumes"),

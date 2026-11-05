@@ -15,6 +15,7 @@ internal sealed class SoundSetPanel : StackPanel
     private List<Guid> choices = [];
     private List<Guid> memberIds = [];
     private bool filling;
+    private readonly List<Control> setDetails = [], placementDetails = [];
     public Guid? SelectedSet => sets.SelectedIndex is > 0 and var i && i <= choices.Count ? choices[i - 1] : null;
     public Guid? Placement { get; private set; }
     public Guid? Member => members.SelectedIndex is >= 0 and var i && i < memberIds.Count ? memberIds[i] : null;
@@ -32,12 +33,16 @@ internal sealed class SoundSetPanel : StackPanel
         Button Action(string label, string command)
         { var button = new Button { Content = label }; button.Click += (_, _) => Command?.Invoke(command); return button; }
         WrapPanel Row(params Control[] controls) { var row = new WrapPanel { Orientation = Orientation.Horizontal }; row.Children.AddRange(controls); return row; }
-        Children.AddRange([sets, mode, Row(Action("Save selection…", "capture"), Action("New set…", "new")),
-            Row(Action("Edit set…", "edit"), Action("Apply", "apply"), Action("Preview", "preview")),
-            Row(Action("Save to library", "librarySave"), Action("Import…", "import"), Action("Update…", "update")),
-            info, Row(new TextBlock { Text = "Set volume %", VerticalAlignment = VerticalAlignment.Center }, gain, Action("Set", "gain")),
-            members, Row(new TextBlock { Text = "Sound %", VerticalAlignment = VerticalAlignment.Center }, memberVolume, Action("Set sound", "member")),
-            Row(Action("Select whole set", "select"), Action("Reset to set", "reset")), Action("Make independent", "detach"), Action("Review output…", "review")]);
+        var editRow = Row(Action("Edit set…", "edit"), Action("Apply", "apply"), Action("Preview", "preview"));
+        var libraryRow = Row(Action("Save to library", "librarySave"), Action("Update…", "update"));
+        var gainRow = Row(new TextBlock { Text = "Set volume %" }, gain, Action("Set", "gain"));
+        var memberRow = Row(new TextBlock { Text = "Sound %" }, memberVolume, Action("Set sound", "member"));
+        var selectionRow = Row(Action("Select whole set", "select"), Action("Reset to set", "reset"));
+        var detach = Action("Make independent", "detach");
+        setDetails.AddRange([mode, editRow, libraryRow]);
+        placementDetails.AddRange([gainRow, members, memberRow, selectionRow, detach]);
+        Children.AddRange([sets, Row(Action("Save selection…", "capture"), Action("New set…", "new")),
+            Action("Import…", "import"), mode, editRow, libraryRow, info, gainRow, members, memberRow, selectionRow, detach, Action("Review output…", "review")]);
     }
     public void Choose(Guid id) { sets.SelectedIndex = choices.IndexOf(id) + 1; }
     public void Refresh(EditSession? session, IReadOnlyCollection<EditHit> selected)
@@ -52,6 +57,8 @@ internal sealed class SoundSetPanel : StackPanel
             { choices = ids; sets.ItemsSource = new[] { "Single sample" }.Concat(definitions.Select(s => s.Name)).ToList(); sets.SelectedIndex = chosen is { } id && choices.Contains(id) ? choices.IndexOf(id) + 1 : 0; }
             var placement = session?.State.SoundPlacements.FirstOrDefault(p => selected.Any(h => h.SetPlacement == p.Id));
             Placement = placement?.Id;
+            foreach (var control in setDetails) control.IsVisible = SelectedSet is not null;
+            foreach (var control in placementDetails) control.IsVisible = Placement is not null;
             var set = placement is null ? null : definitions.FirstOrDefault(s => s.Id == placement.SetId);
             var previous = Member;
             memberIds = set?.Members.Select(m => m.Id).ToList() ?? [];

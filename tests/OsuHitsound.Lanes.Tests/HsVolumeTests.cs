@@ -4,6 +4,25 @@ namespace OsuHitsound.Lanes.Tests;
 
 public class HsVolumeTests : IDisposable
 {
+    [Fact]
+    public void Independent_volume_on_original_object_survives_save_and_generate_without_HS_mode()
+    {
+        var doc = Open("256,192,1000,1,8,0:0:0:80:\n"); var s = doc.Session;
+        s.SetHsMode(false);
+        var target = s.State.Hits[0]; var other = s.State.Hits[1];
+        s.SetLayerVolumes(new Dictionary<EditHit, int> { [target] = 25 });
+        Assert.Equal(80, s.VolumeOf(other)); Assert.True(s.HasHsObjects);
+        var skin = s.State.Hits.Select(h => h.Lane).Distinct().ToDictionary(l => l.Name, _ => new byte[] { 1, 2 });
+        string manifests = Path.Combine(root, "manifests");
+        var (plan, _) = doc.PlanHsSave(manifests, skin, new ExportMergeSettings());
+        Assert.Empty(plan.Storage.Conflicts);
+        Assert.Equal(new[] { 25, 80 }, plan.Storage.Mixes.SelectMany(m => m.Layers).Select(l => l.Volume).Order());
+        doc.WriteHsSave(plan, _ => [1, 2], Path.Combine(root, "backup"), manifests);
+        var reopened = MapDocument.Load(doc.Path); reopened.RestoreHsProject(doc.HsProject);
+        Assert.Equal(new[] { 25, 80 }, reopened.Session.State.Hits.Select(reopened.Session.VolumeOf).Order());
+        var (generated, _) = reopened.PlanGenerate(manifests, skin, new ExportMergeSettings());
+        Assert.Equal(new[] { 25, 80 }, generated.Mixes.SelectMany(m => m.Layers).Select(l => l.Volume).Order());
+    }
     private readonly string root = Directory.CreateTempSubdirectory("hs-volumes-").FullName;
     public void Dispose() => Directory.Delete(root, true);
     private MapDocument Open(string objects = "")

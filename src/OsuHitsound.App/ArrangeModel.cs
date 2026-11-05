@@ -433,9 +433,9 @@ internal sealed partial class ArrangeModel
         Changed?.Invoke();
     }
 
-    public void ToggleMute(Lane lane) => Toggle(muted, [lane]);
+    public void ToggleMute(Lane lane) => ToggleSelected(muted, lane);
 
-    public void ToggleSolo(Lane lane) => Toggle(soloed, [lane]);
+    public void ToggleSolo(Lane lane) => ToggleSelected(soloed, lane);
 
     public void ToggleGroupMute(LaneGroup group) => Toggle(muted, LanesIn(group));
 
@@ -659,6 +659,7 @@ internal sealed partial class ArrangeModel
     private void Relayout(Action change)
     {
         change();
+        selectedLanes.RemoveWhere(lane => hidden.Contains(lane) || !laneRows.Any(r => r.Lane == lane));
         for (int i = 0; i < laneRows.Count; i++) laneRows[i] = laneRows[i] with { Number = i + 1 };
         Rows = BuildRows();
         Changed?.Invoke();

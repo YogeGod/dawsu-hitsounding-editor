@@ -35,3 +35,8 @@ Copy hitsounds
   Map > Copy hitsounds follows the behaviour and options of the Hitsound Copier in
   Mapping Tools (https://github.com/OliBomby/Mapping_Tools), Copyright (c) OliBomby
   and contributors, licensed under the MIT Licence (the permission notice above applies).
+
+UI skin icons
+  Assets/skin-icons.png is the icons-central_2.00x.png sprite supplied from the local
+  E:\Claude\skin collection. Transport, Help and Settings coordinates follow that
+  collection's icons.xml. The app uses alpha masks to tint the unchanged source image.

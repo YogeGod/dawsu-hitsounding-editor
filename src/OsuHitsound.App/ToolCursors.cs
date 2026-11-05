@@ -9,6 +9,7 @@ namespace OsuHitsound.App;
 internal enum ToolCursor
 {
     Arrow,
+    Hand,
     Pen,
     Eraser,
     Cross,
@@ -24,6 +25,7 @@ internal static class ToolCursors
     public static ToolCursor For(Tool tool, KeyModifiers modifiers, bool overGrid)
     {
         if (!overGrid) return ToolCursor.Arrow;
+        if (tool == Tool.Grab) return ToolCursor.Hand;
         bool altDraw = modifiers.HasFlag(KeyModifiers.Alt) && !modifiers.HasFlag(KeyModifiers.Control) && !modifiers.HasFlag(KeyModifiers.Meta);
         return (altDraw ? Tool.Draw : tool) switch
         {
@@ -46,6 +48,7 @@ internal static class ToolCursors
             {
                 ToolCursor.Pen => Drawn(PenParts, new PixelPoint(3, 28)),
                 ToolCursor.Eraser => Drawn(EraserParts, new PixelPoint(5, 27)),
+                ToolCursor.Hand => new Cursor(StandardCursorType.Hand),
                 ToolCursor.Cross => new Cursor(StandardCursorType.Cross),
                 _ => Cursor.Default,
             };

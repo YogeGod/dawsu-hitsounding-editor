@@ -25,6 +25,7 @@ public sealed record HsProject(bool Enabled, bool StartedEmpty, string FileHash,
 /// </summary>
 public sealed record ProjectData
 {
+    public Dictionary<int, string> BookmarkLabels { get; init; } = [];
     public ExportMergeSettings? ExportSettings { get; init; }
     public SoundSetProject? SoundSets { get; init; }
     /// <summary>3 preserves folder order as well as lane order; a version 1 alphabetical layout is ignored.</summary>

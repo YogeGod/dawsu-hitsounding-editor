@@ -143,7 +143,6 @@ public partial class MainWindow : Window
         Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(SnapOptions,
             NextWheelSnap(Lanes.Spacing, step, TripletSnapToggle.IsChecked == true));
         // V6.39 header and toolbar buttons.
-        GenerateButton.Click += async (_, _) => await Generate();
         PreferencesButton.Click += (_, _) => Run("preferences");
         HelpButton.Click += (_, _) => Run("help");
         UndoButton.Click += (_, _) => Run("undo");
@@ -159,7 +158,7 @@ public partial class MainWindow : Window
         ColourBox.SelectionChanged += (_, _) => SetColourByVolume(ColourBox.SelectedIndex == 1);
         FitButton.Click += (_, _) => FitTimeline();
         SelectTool.Click += (_, _) => SetTool(Tool.Select);
-        RangeTool.Click += (_, _) => SetTool(Tool.Range);
+        GrabTool.Click += (_, _) => SetTool(Tool.Grab);
         DrawTool.Click += (_, _) => SetTool(Tool.Draw);
         EraseTool.Click += (_, _) => SetTool(Tool.Erase);
         MuteTool.Click += (_, _) => SetTool(Tool.Mute);
@@ -180,7 +179,7 @@ public partial class MainWindow : Window
         foreach (var (item, speed) in speedItems)
         {
             item.Click += (_, _) => SetSpeed(speed);
-            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = true, Padding = new Avalonia.Thickness(4, 2), FontSize = 11 };
+            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = true, Padding = new Avalonia.Thickness(6, 4), FontSize = 12 };
             button.Classes.Add("viewToggle");
             button.Click += (_, _) => SetSpeed(speed);
             speedButtons.Add((button, speed));
@@ -216,6 +215,10 @@ public partial class MainWindow : Window
         SongOffsetBox.LostFocus += (_, _) => ApplySongOffset();
 
         // Volume panel.
+        VolumeScopeBox.ItemsSource = new[] { "All lanes", "Selected lanes" };
+        VolumeScopeBox.SelectedIndex = 0;
+        VolumeScopeBox.SelectionChanged += (_, _) => { Volume.SelectedLanesOnly = VolumeScopeBox.SelectedIndex == 1; VolumeScopeHint.Text = Volume.SelectedLanesOnly ? "Selected lanes" : "All lanes"; Volume.InvalidateVisual(); };
+        Lanes.SampleDropped += AssignChannelFile;
         RampShapeBox.ItemsSource = new[] { "Linear", "Ease in", "Ease out", "S-curve" };
         RampShapeBox.SelectedIndex = 0;
         RampShapeBox.SelectionChanged += (_, _) => Volume.Shape = (RampShape)Math.Max(0, RampShapeBox.SelectedIndex);
@@ -381,6 +384,7 @@ public partial class MainWindow : Window
             closeProjectBaseline = CaptureProject();
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
+            model.Changed += Volume.InvalidateVisual;
             UpdateActiveLaneText();
             UpdateCues(); // project restoration may have changed layers and preview mutes
             model.PreviewMutesChanged += ScheduleProjectSave;
@@ -614,6 +618,7 @@ public partial class MainWindow : Window
             case "setLeft": Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
             case "setRight": Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
             case "toolSelect": SetTool(Tool.Select); break;
+            case "toolGrab": SetTool(Tool.Grab); break;
             case "toolRange": SetTool(Tool.Range); break;
             case "toolDraw": SetTool(Tool.Draw); break;
             case "toolErase": SetTool(Tool.Erase); break;
@@ -631,7 +636,7 @@ public partial class MainWindow : Window
             case "paste": Lanes.Edits.Paste(Lanes.Playhead); break;
             case "duplicate": Lanes.Edits.Duplicate(); break;
             case "selectAll": Lanes.Edits.SelectAll(); break;
-            case "deselect": Lanes.Edits.Deselect(); break;
+            case "deselect": Lanes.Edits.Deselect(); model?.DeselectLanes(); break;
             case "quantize": Quantize(Lanes.Edits.QuantizeStrength); break;
             case "quantizeDialog": _ = QuantizeDialog(); break;
             case "repeat": _ = Repeat(); break;
@@ -677,9 +682,10 @@ public partial class MainWindow : Window
 
     private void SetTool(Tool tool)
     {
+        if (tool == Tool.Ramp) { VolumeToggle.IsChecked = true; VolumeTab.IsChecked = true; }
         Lanes.Tool = tool;
         SelectTool.IsChecked = tool == Tool.Select;
-        RangeTool.IsChecked = tool == Tool.Range;
+        GrabTool.IsChecked = tool == Tool.Grab;
         DrawTool.IsChecked = tool == Tool.Draw;
         EraseTool.IsChecked = tool == Tool.Erase;
         MuteTool.IsChecked = tool == Tool.Mute;
@@ -784,7 +790,21 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (VolumeModeBox.SelectedIndex == 0) session.SetVolumes(VolumeRamp.Shift(session.State.Volumes, keys, value));
+        if (Volume.SelectedLanesOnly && model is not null)
+        {
+            var selected = model.SelectedLanes;
+            var values = session.State.Hits.Where(h => selected.Contains(h.Lane) && h.Anchor is { } key && keys.Contains(key))
+                .ToDictionary(h => h, h => VolumeModeBox.SelectedIndex == 0 ? Math.Clamp(session.VolumeOf(h) + value, 0, 100) : Math.Clamp(value, 1, 100));
+            if (values.Count == 0) { flash = "Select lanes with hits at the selected times."; UpdateStatus(); return; }
+            session.SetLayerVolumes(values);
+        }
+        else if (VolumeModeBox.SelectedIndex == 0)
+        {
+            var affected = session.State.Hits.Where(h => h.Anchor is { } key && keys.Contains(key)).ToList();
+            if (affected.Any(session.State.LayerVolumes.ContainsKey))
+                session.SetLayerVolumes(affected.ToDictionary(h => h, h => Math.Clamp(session.VolumeOf(h) + value, 0, 100)));
+            else session.SetVolumes(VolumeRamp.Shift(session.State.Volumes, keys, value));
+        }
         else session.SetVolume(keys, Math.Clamp(value, 1, 100));
     }
 
@@ -792,8 +812,7 @@ public partial class MainWindow : Window
     {
         if (session is null) return;
         int min = int.TryParse(VolumeMinBox.Text, out int a) ? a : 0, max = int.TryParse(VolumeMaxBox.Text, out int b) ? b : 100;
-        var state = session.State;
-        Lanes.Edits.SelectWhere(h => h.Anchor is { } k && state.Volumes[k] >= min && state.Volumes[k] <= max);
+        Lanes.Edits.SelectWhere(h => h.Anchor is not null && (!Volume.SelectedLanesOnly || model?.SelectedLanes.Contains(h.Lane) == true) && session.VolumeOf(h) >= min && session.VolumeOf(h) <= max);
     }
 
     /// <summary>View → Time signatures…: edits the editor-only time signature changes (kept in the project, not the map).</summary>
@@ -827,7 +846,7 @@ public partial class MainWindow : Window
         };
         Inspector.Browser.SetRoots(null, prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : null));
         Inspector.ChannelSampleRequested += AssignChannelChoice;
-        Inspector.BrowseChannelSampleRequested += async lane => await BrowseChannelSample(lane);
+        Inspector.BrowseChannelSampleRequested += lane => { BrowserPanelItem.IsChecked = true; ShowBrowser(true); Inspector.Browser.Focus(); };
         Inspector.PreviewChannelRequested += lane =>
         {
             try { if (doc is not null) audio?.Preview(doc.LanePreviewAt(lane, Lanes.Playhead), doc.Folder); }
@@ -860,8 +879,8 @@ public partial class MainWindow : Window
         InspectorPanelItem.Click += (_, _) => InspectorToggle.IsChecked = InspectorToggle.IsChecked != true;
         Inspector.CloseRequested += () => InspectorToggle.IsChecked = false;
         Inspector.SeekRequested += Seek;
-        Inspector.ShiftTimeRequested += ms => Lanes.Edits.Move(ms, h => h.Lane, "Shift time");
-        Inspector.VolumeRequested += v => session?.SetVolume(Lanes.SelectedMoments, v);
+        Inspector.RenameBookmarkRequested += (t, label) => session?.RenameBookmark(t, label);
+        SetupWorkflowPanels();
         Inspector.AddBookmarkRequested += () => Run("addBookmark");
         Inspector.RemoveBookmarkRequested += t => session?.RemoveBookmarkNear(t, 1);
         Inspector.GoToStepRequested += p => session?.GoTo(p);
@@ -1036,7 +1055,7 @@ public partial class MainWindow : Window
         audio.Seek(start);
         playStartedAt = start;
         if (!audio.IsPlaying) audio.Play();
-        PlayButton.Content = "⏸";
+        PlayGlyph.Glyph = "Pause";
     }
 
     /// <summary>After any edit: redraw from the session, play what's wanted now, and check it in the background.</summary>
@@ -1312,7 +1331,7 @@ public partial class MainWindow : Window
             audio.Play();
         }
 
-        PlayButton.Content = audio.IsPlaying ? "⏸" : "▶";
+        PlayGlyph.Glyph = audio.IsPlaying ? "Pause" : "Play";
     }
 
     private void StopPlaying()
@@ -1328,7 +1347,7 @@ public partial class MainWindow : Window
         if (audio is null) return;
         if (audio.IsPlaying) StopPlaying();
         else audio.Seek(0);
-        PlayButton.Content = "▶";
+        PlayGlyph.Glyph = "Play";
     }
 
     private void Seek(double time)
@@ -1358,7 +1377,7 @@ public partial class MainWindow : Window
         if (audio is not null)
         {
             Lanes.Playhead = audio.Position;
-            if (!audio.IsPlaying && PlayButton.Content as string == "⏸") PlayButton.Content = "▶";
+            if (!audio.IsPlaying && PlayGlyph.Glyph == "Pause") PlayGlyph.Glyph = "Play";
 
             // Page when the playhead reaches the right edge (or is off screen to the left), as Cubase does.
             if (audio.IsPlaying && FollowItem.IsChecked)

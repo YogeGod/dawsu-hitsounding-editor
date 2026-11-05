@@ -69,11 +69,16 @@ internal sealed partial class ArrangeModel
     }
 
     internal sealed record ViewState(IReadOnlyList<Lane> Muted, IReadOnlyList<Lane> Soloed,
-        IReadOnlyList<LaneGroup> Collapsed, IReadOnlyList<string> CollapsedFamilies, bool SongSoloed, string Filter);
+        IReadOnlyList<LaneGroup> Collapsed, IReadOnlyList<string> CollapsedFamilies, bool SongSoloed, string Filter)
+    {
+        public IReadOnlyList<Lane> SelectedLanes { get; init; } = [];
+        public Lane? LaneSelectionAnchor { get; init; }
+    }
 
     internal ViewState CaptureViewState()
     {
-        lock (muted) return new(muted.ToList(), soloed.ToList(), collapsed.ToList(), collapsedFamilies.ToList(), SongSoloed, Filter);
+        lock (muted) return new(muted.ToList(), soloed.ToList(), collapsed.ToList(), collapsedFamilies.ToList(), SongSoloed, Filter)
+        { SelectedLanes = selectedLanes.ToList(), LaneSelectionAnchor = laneSelectionAnchor };
     }
 
     internal void RestoreViewState(ViewState state) => Relayout(() =>
@@ -87,5 +92,7 @@ internal sealed partial class ArrangeModel
         collapsedFamilies.Clear(); collapsedFamilies.UnionWith(state.CollapsedFamilies);
         SongSoloed = state.SongSoloed;
         Filter = state.Filter;
+        selectedLanes.Clear(); selectedLanes.UnionWith(state.SelectedLanes);
+        laneSelectionAnchor = state.LaneSelectionAnchor;
     });
 }

@@ -81,6 +81,25 @@ Check(Math.Abs(w.ArrangeArea.Playhead - 2700) < .01, "Next problem seeks first i
 Call(w, "ShowNextOutputProblem"); Pump(); Check(w.ArrangeArea.Selection.Contains(b), "Next problem advances");
 Call(w, "ShowNextOutputProblem"); Pump(); Check(w.ArrangeArea.Selection.Contains(a), "Next problem wraps");
 Check(s.State.Hits.SequenceEqual(hits) && s.State.Volumes.SequenceEqual(volumes), "problem navigation changes no hit or volume data");
+var laneModel = w.ArrangeArea.Model!;
+var laneRows = laneModel.Rows.OfType<LaneRow>().Take(3).ToArray();
+var hitSelection = w.ArrangeArea.Selection.ToArray();
+w.ArrangeArea.ScrollY = 0; Pump();
+ClickLane(laneRows[0]); ClickLane(laneRows[2], RawInputModifiers.Shift);
+Check(laneModel.SelectedLanes.SetEquals(laneRows.Select(r => r.Lane)), "Shift-click selects a visible lane range");
+Check(w.ArrangeArea.Selection.ToHashSet().SetEquals(hitSelection), "lane clicks preserve selected hits");
+ClickLane(laneRows[1], RawInputModifiers.Control);
+Check(laneModel.SelectedLanes.Count == 2 && !laneModel.SelectedLanes.Contains(laneRows[1].Lane), "Ctrl-click toggles one lane");
+ClickLane(laneRows[0], x: ArrangeView.GridLeft - 48 + 9);
+Check(laneModel.SelectedLanes.All(laneModel.IsMuted) && !laneModel.IsMuted(laneRows[1].Lane), "lane M button mutes only selected group");
+ClickLane(laneRows[0], x: ArrangeView.GridLeft - 25 + 9);
+Check(laneModel.SelectedLanes.All(laneModel.IsSoloed) && !laneModel.IsSoloed(laneRows[1].Lane), "lane S button solos only selected group");
+ClickLane(laneRows[1]);
+Check(laneModel.SelectedLanes.Count == 1 && laneModel.SelectedLanes.Contains(laneRows[1].Lane), "plain lane click ends previous group");
+Press(w, Key.Escape);
+Check(laneModel.SelectedLanes.Count == 0, "Escape clears lane selection");
+Check(s.State.Hits.SequenceEqual(hits) && s.State.Volumes.SequenceEqual(volumes), "group mixer controls preserve hit and volume data");
+ClickLane(laneRows[0]); ClickLane(laneRows[2], RawInputModifiers.Shift);
 foreach (var size in new[] { (900, 500), (1366, 768), (1600, 900) })
 {
     w.Width = size.Item1; w.Height = size.Item2; Pump();
@@ -89,6 +108,8 @@ foreach (var size in new[] { (900, 500), (1366, 768), (1600, 900) })
     var footer = w.FindControl<Control>("WorkflowFooter")!;
     Check(footer.TranslatePoint(default, w)!.Value.Y + footer.Bounds.Height <= w.Bounds.Height + 1, $"footer fits at {size}");
     Check(w.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "VOLUME AT TIMES · %" && t.IsEffectivelyVisible), $"shared volume scope visible at {size}");
+    foreach (string id in new[] { "GridOptionsButton", "ViewOptionsButton", "SongOptionsButton", "PlaybackOptionsButton" })
+        Check(w.FindControl<Button>(id)!.IsEffectivelyVisible, $"{id} remains available at {size}");
     w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, $"safety-{size.Item1}x{size.Item2}.png"));
 }
 w.Close(); Pump(); Choose(Prompt(w), "Discard");
@@ -103,18 +124,73 @@ int assignments = 0, previews = 0;
 browser.SampleRequested += _ => assignments++; browser.PreviewRequested += _ => previews++;
 browser.SetRoots(samples, samples);
 var entries = (ListBox)typeof(FileBrowserPanel).GetField("entries", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(browser)!;
-Wait(() => entries.ItemCount == 2); entries.SelectedIndex = 1; Pump();
-var replace = browser.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "Replace lane sample"));
+Wait(() => entries.Items.Cast<object>().Any(e => (string)e.GetType().GetProperty("Path")!.GetValue(e)! == Path.Combine(samples, "one.wav")));
+var sampleRow = entries.Items.Cast<object>().Single(e => (string)e.GetType().GetProperty("Path")!.GetValue(e)! == Path.Combine(samples, "one.wav"));
+entries.SelectedItem = sampleRow; Pump();
+var replace = browser.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "Add to selected lane"));
+Check(previews == 1 && assignments == 0, "highlight previews without assigning");
 Check(!replace.IsEnabled, "browser cannot assign without active lane");
 browser.SetAssignmentTarget("Kick lane", false); Check(!replace.IsEnabled, "read-only lane cannot be replaced");
 browser.SetAssignmentTarget("Kick lane", true);
-Check(replace.IsEnabled && browser.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("Kick lane for every hit") == true), "browser names lane and whole-lane replacement scope");
-Check(browser.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("Double-click a sample or press Enter") == true), "browser explains assignment gesture");
-Check(entries.ContainerFromIndex(1)!.Focus(), "sample row accepts keyboard focus"); Press(browserWindow, Key.Enter); Check(assignments == 1, "Enter still assigns selected sample");
-Choose(browserWindow, "Preview"); Check(previews == 1 && assignments == 1, "Preview auditions without assignment");
-entries.SelectedIndex = 0; Pump(); Check(browser.GetLogicalDescendants().OfType<Button>().Any(b => Equals(b.Content, "Open folder") && b.IsEnabled), "folder browsing stays available");
+Check(replace.IsEnabled && browser.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("every hit in Kick lane") == true), "browser names lane and replacement scope");
+entries.ScrollIntoView(sampleRow); Pump();
+Check(entries.ContainerFromIndex(entries.SelectedIndex)!.Focus(), "sample row accepts keyboard focus"); Press(browserWindow, Key.Enter);
+Check(assignments == 0 && previews >= 2, "Enter previews without assignment");
+Choose(browserWindow, "Add to selected lane"); Check(assignments == 1, "explicit button assigns sample");
+Check(entries.ItemCount > 2, "browser includes expanded parent folders");
+Check(entries.Bounds.Height > 250, "browser fills vertical space");
 browserWindow.Close(); Pump();
 
+// The new workflow controls must change their intended scope only.
+w = Open(); s = w.ArrangeArea.Model!.Session;
+var area = w.ArrangeArea; var scopedModel = area.Model!;
+Check(w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex == 0, "volume scope defaults to All lanes");
+Check(w.FindControl<Button>("GenerateButton") is null && w.FindControl<MenuItem>("GenerateItem") is not null, "Generate lives in menus");
+var inspector = w.GetLogicalDescendants().OfType<InspectorPanel>().Single();
+Check(!inspector.Order.Contains("selection") && !inspector.Order.Contains("browser"), "left inspector has no selection or embedded browser card");
+Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
+var browserHost = w.FindControl<Border>("BrowserHost")!;
+Check(Grid.GetColumn(browserHost) == 4 && browserHost.Bounds.Height > 400, "browser fills right sidebar");
+var stateBeforePan = s.State; int historyBeforePan = s.StepCount;
+area.Axis.Left = 1000; area.ScrollY = 100; Pump();
+Press(w, Key.D2); Check(area.Tool == Tool.Grab, "2 activates Grab");
+var panPoint = area.TranslatePoint(new Point(ArrangeView.GridLeft + 170, area.HeaderHeight + 75), w)!.Value;
+double initialLeft = area.Axis.Left, initialScroll = area.ScrollY;
+w.MouseDown(panPoint, MouseButton.Left); w.MouseMove(panPoint + new Vector(60, 25)); w.MouseUp(panPoint + new Vector(60, 25), MouseButton.Left); Pump();
+Check(area.Axis.Left < initialLeft && area.ScrollY < initialScroll, "Grab pans time and lanes");
+Check(ReferenceEquals(stateBeforePan, s.State) && s.StepCount == historyBeforePan, "Grab creates no edits or undo step");
+Press(w, Key.D6); Check(area.Tool == Tool.Ramp && w.FindControl<Control>("BottomPanel")!.IsEffectivelyVisible, "6 opens controller and activates Ramp");
+Press(w, Key.D1);
+var at1500 = s.State.Hits.Where(h => h.Time == 1500).ToList();
+var targetHit = at1500[0]; var untouchedHit = at1500[1];
+scopedModel.SelectLane(targetHit.Lane); area.Edits.Select(at1500);
+w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex = 1;
+w.FindControl<TextBox>("VolumeValueBox")!.Text = "25"; Call(w, "ApplyVolumeValue"); Pump();
+Check(s.VolumeOf(targetHit) == 25 && s.VolumeOf(untouchedHit) == 100, "numeric Selected lanes leaves simultaneous other layer unchanged");
+var volumeControl = w.FindControl<VolumeLane>("Volume")!;
+volumeControl.ApplyVolumes(new Dictionary<MomentKey, int> { [targetHit.Anchor!.Value] = 43 });
+Check(s.VolumeOf(targetHit) == 43 && s.VolumeOf(untouchedHit) == 100, "bar/paint/ramp shared path obeys Selected lanes");
+w.FindControl<ComboBox>("VolumeModeBox")!.SelectedIndex = 0;
+w.FindControl<TextBox>("VolumeValueBox")!.Text = "7"; Call(w, "ApplyVolumeValue");
+Check(s.VolumeOf(targetHit) == 50 && s.VolumeOf(untouchedHit) == 100, "relative edit shifts each selected lane level independently");
+w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex = 0;
+w.FindControl<TextBox>("VolumeValueBox")!.Text = "-10"; Call(w, "ApplyVolumeValue");
+Check(s.VolumeOf(targetHit) == 40 && s.VolumeOf(untouchedHit) == 90, "relative All lanes preserves independent level differences");
+volumeControl.ApplyVolumes(new Dictionary<MomentKey, int> { [targetHit.Anchor!.Value] = 67 });
+Check(at1500.All(h => s.VolumeOf(h) == 67), "All lanes updates every layer and clears individual levels");
+s.AddBookmark(1500); s.RenameBookmark(1500, "Chorus"); Pump();
+Call(w, "SaveProject");
+Check(ProjectStore.Load(ProjectStore.DefaultRoot(), MapPath(w))!.BookmarkLabels[1500] == "Chorus", "bookmark label saved in project");
+Check(!File.ReadAllText(MapPath(w)).Contains("Chorus"), "bookmark labels stay out of osu file");
+foreach (var size in new[] { (1920, 1030), (1040, 720) })
+{
+    w.Width = size.Item1; w.Height = size.Item2; Pump();
+    var scopeControl = w.FindControl<ComboBox>("VolumeScopeBox")!;
+    Check(scopeControl.IsEffectivelyVisible && scopeControl.TranslatePoint(default, w)!.Value.X + scopeControl.Bounds.Width < w.Bounds.Width, $"volume scope remains accessible at {size}");
+    w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, $"workflow-{size.Item1}x{size.Item2}.png"));
+}
+w.Close(); Pump(); Choose(Prompt(w), "Discard");
+Check(!ProjectStore.Load(ProjectStore.DefaultRoot(), MapPath(w))!.BookmarkLabels.ContainsKey(1500), "Discard does not resurrect bookmark label autosave");
 // Cancelling a second save confirmation must not authorize closing.
 w = Open(); path = MapPath(w); s = w.ArrangeArea.Model!.Session;
 string root = Path.GetDirectoryName(path)!;
@@ -167,3 +243,11 @@ void Wait(Func<bool> done) { var until = DateTime.UtcNow.AddSeconds(20); while (
 void Check(bool ok, string label) { if (!ok) throw new Exception("FAIL: " + label); checks++; Console.WriteLine("PASS: " + label); }
 
 int Volume(string path) { var document = MapDocument.Load(path); return document.Session.VolumeOf(document.Session.State.Hits.First()); }
+
+void ClickLane(LaneRow row, RawInputModifiers modifiers = RawInputModifiers.None, double x = 140)
+{
+    int index = laneModel.Rows.ToList().IndexOf(row);
+    double top = (double)typeof(ArrangeView).GetMethod("RowTop", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w.ArrangeArea, [index])!;
+    var point = w.ArrangeArea.TranslatePoint(new Point(x, w.ArrangeArea.HeaderHeight + top - w.ArrangeArea.ScrollY + w.ArrangeArea.RowHeight / 2), w)!.Value;
+    w.MouseDown(point, MouseButton.Left, modifiers); w.MouseUp(point, MouseButton.Left, modifiers); Pump();
+}

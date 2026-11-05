@@ -5,45 +5,51 @@ namespace OsuHitsound.App;
 
 public partial class MainWindow
 {
-    private readonly List<(Button Button, double Breakpoint, StackPanel Popup,
-        (Control Control, Panel Parent, int Index)[] Items)> compactGroups = [];
     private bool narrowLayout, wideInspectorOpen, compactInspectorOpen;
     private bool shortLayout, tallControllerOpen, shortControllerOpen;
 
     private void SetupCompactLayout()
     {
-        Add(GridOptionsButton, 1100, SnapModeBox, TripletSnapToggle);
-        Add(ViewOptionsButton, 1450, ViewExtras);
-        Add(SongOptionsButton, 1250, SongControls);
-        Add(PlaybackOptionsButton, 1550, LocatorPanel, PlaybackOptionsPanel, SpeedPanel, StatusLeft, StatusRight);
+        Add(GridOptionsButton, SnapModeBox, TripletSnapToggle);
+        Add(ViewOptionsButton, ViewExtras);
+        Add(SongOptionsButton, SongControls);
+        Add(PlaybackOptionsButton, LocatorPanel, PlaybackOptionsPanel, SpeedPanel);
+        // Both summaries already appear in the selection bar, timeline and output footer.
+        StatusLeft.IsVisible = StatusRight.IsVisible = false;
 
-        void Add(Button button, double breakpoint, params Control[] controls)
+        void Add(Button button, params Control[] controls)
         {
             var popup = new StackPanel { Spacing = 12, Margin = new Thickness(4) };
-            button.Flyout = new Flyout { Content = popup, Placement = PlacementMode.BottomEdgeAlignedRight };
-            compactGroups.Add((button, breakpoint, popup, controls.Select(c =>
-                (c, (Panel)c.Parent!, ((Panel)c.Parent!).Children.IndexOf(c))).ToArray()));
+            button.Flyout = new Flyout
+            {
+                Content = new ScrollViewer { Content = popup, MaxHeight = 360, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled },
+                Placement = PlacementMode.BottomEdgeAlignedRight,
+            };
+            // Move the existing controls once: values, event handlers and keyboard access stay intact.
+            foreach (var control in controls)
+            {
+                ((Panel)control.Parent!).Children.Remove(control);
+                control.Margin = default;
+                string? heading = control == LocatorPanel ? "Loop locators · ms"
+                    : control == PlaybackOptionsPanel ? "Playback behavior"
+                    : control == SpeedPanel ? "Speed · pitch preserved" : null;
+                if (heading is not null) popup.Children.Add(new TextBlock { Text = heading, FontSize = 11, Foreground = Paint.Brush(UiTheme.Current.Color("lcd.caption")) });
+                popup.Children.Add(control);
+            }
+            button.IsVisible = true;
         }
     }
 
     private void UpdateCompactLayout(double width)
     {
-        if (compactGroups.Count == 0) return;
-        // Reuse the actual controls so popovers retain the same values, handlers and shortcuts.
-        foreach (var group in compactGroups)
+        bool browserNarrow = width < 1400;
+        if (browserNarrow != compactBrowser)
         {
-            bool compact = width < group.Breakpoint;
-            if (compact == group.Button.IsVisible) continue;
-            group.Button.Flyout!.Hide();
-            foreach (var item in group.Items)
-            {
-                ((Panel)item.Control.Parent!).Children.Remove(item.Control);
-                if (compact) group.Popup.Children.Add(item.Control);
-                else item.Parent.Children.Insert(item.Index, item.Control);
-            }
-            group.Button.IsVisible = compact;
+            if (browserNarrow) wideBrowserOpen = BrowserPanelItem.IsChecked;
+            compactBrowser = browserNarrow;
+            BrowserPanelItem.IsChecked = browserNarrow ? false : wideBrowserOpen;
+            ShowBrowser(BrowserPanelItem.IsChecked);
         }
-
         bool narrow = width < 1100;
         if (narrow != narrowLayout)
         {
@@ -62,7 +68,7 @@ public partial class MainWindow
             VolumeToggle.IsChecked = shortWindow ? shortControllerOpen : tallControllerOpen;
         }
         AppTitle.IsVisible = width >= 1100;
-        ViewExtras.Orientation = width < 1450 ? Avalonia.Layout.Orientation.Vertical : Avalonia.Layout.Orientation.Horizontal;
+        ViewExtras.Orientation = Avalonia.Layout.Orientation.Vertical;
         FileTitle.IsVisible = width >= 1250;
         TitleBarContent.MinWidth = ControlBarContent.MinWidth = EditBarContent.MinWidth = StatusBarContent.MinWidth = 0;
         TitleBarScroller.HorizontalScrollBarVisibility = ControlBarScroller.HorizontalScrollBarVisibility =

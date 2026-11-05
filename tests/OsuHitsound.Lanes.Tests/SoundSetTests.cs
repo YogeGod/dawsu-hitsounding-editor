@@ -6,6 +6,16 @@ namespace OsuHitsound.Lanes.Tests;
 
 public sealed class SoundSetTests : IDisposable
 {
+    [Fact]
+    public void Independent_volume_edit_on_owned_member_survives_set_rendering()
+    {
+        var s = Session(); var set = Set(); s.SaveSoundSet(set);
+        var hits = s.ApplySoundSet(set.Id, 1000);
+        s.SetLayerVolumes(new Dictionary<EditHit, int> { [hits[0]] = 23 });
+        s.SaveSoundSet(set with { Name = "Renamed" });
+        Assert.Equal(23, s.VolumeOf(s.State.Hits.Single(h => h.SetMember == hits[0].SetMember)));
+        Assert.Equal(40, s.VolumeOf(s.State.Hits.Single(h => h.SetMember == hits[1].SetMember)));
+    }
     private readonly string root = Directory.CreateTempSubdirectory("sound-sets-").FullName;
     private readonly Dictionary<string, byte[]> skin = new() { ["normal-hitnormal"] = [1, 2, 3], ["soft-hitclap"] = [4, 5, 6], ["soft-hitwhistle"] = [7, 8, 9] };
     private const string MapText = "osu file format v14\n[General]\nSampleSet:Normal\n[Metadata]\nVersion:HS\n[TimingPoints]\n0,500,4,1,0,100,1,0\n[HitObjects]\n";

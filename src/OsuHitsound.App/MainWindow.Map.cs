@@ -297,7 +297,7 @@ public partial class MainWindow
         var data = CaptureProject();
         // Keep view preferences, but don't resurrect discarded edits from a previous autosave.
         if (discardProjectOnClose && closeProjectBaseline is { } baseline)
-            data = data with { Unanchored = baseline.Unanchored, HsMode = baseline.HsMode, SoundSets = baseline.SoundSets };
+            data = data with { Unanchored = baseline.Unanchored, HsMode = baseline.HsMode, SoundSets = baseline.SoundSets, BookmarkLabels = baseline.BookmarkLabels };
         try
         {
             ProjectStore.Save(ProjectStore.DefaultRoot(), mapPath, data);
@@ -319,6 +319,7 @@ public partial class MainWindow
         var (names, order, added, hidden) = model.LaneLayout();
         return new ProjectData
         {
+            BookmarkLabels = session.State.BookmarkLabels.ToDictionary(),
             Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time) { Volume = session.State.LayerVolumes.TryGetValue(h, out int volume) ? volume : null })],
             LaneNames = names,
             LaneSlots = model.SlotLayout(),
@@ -344,6 +345,7 @@ public partial class MainWindow
     {
         if (model is null || session is null || mapPath is null || folder is null) return;
         var project = ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) ?? new ProjectData();
+        session.RestoreBookmarkLabels(project.BookmarkLabels);
         exportSettings = project.ExportSettings ?? new ExportMergeSettings { PairSamples = true, Style = prefs.ExportStyle };
         try { exportSettings.Validate(); }
         catch (FormatException) { exportSettings = new ExportMergeSettings { PairSamples = true, Style = prefs.ExportStyle }; }

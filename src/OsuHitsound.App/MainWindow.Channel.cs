@@ -1,4 +1,3 @@
-using Avalonia.Platform.Storage;
 using OsuHitsound.Format;
 using OsuHitsound.Lanes;
 
@@ -6,18 +5,6 @@ namespace OsuHitsound.App;
 
 public partial class MainWindow
 {
-    private async Task BrowseChannelSample(Lane lane)
-    {
-        var current = doc;
-        var files = await StorageProvider.OpenFilePickerAsync(new()
-        {
-            Title = "Choose sample for selected lane", AllowMultiple = false,
-            SuggestedStartLocation = await SampleStartLocation(),
-            FileTypeFilter = [new("Audio samples") { Patterns = ["*.wav", "*.ogg", "*.mp3"] }],
-        });
-        if (ReferenceEquals(doc, current) && files.FirstOrDefault()?.TryGetLocalPath() is { } path) { RememberSampleFolder(path); AssignChannelFile(lane, path); }
-    }
-
     private void AssignChannelChoice(Lane lane, Lane choice)
     {
         if (!ArrangeModel.CanChooseChannelSample(choice)) return;

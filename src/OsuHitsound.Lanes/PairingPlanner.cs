@@ -77,9 +77,9 @@ public sealed class PairingPlanner
         var layers = bakeExactGain ? original.Select(l => (l.Lane, Volume: exactGainLanes?.Contains(l.Lane) == true ? l.Volume : Math.Max(l.Volume, HitsoundRules.StableMinimumVolume))).OrderBy(l => ProjectStore.KeyOf(l.Lane)).ToList()
             : MixPlanner.Normalize(original, includeMissing: true);
         var combination = new MergeCombination(layers, []) { Time = time, MatchBalance = true };
-        // Preserve exact original lanes/volumes when they already fit, including low inherited volumes.
-        bool noOverrides = settings.Rules.Count == 0 && settings.OccurrenceRules.Count == 0 && settings.KeepOriginalRules.Count == 0 && settings.OccurrenceKeepOriginal.Count == 0;
-        if (!bakeExactGain && original.Count > 0 && noOverrides && (alreadyEncoded || layers.Count == 1 && CanEncode(folder, original))) return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
+        // Native combinations always win over saved merge rules, including low inherited volumes.
+        if (!bakeExactGain && original.Count > 0 && (alreadyEncoded || CanEncode(folder, original)))
+            return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
         combination = combination with { Fingerprints = layers.Select(l => l.Lane).Distinct().ToDictionary(l => l, Fingerprint) };
         if (layers.Count > 1) combinations.Add(combination);
         if (settings.KeepOriginal(combination) && (bakeExactGain || !alreadyEncoded && !CanEncode(folder, original)))
@@ -88,7 +88,6 @@ public sealed class PairingPlanner
             return new(original.Select(l => l.Lane).ToList(), original.FirstOrDefault().Volume);
         }
         string? rule = settings.RuleFor(combination);
-        if (!bakeExactGain && rule is null && (alreadyEncoded || CanEncode(folder, original))) return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
         var chosen = rule ?? combination.AutomaticSlot(settings) ?? "soft-hitnormal";
         var bank = HitsoundRules.ParseSampleName(chosen)!.Value.Set;
         var normalBank = layers.FirstOrDefault(l => l.Lane.Sample?.Sound == "hitnormal").Lane?.Sample?.Set ?? bank;

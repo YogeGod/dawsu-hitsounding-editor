@@ -22,6 +22,7 @@ public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor)
 /// </summary>
 public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks)
 {
+    public ImmutableDictionary<int, string> BookmarkLabels { get; init; } = ImmutableDictionary<int, string>.Empty;
     public ImmutableList<Lane> LaneOrder { get; init; } = [];
     public bool HsMode { get; init; }
     public ImmutableDictionary<MomentKey, double> HsCircles { get; init; } = ImmutableDictionary<MomentKey, double>.Empty;
@@ -98,7 +99,8 @@ public sealed partial class EditSession
     private static bool MapChanged(EditState a, EditState b) =>
         !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks)
         || !ReferenceEquals(a.HsCircles, b.HsCircles) || !ReferenceEquals(a.LayerVolumes, b.LayerVolumes)
-        || !ReferenceEquals(a.SoundSets, b.SoundSets) || !ReferenceEquals(a.SoundPlacements, b.SoundPlacements);
+        || !ReferenceEquals(a.SoundSets, b.SoundSets) || !ReferenceEquals(a.SoundPlacements, b.SoundPlacements)
+        || !ReferenceEquals(a.BookmarkLabels, b.BookmarkLabels);
 
     /// <summary>Seeds the editor-only layout on load or after adding lanes, without creating an edit.</summary>
     public void RestoreLaneOrder(IEnumerable<Lane> lanes)
@@ -286,6 +288,16 @@ public sealed partial class EditSession
             : s with { Volumes = s.Volumes.SetItems(changed), LayerVolumes = layers };
     });
 
+    /// <summary>Changes individual layers without changing other sounds on the same object.</summary>
+    public void SetLayerVolumes(IReadOnlyDictionary<EditHit, int> volumes, string label = "Lane volumes") => Change(label, s =>
+    {
+        var existing = s.Hits.ToHashSet();
+        var changed = volumes.Where(kv => existing.Contains(kv.Key))
+            .Select(kv => KeyValuePair.Create(kv.Key, Math.Clamp(kv.Value, 0, 100)))
+            .Where(kv => VolumeOf(s, kv.Key) != kv.Value).ToList();
+        return changed.Count == 0 ? s : s with { LayerVolumes = s.LayerVolumes.SetItems(changed) };
+    });
+
     /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step, named <paramref name="label"/>.</summary>
     public void BeginGesture(string label = "Edit")
     {
@@ -350,6 +362,25 @@ public sealed partial class EditSession
     /// <summary>Bookmarks on the timeline (shown times), sorted.</summary>
     public IEnumerable<double> BookmarkTimes => State.Bookmarks.Select(b => b + timeOffset);
 
+    public string BookmarkLabel(double time) => State.BookmarkLabels.GetValueOrDefault((int)Math.Round(time - timeOffset), "");
+
+    public void RestoreBookmarkLabels(IReadOnlyDictionary<int, string>? labels)
+    {
+        State = State with { BookmarkLabels = (labels ?? new Dictionary<int, string>())
+            .Where(kv => State.Bookmarks.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+            .ToImmutableDictionary(kv => kv.Key, kv => kv.Value.Trim()[..Math.Min(kv.Value.Trim().Length, 120)]) };
+        announced = State;
+    }
+
+    public void RenameBookmark(double time, string label) => Change("Rename bookmark", s =>
+    {
+        int ms = (int)Math.Round(time - timeOffset);
+        string name = label.Trim();
+        name = name[..Math.Min(name.Length, 120)];
+        if (!s.Bookmarks.Contains(ms) || s.BookmarkLabels.GetValueOrDefault(ms, "") == name) return s;
+        return s with { BookmarkLabels = name.Length == 0 ? s.BookmarkLabels.Remove(ms) : s.BookmarkLabels.SetItem(ms, name) };
+    });
+
     /// <summary>Adds a bookmark at a timeline time (whole ms, as osu! writes them). One undo step.</summary>
     public void AddBookmark(double time) => Change("Add bookmark", s =>
     {
@@ -368,7 +399,8 @@ public sealed partial class EditSession
 
     /// <summary>Removes the bookmark nearest <paramref name="time"/> within <paramref name="tolerance"/> ms, if any.</summary>
     public void RemoveBookmarkNear(double time, double tolerance) => Change("Remove bookmark", s =>
-        NearestBookmark(time, tolerance) is { } b ? s with { Bookmarks = s.Bookmarks.Remove((int)Math.Round(b - timeOffset)) } : s);
+        NearestBookmark(time, tolerance) is { } b ? s with { Bookmarks = s.Bookmarks.Remove((int)Math.Round(b - timeOffset)),
+            BookmarkLabels = s.BookmarkLabels.Remove((int)Math.Round(b - timeOffset)) } : s);
     /// <summary>Hits that have no object to play on.</summary>
     public IEnumerable<EditHit> Unanchored => State.Hits.Where(h => h.Anchor is null);
 
