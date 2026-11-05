@@ -1,0 +1,8 @@
+Upright Piano KW, version 2022-02-21, from the FreePats project:
+http://freepats.zenvoid.org/Piano/acoustic-grand-piano.html#UprightKW
+Download: UprightPianoKW-SFZ+FLAC-20220221.7z ("best quality", 2 velocity layers).
+Licence: Creative Commons CC0 1.0 public domain dedication (cc0.txt, readme.txt).
+
+Changes for dawsu!: each FLAC sample was converted to Ogg Vorbis with
+  ffmpeg -i NAME.flac -c:a libvorbis -q:a 6 NAME.ogg
+and the .sfz's sample names were changed from .flac to .ogg. Nothing else was changed.

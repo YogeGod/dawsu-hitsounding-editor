@@ -59,6 +59,14 @@ public sealed class PlaybackMixer : ISampleProvider
 
     public string? DrumInstrumentError { get { lock (gate) return drums?.Error; } }
 
+    private ILivePart? live;
+
+    /// <summary>A live instrument part (Keysound mode's piano), rendered with the song; null removes it.</summary>
+    public void SetLivePart(ILivePart? part)
+    {
+        lock (gate) live = part;
+    }
+
     // The clock: the timeline at the end of the last block, when that block was rendered, and the last time reported.
     private double rendered;
     private long renderedAt;
@@ -212,7 +220,7 @@ public sealed class PlaybackMixer : ISampleProvider
     {
         lock (gate)
         {
-            drums?.Reset();
+            ResetInstruments();
             if (!playing) return;
             double at = Position;
             playing = false;
@@ -224,7 +232,7 @@ public sealed class PlaybackMixer : ISampleProvider
     {
         lock (gate)
         {
-            drums?.Reset();
+            ResetInstruments();
             timeline = Math.Clamp(time, 0, Math.Max(length, 0));
             if (playing) StartAt(timeline);
         }
@@ -258,12 +266,19 @@ public sealed class PlaybackMixer : ISampleProvider
     // Must hold the gate. Playback (re)starts at a time: the song is placed on the next block, a cue right at the time plays.
     private void StartAt(double time)
     {
-        drums?.Reset();
+        ResetInstruments();
         timeline = rendered = startedAt = time;
         renderedAt = startedTicks = Now();
         reported = double.NegativeInfinity;
         cueFrom = Math.BitDecrement(time);
         songRunning = false;
+    }
+
+    // Must hold the gate: pause, seek and (re)start silence the drum VST and release the live part's notes.
+    private void ResetInstruments()
+    {
+        drums?.Reset();
+        live?.ReleaseAll();
     }
 
     // Must hold the gate: keep the clock where it is when the speed changes, so the playhead doesn't jump.
@@ -313,6 +328,7 @@ public sealed class PlaybackMixer : ISampleProvider
                 drums?.Begin();
                 MixVoices(block, n); // previews and natural VST tails while stopped
                 drums?.Render(block);
+                live?.Render(block, n, timeline, 0, playing: false);
                 done += n;
             }
 
@@ -364,6 +380,7 @@ public sealed class PlaybackMixer : ISampleProvider
         MixVoices(block, n);
         MixLoops(block, n, start, msPerFrame);
         drums?.Render(block);
+        live?.Render(block, n, start, msPerFrame, playing: true);
         timeline = end;
     }
 

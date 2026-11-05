@@ -33,4 +33,9 @@
     <EmbeddedResource Include="DefaultSamples\*.wav" LogicalName="DefaultSamples.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Keysound mode's bundled piano: FreePats Upright Piano KW (CC0 1.0), converted to Ogg Vorbis (see Instruments/UprightPianoKW/SOURCE.txt). -->
+    <None Include="Instruments\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

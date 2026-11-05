@@ -47,12 +47,21 @@ public static class SampleMixer
         {
             var info = Bass.ChannelGetInfo(stream);
             int channels = Math.Max(1, info.Channels);
-            var samples = new List<float>();
+            // One array of the decoded length when BASS knows it (it does for files), filled in chunks.
+            long bytes = Bass.ChannelGetLength(stream, PositionFlags.Bytes);
+            var samples = new float[bytes > 0 && bytes / sizeof(float) < int.MaxValue ? bytes / sizeof(float) : 0];
             var buffer = new float[16384];
-            int got;
+            int count = 0, got;
             while ((got = Bass.ChannelGetData(stream, buffer, buffer.Length * sizeof(float))) > 0)
-                samples.AddRange(buffer.AsSpan(0, got / sizeof(float)).ToArray());
-            return ToStereo(samples.ToArray(), channels, info.Frequency);
+            {
+                int n = got / sizeof(float);
+                if (count + n > samples.Length) Array.Resize(ref samples, Math.Max(samples.Length * 2, count + n));
+                Array.Copy(buffer, 0, samples, count, n);
+                count += n;
+            }
+
+            if (count != samples.Length) Array.Resize(ref samples, count);
+            return ToStereo(samples, channels, info.Frequency);
         }
         finally
         {

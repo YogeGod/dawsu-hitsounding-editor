@@ -156,7 +156,15 @@ public partial class MainWindow
         if (audio is { IsPlaying: true }) StopPlaying();
         audio?.Dispose();
         StartAudio();
-        if (audio is not null && model is not null && doc is { } document && session is not null && folder is not null)
+        if (Keys.Document is { } keysound)
+        {
+            // Keysound mode: its song and piano move to the new engine. The hitsound map underneath reloads when Keysound closes.
+            audio?.Load(new DecompiledMap(keysound.Settings, [], [], [], []),
+                MapFolder.FromDirectory(Path.Combine(keysound.Folder, OsuHitsound.Lanes.Keysound.KeysoundStore.ReferenceFolder)), skin.Value);
+            if (audio is not null) audio.Speed = speed;
+            Keys.UseAudio(audio);
+        }
+        else if (audio is not null && model is not null && doc is { } document && session is not null && folder is not null)
         {
             audio.Load(document.Map with { Lanes = session.Lanes }, folder, skin.Value);
             foreach (var lane in model.LaneRows.Select(r => r.Lane).Where(l => l.Source == LaneSource.BeatmapFile && !session.Lanes.Contains(l)))

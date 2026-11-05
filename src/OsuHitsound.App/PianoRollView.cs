@@ -57,6 +57,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public bool ShowGhosts { get; set; } = true;
     public bool ShowMarkers { get; set; } = true;
 
+    /// <summary>A note to hear now (pitch, velocity): a clicked key, a drawn, selected or re-pitched note.</summary>
+    public event Action<int, int>? AuditionRequested;
+
     /// <summary>Clicks on the ruler or strip move the playhead.</summary>
     public event Action<double>? SeekRequested;
     /// <summary>Selection, tool or view changes the editor shows (not edits: those come from the session).</summary>
@@ -415,6 +418,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         public Dictionary<Guid, KeyNote> Originals { get; } = [];
         public KeyNote? Anchor { get; set; } // the note under the pointer
         public HashSet<Guid> BoxBase { get; } = [];
+        public int PitchShift { get; set; } // the last pitch change of a move, to audition each new pitch once
     }
 
     private KeyNote? NoteAt(Point p) =>
@@ -435,6 +439,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         if (p.Y < RulerHeight + StripHeight && p.X >= KeyboardWidth)
         {
             SeekRequested?.Invoke(Math.Max(0, TimeOfX(p.X)));
+            e.Handled = true;
+            return;
+        }
+
+        if (p.X < KeyboardWidth && Grid.Contains(new Point(KeyboardWidth, p.Y)))
+        {
+            AuditionRequested?.Invoke(PitchOfY(p.Y), DefaultVelocity); // the keyboard plays its key
             e.Handled = true;
             return;
         }
@@ -485,6 +496,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 selection.Add(note.Id);
                 StartGesture(DragKind.Draw, p, note, track, "Draw note");
                 session.AddNotes(track.Id, [note]);
+                AuditionRequested?.Invoke(note.Pitch, note.Velocity);
                 break;
             }
 
@@ -494,6 +506,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 else if (mods.HasFlag(KeyModifiers.Shift)) selection.Add(hit.Id);
                 else if (!selection.Contains(hit.Id)) { selection.Clear(); selection.Add(hit.Id); }
                 if (!selection.Contains(hit.Id)) break;
+                AuditionRequested?.Invoke(hit.Pitch, hit.Velocity);
                 bool resize = OnRightEdge(hit, p);
                 StartGesture(resize ? DragKind.Resize : DragKind.Move, p, hit, track, resize ? "Resize notes" : "Move notes");
                 break;
@@ -584,6 +597,12 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
                 int lowest = drag.Originals.Values.Min(n => n.Pitch), highest = drag.Originals.Values.Max(n => n.Pitch);
                 dp = Math.Clamp(dp, KeyNote.MinPitch - lowest, KeyNote.MaxPitch - highest);
+                if (dp != drag.PitchShift)
+                {
+                    drag.PitchShift = dp;
+                    AuditionRequested?.Invoke(anchor.Pitch + dp, anchor.Velocity);
+                }
+
                 session.UpdateNotes(track.Id, [.. drag.Originals.Values.Select(n => n with { Start = n.Start + dt, Pitch = n.Pitch + dp })], "Move notes");
                 break;
             }

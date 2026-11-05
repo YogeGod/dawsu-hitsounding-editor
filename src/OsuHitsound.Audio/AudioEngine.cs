@@ -108,6 +108,9 @@ public sealed class AudioEngine : IDisposable
     /// <summary>Song length in ms, or a second past the last cue when there's no song.</summary>
     public double Length => mixer.Length;
 
+    /// <summary>Lets playback run at least this long (Keysound notes past the song's end, or a project whose song is missing).</summary>
+    public void SetMinimumLength(double ms) => mixer.Length = Math.Max(Math.Max(songLength, cueLength), ms);
+
     private double songLength, cueLength;
 
     /// <summary>When set, playback jumps back to Start on reaching End.</summary>
@@ -305,6 +308,9 @@ public sealed class AudioEngine : IDisposable
         mixer.SetDrumInstrument(instrument, notes);
 
     public string? DrumInstrumentError => mixer.DrumInstrumentError;
+
+    /// <summary>Keysound mode's live piano, mixed with the song (null removes it).</summary>
+    public void SetLivePart(ILivePart? part) => mixer.SetLivePart(part);
 
     /// <summary>Auditions a resolved map lane, loading an unused custom index on demand.</summary>
     public void Preview(Lane lane, MapFolder folder)

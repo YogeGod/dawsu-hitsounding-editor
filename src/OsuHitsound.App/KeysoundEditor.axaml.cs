@@ -20,6 +20,10 @@ public partial class KeysoundEditor : UserControl
     private readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromMilliseconds(30) };
     private KeysoundDocument? doc;
     private AudioEngine? audio;
+    private KeysoundPlayer? player;
+
+    // One piano for the whole session: decoding its samples takes a moment and about 110 MB, so projects share it.
+    private static Task<SfzInstrument>? piano;
     private CancellationTokenSource? waveCancel;
     private string status = "";
     private string trackListKey = "";
@@ -50,6 +54,7 @@ public partial class KeysoundEditor : UserControl
         StartButton.Click += (_, _) => Seek(0);
         PlayButton.Click += (_, _) => TogglePlay();
         Roll.SeekRequested += Seek;
+        Roll.AuditionRequested += (pitch, velocity) => { if (HearToggle.IsChecked == true) player?.Audition(pitch, velocity); };
         Roll.ViewChanged += UpdateTexts;
         clock.Tick += (_, _) => Tick();
     }
@@ -71,6 +76,7 @@ public partial class KeysoundEditor : UserControl
         Roll.Playhead = audio?.Position ?? 0;
         Roll.CentrePitch();
         LoadWaveform();
+        _ = LoadPiano(doc);
         status = doc.Warnings.Count > 0 ? string.Join(" ", doc.Warnings) : $"Opened {doc.Name}. Save project (Ctrl+S) keeps your tracks and notes.";
         RefreshTracks();
         UpdateTexts();
@@ -82,6 +88,8 @@ public partial class KeysoundEditor : UserControl
         if (doc is null) return;
         Stop();
         waveCancel?.Cancel();
+        audio?.SetLivePart(null);
+        player = null;
         doc.Session.Changed -= OnSessionChanged;
         doc = null;
         Roll.Attach(null);
@@ -104,8 +112,68 @@ public partial class KeysoundEditor : UserControl
         }
 
         RefreshTracks();
+        SchedulePlayback();
         UpdateTexts();
         Changed?.Invoke();
+    }
+
+    /// <summary>The window restarted the audio output (new device or buffer): play through the new engine.</summary>
+    public void UseAudio(AudioEngine? engine)
+    {
+        Stop();
+        audio = engine;
+        if (doc is null) return;
+        if (player is not null) audio?.SetLivePart(player);
+        else _ = LoadPiano(doc);
+        RefreshPlayback();
+    }
+
+    /// <summary>Loads the bundled piano (once, off the UI thread) and plays this project through it.</summary>
+    private async Task LoadPiano(KeysoundDocument opened)
+    {
+        if (audio is null) return;
+        SfzInstrument instrument;
+        try
+        {
+            instrument = await (piano ??= Task.Run(() => SfzInstrument.Load(SfzInstrument.BundledPianoPath)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            piano = null; // try again next time
+            if (ReferenceEquals(doc, opened)) SetStatus($"The bundled piano couldn't load ({ex.Message}); notes stay silent.");
+            return;
+        }
+
+        if (!ReferenceEquals(doc, opened)) return; // closed or replaced meanwhile
+        player = new KeysoundPlayer(instrument);
+        audio.SetLivePart(player);
+        RefreshPlayback();
+    }
+
+    private bool playbackPending;
+
+    // A drag changes the notes on every mouse move: the list is rebuilt once those changes have settled.
+    private void SchedulePlayback()
+    {
+        if (playbackPending) return;
+        playbackPending = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            playbackPending = false;
+            RefreshPlayback();
+        }, DispatcherPriority.Background);
+    }
+
+    /// <summary>The notes playback plays: every audible track (mute and solo), in timeline ms.</summary>
+    private void RefreshPlayback()
+    {
+        if (player is null || doc is null) return;
+        var session = doc.Session;
+        var tempo = doc.Tempo;
+        var played = session.State.Tracks.Where(t => session.IsAudible(t.Id))
+            .SelectMany(t => t.Notes).Select(n => new PlayedNote(tempo.TimeAt(n.Start), tempo.TimeAt(n.End), n.Pitch, n.Velocity)).ToList();
+        player.SetNotes(played);
+        audio?.SetMinimumLength(played.Count > 0 ? played.Max(n => n.End) + 2000 : 0); // notes after the song, or no song at all
     }
 
     private void LoadWaveform()
@@ -192,7 +260,7 @@ public partial class KeysoundEditor : UserControl
         }
 
         var current = doc.SelectedTrack is { } sel ? session.State.Track(sel) : null;
-        InstrumentText.Text = current is null ? "No track. Add one to draw notes." : $"Instrument: {current.Instrument.DisplayName} (silent until the bundled piano is added)";
+        InstrumentText.Text = current is null ? "No track. Add one to draw notes." : $"Instrument: {current.Instrument.DisplayName}";
         RenameTrackButton.IsEnabled = DeleteTrackButton.IsEnabled = current is not null;
     }
 
@@ -208,6 +276,7 @@ public partial class KeysoundEditor : UserControl
     {
         if (on) set.Add(id); else set.Remove(id);
         RefreshTracks();
+        SchedulePlayback();
         Changed?.Invoke();
     }
 

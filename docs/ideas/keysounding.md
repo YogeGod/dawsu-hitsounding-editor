@@ -1,6 +1,6 @@
 # Keysounding - planning interview
 
-Current scope: the separate Drums VST workflow supports live timeline playback, lane audition and explicit WAV export. Keysound Milestone 1 (2026-11-05) adds the start screen's Keysounding panel, editable and saveable Keysound projects with a copied reference snapshot, instrument tracks, an undoable piano roll and song playback; notes are still silent. The bundled piano, MIDI import/recording, controllers, VST instruments, Sync and Generate remain to be built. The interview below records design intent; it is not a claim that those features are implemented.
+Current scope: the separate Drums VST workflow supports live timeline playback, lane audition and explicit WAV export. Keysound Milestone 1 (2026-11-05) adds the start screen's Keysounding panel, editable and saveable Keysound projects with a copied reference snapshot, instrument tracks, an undoable piano roll and song playback. Milestone 2 adds the bundled piano (FreePats Upright Piano KW, CC0) for playback and editing audition. MIDI import/recording, controllers, VST instruments, Sync and Generate remain to be built. The interview below records design intent; it is not a claim that those features are implemented.
 
 ## Confirmed
 - Access Keysounding from the app's start menu through its Keysounding panel (confirmed 2026-11-05).
