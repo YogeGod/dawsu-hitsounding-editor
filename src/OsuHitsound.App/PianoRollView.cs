@@ -29,6 +29,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private static readonly IPen MarkerPen = new ImmutablePen(Paint.Brush(Color.Parse("#ff66aa"), 0.24), 1);
     private static readonly IPen RowLine = new ImmutablePen(Paint.Brush(Colors.Black, 0.35), 1), OctaveLine = new ImmutablePen(Paint.Brush(Colors.Black, 0.7), 1);
     private static readonly IPen NoteEdge = new ImmutablePen(Paint.Brush(Colors.Black, 0.55), 1);
+    private static readonly IBrush RecordFill = Paint.Brush(Color.Parse("#e5484d"), 0.8);
     private static readonly IPen WhiteRing = new ImmutablePen(Brushes.White, 1.5); // selected notes and object heads
     private static readonly IPen BoxPen = new ImmutablePen(Paint.Brush(Colors.White, 0.6), 1, new ImmutableDashStyle([3, 3], 0));
     // osu!'s default combo colours, for references that set none.
@@ -56,6 +57,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public int SnapDivisions { get; set; } = 4; // beats are split into this many grid steps
     public bool ShowGhosts { get; set; } = true;
     public bool ShowMarkers { get; set; } = true;
+    /// <summary>Notes being recorded, drawn over the selected track until the take ends.</summary>
+    public IReadOnlyList<KeyNote>? RecordingPreview { get; set; }
+
     /// <summary>Cubase's Note Insert Velocity: what drawn notes get.</summary>
     public int InsertVelocity { get; set; } = 100;
 
@@ -275,6 +279,11 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                     foreach (var n in t.Notes)
                         if (n.End >= fromTick && n.Start <= toTick)
                             ctx.FillRectangle(Ghost, NoteRect(n));
+
+        if (RecordingPreview is { } recording)
+            foreach (var n in recording)
+                if (n.End >= fromTick && n.Start <= toTick)
+                    ctx.DrawRectangle(RecordFill, NoteEdge, NoteRect(n), 1.5, 1.5);
 
         if (Track is not { } track) return;
         foreach (var n in track.Notes)

@@ -31,6 +31,9 @@ public sealed class SfzInstrument
 
     public IReadOnlyList<SfzRegion> Regions { get; }
 
+    /// <summary>Semitones at full pitch bend (the General MIDI default; SFZ's bend_up/bend_down aren't read).</summary>
+    public double PitchBendRange { get; init; } = 2;
+
     /// <summary>Decodes every sample (in parallel) with <paramref name="loadSample"/>, by the region's sample name.</summary>
     public SfzInstrument(IReadOnlyList<SfzRegion> regions, Func<string, float[]?> loadSample)
     {

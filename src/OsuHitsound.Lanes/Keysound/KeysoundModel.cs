@@ -44,6 +44,18 @@ public static class KeyControllers
     public const int PedalDown = 64;
 
     /// <summary>
+    /// A controller's value at a tick: its last change at or before it, else the resting value (pedal up, no
+    /// modulation, bend centred).
+    /// </summary>
+    public static int ValueAt(IReadOnlyList<KeyController> controllers, ControllerKind kind, long tick)
+    {
+        // Sorted by tick: from the last change at or before the tick, back to the last one of this kind.
+        for (int i = Sorted.LowerBound(controllers, tick + 0.5, c => c.Tick) - 1; i >= 0; i--)
+            if (controllers[i].Kind == kind) return controllers[i].Value;
+        return 0;
+    }
+
+    /// <summary>
     /// When the sustain pedal keeps a note sounding: its end, or the next pedal release after it when the pedal is down
     /// then. A pedal never released doesn't hold the note forever. <paramref name="sustain"/> is sorted by tick.
     /// </summary>

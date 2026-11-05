@@ -32,11 +32,53 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
     private const float Gain = 0.7f; // chords stay below clipping in the usual case
     private const int Rate = PlaybackMixer.Rate;
 
+    /// <summary>The part of notes played live on a MIDI keyboard: they follow the live pitch bend and sustain pedal.</summary>
+    public const int LivePart = -2;
+
     private PlayedNote[] notes = [];
     private PlayedBend[][] bends = [];
+    private (double Time, bool Accent)[] clicks = [];
     private readonly ConcurrentQueue<(int Pitch, int Velocity, double Ms)> auditions = new();
+    private readonly ConcurrentQueue<(LiveKind Kind, int Pitch, int Value)> live = new();
+    private double pendingLiveBend = 1; // written by any thread, read by the audio thread
     private readonly List<Voice> voices = [];
+    private readonly List<(float[] Data, int Frame)> clickVoices = [];
     private long clock; // frames rendered so far
+
+    // Live keyboard state, touched only on the audio thread.
+    private readonly Dictionary<int, Voice> liveHeld = [];
+    private readonly List<Voice> pedalHeld = [];
+    private bool pedalDown;
+    private double liveBend = 1;
+
+    private enum LiveKind { NoteOn, NoteOff, Sustain }
+
+    // Metronome clicks: short decaying sines, higher on the bar's first beat.
+    private static readonly float[] AccentClick = Click(1760, 0.55f), BeatClick = Click(1320, 0.4f);
+
+    private static float[] Click(double hz, float amp)
+    {
+        int frames = Rate * 40 / 1000;
+        var data = new float[frames * 2];
+        for (int i = 0; i < frames; i++)
+        {
+            float v = amp * MathF.Exp(-i / (Rate * 0.008f)) * MathF.Sin((float)(2 * Math.PI * hz * i / Rate));
+            data[i * 2] = data[i * 2 + 1] = v;
+        }
+
+        return data;
+    }
+
+    /// <summary>A key pressed on a MIDI keyboard: it sounds until <see cref="LiveNoteOff"/> (or the pedal's release). Any thread.</summary>
+    public void LiveNoteOn(int pitch, int velocity) => live.Enqueue((LiveKind.NoteOn, pitch, velocity));
+    public void LiveNoteOff(int pitch) => live.Enqueue((LiveKind.NoteOff, pitch, 0));
+    public void LiveSustain(bool down) => live.Enqueue((LiveKind.Sustain, down ? 1 : 0, 0));
+    /// <summary>The live pitch bend, −8192–8191, over the instrument's bend range.</summary>
+    public void LiveBend(int value) => Volatile.Write(ref pendingLiveBend, Math.Pow(2, value / 8192.0 * instrument.PitchBendRange / 12));
+
+    /// <summary>Metronome clicks to play while playback runs (timeline ms; accent on a bar's first beat); null for none. Any thread.</summary>
+    public void SetClicks(IEnumerable<(double Time, bool Accent)>? times) =>
+        Volatile.Write(ref clicks, times is null ? [] : [.. times.OrderBy(c => c.Time)]);
 
     /// <summary>
     /// Replaces what plays: the notes, and per part its pitch-bend changes sorted by time. Safe from any thread.
@@ -60,9 +102,12 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
     /// <summary>Plays one note now, for <paramref name="ms"/> before its release, whether or not playback runs.</summary>
     public void Audition(int pitch, int velocity, double ms = 400) => auditions.Enqueue((pitch, velocity, ms));
 
+    /// <summary>Releases the scheduled and auditioned notes; keys still held on a MIDI keyboard keep sounding.</summary>
     public void ReleaseAll()
     {
-        foreach (var v in voices) v.ReleaseAt = Math.Min(v.ReleaseAt, clock);
+        foreach (var v in voices)
+            if (v.Part != LivePart) v.ReleaseAt = Math.Min(v.ReleaseAt, clock);
+        clickVoices.Clear();
     }
 
     internal int ActiveVoices => voices.Count;
@@ -70,6 +115,8 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
     public void Render(Span<float> stereo, int frames, double start, double msPerFrame, bool playing)
     {
         while (auditions.TryDequeue(out var a)) Start(a.Pitch, a.Velocity, 0, (long)Math.Round(a.Ms * Rate / 1000), part: -1);
+        while (live.TryDequeue(out var e)) Live(e.Kind, e.Pitch, e.Value);
+        liveBend = Volatile.Read(ref pendingLiveBend);
 
         if (playing && msPerFrame > 0)
         {
@@ -84,23 +131,72 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
             }
         }
 
+        if (playing && msPerFrame > 0)
+        {
+            var list = Volatile.Read(ref clicks);
+            double end = start + frames * msPerFrame;
+            for (int i = Sorted.LowerBound(list, start, c => c.Time); i < list.Length && list[i].Time < end; i++)
+                clickVoices.Add((list[i].Accent ? AccentClick : BeatClick, -(int)Math.Round((list[i].Time - start) / msPerFrame)));
+        }
+
+        for (int c = clickVoices.Count - 1; c >= 0; c--)
+        {
+            var (data, frame) = clickVoices[c];
+            for (int i = Math.Max(0, -frame); i < frames && (frame + i) * 2 + 1 < data.Length; i++)
+            {
+                stereo[i * 2] += data[(frame + i) * 2];
+                stereo[i * 2 + 1] += data[(frame + i) * 2 + 1];
+            }
+
+            if ((frame += frames) * 2 >= data.Length) clickVoices.RemoveAt(c);
+            else clickVoices[c] = (data, frame);
+        }
+
         var partBends = Volatile.Read(ref bends);
         for (int v = voices.Count - 1; v >= 0; v--)
         {
             var voice = voices[v];
             // Bends follow the timeline while playing; a stopped voice keeps its last bend.
-            if (playing && voice.Part >= 0) voice.Bend = Math.Pow(2, BendAt(partBends, voice.Part, start) / 12);
+            if (voice.Part == LivePart) voice.Bend = liveBend;
+            else if (playing && voice.Part >= 0) voice.Bend = Math.Pow(2, BendAt(partBends, voice.Part, start) / 12);
             if (!voice.Mix(stereo, frames, clock)) voices.RemoveAt(v);
         }
         clock += frames;
     }
 
-    private void Start(int pitch, int velocity, int offset, long length, int part)
+    private Voice? Start(int pitch, int velocity, int offset, long length, int part)
     {
-        if (instrument.RegionFor(pitch, velocity) is not { } region) return;
+        if (instrument.RegionFor(pitch, velocity) is not { } region) return null;
         if (voices.Count >= MaxVoices) voices.RemoveAt(0); // the oldest goes
         float amp = Gain * MathF.Pow(Math.Clamp(velocity, 1, 127) / 127f, 2); // SFZ's default amp_veltrack=100
-        voices.Add(new Voice(region, instrument.Sample(region), pitch, amp, clock + offset, clock + offset + length) { Part = part });
+        var voice = new Voice(region, instrument.Sample(region), pitch, amp, clock + offset, clock + offset + length) { Part = part };
+        voices.Add(voice);
+        return voice;
+    }
+
+    // A live keyboard event, on the audio thread at the start of a block.
+    private void Live(LiveKind kind, int a, int b)
+    {
+        switch (kind)
+        {
+            case LiveKind.NoteOn:
+                if (liveHeld.Remove(a, out var again)) again.ReleaseAt = clock;
+                if (Start(a, b, 0, long.MaxValue / 4, LivePart) is { } started) liveHeld[a] = started;
+                break;
+            case LiveKind.NoteOff when liveHeld.Remove(a, out var voice):
+                if (pedalDown) pedalHeld.Add(voice); // the pedal keeps it sounding
+                else voice.ReleaseAt = clock;
+                break;
+            case LiveKind.Sustain:
+                pedalDown = a != 0;
+                if (!pedalDown)
+                {
+                    foreach (var v in pedalHeld) v.ReleaseAt = Math.Min(v.ReleaseAt, clock);
+                    pedalHeld.Clear();
+                }
+
+                break;
+        }
     }
 
     /// <summary>One sounding note: resampled from its region, looping while held, fading over the release time.</summary>

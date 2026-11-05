@@ -31,6 +31,9 @@
           <ToggleButton Name="MarkerToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines at the reference's circles, slider heads, repeats and tails, and spinner ends. Notes drawn on a line still need Sync before Generate." />
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <ComboBox Name="MidiInputBox" Width="190" ToolTip.Tip="MIDI keyboard input (all channels)" />
+          <Button Name="MidiRescanButton" Content="⟳" Width="28" ToolTip.Tip="Look for MIDI keyboards again (after plugging one in)" />
+          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
           <Button Name="ZoomOutButton" Content="−" Width="28" ToolTip.Tip="Zoom out in time (G)" />
           <Button Name="ZoomInButton" Content="+" Width="28" ToolTip.Tip="Zoom in in time (H)" />
           <Button Name="RowsOutButton" Content="↕−" ToolTip.Tip="Smaller key rows (Ctrl+Shift+wheel)" />
@@ -67,6 +70,11 @@
             <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
           </Button>
           <Button Name="PlayButton" Classes="transport" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop (Space): the song and the audible tracks' notes" AutomationProperties.Name="Play or stop"><app:SkinIcon Name="PlayGlyph" Glyph="Play" /></Button>
+          <ToggleButton Name="RecordButton" Classes="transport" ToolTip.Tip="Record (Numpad *): from the playhead into the selected track, from your MIDI keyboard. Notes starting in the recorded range are replaced; Space or Record stops." AutomationProperties.Name="Record">
+            <Ellipse Width="12" Height="12" Fill="#e5484d" />
+          </ToggleButton>
+          <ToggleButton Name="CountInToggle" Content="Count-in" IsChecked="True" Height="28" MinHeight="28" Padding="8,0" Margin="6,0,0,0" ToolTip.Tip="One bar of clicks before recording starts (shorter at the very start of the song)" />
+          <ToggleButton Name="MetronomeToggle" Content="Click" IsChecked="True" Height="28" MinHeight="28" Padding="8,0" ToolTip.Tip="Metronome while recording: the bar's first beat is higher" />
           <Border Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Margin="12,0,0,0" Height="40">
             <StackPanel Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
               <StackPanel><TextBlock Name="TimeText" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>

@@ -28,6 +28,7 @@ public partial class MainWindow
     /// <summary>Asks to save a Keysound project with unsaved edits. False when the user cancels or saving fails.</summary>
     private async Task<bool> MayLeaveKeysound()
     {
+        Keys.StopRecording(); // a take in progress becomes an edit first, so the prompt covers it
         if (Keys.Document is not { Session.IsEdited: true } project) return true;
         return await Dialogs.UnsavedClose(this, $"the Keysound project {Path.GetFileName(project.Folder)}") switch
         {

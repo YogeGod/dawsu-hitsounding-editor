@@ -15,6 +15,7 @@ public partial class MainWindow
         // While Keysound shows, the hitsound map's edits were already given up when Keysound opened (MayLeaveMap).
         if (!closeConfirmed && Keys.Document is { } keys)
         {
+            Keys.StopRecording();
             if (!keys.Session.IsEdited) return;
             e.Cancel = true;
             if (closePromptOpen) return;

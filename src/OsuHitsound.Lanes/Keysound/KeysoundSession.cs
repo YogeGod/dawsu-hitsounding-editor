@@ -111,6 +111,10 @@ public sealed class KeysoundSession
         Change(label, s => s with { Tracks = s.Tracks.AddRange(tracks) });
     }
 
+    /// <summary>Replaces a track by a new version as one step (a recording pass).</summary>
+    public void ReplaceTrack(KeyTrack track, string label) =>
+        Change(label, s => s.Track(track.Id) is { } old && old != track ? s.WithTrack(track.Id, _ => track) : s);
+
     public void DeleteTrack(Guid id) => Change("Delete track", s => s.Track(id) is { } t ? s with { Tracks = s.Tracks.Remove(t) } : s);
 
     public void RenameTrack(Guid id, string name) =>

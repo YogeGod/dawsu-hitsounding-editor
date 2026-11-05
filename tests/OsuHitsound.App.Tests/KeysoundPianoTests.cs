@@ -1,4 +1,5 @@
 using OsuHitsound.Audio;
+using OsuHitsound.Lanes.Keysound;
 
 namespace OsuHitsound.App.Tests;
 
@@ -131,6 +132,67 @@ public class KeysoundPianoTests
         var plain = new KeysoundPlayer(Instrument(new SfzRegion("r", 0, 127, 60, 1, 127), data));
         plain.SetNotes([new PlayedNote(0, 1000, 60, 127)], [[new PlayedBend(0, 12)]]); // part -1: no bend
         Assert.Equal(data[10 * 2] * 0.7f, Render(plain, 100, start: 0)[10 * 2], 5);
+    }
+
+    [Fact]
+    public void A_live_key_sounds_until_released_and_the_pedal_holds_it()
+    {
+        var region = new SfzRegion("r", 0, 127, 60, 1, 127) { LoopStart = 0, LoopEnd = 999, Release = 0.005 };
+        var player = new KeysoundPlayer(Instrument(region, Ramp(1000)));
+        player.LiveNoteOn(60, 100);
+        Render(player, 20_000, playing: false);
+        Assert.Equal(1, player.ActiveVoices); // held: still sounding long after an audition would have ended
+
+        player.ReleaseAll(); // stopping playback doesn't cut a key that is still held
+        Render(player, 1000, playing: false);
+        Assert.Equal(1, player.ActiveVoices);
+
+        player.LiveSustain(true);
+        player.LiveNoteOff(60);
+        Render(player, 2000, playing: false);
+        Assert.Equal(1, player.ActiveVoices); // the pedal keeps it
+        player.LiveSustain(false);
+        Render(player, 2000, playing: false);
+        Assert.Equal(0, player.ActiveVoices);
+    }
+
+    [Fact]
+    public void Live_pitch_bend_bends_live_notes()
+    {
+        var data = Ramp(10_000);
+        var instrument = new SfzInstrument([new SfzRegion("r", 0, 127, 60, 1, 127)], _ => data) { PitchBendRange = 12 };
+        var player = new KeysoundPlayer(instrument);
+        player.LiveBend(8191); // nearly an octave up
+        player.LiveNoteOn(60, 127);
+        var output = Render(player, 100, playing: false);
+        Assert.Equal(data[20 * 2] * 0.7f, output[10 * 2], 2);
+    }
+
+    [Fact]
+    public void Metronome_clicks_play_on_their_frames_only_while_playing()
+    {
+        var player = new KeysoundPlayer(Instrument(new SfzRegion("r", 0, 127, 60, 1, 127), Ramp(10)));
+        player.SetClicks([(10, true), (500, false)]);
+        Assert.All(Render(player, 1000, playing: false), v => Assert.Equal(0, v));
+        var block = Render(player, 1000, start: 0);
+        Assert.InRange(Array.FindIndex(block, v => v != 0) / 2, (int)Math.Round(10 / MsPerFrame) - 1, (int)Math.Round(10 / MsPerFrame) + 1);
+        player.SetClicks(null); // the 500 ms click is never scheduled; the first one's 40 ms tail runs out
+        Render(player, 4410, start: 1000 * MsPerFrame);
+        Assert.All(Render(player, 44_100, start: 5410 * MsPerFrame), v => Assert.Equal(0, v));
+    }
+
+    [Fact]
+    public void Keyboard_messages_decode_on_any_channel()
+    {
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.NoteOn, 60, 100), MidiKeyboard.Decode(0x90 | 60 << 8 | 100 << 16));
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.NoteOff, 60, 0), MidiKeyboard.Decode(0x93 | 60 << 8)); // velocity 0, channel 4
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.NoteOff, 61, 0), MidiKeyboard.Decode(0x8F | 61 << 8 | 40 << 16));
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.Controller, 0, 127, ControllerKind.Sustain), MidiKeyboard.Decode(0xB0 | 64 << 8 | 127 << 16));
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.Controller, 0, 9, ControllerKind.Modulation), MidiKeyboard.Decode(0xB2 | 1 << 8 | 9 << 16));
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.Controller, 0, 8191, ControllerKind.PitchBend), MidiKeyboard.Decode(0xE0 | 0x7F << 8 | 0x7F << 16));
+        Assert.Equal(new KeyboardEvent(KeyboardEventKind.Controller, 0, -8192, ControllerKind.PitchBend), MidiKeyboard.Decode(0xE0));
+        Assert.Null(MidiKeyboard.Decode(0xB0 | 7 << 8 | 100 << 16)); // volume: not used
+        Assert.Null(MidiKeyboard.Decode(0xF8)); // clock
     }
 
     [Fact]

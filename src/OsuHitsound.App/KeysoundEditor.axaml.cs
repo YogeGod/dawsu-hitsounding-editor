@@ -64,6 +64,7 @@ public partial class KeysoundEditor : UserControl
         Roll.AuditionRequested += (pitch, velocity) => { if (HearToggle.IsChecked == true) player?.Audition(pitch, velocity); };
         Roll.ViewChanged += UpdateTexts;
         clock.Tick += (_, _) => Tick();
+        SetupRecording();
     }
 
     /// <summary>The ◀ Close button: the window asks about unsaved edits, then closes the project.</summary>
@@ -84,6 +85,7 @@ public partial class KeysoundEditor : UserControl
         Roll.CentrePitch();
         LoadWaveform();
         _ = LoadPiano(doc);
+        RefreshMidiInputs();
         status = doc.Warnings.Count > 0 ? string.Join(" ", doc.Warnings) : $"Opened {doc.Name}. Save project (Ctrl+S) keeps your tracks and notes.";
         RefreshTracks();
         UpdateTexts();
@@ -93,6 +95,8 @@ public partial class KeysoundEditor : UserControl
     public void Close()
     {
         if (doc is null) return;
+        StopRecording();
+        keyboard.Stop();
         Stop();
         waveCancel?.Cancel();
         audio?.SetLivePart(null);
@@ -382,6 +386,7 @@ public partial class KeysoundEditor : UserControl
 
     private void Seek(double time)
     {
+        if (IsRecording) return; // a take records one stretch of the timeline
         audio?.Seek(time);
         Roll.Playhead = time;
         Roll.InvalidateVisual();
@@ -391,6 +396,7 @@ public partial class KeysoundEditor : UserControl
     private void TogglePlay()
     {
         if (audio is null) { SetStatus("No audio output is available."); return; }
+        if (IsRecording) { StopRecording(); return; }
         if (audio.IsPlaying) { Stop(); return; }
         if (!audio.HasSong) SetStatus("The song audio is missing from this project.");
         audio.Seek(Roll.Playhead);
@@ -408,9 +414,16 @@ public partial class KeysoundEditor : UserControl
 
     private void Tick()
     {
-        if (audio is null || !audio.IsPlaying) { Stop(); return; }
+        if (audio is null || !audio.IsPlaying)
+        {
+            if (IsRecording) StopRecording(); // the song ended; this stops playback too
+            else Stop();
+            return;
+        }
+
         double now = audio.Position;
         Roll.Playhead = now;
+        ShowRecording(now);
         // Follow playback a page at a time.
         var axis = Roll.Axis;
         if (now > axis.Left + axis.VisibleDuration * 0.92 || now < axis.Left) axis.Left = now - axis.VisibleDuration * 0.08;
@@ -470,6 +483,7 @@ public partial class KeysoundEditor : UserControl
             case Key.V when ctrl && !shift: Roll.Paste(clipboard, Roll.Playhead); return true;
             case Key.Q when mods == KeyModifiers.None: Roll.QuantizeSelection(); return true;
             case Key.Space when mods == KeyModifiers.None: TogglePlay(); return true;
+            case Key.Multiply when mods == KeyModifiers.None: ToggleRecord(); return true; // Cubase's Record
             case Key.Home when mods == KeyModifiers.None: Seek(0); return true;
             // Cubase's tool numbers.
             case Key.D1 or Key.NumPad1 when mods == KeyModifiers.None: SetTool(KeyTool.Select); return true;
