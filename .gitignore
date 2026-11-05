@@ -13,6 +13,9 @@ testmaps/hitsound-rules-test/
 # Local agent handoff records
 .handoff/
 
+# Cubase skin extract kept on this machine only
+keysounding-docs/rea/cubase/srf/
+
 # Release packages
 artifacts/
 TASKS.md

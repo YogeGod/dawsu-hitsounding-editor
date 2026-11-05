@@ -1,0 +1,3531 @@
+quiet
+ready
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+down 90
+up 17
+up 90
+up 90
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+up 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 90
+up 17
+up 90
+up 90
+down 17
+down 17
+up 17
+down 17
+down 17
+down 65
+up 65
+up 65
+down 88
+up 88
+up 88
+up 17
+down 16
+down 16
+down 17
+down 17
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 16
+down 16
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 17
+down 17
+up 16
+down 17
+down 17
+up 17
+down 17
+down 17
+down 90
+up 17
+up 90
+up 90
+down 17
+down 17
+up 17
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+up 16
+down 39
+up 39
+up 39
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 39
+down 40
+down 40
+up 40
+up 40
+up 39
+up 39
+down 37
+up 37
+up 37
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 38
+down 38
+up 38
+up 38
+down 38
+down 38
+up 38
+up 38
+down 38
+down 38
+up 38
+up 38
+up 17
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 16
+down 16
+down 16
+down 16
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 37
+down 40
+up 37
+up 37
+up 40
+up 40
+down 40
+up 40
+up 40
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 86
+up 86
+up 86
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 16
+ok 0x14154feb0
+ok 0x14154ffa0
+ok 0x141550090
+ok 0x141550270
+extra-ready
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+up 17
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 49
+up 49
+up 49
+mouse-down
+mouse-up
+mouse-up
+mouse-down
+mouse-up
+mouse-up
+mouse-down
+mouse-up
+mouse-up
+down 50
+up 50
+up 50
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 32
+up 32
+up 32
+down 32
+up 32
+up 32
+mouse-down
+mouse-up
+down 32
+up 32
+up 32
+down 32
+up 32
+up 32
+up 18
+up 32
+up 32
+down 32
+up 32
+up 32
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 49
+up 49
+up 49
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+up 17
+up 17
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 88
+down 90
+up 90
+up 90
+up 88
+up 88
+up 17
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+mouse-down
+mouse-up
+down 17
+down 17
+down 67
+up 67
+up 67
+down 68
+up 68
+up 68
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 67
+up 67
+up 67
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 86
+up 86
+up 86
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 32
+up 32
+up 32
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 32
+up 32
+up 32
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 17
+up 90
+up 90
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+up 17
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 17
+down 17
+down 38
+down 38
+up 38
+up 38
+up 17
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+up 18
+up 18
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+down 18
+down 18
+down 17
+down 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 37
+down 37
+up 37
+up 37
+down 39
+down 39
+up 39
+up 39
+down 39
+down 39
+up 39
+up 39
+up 16
+up 17
+down 17
+down 17
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+up 17
+down 38
+up 38
+up 38
+down 40
+up 40
+up 40
+up 18
+down 17
+down 17
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 65
+up 65
+up 65
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 80
+up 80
+up 80
+down 80
+up 80
+up 80
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 80
+down 219
+down 219
+up 80
+up 80
+up 219
+up 219
+mouse-down
+down 17
+down 17
+mouse-up
+down 88
+up 88
+up 88
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 80
+down 79
+up 79
+up 79
+up 80
+up 80
+mouse-down
+down 80
+up 80
+up 80
+mouse-down
+mouse-up
+down 80
+up 80
+up 80
+mouse-down
+mouse-up
+down 80
+up 80
+up 80
+mouse-down
+mouse-up
+down 80
+up 80
+up 80
+mouse-down
+mouse-up
+down 80
+up 80
+up 80
+down 17
+down 17
+down 86
+up 86
+up 86
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 86
+up 86
+up 86
+up 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 49
+up 49
+up 49
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+mouse-up
+down 16
+down 16
+up 16
+down 91
+down 91
+mouse-down
+mouse-up
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 16
+down 16
+up 16
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 32
+up 32
+up 32
+down 32
+up 32
+up 32
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 45
+up 45
+up 45
+down 32
+up 32
+up 32
+down 32
+up 32
+up 32
+down 17
+down 17
+down 17
+down 17
+up 17
+down 32
+up 32
+up 32
+down 32
+up 32
+up 32
+down 45
+up 45
+up 45
+down 32
+up 32
+up 32
+down 32
+up 32
+up 32
+down 45
+up 45
+up 45
+down 32
+up 32
+up 32
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 32
+up 32
+up 32
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+mouse-down
+down 17
+down 17
+mouse-up
+down 88
+up 88
+up 88
+up 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 17
+up 17
+up 88
+up 88
+down 17
+down 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 16
+down 16
+up 17
+up 16
+mouse-down
+mouse-up
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+up 17
+up 17
+down 17
+down 17
+down 90
+up 17
+up 90
+up 90
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+down 16
+down 16
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 16
+down 16
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 49
+up 49
+up 49
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 17
+up 90
+up 90
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 17
+mouse-down
+mouse-up
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 16
+down 16
+up 16
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 49
+up 49
+up 49
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+mouse-up
+down 49
+up 49
+up 49
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+down 88
+up 88
+up 88
+up 90
+up 90
+down 90
+up 90
+up 90
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+up 17
+mouse-up
+down 16
+down 16
+up 16
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 49
+up 49
+up 49
+mouse-down
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 16
+down 16
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+down 40
+up 40
+up 40
+up 16
+up 16
+down 17
+down 17
+down 17
+down 17
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+down 18
+down 18
+down 18
+down 18
+down 37
+up 37
+up 37
+down 17
+down 17
+up 18
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+up 17
+up 17
+down 17
+down 17
+down 18
+down 37
+up 37
+up 37
+down 37
+up 37
+up 37
+down 39
+up 39
+up 39
+down 39
+up 39
+up 39
+up 18
+down 16
+down 16
+down 39
+down 39
+up 39
+up 39
+down 39
+down 39
+up 39
+up 39
+down 39
+down 39
+up 39
+up 39
+down 37
+down 37
+up 37
+up 37
+down 37
+down 37
+up 37
+up 37
+up 16
+up 16
+up 17
+up 17
+down 17
+down 17
+up 17
+up 17
+down 91
+down 91
+up 37
+up 37
+up 37
+up 37
+up 39
+up 39
+up 37
+up 37
+up 39
+up 39
+up 37
+up 37
+up 91
+up 91
+down 17
+down 17
+down 18
+down 37
+up 37
+up 37
+down 38
+up 38
+up 38
+up 18
+up 17
+down 16
+down 16
+up 16
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+up 38
+up 38
+down 38
+down 16
+down 16
+up 38
+up 38
+down 38
+down 38
+down 38
+down 38
+down 38
+up 38
+up 38
+down 40
+up 40
+up 40
+down 40
+down 40
+down 40
+up 40
+up 40
+up 16
+down 40
+down 16
+down 16
+up 40
+up 40
+down 17
+down 17
+up 16
+down 38
+down 38
+up 38
+up 38
+down 38
+down 38
+up 38
+up 38
+down 16
+down 16
+down 38
+down 38
+up 38
+up 38
+up 16
+down 39
+up 39
+up 39
+down 18
+down 18
+up 18
+down 18
+down 18
+down 17
+down 17
+up 18
+down 90
+down 90
+down 90
+down 90
+down 90
+down 90
+down 90
+down 90
+down 90
+up 90
+up 90
+up 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 88
+up 88
+up 88
+up 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+down 18
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+down 18
+up 90
+up 90
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+mouse-down
+down 17
+down 17
+down 17
+down 17
+mouse-up
+down 17
+down 17
+up 17
+mouse-down
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 65
+up 17
+up 65
+up 65
+mouse-down
+down 17
+down 17
+down 17
+down 17
+mouse-up
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+down 90
+up 90
+up 90
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 90
+up 90
+up 90
+up 17
+down 49
+up 49
+up 49
+down 17
+down 17
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 16
+down 16
+down 90
+up 90
+up 90
+up 16
+down 16
+down 16
+down 90
+up 90
+up 90
+up 16
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 49
+up 49
+up 49
+down 49
+up 49
+up 49
+down 49
+up 49
+up 49
+mouse-down
+down 17
+down 17
+up 17
+mouse-up
+down 16
+down 16
+up 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+mouse-down
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 16
+down 16
+mouse-down
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 49
+down 192
+down 192
+up 192
+up 192
+up 49
+up 49
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+up 17
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-up 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+pitch-down 0x72495ba0
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+pitch-down 0x7248eb20
+pitch-down 0x7248eb20
+pitch-down 0x7248eb20
+pitch-down 0x7248eb20
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 17
+down 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 17
+up 16
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 17
+down 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+mouse-down
+mouse-down
+mouse-down
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+up 17
+down 16
+down 16
+up 16
+down 17
+down 17
+up 17
+mouse-down
+mouse-down
+mouse-up
+down 17
+down 17
+up 17
+up 17
+mouse-down
+mouse-up
+mouse-down
+mouse-down
+mouse-up
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 17
+down 90
+up 90
+up 90
+up 17
+down 17
+down 17
+down 16
+down 16
+down 16
+down 16
+down 16
+down 16
+up 16
+up 17
+down 32
+up 32
+up 32

@@ -62,8 +62,8 @@ The two Yoge starter kits use the exact screenshot names/order, with all samples
 
 ## Local Cubase Reference and Evidence Limits
 
-- [Cubase 15 Drum Editor analysis](../../../REA/cubase/cubase15-feature-analysis.md), section4: drum-sound list, instrument/sample-mapping concept, visibility options and setup actions.
-- [Extracted Drum Map Setup UI](../../../REA/cubase/srf/skin/skin.xml), template DrumMapSetup near line1509: newMap, copyMap, deleteMap, saveMap, loadMap, drumMapList and drumMapView.
-- [Extracted editor layout](../../../REA/cubase/srf/skin/editors.xml), DrumEditorMainView and DrumMainView: editor zones and timeline container.
+- [Cubase 15 Drum Editor analysis](../../keysounding-docs/rea/cubase/cubase15-feature-analysis.md), section4: drum-sound list, instrument/sample-mapping concept, visibility options and setup actions.
+- [Extracted Drum Map Setup UI](../../keysounding-docs/rea/cubase/srf/skin/skin.xml), template DrumMapSetup near line1509: newMap, copyMap, deleteMap, saveMap, loadMap, drumMapList and drumMapView.
+- [Extracted editor layout](../../keysounding-docs/rea/cubase/srf/skin/editors.xml), DrumEditorMainView and DrumMainView: editor zones and timeline container.
 
 The reference establishes the available controls and structure. The local analysis explicitly leaves native grid interactions and exact I-Note/O-Note playback behavior unverified. Our osu! sample assignments are an adaptation; no claim of an exact native Cubase remapping reproduction is made, and MIDI routing is excluded.
