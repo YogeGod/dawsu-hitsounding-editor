@@ -176,6 +176,13 @@ internal sealed class InspectorPanel : Border
         }
     }
 
+    /// <summary>Unfolds these cards and moves them to the top, in this order (the start screen's Edit samples).</summary>
+    public void Reveal(params string[] ids)
+    {
+        SetLayout(ids.Concat(Order), Folded.Except(ids));
+        LayoutChanged?.Invoke();
+    }
+
     /// <summary>Fills the cards from the editor's state.</summary>
     public void Refresh(EditSession? session, ArrangeModel? model, IReadOnlyCollection<EditHit> selected, Func<double, string> time)
     {

@@ -1,0 +1,175 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OsuHitsound.App.StartScreen"
+             Background="#16191f">
+  <!-- What opens before a map does: four large choices over the empty editor. The title bar stays above it. -->
+  <UserControl.Resources>
+    <!-- Bundled OFL fonts (Assets/Fonts); Inter and the LCD's mono fonts if they are missing. -->
+    <FontFamily x:Key="StartHeading">avares://OsuHitsoundEditor/Assets/Fonts#Archivo Expanded, $Default</FontFamily>
+    <FontFamily x:Key="StartMono">avares://OsuHitsoundEditor/Assets/Fonts#Martian Mono, Cascadia Mono, Consolas</FontFamily>
+    <SolidColorBrush x:Key="StartCard" Color="#1f242c" />
+    <SolidColorBrush x:Key="StartCardHover" Color="#252b34" />
+    <SolidColorBrush x:Key="StartCardBorder" Color="#353c47" />
+    <SolidColorBrush x:Key="StartText" Color="#e9edf2" />
+    <SolidColorBrush x:Key="StartMuted" Color="#a3adbb" />
+    <SolidColorBrush x:Key="StartFaint" Color="#7d8796" />
+    <!-- Lucide icons (ISC licence), 24×24, drawn as strokes like the editor's own icons -->
+    <StreamGeometry x:Key="IconFolderOpen">M6 14l1.5 -2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1 -1.95 1.5H4a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h3.9a2 2 0 0 1 1.69 0.9l0.81 1.2a2 2 0 0 0 1.67 0.9H18a2 2 0 0 1 2 2v2</StreamGeometry>
+    <StreamGeometry x:Key="IconHistory">M3 12a9 9 0 1 0 9 -9a9.75 9.75 0 0 0 -6.74 2.74L3 8 M3 3v5h5 M12 7v5l4 2</StreamGeometry>
+    <StreamGeometry x:Key="IconWaveform">M2 13a2 2 0 0 0 2 -2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2 -2</StreamGeometry>
+    <StreamGeometry x:Key="IconKeyboardMusic">M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V6a2 2 0 0 1 2 -2z M6 8h4 M14 8h0.01 M18 8h0.01 M2 12h20 M6 12v4 M10 12v4 M14 12v4 M18 12v4</StreamGeometry>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="Button.startPanel">
+      <Setter Property="Width" Value="252" />
+      <Setter Property="Height" Value="252" />
+      <Setter Property="Padding" Value="18" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="{StaticResource StartCard}" />
+      <Setter Property="BorderBrush" Value="{StaticResource StartCardBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.startPanel:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource StartCardHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+    </Style>
+    <Style Selector="Button.startPanel:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource StartCard}" />
+    </Style>
+    <Style Selector="Button.startPanel:focus-visible /template/ ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Button.startPanel:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource StartCard}" />
+      <Setter Property="BorderBrush" Value="{StaticResource StartCardBorder}" />
+    </Style>
+    <Style Selector="Button.startPanel Path.icon">
+      <Setter Property="StrokeThickness" Value="1.5" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+    </Style>
+    <Style Selector="Button.startPanel TextBlock.label">
+      <Setter Property="FontFamily" Value="{StaticResource StartHeading}" />
+      <Setter Property="FontWeight" Value="ExtraBold" />
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="Foreground" Value="{StaticResource StartText}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,18,0,0" />
+    </Style>
+    <Style Selector="Button.startPanel TextBlock.sub">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource StartMuted}" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="MaxWidth" Value="190" />
+      <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="{StaticResource StartMono}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{StaticResource StartText}" />
+    </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="-8" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+      <Setter Property="Background" Value="{DynamicResource LcdBg}" />
+    </Style>
+    <Style Selector="Panel.soon">
+      <Setter Property="Width" Value="252" />
+      <Setter Property="Height" Value="252" />
+    </Style>
+    <Style Selector="Button.footLink">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="#b6b6c3" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" RowDefinitions="Auto,22,Auto,22,Auto">
+    <!-- Name and version -->
+    <DockPanel>
+      <TextBlock Name="Version" DockPanel.Dock="Right" VerticalAlignment="Bottom" Margin="0,0,0,4" Classes="mono" Foreground="{StaticResource StartFaint}" FontSize="11" Text="hitsound studio" />
+      <TextBlock FontFamily="{StaticResource StartHeading}" FontWeight="ExtraBold" FontSize="26" Foreground="{StaticResource StartText}">
+        <Run Text="dawsu" /><Run Text="!" Foreground="#ff66aa" />
+      </TextBlock>
+    </DockPanel>
+
+    <UniformGrid Grid.Row="2" Columns="2" Rows="2" ColumnSpacing="16" RowSpacing="16">
+      <Button Name="OpenPanel" Classes="startPanel" AutomationProperties.Name="Open beatmap file"
+              ToolTip.Tip="Open a .osu, or import an .osz into your Songs folder (Ctrl+O). You can also drop either onto the window.">
+        <Grid>
+          <Border Classes="chip"><TextBlock Classes="mono" Text="Ctrl+O" Foreground="{DynamicResource LcdCaption}" /></Border>
+          <StackPanel VerticalAlignment="Center">
+            <Viewbox Width="58" Height="58"><Path Classes="icon" Data="{StaticResource IconFolderOpen}" Stroke="{DynamicResource WaveLow}" Width="24" Height="24" /></Viewbox>
+            <TextBlock Classes="label" Text="Open beatmap file" />
+            <TextBlock Classes="sub"><Run FontFamily="{StaticResource StartMono}" FontSize="11" Foreground="{StaticResource StartText}" Text=".osu" /><Run Text=" or " /><Run FontFamily="{StaticResource StartMono}" FontSize="11" Foreground="{StaticResource StartText}" Text=".osz" /><Run Text=", or drop one onto the window" /></TextBlock>
+          </StackPanel>
+        </Grid>
+      </Button>
+
+      <Button Name="RecentPanel" Classes="startPanel" AutomationProperties.Name="Edit recent project">
+        <Button.Flyout>
+          <MenuFlyout Placement="BottomEdgeAlignedLeft" />
+        </Button.Flyout>
+        <StackPanel VerticalAlignment="Center">
+          <Viewbox Width="58" Height="58"><Path Classes="icon" Data="{StaticResource IconHistory}" Stroke="{DynamicResource WaveMid}" Width="24" Height="24" /></Viewbox>
+          <TextBlock Classes="label" Text="Edit recent project" />
+          <TextBlock Name="RecentCaption" Classes="sub" Text="Nothing opened yet" />
+          <TextBlock Name="RecentName" Classes="mono" HorizontalAlignment="Center" MaxWidth="212" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" IsVisible="False" />
+        </StackPanel>
+      </Button>
+
+      <Button Name="SamplesPanel" Classes="startPanel" AutomationProperties.Name="Edit samples"
+              ToolTip.Tip="Go to the editor with the file browser and the inspector's Active lane card open">
+        <StackPanel VerticalAlignment="Center">
+          <Viewbox Width="58" Height="58"><Path Classes="icon" Data="{StaticResource IconWaveform}" Stroke="{DynamicResource WaveHigh}" Width="24" Height="24" /></Viewbox>
+          <TextBlock Classes="label" Text="Edit samples" />
+          <TextBlock Classes="sub" Text="Browse and audition samples in the File browser" />
+        </StackPanel>
+      </Button>
+
+      <Panel Classes="soon" AutomationProperties.Name="Keysounding, coming soon" ToolTip.Tip="Keysounding isn't in the editor yet">
+        <!-- Keysounding isn't built yet: a dashed, greyed outline instead of a card -->
+        <Rectangle RadiusX="6" RadiusY="6" Stroke="#3a414c" StrokeThickness="1" StrokeDashArray="4,3" />
+        <Grid Margin="18">
+          <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-8" Padding="8,1" CornerRadius="9" BorderThickness="1" BorderBrush="#3a414c">
+            <TextBlock Text="Coming soon" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource StartMuted}" />
+          </Border>
+          <StackPanel VerticalAlignment="Center">
+            <Viewbox Width="58" Height="58"><Path Data="{StaticResource IconKeyboardMusic}" Stroke="#5a6372" StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round" Width="24" Height="24" /></Viewbox>
+            <TextBlock Text="Keysounding" FontFamily="{StaticResource StartHeading}" FontWeight="ExtraBold" FontSize="16" Foreground="#8a93a1" HorizontalAlignment="Center" Margin="0,18,0,0" />
+            <TextBlock Text="Not in the editor yet" FontSize="12" Foreground="{StaticResource StartFaint}" HorizontalAlignment="Center" Margin="0,8,0,0" />
+          </StackPanel>
+        </Grid>
+      </Panel>
+    </UniformGrid>
+
+    <!-- Footer: the app's own entry points, and where imports go -->
+    <Border Grid.Row="4" BorderBrush="#262c35" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Text="Songs folder" FontSize="11" Foreground="{StaticResource StartFaint}" VerticalAlignment="Center" />
+          <TextBlock Name="SongsFolder" Classes="mono" FontSize="11" Foreground="{DynamicResource LcdCaption}" MaxWidth="170" TextTrimming="PrefixCharacterEllipsis" VerticalAlignment="Center" Text="not set" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="2" Margin="-10,0,0,0">
+          <Button Name="PreferencesLink" Classes="footLink" Content="Preferences…" />
+          <Button Name="QuickStartLink" Classes="footLink" Content="Quick start" />
+          <Button Name="KeysLink" Classes="footLink" ToolTip.Tip="Keyboard shortcuts (F1)">
+            <TextBlock><Run Text="Shortcuts " /><Run FontFamily="{StaticResource StartMono}" FontSize="11" Text="F1" Foreground="{DynamicResource LcdCaption}" /></TextBlock>
+          </Button>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

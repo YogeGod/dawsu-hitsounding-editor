@@ -23,7 +23,11 @@ public partial class MainWindow
 
     private void StartTutorial() => Tutorial.Start(TutorialSteps());
 
-    internal void StartQuickStart() => Tutorial.Start(QuickStartSteps(), interactive: true);
+    internal void StartQuickStart()
+    {
+        HideStartScreen(); // the steps point at the editor under it
+        Tutorial.Start(QuickStartSteps(), interactive: true);
+    }
 
     private IReadOnlyList<TutorialStep> QuickStartSteps() =>
     [

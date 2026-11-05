@@ -247,6 +247,7 @@ public partial class MainWindow : Window
         SetupInspector();
         SetupCompactLayout();
         SetupTutorial();
+        SetupStartScreen(show: path is null);
         SetupOutput();
         SetupSoundSets();
         Deactivated += (_, _) => UpdateToolCursors(KeyModifiers.None);
@@ -410,6 +411,7 @@ public partial class MainWindow : Window
             ScheduleCompile();
             RevertItem.IsEnabled = true;
             RefreshHsMode();
+            HideStartScreen();
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException)
@@ -557,6 +559,7 @@ public partial class MainWindow : Window
     protected override void OnKeyDown(KeyEventArgs e)
     {
         if (e.Key is Key.LeftAlt or Key.RightAlt) UpdateToolCursors(e.KeyModifiers | KeyModifiers.Alt);
+        if (StartScreenKey(e)) { e.Handled = true; return; }
         // Typing in a text box (volume value, offset…) must not trigger editor shortcuts like 5 (Mute) or Backspace (delete hits).
         var focused = FocusManager?.GetFocusedElement();
         bool controlKey = (focused is Button or Avalonia.Controls.Primitives.ToggleButton && e.Key is Key.Space or Key.Enter)
@@ -1245,6 +1248,9 @@ public partial class MainWindow : Window
         Resources["LcdFontSize"] = t.Number("lcd.fontSize");
         Resources["PlayIcon"] = B("play.icon");
         Resources["VolumeSide"] = B("volume.side");
+        Resources["WaveLow"] = B("wave.low"); // the start screen's icons follow the waveform colours
+        Resources["WaveMid"] = B("wave.mid");
+        Resources["WaveHigh"] = B("wave.high");
         if (Avalonia.Application.Current is { } app)
             foreach (var key in new[] { "HeaderBg", "ButtonBg", "ButtonText", "ChromeBorder", "ControlHover", "ButtonActive", "LcdBg", "LcdCaption" })
                 app.Resources[key] = Resources[key];

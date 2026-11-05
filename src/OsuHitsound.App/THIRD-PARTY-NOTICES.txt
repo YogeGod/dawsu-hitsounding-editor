@@ -40,3 +40,27 @@ UI skin icons
   Assets/skin-icons.png is the icons-central_2.00x.png sprite supplied from the local
   E:\Claude\skin collection. Transport, Help and Settings coordinates follow that
   collection's icons.xml. The app uses alpha masks to tint the unchanged source image.
+
+Start screen icons
+  The start screen redraws four Lucide icons (folder-open, history, audio-waveform and
+  keyboard-music) as stroke geometry.
+  Source: https://github.com/lucide-icons/lucide
+  Licence: ISC
+    Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of
+    Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+    Permission to use, copy, modify, and/or distribute this software for any purpose
+    with or without fee is hereby granted, provided that the above copyright notice
+    and this permission notice appear in all copies.
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+    FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT,
+    OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+    DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+    ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+Start screen fonts
+  Archivo Expanded ExtraBold, Copyright 2020 The Archivo Project Authors
+  (https://github.com/Omnibus-Type/Archivo), and Martian Mono Regular, Copyright 2021
+  The Martian Mono Project Authors (https://github.com/evilmartians/mono), are bundled
+  under the SIL Open Font License 1.1. The licence text is Assets/Fonts/OFL-Archivo.txt
+  and Assets/Fonts/OFL-MartianMono.txt.
