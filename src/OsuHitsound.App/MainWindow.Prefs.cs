@@ -90,9 +90,9 @@ public partial class MainWindow
             ? [new MenuItem { Header = "(none yet)", IsEnabled = false }]
             : prefs.RecentMaps.Select(path =>
             {
-                var item = new MenuItem { Header = Path.GetFileNameWithoutExtension(path) };
+                var item = new MenuItem { Header = StartScreen.RecentLabel(path) };
                 ToolTip.SetTip(item, path);
-                item.Click += async (_, _) => { if (await MayLeaveMap()) await Open(path); };
+                item.Click += async (_, _) => { if (IsKeysoundProject(path) || await MayLeaveMap()) await Open(path); };
                 return item;
             }).ToList();
     }

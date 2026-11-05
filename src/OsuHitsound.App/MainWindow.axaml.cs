@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using OsuHitsound.Audio;
 using OsuHitsound.Format;
 using OsuHitsound.Lanes;
+using OsuHitsound.Lanes.Keysound;
 
 namespace OsuHitsound.App;
 
@@ -236,7 +237,7 @@ public partial class MainWindow : Window
             e.Handled = true;
         };
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
-        SaveButton.Click += (_, _) => Save();
+        SaveButton.Click += (_, _) => { if (Keys.Document is not null) SaveKeysound(); else _ = Save(); };
         menuCommands =
         [
             (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (OpenHitsoundFolderItem, "openHitsoundFolder"), (ReviewOutputItem, "reviewOutput"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
@@ -258,6 +259,7 @@ public partial class MainWindow : Window
         SetupCompactLayout();
         SetupTutorial();
         SetupStartScreen(show: path is null);
+        SetupKeysound();
         SetupOutput();
         SetupSoundSets();
         Deactivated += (_, _) => UpdateToolCursors(KeyModifiers.None);
@@ -337,8 +339,12 @@ public partial class MainWindow : Window
     internal Task Loading { get; private set; } = Task.CompletedTask;
 
     /// <summary>Opens a map: reading and decoding run off the UI thread. Errors are shown in the status bar, never thrown.</summary>
-    public Task Open(string path) => Loading = Path.GetExtension(path).Equals(".osz", StringComparison.OrdinalIgnoreCase)
-        ? OpenDropped(path) : OpenAsync(path);
+    public Task Open(string path) => Loading = Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".osz" => OpenDropped(path),
+        KeysoundStore.Extension => OpenKeysound(path),
+        _ => LeaveKeysoundThen(() => OpenAsync(path)),
+    };
 
     private async Task<bool> OpenAsync(string path, bool restoreUnanchored = true, HsProject? hsOverride = null)
     {
@@ -460,11 +466,12 @@ public partial class MainWindow : Window
 
     // The first dropped file that is a .osu or an .osz, or null.
     private static string? DroppedMap(DragEventArgs e) =>
-        e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null && Path.GetExtension(p).ToLowerInvariant() is ".osu" or ".osz");
+        e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null && Path.GetExtension(p).ToLowerInvariant() is ".osu" or ".osz" or KeysoundStore.Extension);
 
     private async Task OpenDropped(string path)
     {
-        if (Path.GetExtension(path).Equals(".osu", StringComparison.OrdinalIgnoreCase))
+        if (Path.GetExtension(path).Equals(KeysoundStore.Extension, StringComparison.OrdinalIgnoreCase)) await Open(path);
+        else if (Path.GetExtension(path).Equals(".osu", StringComparison.OrdinalIgnoreCase))
         {
             if (await MayLeaveMap()) await Open(path);
         }
@@ -561,6 +568,7 @@ public partial class MainWindow : Window
     {
         if (e.Key is Key.LeftAlt or Key.RightAlt) UpdateToolCursors(e.KeyModifiers | KeyModifiers.Alt);
         if (StartScreenKey(e)) { e.Handled = true; return; }
+        if (KeysoundKey(e)) { e.Handled = true; return; }
         // Typing in a text box (volume value, offset…) must not trigger editor shortcuts like 5 (Mute) or Backspace (delete hits).
         var focused = FocusManager?.GetFocusedElement();
         bool controlKey = (focused is Button or Avalonia.Controls.Primitives.ToggleButton && e.Key is Key.Space or Key.Enter)

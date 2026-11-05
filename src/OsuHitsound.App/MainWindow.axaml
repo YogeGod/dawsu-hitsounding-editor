@@ -588,6 +588,7 @@
       </StackPanel>
     </Border>
     <!-- The start screen: under the title bar, over the empty editor, until a map opens -->
+    <app:KeysoundEditor Name="Keys" Grid.Row="1" Grid.RowSpan="7" Grid.ColumnSpan="5" ZIndex="40" IsVisible="False" />
     <app:StartScreen Name="Start" Grid.Row="1" Grid.RowSpan="7" Grid.ColumnSpan="5" ZIndex="50" IsVisible="False" />
     <!-- The tutorial: over everything, hidden until it runs -->
     <app:TutorialOverlay Name="Tutorial" Grid.RowSpan="8" Grid.ColumnSpan="5" ZIndex="100" />

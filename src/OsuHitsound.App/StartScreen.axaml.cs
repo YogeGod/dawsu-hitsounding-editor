@@ -17,6 +17,8 @@ public partial class StartScreen : UserControl
         PreferencesLink.Click += (_, _) => PreferencesRequested?.Invoke();
         QuickStartLink.Click += (_, _) => QuickStartRequested?.Invoke();
         KeysLink.Click += (_, _) => HelpRequested?.Invoke();
+        KeysoundNewItem.Click += (_, _) => KeysoundNewRequested?.Invoke();
+        KeysoundOpenItem.Click += (_, _) => KeysoundOpenRequested?.Invoke();
     }
 
     public event Action? OpenRequested;
@@ -25,6 +27,14 @@ public partial class StartScreen : UserControl
     public event Action? PreferencesRequested;
     public event Action? QuickStartRequested;
     public event Action? HelpRequested;
+    public event Action? KeysoundNewRequested;
+    public event Action? KeysoundOpenRequested;
+
+    /// <summary>A recent entry's name: the difficulty, or for a Keysound project its folder.</summary>
+    public static string RecentLabel(string path) =>
+        Path.GetExtension(path).Equals(OsuHitsound.Lanes.Keysound.KeysoundStore.Extension, StringComparison.OrdinalIgnoreCase)
+            ? $"{Path.GetFileName(Path.GetDirectoryName(path))} (Keysound)"
+            : Path.GetFileNameWithoutExtension(path);
 
     public void SetMessage(string? message)
     {
@@ -41,12 +51,12 @@ public partial class StartScreen : UserControl
         RecentPanel.IsEnabled = any;
         RecentCaption.Text = any ? "Last opened" : "Nothing opened yet";
         RecentName.IsVisible = any;
-        RecentName.Text = any ? Path.GetFileNameWithoutExtension(paths[0]) : "";
+        RecentName.Text = any ? RecentLabel(paths[0]) : "";
         ToolTip.SetTip(RecentPanel, any ? "Choose a recent map (newest first)" : null);
         if (RecentPanel.Flyout is MenuFlyout menu && (changed || menu.Items.Count != paths.Count))
             menu.ItemsSource = paths.Select(path =>
             {
-                var item = new MenuItem { Header = Path.GetFileNameWithoutExtension(path) };
+                var item = new MenuItem { Header = RecentLabel(path) };
                 ToolTip.SetTip(item, path);
                 item.Click += (_, _) => RecentRequested?.Invoke(path);
                 return item;

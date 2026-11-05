@@ -12,6 +12,25 @@ public partial class MainWindow
     private async void OnEditorClosing(object? sender, WindowClosingEventArgs e)
     {
         if (renderingDrums || savingHs || generating || !Loading.IsCompleted) { e.Cancel = true; return; }
+        // While Keysound shows, the hitsound map's edits were already given up when Keysound opened (MayLeaveMap).
+        if (!closeConfirmed && Keys.Document is { } keys)
+        {
+            if (!keys.Session.IsEdited) return;
+            e.Cancel = true;
+            if (closePromptOpen) return;
+            closePromptOpen = true;
+            try
+            {
+                if (await MayLeaveKeysound())
+                {
+                    closeConfirmed = true;
+                    Close();
+                }
+            }
+            finally { closePromptOpen = false; }
+            return;
+        }
+
         if (closeConfirmed || session is not { IsEdited: true }) return;
         e.Cancel = true;
         if (closePromptOpen) return;

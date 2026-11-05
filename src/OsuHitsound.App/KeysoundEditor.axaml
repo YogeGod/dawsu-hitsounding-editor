@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="using:OsuHitsound.App"
+             x:Class="OsuHitsound.App.KeysoundEditor"
+             Background="{DynamicResource VolumeSide}">
+  <Grid RowDefinitions="46,*,52" ColumnDefinitions="232,1,*">
+    <!-- Toolbar: compact tools, snap and view toggles, as in the key-editor design. -->
+    <Border Grid.ColumnSpan="3" Classes="toolbar" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource ChromeBorder}">
+      <DockPanel Margin="12,0" LastChildFill="False">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Name="CloseButton" Content="◀ Close" ToolTip.Tip="Close this Keysound project: back to the beatmap that was open before, or to the start screen" />
+          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
+          <Button Name="UndoButton" Classes="icon" ToolTip.Tip="Undo (Ctrl+Z)" AutomationProperties.Name="Undo"><Path Data="M 5,3 L 1,7 L 5,11 M 1,7 L 9,7 C 15,7 15,15 9,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
+          <Button Name="RedoButton" Classes="icon" ToolTip.Tip="Redo (Ctrl+Y)" AutomationProperties.Name="Redo"><Path Data="M 11,3 L 15,7 L 11,11 M 15,7 L 7,7 C 1,7 1,15 7,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
+          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
+          <ToggleButton Name="SelectTool" Classes="tool" IsChecked="True" ToolTip.Tip="Select (1): click or box-select notes, drag to move (Ctrl: one direction), drag the right edge to resize" AutomationProperties.Name="Select"><Path Data="M 3,1 L 3,14 L 7,10 L 11,15 L 14,13 L 10,8 L 15,7 Z" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+          <ToggleButton Name="DrawTool" Classes="tool" ToolTip.Tip="Draw (3, or hold Alt): click to add a note, drag right to set its length; clicking a note deletes it" AutomationProperties.Name="Draw"><Path Data="M 2,11 L 11,2 L 14,5 L 5,14 L 1,15 Z M 9,4 L 12,7" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+          <ToggleButton Name="EraseTool" Classes="tool" ToolTip.Tip="Erase (4): click or drag across notes to delete them" AutomationProperties.Name="Erase"><Path Data="M 2,10 L 10,2 L 15,7 L 7,15 L 5,15 Z M 7,5 L 12,10 M 5,15 L 15,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
+          <ToggleButton Name="SnapToggle" Classes="viewToggle" Content="Snap" IsChecked="True" ToolTip.Tip="Snap notes to the grid (J). The grid counts from each red line of the reference beatmap." />
+          <ComboBox Name="SnapBox" Width="72" ToolTip.Tip="Grid spacing in beats" />
+          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
+          <ToggleButton Name="GhostToggle" Classes="viewToggle" Content="Ghost notes" IsChecked="True" ToolTip.Tip="Show other tracks' notes faintly. Only the selected track is editable." />
+          <ToggleButton Name="MarkerToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines at the reference's circles, slider heads, repeats and tails, and spinner ends. Notes drawn on a line still need Sync before Generate." />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Name="ZoomOutButton" Content="−" Width="28" ToolTip.Tip="Zoom out in time (G)" />
+          <Button Name="ZoomInButton" Content="+" Width="28" ToolTip.Tip="Zoom in in time (H)" />
+          <Button Name="RowsOutButton" Content="↕−" ToolTip.Tip="Smaller key rows (Ctrl+Shift+wheel)" />
+          <Button Name="RowsInButton" Content="↕+" ToolTip.Tip="Larger key rows (Ctrl+Shift+wheel)" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Tracks: the inspector side of the key editor. -->
+    <Border Grid.Row="1" Background="{DynamicResource PaneTitle}" Padding="10,8">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Classes="sectionLabel" Text="TRACKS" Margin="0,0,0,6" />
+        <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Name="AddTrackButton" Content="+ Track" ToolTip.Tip="Add an instrument track with the bundled piano" />
+            <Button Name="RenameTrackButton" Content="Rename…" ToolTip.Tip="Rename the selected track" />
+            <Button Name="DeleteTrackButton" Content="Delete" ToolTip.Tip="Delete the selected track. Undo brings it back with its notes." />
+          </StackPanel>
+          <TextBlock Name="InstrumentText" Classes="caption" HorizontalAlignment="Left" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <StackPanel Name="TrackList" Spacing="4" />
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+    <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource ChromeBorder}" />
+    <app:PianoRollView Grid.Row="1" Grid.Column="2" Name="Roll" />
+
+    <!-- Transport. -->
+    <Border Grid.Row="2" Grid.ColumnSpan="3" Classes="transportBar" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource ChromeBorder}">
+      <DockPanel Margin="12,0">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
+            <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
+          </Button>
+          <Button Name="PlayButton" Classes="transport" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop the song (Space). Notes are silent until the bundled piano arrives." AutomationProperties.Name="Play or stop"><app:SkinIcon Name="PlayGlyph" Glyph="Play" /></Button>
+          <Border Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Margin="12,0,0,0" Height="40">
+            <StackPanel Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
+              <StackPanel><TextBlock Name="TimeText" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>
+              <StackPanel><TextBlock Name="BarText" Classes="lcd" Text="1.1" /><TextBlock Classes="caption" Text="BAR · BEAT" /></StackPanel>
+              <StackPanel><TextBlock Name="BpmText" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="TEMPO" /></StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <TextBlock Name="StatusText" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{DynamicResource ButtonText}" TextTrimming="CharacterEllipsis" MaxWidth="760" />
+        <TextBlock Name="SelectionText" VerticalAlignment="Center" Margin="18,0" Foreground="{DynamicResource LcdCaption}" />
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

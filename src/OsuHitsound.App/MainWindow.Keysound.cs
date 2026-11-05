@@ -1,0 +1,248 @@
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Platform.Storage;
+using OsuHitsound.Audio;
+using OsuHitsound.Lanes;
+using OsuHitsound.Lanes.Keysound;
+
+namespace OsuHitsound.App;
+
+/// <summary>
+/// Keysound mode (<see cref="KeysoundEditor"/>): entered from the start screen's Keysounding panel or a recent
+/// .dawsuks project. While it shows, the hitsound view stays underneath untouched; leaving reopens the map that was open.
+/// </summary>
+public partial class MainWindow
+{
+    private string? hsMapBeforeKeysound;
+    private (object? Content, object? Tip) hsSaveButton;
+
+    private void SetupKeysound()
+    {
+        hsSaveButton = (SaveButton.Content, ToolTip.GetTip(SaveButton));
+        Keys.CloseRequested += async () => { if (await MayLeaveKeysound()) await CloseKeysound(); };
+        Keys.Changed += UpdateKeysoundTitle;
+        Start.KeysoundNewRequested += () => _ = NewKeysound();
+        Start.KeysoundOpenRequested += () => _ = PickKeysound();
+    }
+
+    /// <summary>Asks to save a Keysound project with unsaved edits. False when the user cancels or saving fails.</summary>
+    private async Task<bool> MayLeaveKeysound()
+    {
+        if (Keys.Document is not { Session.IsEdited: true } project) return true;
+        return await Dialogs.UnsavedClose(this, $"the Keysound project {Path.GetFileName(project.Folder)}") switch
+        {
+            CloseChoice.Save => SaveKeysound(),
+            CloseChoice.Discard => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>Asks about both modes' unsaved edits before another project opens.</summary>
+    private async Task<bool> MayLeaveForKeysound() => await MayLeaveKeysound() && (Keys.Document is not null || await MayLeaveMap());
+
+    /// <summary>Opening a beatmap from Keysound mode first leaves it (asking about unsaved edits).</summary>
+    private async Task LeaveKeysoundThen(Func<Task> next)
+    {
+        if (Keys.Document is not null)
+        {
+            if (!await MayLeaveKeysound()) return;
+            hsMapBeforeKeysound = null;
+            CloseKeysoundView();
+        }
+
+        await next();
+    }
+
+    private async Task NewKeysound()
+    {
+        if (!await MayLeaveForKeysound()) return;
+        var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Choose the reference beatmap for the Keysound project",
+            AllowMultiple = false,
+            SuggestedStartLocation = prefs.SongsFolder is { } songs ? await StorageProvider.TryGetFolderFromPathAsync(songs) : null,
+            FileTypeFilter = [new FilePickerFileType("osu! difficulty") { Patterns = ["*.osu"] }],
+        });
+        if (picked.Count == 0 || picked[0].TryGetLocalPath() is not { } osu) return;
+
+        var root = KeysoundStore.DefaultRoot();
+        try { Directory.CreateDirectory(root); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var parents = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Choose where to keep the Keysound project (a new folder is made inside)",
+            AllowMultiple = false,
+            SuggestedStartLocation = Directory.Exists(root) ? await StorageProvider.TryGetFolderFromPathAsync(root) : null,
+        });
+        if (parents.Count == 0 || parents[0].TryGetLocalPath() is not { } parent) return;
+
+        if (prefs.SongsFolder is { } songsFolder && SafeFile.IsInside(parent, songsFolder))
+        {
+            ShowKeysoundMessage("Keep Keysound projects outside the osu! Songs folder: osu! would list the copied reference as another difficulty.");
+            return;
+        }
+
+        var target = KeysoundStore.SuggestFolder(parent, osu);
+        var warnings = new List<string>();
+        string project;
+        try
+        {
+            project = await Task.Run(() => KeysoundStore.Create(osu, target, warnings));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or ArgumentException)
+        {
+            ShowKeysoundMessage($"Couldn't make the Keysound project: {ex.Message}");
+            return;
+        }
+
+        await OpenKeysound(project, confirmed: true);
+        if (Keys.Document is not null)
+            Keys.SetStatus($"Made the project in {target}." + (warnings.Count > 0 ? " " + string.Join(" ", warnings) : ""));
+    }
+
+    /// <summary>Keysound projects ask about the hitsound map's edits themselves (<see cref="OpenKeysound"/>).</summary>
+    private static bool IsKeysoundProject(string path) => Path.GetExtension(path).Equals(KeysoundStore.Extension, StringComparison.OrdinalIgnoreCase);
+
+    private async Task PickKeysound()
+    {
+        var root = KeysoundStore.DefaultRoot();
+        var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open a Keysound project",
+            AllowMultiple = false,
+            SuggestedStartLocation = Directory.Exists(root) ? await StorageProvider.TryGetFolderFromPathAsync(root) : null,
+            FileTypeFilter = [new FilePickerFileType("Keysound project") { Patterns = ["*" + KeysoundStore.Extension] }],
+        });
+        if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } path) await Open(path);
+    }
+
+    /// <param name="confirmed">The caller already asked about unsaved edits (<see cref="MayLeaveForKeysound"/>).</param>
+    private async Task OpenKeysound(string path, bool confirmed = false)
+    {
+        if (Keys.Document is { } current && string.Equals(current.ProjectPath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) return;
+        if (!confirmed && !await MayLeaveForKeysound()) return;
+
+        bool withAudio = audio is not null;
+        var skinSounds = skin;
+        KeysoundDocument project;
+        PreparedLoad? prepared;
+        try
+        {
+            (project, prepared) = await Task.Run(() =>
+            {
+                var opened = KeysoundStore.Open(path);
+                var load = withAudio
+                    ? AudioEngine.Prepare(new DecompiledMap(opened.Settings, [], [], [], []), MapFolder.FromDirectory(Path.Combine(opened.Folder, KeysoundStore.ReferenceFolder)), skinSounds.Value)
+                    : null;
+                return (opened, load);
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException)
+        {
+            ShowKeysoundMessage($"Couldn't open {path}: {ex.Message}");
+            return;
+        }
+
+        if (Keys.Document is null)
+        {
+            SaveProject(); // the hitsound map's editor data, as when opening another map
+            hsMapBeforeKeysound = doc is not null ? mapPath : null;
+        }
+
+        if (audio is not null && prepared is not null) audio.Apply(prepared);
+        else prepared?.Dispose();
+        Keys.Open(project, audio);
+        Keys.IsVisible = true;
+        HideStartScreen();
+        ShowKeysoundChrome(true);
+        Remember(project.ProjectPath);
+        UpdateKeysoundTitle();
+    }
+
+    /// <summary>Leaves Keysound mode: back to the hitsound map that was open, or the start screen.</summary>
+    private async Task CloseKeysound()
+    {
+        var map = hsMapBeforeKeysound;
+        hsMapBeforeKeysound = null;
+        CloseKeysoundView();
+        if (map is not null && File.Exists(map)) await OpenAsync(map);
+        else if (usePreferences)
+        {
+            Start.IsVisible = true;
+            RefreshStartScreen();
+        }
+    }
+
+    private void CloseKeysoundView()
+    {
+        Keys.Close();
+        Keys.IsVisible = false;
+        ShowKeysoundChrome(false);
+        FileTitle.Text = mapPath is not null ? $"{Path.GetFileName(mapPath)} — Hitsounds" : "No map open";
+        Title = mapPath is not null ? $"{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor" : "osu! Hitsound Editor";
+    }
+
+    /// <summary>The title bar in Keysound mode: Save project instead of Save .osu, no hitsound-only commands.</summary>
+    private void ShowKeysoundChrome(bool on)
+    {
+        SaveButton.Content = on ? "Save project" : hsSaveButton.Content;
+        ToolTip.SetTip(SaveButton, on
+            ? "Save the Keysound project (Ctrl+S): tracks, notes and instrument settings. The reference beatmap is never changed."
+            : hsSaveButton.Tip);
+        HsModeButton.IsVisible = HeaderMenu.IsVisible = OpenButton.IsVisible = !on;
+    }
+
+    private void UpdateKeysoundTitle()
+    {
+        if (Keys.Document is not { } project) return;
+        string name = Path.GetFileName(project.Folder);
+        FileTitle.Text = $"{name} — Keysound{(project.Session.IsEdited ? " (unsaved)" : "")}";
+        ToolTip.SetTip(FileTitle, project.ProjectPath);
+        Title = $"{name} — dawsu! Keysound";
+    }
+
+    private bool SaveKeysound()
+    {
+        if (Keys.Document is not { } project) return false;
+        try
+        {
+            KeysoundStore.Save(project);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        {
+            Keys.SetStatus($"Couldn't save the project: {ex.Message}");
+            return false;
+        }
+
+        Keys.SetStatus($"Saved {Path.GetFileName(project.Folder)}.");
+        UpdateKeysoundTitle();
+        return true;
+    }
+
+    private void ShowKeysoundMessage(string message)
+    {
+        if (Keys.Document is not null) Keys.SetStatus(message);
+        else if (Start.IsVisible) Start.SetMessage(message);
+        else
+        {
+            flash = message;
+            UpdateStatus();
+        }
+    }
+
+    /// <summary>Keys while Keysound shows: Save, help and preferences stay global; the rest go to the key editor.</summary>
+    private bool KeysoundKey(KeyEventArgs e)
+    {
+        if (Keys.Document is null) return false;
+        var command = EditorCommands.Match(e);
+        if (command?.Id == "save") { SaveKeysound(); return true; }
+        if (command?.Id is "help" or "preferences" or "inspector") return false;
+        var focused = FocusManager?.GetFocusedElement();
+        bool ownKey = focused is TextBox
+            || focused is Button or Avalonia.Controls.Primitives.ToggleButton && e.Key is Key.Space or Key.Enter
+            || focused is ComboBox or Slider && e.Key is Key.Space or Key.Enter or Key.Escape or Key.Left or Key.Right or Key.Up or Key.Down
+                or Key.Home or Key.End or Key.PageUp or Key.PageDown;
+        if (ownKey) return false;
+        return Keys.HandleKey(e) || command is not null; // hitsound commands do nothing here
+    }
+}

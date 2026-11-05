@@ -21,6 +21,21 @@ public static class SafeFile
         }
     }
 
+    /// <summary>parent/name, or parent/name (2), (3)… the first that doesn't exist yet.</summary>
+    public static string FreeFolder(string parent, string name)
+    {
+        var path = Path.Combine(parent, name);
+        for (int n = 2; Directory.Exists(path) || File.Exists(path); n++) path = Path.Combine(parent, $"{name} ({n})");
+        return path;
+    }
+
+    /// <summary>True when <paramref name="path"/> is <paramref name="folder"/> or inside it (full paths, case-insensitive).</summary>
+    public static bool IsInside(string path, string folder)
+    {
+        string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)), root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        return full.Equals(root, StringComparison.OrdinalIgnoreCase) || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>A name safe to use as a file or folder name: characters Windows doesn't allow become '_'.</summary>
     public static string Name(string name)
     {

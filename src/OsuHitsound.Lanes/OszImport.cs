@@ -58,7 +58,7 @@ public static class OszImport
 
             for (int tries = 0; ; tries++)
             {
-                var target = FreeFolder(songs, name);
+                var target = SafeFile.FreeFolder(songs, name);
                 try
                 {
                     Directory.Move(staging, target);
@@ -82,14 +82,6 @@ public static class OszImport
 
     // Windows device names (CON, NUL, COM1...) open the device instead of a file, with or without an extension.
     private static bool IsDevice(string part) => DeviceNames.Contains(part.Split('.')[0].TrimEnd(' '));
-
-    // songs/name, or songs/name (2), (3)... the first that doesn't exist yet.
-    private static string FreeFolder(string songs, string name)
-    {
-        var path = Path.Combine(songs, name);
-        for (int n = 2; Directory.Exists(path) || File.Exists(path); n++) path = Path.Combine(songs, $"{name} ({n})");
-        return path;
-    }
 
     // Where an entry unpacks, or null when it would leave the folder or Windows can't store its name: absolute paths,
     // drive letters, "..", alternate data streams (':') and other characters invalid in file names.
