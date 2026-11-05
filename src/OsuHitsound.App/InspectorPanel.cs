@@ -62,6 +62,7 @@ internal sealed class InspectorPanel : Border
     private readonly Button replaceSample = new() { Content = "Browse samples…" };
     private readonly Button previewSample = new() { Content = "Preview" };
     public FileBrowserPanel Browser { get; } = new();
+    private readonly Border browserSlot = new();
     public SoundSetPanel SoundSets { get; } = new();
     private Lane? channelLane;
     private List<Lane> channelChoices = [];
@@ -123,6 +124,8 @@ internal sealed class InspectorPanel : Border
         useSelectedLane.Click += (_, _) => { if (selectedLane is { } lane) ActivateLaneRequested?.Invoke(lane); };
         Avalonia.Automation.AutomationProperties.SetName(channelSample, "Sample for active lane");
         AddCard(ChannelCard, "Active lane", Stack(channelName, laneHelp, useSelectedLane, sampleFile, channelSample, Row(null, replaceSample, previewSample)));
+        AddCard("browser", "File browser", browserSlot);
+        byId["browser"].Card.IsVisible = false;
 
         AddCard("soundSets", "Sound sets", SoundSets);
 
@@ -153,6 +156,12 @@ internal sealed class InspectorPanel : Border
             if (open && !card.IsVisible) { body.IsVisible = true; chevron.RenderTransform = new RotateTransform(90); }
             card.IsVisible = open;
         }
+    }
+
+    public void SetClassicBrowser(bool classic, bool open)
+    {
+        browserSlot.Child = classic ? Browser : null;
+        byId["browser"].Card.IsVisible = classic && open;
     }
 
     /// <summary>Card ids, top to bottom.</summary>

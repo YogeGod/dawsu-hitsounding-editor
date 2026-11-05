@@ -140,6 +140,7 @@ public partial class MainWindow
         bool skinChanged = edited.LazerResources != prefs.LazerResources;
         // The dialog doesn't show the global volume: keep the slider's, which restarting the audio below uses.
         prefs = edited with { GlobalVolume = GlobalVolumeSlider.Value };
+        ApplyBrowserStyle();
         SavePrefs();
         ApplyKeys();
         RefreshOutputSettings();

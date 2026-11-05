@@ -36,6 +36,9 @@ internal sealed class FileBrowserPanel : DockPanel
     private int scanNumber;
     private Entry? root;
     private Point? dragStart;
+    private bool classic;
+    private readonly Button up = new() { Content = "Up", IsVisible = false };
+    private readonly DockPanel title = new() { Margin = new Thickness(0, 0, 0, 8) };
     public event Action<string>? OpenMapRequested;
     public event Action<string>? SampleRequested;
     public event Action<string>? PreviewRequested;
@@ -46,7 +49,6 @@ internal sealed class FileBrowserPanel : DockPanel
         var close = new Button { Content = "‹" };
         close.Click += (_, _) => CloseRequested?.Invoke();
         ToolTip.SetTip(close, "Hide file browser");
-        var title = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
         SetDock(close, Dock.Right);
         title.Children.AddRange([close, new TextBlock { Text = "File browser", FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center }]);
         var browse = new Button { Content = "Folder…" };
@@ -54,25 +56,12 @@ internal sealed class FileBrowserPanel : DockPanel
         var mapFolder = new Button { Content = "Map folder" };
         var library = new Button { Content = "Library" };
         var navigation = new WrapPanel { Orientation = Orientation.Horizontal };
-        navigation.Children.AddRange([browse, go, mapFolder, library]);
+        navigation.Children.AddRange([browse, up, go, mapFolder, library]);
         var top = new StackPanel { Spacing = 6, Children = { title, mode, location, navigation } };
         var bottom = new StackPanel { Spacing = 6, Margin = new Thickness(0, 8, 0, 0), Children = { assignment, use, status } };
         SetDock(top, Dock.Top); SetDock(bottom, Dock.Bottom);
         Children.AddRange([top, bottom, entries]);
-        entries.ItemTemplate = new FuncDataTemplate<Entry>((entry, _) =>
-        {
-            if (entry is null) return null;
-            var row = new DockPanel { Margin = new Thickness(entry.Depth * 14, 0, 0, 0), MinHeight = 26 };
-            var toggle = new Button { Content = entry.Expanded ? "−" : "+", Width = 22, MinWidth = 22, Padding = new Thickness(0), IsVisible = entry.Folder };
-            Avalonia.Automation.AutomationProperties.SetName(toggle, $"{(entry.Expanded ? "Collapse" : "Expand")} {entry.Path}");
-            toggle.Click += async (_, e) => { e.Handled = true; await Toggle(entry); };
-            SetDock(toggle, Dock.Left);
-            row.Children.Add(toggle);
-            row.Children.Add(new TextBlock { Text = entry.Name,
-                VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(entry.Folder ? 4 : 26, 0, 0, 0) });
-            ToolTip.SetTip(row, entry.Path);
-            return row;
-        });
+        entries.ItemTemplate = RowTemplate();
         mode.SelectionChanged += (_, _) => SetFolder(mode.SelectedIndex == 0 ? samplesRoot : mapsRoot);
         browse.Click += async (_, _) =>
         {
@@ -81,6 +70,10 @@ internal sealed class FileBrowserPanel : DockPanel
             if (folders.FirstOrDefault()?.TryGetLocalPath() is { } folder) SetFolder(folder);
         };
         go.Click += (_, _) => SetFolder(location.Text);
+        up.Click += (_, _) =>
+        {
+            if (root is not null && Directory.GetParent(root.Path) is { } parent) SetFolder(parent.FullName);
+        };
         location.KeyDown += (_, e) => { if (e.Key == Key.Enter) { SetFolder(location.Text); e.Handled = true; } };
         mapFolder.Click += (_, _) => SetFolder(activeMapRoot);
         library.Click += (_, _) => SetFolder(libraryRoot);
@@ -114,6 +107,33 @@ internal sealed class FileBrowserPanel : DockPanel
         RefreshActions();
     }
 
+    public void SetClassic(bool value)
+    {
+        if (classic == value) return;
+        classic = value;
+        title.IsVisible = !classic;
+        up.IsVisible = classic;
+        entries.Height = classic ? 180 : double.NaN;
+        entries.ItemTemplate = RowTemplate();
+        SetFolder(location.Text);
+    }
+
+    private FuncDataTemplate<Entry> RowTemplate() => new((entry, _) =>
+    {
+        if (entry is null) return null;
+        if (classic) return new TextBlock { Text = (entry.Folder ? "▸ " : "") + entry.Name, TextTrimming = TextTrimming.CharacterEllipsis };
+        var row = new DockPanel { Margin = new Thickness(entry.Depth * 14, 0, 0, 0), MinHeight = 26 };
+        var toggle = new Button { Content = entry.Expanded ? "−" : "+", Width = 22, MinWidth = 22, Padding = new Thickness(0), IsVisible = entry.Folder };
+        Avalonia.Automation.AutomationProperties.SetName(toggle, $"{(entry.Expanded ? "Collapse" : "Expand")} {entry.Path}");
+        toggle.Click += async (_, e) => { e.Handled = true; await Toggle(entry); };
+        SetDock(toggle, Dock.Left);
+        row.Children.Add(toggle);
+        row.Children.Add(new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(entry.Folder ? 4 : 26, 0, 0, 0) });
+        ToolTip.SetTip(row, entry.Path);
+        return row;
+    });
+
     public void SetAssignmentTarget(string? name, bool editable, string? unavailableReason = null)
     { assignmentTarget = name; canAssign = editable; assignmentUnavailable = unavailableReason; RefreshActions(); }
     public void SetRoots(string? samples, string? maps) { (samplesRoot, mapsRoot) = (samples, maps); SetFolder(mode.SelectedIndex == 0 ? samples : maps); }
@@ -135,7 +155,7 @@ internal sealed class FileBrowserPanel : DockPanel
     private async Task Activate()
     {
         if (entries.SelectedItem is not Entry entry) return;
-        if (entry.Folder) await Toggle(entry);
+        if (entry.Folder) { if (classic) SetFolder(entry.Path); else await Toggle(entry); }
         else if (mode.SelectedIndex == 0) PreviewRequested?.Invoke(entry.Path);
         else OpenMapRequested?.Invoke(entry.Path);
     }
@@ -150,7 +170,7 @@ internal sealed class FileBrowserPanel : DockPanel
         var selected = entries.SelectedItem;
         var visible = new List<Entry>();
         void Add(Entry node) { visible.Add(node); if (node.Expanded && node.Children is { } children) foreach (var child in children) Add(child); }
-        if (root is not null) Add(root);
+        if (root is not null) { if (classic) visible.AddRange(root.Children ?? []); else Add(root); }
         refreshing = true;
         try { entries.ItemsSource = visible; entries.SelectedItem = selected is Entry entry && visible.Contains(entry) ? selected : null; }
         finally { refreshing = false; }
@@ -181,12 +201,19 @@ internal sealed class FileBrowserPanel : DockPanel
         int number = ++scanNumber;
         if (string.IsNullOrWhiteSpace(path)) { root = null; RefreshTree(); location.Text = ""; return; }
         bool samples = mode.SelectedIndex == 0;
+        bool flat = classic;
         try
         {
             string full = Path.GetFullPath(path);
             status.Text = "Loading…";
             var found = await Task.Run(() =>
             {
+                if (flat)
+                {
+                    var folder = new Entry(full, true, -1);
+                    folder.Children = ReadChildren(folder, samples);
+                    return (Root: folder, Target: folder);
+                }
                 var chain = new Stack<string>();
                 for (var dir = new DirectoryInfo(full); dir is not null; dir = dir.Parent) chain.Push(dir.FullName);
                 var first = new Entry(chain.Pop(), true, 0);
@@ -202,7 +229,7 @@ internal sealed class FileBrowserPanel : DockPanel
             });
             if (number != scanNumber) return;
             location.Text = full; root = found.Root; RefreshTree();
-            Dispatcher.UIThread.Post(() =>
+            if (!flat) Dispatcher.UIThread.Post(() =>
             {
                 if (number != scanNumber) return;
                 entries.ScrollIntoView(found.Target);

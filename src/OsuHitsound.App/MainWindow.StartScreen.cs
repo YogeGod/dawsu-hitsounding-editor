@@ -36,6 +36,7 @@ public partial class MainWindow
         Inspector.Reveal(InspectorPanel.ChannelCard);
         BrowserPanelItem.IsChecked = true;
         ShowBrowser(true);
+        if (prefs.ClassicBrowser) Inspector.Reveal("browser");
         Inspector.Browser.Focus();
     }
 

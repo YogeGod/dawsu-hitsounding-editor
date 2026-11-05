@@ -61,6 +61,7 @@ internal sealed record Preferences
     public bool InspectorOpen { get; init; } = true;
 
     public bool BrowserOpen { get; init; } = true;
+    public bool ClassicBrowser { get; init; }
     public double BrowserWidth { get; init; } = 280;
     public bool HistoryOpen { get; init; }
     public bool SoundSetsOpen { get; init; }

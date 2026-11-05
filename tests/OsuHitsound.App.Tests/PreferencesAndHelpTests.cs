@@ -17,7 +17,7 @@ public class PreferencesAndHelpTests : IDisposable
         {
             SongsFolder = @"F:\osu!\Songs", AudioOutput = OutputKind.Asio, OutputDevice = "ASIO4ALL v2", BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
             SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, AuditionOnPlacement = false, InspectorOpen = false, InspectorWidth = 300,
-            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true, GlobalSongOffset = -25,
+            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true, GlobalSongOffset = -25, ClassicBrowser = true,
         }.WithRecent(@"C:\a.osu");
         prefs.Save(path);
 

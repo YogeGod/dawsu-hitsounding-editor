@@ -847,7 +847,12 @@ public partial class MainWindow : Window
         };
         Inspector.Browser.SetRoots(null, prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : null));
         Inspector.ChannelSampleRequested += AssignChannelChoice;
-        Inspector.BrowseChannelSampleRequested += lane => { BrowserPanelItem.IsChecked = true; ShowBrowser(true); Inspector.Browser.Focus(); };
+        Inspector.BrowseChannelSampleRequested += lane =>
+        {
+            BrowserPanelItem.IsChecked = true; ShowBrowser(true);
+            if (prefs.ClassicBrowser) Inspector.Reveal("browser");
+            Inspector.Browser.Focus();
+        };
         Inspector.PreviewChannelRequested += lane =>
         {
             try

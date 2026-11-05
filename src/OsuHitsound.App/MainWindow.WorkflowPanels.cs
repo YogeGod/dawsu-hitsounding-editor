@@ -11,17 +11,30 @@ public partial class MainWindow
 
     private void ShowBrowser(bool open)
     {
-        if (!open && Root.ColumnDefinitions[0].ActualWidth > 0) browserWidth = Root.ColumnDefinitions[0].ActualWidth;
+        bool classic = prefs.ClassicBrowser;
+        if (BrowserHost.IsVisible && (!open || classic) && Root.ColumnDefinitions[0].ActualWidth > 0) browserWidth = Root.ColumnDefinitions[0].ActualWidth;
         // Keep a useful canvas even when both panels are explicitly opened on a small window.
         double width = Bounds.Width <= 0 ? browserWidth : Math.Min(browserWidth, Math.Max(220, Bounds.Width - (Inspector.IsVisible ? InspectorWidthToSave : 0) - 520));
-        Root.ColumnDefinitions[0].Width = new GridLength(open ? width : 0);
-        Root.ColumnDefinitions[1].Width = new GridLength(open ? 4 : 0);
-        BrowserHost.IsVisible = BrowserSplitter.IsVisible = open;
+        bool sidebar = open && !classic;
+        Root.ColumnDefinitions[0].Width = new GridLength(sidebar ? width : 0);
+        Root.ColumnDefinitions[1].Width = new GridLength(sidebar ? 4 : 0);
+        BrowserHost.IsVisible = BrowserSplitter.IsVisible = sidebar;
+        Inspector.SetClassicBrowser(classic, open);
+        if (classic && open) InspectorToggle.IsChecked = true;
+    }
+
+    private void ApplyBrowserStyle()
+    {
+        BrowserHost.Child = null;
+        Inspector.SetClassicBrowser(false, false);
+        Inspector.Browser.SetClassic(prefs.ClassicBrowser);
+        if (!prefs.ClassicBrowser) BrowserHost.Child = Inspector.Browser;
+        UpdateCompactLayout(Bounds.Width > 0 ? Bounds.Width : Width);
+        ShowBrowser(BrowserPanelItem.IsChecked);
     }
 
     private void SetupWorkflowPanels()
     {
-        BrowserHost.Child = Inspector.Browser;
         browserWidth = double.IsFinite(prefs.BrowserWidth) ? Math.Clamp(prefs.BrowserWidth, 220, 500) : 280;
         wideBrowserOpen = prefs.BrowserOpen;
         BrowserPanelItem.IsChecked = prefs.BrowserOpen;
@@ -33,6 +46,6 @@ public partial class MainWindow
         HistoryPanelItem.PropertyChanged += (_, e) => { if (e.Property == MenuItem.IsCheckedProperty) Refresh(); };
         SoundSetsPanelItem.PropertyChanged += (_, e) => { if (e.Property == MenuItem.IsCheckedProperty) Refresh(); };
         RangeToolItem.Click += (_, _) => SetTool(Tool.Range);
-        Refresh(); ShowBrowser(prefs.BrowserOpen);
+        Refresh(); ApplyBrowserStyle();
     }
 }

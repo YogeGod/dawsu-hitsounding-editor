@@ -42,7 +42,7 @@ public partial class MainWindow
 
     private void UpdateCompactLayout(double width)
     {
-        bool browserNarrow = width < 1400;
+        bool browserNarrow = !prefs.ClassicBrowser && width < 1400;
         if (browserNarrow != compactBrowser)
         {
             if (browserNarrow) wideBrowserOpen = BrowserPanelItem.IsChecked;

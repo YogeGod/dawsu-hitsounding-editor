@@ -147,7 +147,7 @@ var area = w.ArrangeArea; var scopedModel = area.Model!;
 Check(w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex == 0, "volume scope defaults to All lanes");
 Check(w.FindControl<Button>("GenerateButton") is null && w.FindControl<MenuItem>("GenerateItem") is not null, "Generate lives in menus");
 var inspector = w.GetLogicalDescendants().OfType<InspectorPanel>().Single();
-Check(!inspector.Order.Contains("selection") && !inspector.Order.Contains("browser"), "left inspector has no selection or embedded browser card");
+Check(!inspector.Order.Contains("selection") && !inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree browser stays outside the inspector");
 Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
 var browserHost = w.FindControl<Border>("BrowserHost")!;
 Check(Grid.GetColumn(browserHost) == 0 && browserHost.Bounds.Height > 400, "browser fills left sidebar");
