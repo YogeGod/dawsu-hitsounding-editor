@@ -44,6 +44,7 @@ internal sealed partial class ArrangeModel
 
     private List<Row> BuildDrumRows()
     {
+        var grouped = BuildGroupedRows();
         var rows = new List<Row>(); var assigned = new HashSet<Lane>();
         foreach (var entry in ActiveDrumMap?.Rows ?? [])
         {
@@ -55,12 +56,18 @@ internal sealed partial class ArrangeModel
                 continue;
             }
             assigned.Add(source.Lane);
+            var children = laneRows.Where(r => RenderParent(r.Lane) == source.Lane && (!hidden.Contains(r.Lane) || Session.State.Hits.Any(h => h.Lane == r.Lane))).ToList();
+            foreach (var child in children) assigned.Add(child.Lane);
             if (Filter.Length == 0 || entry.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase) || MatchesFilter(source.Lane))
+            {
                 rows.Add(source with { DrumEntryId = entry.Id, InstrumentName = entry.Name, Number = rows.Count + 1 });
+                if (!IsFamilyCollapsed(source.Lane) || Filter.Length > 0) rows.AddRange(children);
+            }
         }
         // Never lose access to samples or existing hits when entering the instrument view.
         var withHits = Session.State.Hits.Select(h => h.Lane).ToHashSet();
-        rows.AddRange(laneRows.Where(r => !assigned.Contains(r.Lane) && (!hidden.Contains(r.Lane) || withHits.Contains(r.Lane)) && MatchesFilter(r.Lane)));
+        rows.AddRange(laneRows.Where(r => !assigned.Contains(r.Lane) && RenderFamily(r.Lane) is null && (!hidden.Contains(r.Lane) || withHits.Contains(r.Lane)) && MatchesFilter(r.Lane)));
+        rows.AddRange(grouped.OfType<LaneRow>().Where(r => !assigned.Contains(r.Lane) && RenderFamily(r.Lane) is not null));
         return rows;
     }
 
@@ -75,7 +82,8 @@ internal sealed partial class ArrangeModel
             LaneRow lane => new(Guid.NewGuid(), NameOf(lane.Lane)[..Math.Min(128, NameOf(lane.Lane).Length)], ProjectStore.KeyOf(lane.Lane), ProjectStore.KeyOf(SlotOf(lane.Lane))),
             _ => throw new InvalidOperationException("Select an instrument row.")
         };
-        var pairs = Rows.Select(row => (Row: row, Entry: Entry(row))).ToList();
+        if (source is LaneRow sr && RenderParent(sr.Lane) is not null || target is LaneRow tr && RenderParent(tr.Lane) is not null) return;
+        var pairs = Rows.Where(row => row is not LaneRow r || RenderParent(r.Lane) is null).Select(row => (Row: row, Entry: Entry(row))).ToList();
         var moving = pairs.Single(p => p.Row == source); pairs.Remove(moving);
         int index = pairs.FindIndex(p => p.Row == target); if (index < 0) return;
         pairs.Insert(index + (after ? 1 : 0), moving);

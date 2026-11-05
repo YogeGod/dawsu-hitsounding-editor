@@ -301,6 +301,11 @@ public sealed class AudioEngine : IDisposable
 
     public void StopAudition() => mixer.Audition(null);
 
+    public void SetDrumInstrument(IDrumInstrument? instrument, IReadOnlyDictionary<Lane, int>? notes = null) =>
+        mixer.SetDrumInstrument(instrument, notes);
+
+    public string? DrumInstrumentError => mixer.DrumInstrumentError;
+
     /// <summary>Auditions a resolved map lane, loading an unused custom index on demand.</summary>
     public void Preview(Lane lane, MapFolder folder)
     {

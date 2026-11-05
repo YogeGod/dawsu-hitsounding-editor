@@ -280,6 +280,8 @@
               <MenuItem Name="ScaleVolumeItem" Header="Scale by volume…" />
             </MenuItem>
             <MenuItem Header="Playback">
+              <MenuItem Name="DrumVstItem" Header="Drums VST…" />
+              <Separator />
               <MenuItem Header="Start from">
                 <MenuItem Name="StartCursorItem" Header="Cursor" ToggleType="Radio" GroupName="start" IsChecked="True" />
                 <MenuItem Name="StartLeftItem" Header="Left locator" ToggleType="Radio" GroupName="start" />

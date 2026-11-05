@@ -14,3 +14,6 @@ _Avoid_: Disk folder
 **Lane layout**:
 The visual order of folders and the lanes within them for one map.
 _Avoid_: Note timing, sample assignment
+
+**Keysounding**:
+A separate editor mode for arranging pitched musical notes and turning their instrument sounds into samples assigned to an osu! beatmap. Editable notes and instrument settings remain part of the project.

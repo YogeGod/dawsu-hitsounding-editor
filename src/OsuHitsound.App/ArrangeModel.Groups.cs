@@ -9,8 +9,8 @@ internal sealed partial class ArrangeModel
     private readonly Dictionary<LaneGroup, IReadOnlyList<LaneRow>> closedFolders = [];
 
     public Lane SlotOf(Lane lane) => laneSlots.GetValueOrDefault(lane) ?? lane;
-    public string? FamilyKey(Lane lane) => FamilyOf(SlotOf(lane));
-    public int DepthOf(Lane lane) => DrumMapMode ? 1 : depths.GetValueOrDefault(lane, 1);
+    public string? FamilyKey(Lane lane) => RenderFamily(lane) ?? FamilyOf(SlotOf(lane));
+    public int DepthOf(Lane lane) => DrumRenders.ContainsKey(ProjectStore.KeyOf(lane)) ? 2 : DrumMapMode ? 1 : depths.GetValueOrDefault(lane, 1);
     public bool IsFamilyBase(Lane lane) => FamilyKey(lane) is { } key && familyParents.GetValueOrDefault(key) == lane;
     public IReadOnlyList<LaneRow> FolderChildren(LaneGroup group) => closedFolders.GetValueOrDefault(group) ?? [];
     public Dictionary<string, string> SlotLayout() => laneSlots.ToDictionary(p => ProjectStore.KeyOf(p.Key), p => ProjectStore.KeyOf(p.Value));
@@ -61,7 +61,8 @@ internal sealed partial class ArrangeModel
         foreach (var family in source.GroupBy(r => FamilyKey(r.Lane) ?? "file:" + ProjectStore.KeyOf(r.Lane)))
         {
             var items = family.ToList();
-            var parent = items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 1 })
+            var parent = items.FirstOrDefault(r => RenderFamily(r.Lane) is not null && !DrumRenders.ContainsKey(ProjectStore.KeyOf(r.Lane)))
+                ?? items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 1 })
                 ?? items.FirstOrDefault(r => SlotOf(r.Lane).Sample is { Index: 0 }) ?? items[0];
             yield return parent;
             foreach (var child in items.Where(r => r != parent)) yield return child;

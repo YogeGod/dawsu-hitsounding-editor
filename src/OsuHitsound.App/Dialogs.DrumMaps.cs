@@ -18,7 +18,7 @@ internal static partial class Dialogs
                 SelectedIndex = Math.Max(0, maps.Presets.FindIndex(p => p.Id == maps.Active)) };
             Guid? Selected() => list.SelectedIndex is >= 0 and var i && i < maps.Presets.Count ? maps.Presets[i].Id : null;
             var detail = MergeText("");
-            void Refresh() { detail.Text = Selected() is { } id ? string.Join("\n", maps.Presets.Single(p => p.Id == id).Rows.Take(8).Select(r => r.Name + " → " + (ProjectStore.LaneOf(r.LaneKey ?? "")?.Name ?? "Unassigned"))) : "New Map creates an editing preset, not a .osu difficulty."; }
+            void Refresh() { detail.Text = Selected() is { } id ? string.Join("\n", maps.Presets.Single(p => p.Id == id).Rows.Take(8).Select(r => r.Name + (r.MidiNote is { } note ? $" · MIDI {note}" : " · MIDI unassigned") + " → " + (ProjectStore.LaneOf(r.LaneKey ?? "")?.Name ?? "Unassigned"))) : "New Map creates an editing preset, not a .osu difficulty."; }
             list.SelectionChanged += (_, _) => Refresh(); Refresh();
             Button Command(string label, string command, bool needsMap = true)
             {
@@ -37,10 +37,10 @@ internal static partial class Dialogs
         {
             var name = new TextBox { Text = preset.Name, MaxLength = 128, Width = 500, HorizontalAlignment = HorizontalAlignment.Left };
             Avalonia.Automation.AutomationProperties.SetName(name, "Drum-map name");
-            body.Children.AddRange([MergeText("Map name"), name, MergeText("Instrument names and sample assignments only. Removing a row keeps its notes. Two rows assigned to one sample mirror the same hits.")]);
+            body.Children.AddRange([MergeText("Map name"), name, MergeText("Instrument names, sample assignments and MIDI notes (0–127, percussion channel 10). Clear a MIDI note to leave it unassigned. GM does not distinguish all kit articulations, so some rows share a note. Removing a row keeps its hits.")]);
             var available = lanes.ToList();
             var list = new StackPanel { Spacing = 6 };
-            var entries = new List<(Guid Id, TextBox Name, ComboBox Sample, StackPanel Row)>();
+            var entries = new List<(Guid Id, TextBox Name, ComboBox Sample, NumericUpDown Midi, StackPanel Row)>();
             var options = new ObservableCollection<string>(new[] { "Unassigned" }.Concat(available.Select(l => labels?.GetValueOrDefault(l.Lane) ?? (l.Slot.Name == l.Lane.Name ? l.Lane.Name : l.Slot.Name + " · " + l.Lane.Name))));
             void Add(DrumMapEntry entry)
             {
@@ -49,6 +49,8 @@ internal static partial class Dialogs
                     SelectedIndex = available.FindIndex(l => ProjectStore.KeyOf(l.Lane) == entry.LaneKey) + 1 };
                 Avalonia.Automation.AutomationProperties.SetName(label, "Instrument name");
                 Avalonia.Automation.AutomationProperties.SetName(sample, "Assigned sample for " + entry.Name);
+                var midi = new NumericUpDown { Minimum = 0, Maximum = 127, Increment = 1, FormatString = "0", Value = entry.MidiNote, Width = 128 };
+                Avalonia.Automation.AutomationProperties.SetName(midi, "MIDI note for " + entry.Name);
                 var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Tag = entry.Id };
                 if (focusEntry == entry.Id) sample.AttachedToVisualTree += (_, _) => { sample.Focus(); row.BringIntoView(); };
                 var up = new Button { Content = "Up" }; var down = new Button { Content = "Down" }; var remove = new Button { Content = "Remove" };
@@ -61,8 +63,8 @@ internal static partial class Dialogs
                 }
                 up.Click += (_, _) => Move(-1); down.Click += (_, _) => Move(1);
                 remove.Click += (_, _) => { entries.RemoveAll(e => e.Id == entry.Id); list.Children.Remove(row); };
-                row.Children.AddRange([label, sample, up, down, remove]);
-                entries.Add((entry.Id, label, sample, row)); list.Children.Add(row);
+                row.Children.AddRange([label, sample, midi, up, down, remove]);
+                entries.Add((entry.Id, label, sample, midi, row)); list.Children.Add(row);
             }
             foreach (var entry in preset.Rows) Add(entry);
             var add = new Button { Content = "Add instrument" };
@@ -89,16 +91,20 @@ internal static partial class Dialogs
             };
             var layerTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             layerTools.Children.AddRange([family, extra]);
-            var headings = new Grid { ColumnDefinitions = new ColumnDefinitions("150,250,*"), ColumnSpacing = 4 };
+            var headings = new Grid { ColumnDefinitions = new ColumnDefinitions("150,250,128,*"), ColumnSpacing = 4 };
             headings.Children.Add(MergeText("Instrument"));
             var assignedHeading = MergeText("Assigned sample"); Grid.SetColumn(assignedHeading, 1); headings.Children.Add(assignedHeading);
+            var midiHeading = MergeText("MIDI note"); Grid.SetColumn(midiHeading, 2); headings.Children.Add(midiHeading);
             body.Children.AddRange([MergeText("Add extra layers for any instrument. Missing numbered samples use the bundled family default."), layerTools,
                 headings, list, add, error]);
             return (() =>
             {
-                var rows = entries.Select(e => e.Sample.SelectedIndex > 0 && e.Sample.SelectedIndex <= available.Count
+                if (entries.Any(e => e.Midi.Value is { } value && value != decimal.Truncate(value)))
+                { error.Text = "Use whole MIDI note numbers from 0 to 127, or clear the field."; return; }
+                var rows = entries.Select(e => (e.Sample.SelectedIndex > 0 && e.Sample.SelectedIndex <= available.Count
                     ? new DrumMapEntry(e.Id, e.Name.Text?.Trim() ?? "", ProjectStore.KeyOf(available[e.Sample.SelectedIndex - 1].Lane), ProjectStore.KeyOf(available[e.Sample.SelectedIndex - 1].Slot))
-                    : new DrumMapEntry(e.Id, e.Name.Text?.Trim() ?? "", null, preset.Rows.FirstOrDefault(r => r.Id == e.Id)?.SlotKey)).ToImmutableList();
+                    : new DrumMapEntry(e.Id, e.Name.Text?.Trim() ?? "", null, preset.Rows.FirstOrDefault(r => r.Id == e.Id)?.SlotKey))
+                    with { MidiNote = e.Midi.Value is { } note ? decimal.ToInt32(note) : null }).ToImmutableList();
                 var edited = preset with { Name = name.Text?.Trim() ?? "", Rows = rows, Audio = [] };
                 try { edited.Validate(); close(edited); } catch (FormatException ex) { error.Text = ex.Message; }
             }, "Save map");

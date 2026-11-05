@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Vst3NativeDirectory Condition="'$(Vst3HostDll)' != ''">$([System.IO.Path]::GetDirectoryName('$(Vst3HostDll)'))</Vst3NativeDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(Vst3NativeDirectory)/dawsu_vst3_scan.exe" Link="dawsu_vst3_scan.exe" CopyToOutputDirectory="PreserveNewest" Condition="'$(Vst3NativeDirectory)' != '' And Exists('$(Vst3NativeDirectory)/dawsu_vst3_scan.exe')" />
+    <ProjectReference Include="../../src/OsuHitsound.Audio/OsuHitsound.Audio.csproj" />
+    <None Include="$(Vst3HostDll)" Link="dawsu_vst3.dll" CopyToOutputDirectory="PreserveNewest"
+          Condition="'$(Vst3HostDll)' != '' And Exists('$(Vst3HostDll)')" />
+  </ItemGroup>
+</Project>

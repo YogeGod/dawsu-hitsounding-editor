@@ -23,6 +23,8 @@ public sealed record HsProject(bool Enabled, bool StartedEmpty, string FileHash,
 /// What a .osu can't hold, kept per map by the editor: hits with no object, lane names, order, added and hidden
 /// lanes, cycle locators, preview mutes and the song offset. Lanes are stored as keys (see <see cref="ProjectStore.KeyOf"/>).
 /// </summary>
+public sealed record DrumRenderSource(string Parent, int Note, int Velocity);
+
 public sealed record ProjectData
 {
     public Dictionary<int, string> BookmarkLabels { get; init; } = [];
@@ -37,6 +39,7 @@ public sealed record ProjectData
 
     public Dictionary<string, string> LaneNames { get; init; } = [];
     public Dictionary<string, string> LaneSlots { get; init; } = [];
+    public Dictionary<string, DrumRenderSource> DrumRenders { get; init; } = [];
 
     public List<string> LaneOrder { get; init; } = [];
 

@@ -4,7 +4,30 @@ using OsuHitsound.Format;
 
 namespace OsuHitsound.Lanes;
 
-public sealed record DrumMapEntry(Guid Id, string Name, string? LaneKey, string? SlotKey);
+public sealed record DrumMapEntry(Guid Id, string Name, string? LaneKey, string? SlotKey)
+{
+    // Missing fields in older presets acquire the starter mapping; explicit null stays unassigned.
+    public int? MidiNote { get; init; } = DrumMapMidi.DefaultNote(Name);
+}
+
+/// <summary>General MIDI percussion notes (channel 10). Articulations absent from GM share their nearest sound.</summary>
+public static class DrumMapMidi
+{
+    public static int? DefaultNote(string name) => name switch
+    {
+        "Kick" => 36,
+        "Snare" or "Ghost Notes" => 38,
+        "T1" => 50, "T2" => 48, "T3" => 45, "T4" => 41,
+        "Tight Tip" or "Tight Edge" or "Closed Tip" or "Closed Edge" => 42,
+        "Hi-Hat Open 1" or "Hi-Hat Open 2" or "Hi-Hat Open 3" => 46,
+        "Ride Bell" => 53,
+        "Bow Ride (Low)" => 51, "Bow Ride (High)" or "Ride Crash" => 59,
+        "Right Crash" => 49, "Left Crash" => 57,
+        "China" or "Stack" => 52,
+        "Mini Stack Left" or "Mini Stack Right" or "Splash" => 55,
+        _ => null
+    };
+}
 public sealed record DrumMapAudio(string LaneKey, string SlotKey, byte[] Bytes);
 public sealed record DrumMapPreset(Guid Id, string Name, ImmutableList<DrumMapEntry> Rows)
 {
@@ -13,7 +36,7 @@ public sealed record DrumMapPreset(Guid Id, string Name, ImmutableList<DrumMapEn
     public void Validate()
     {
         if (Id == Guid.Empty || string.IsNullOrWhiteSpace(Name) || Name.Length > 128 || Rows is null || Audio is null || Rows.Count > 4096 || Audio.Count > 512 ||
-            Rows.Any(r => r is null || r.Id == Guid.Empty || string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 128 || !ValidKey(r.LaneKey) || !ValidKey(r.SlotKey)) ||
+            Rows.Any(r => r is null || r.Id == Guid.Empty || string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 128 || r.MidiNote is < 0 or > 127 || !ValidKey(r.LaneKey) || !ValidKey(r.SlotKey)) ||
             Rows.Select(r => r.Id).Distinct().Count() != Rows.Count ||
             Audio.Any(a => a is null || !ValidKey(a.LaneKey) || !ValidKey(a.SlotKey) || a.LaneKey is null || a.SlotKey is null || a.Bytes is not { Length: > 0 and <= 33554432 }) ||
             Audio.Select(a => a.LaneKey).Distinct().Count() != Audio.Count || Audio.Sum(a => (long)a.Bytes.Length) > 67108864)

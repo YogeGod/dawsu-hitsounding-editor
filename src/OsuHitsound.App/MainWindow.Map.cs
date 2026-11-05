@@ -323,6 +323,7 @@ public partial class MainWindow
             Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time) { Volume = session.State.LayerVolumes.TryGetValue(h, out int volume) ? volume : null })],
             LaneNames = names,
             LaneSlots = model.SlotLayout(),
+            DrumRenders = model.DrumRenders.ToDictionary(),
             LaneOrder = order,
             ActiveLane = model.ActiveLane is { } active ? ProjectStore.KeyOf(active) : null,
             AddedLanes = added,

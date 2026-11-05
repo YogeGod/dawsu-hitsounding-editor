@@ -6,6 +6,23 @@ namespace OsuHitsound.Lanes.Tests;
 
 public sealed class SoundSetTests : IDisposable
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Drum_render_detaches_only_converted_member_and_undo_restores_binding(bool hs)
+    {
+        var s = Session(hs); var set = Set(); s.SaveSoundSet(set);
+        var hits = s.ApplySoundSet(set.Id, 1000); var original = s.State;
+        var wav = new Lane(LaneSource.BeatmapFile, "rendered.wav");
+        s.ApplyDrumRender(new Dictionary<EditHit, Lane> { [hits[0]] = wav });
+        var rendered = Assert.Single(s.State.Hits, h => h.Lane == wav);
+        Assert.Equal(Guid.Empty, rendered.SetPlacement); Assert.Equal(100, s.VolumeOf(rendered));
+        Assert.Equal(40, s.VolumeOf(s.State.Hits.Single(h => h.SetMember == hits[1].SetMember)));
+        s.SaveSoundSet(set with { Name = "Renamed after render" });
+        Assert.Contains(s.State.Hits, h => h.Lane == wav); Assert.Equal(2, s.State.Hits.Count);
+        s.Undo(); s.Undo(); Assert.Equal(original.Hits, s.State.Hits);
+    }
+
     [Fact]
     public void Independent_volume_edit_on_owned_member_survives_set_rendering()
     {
