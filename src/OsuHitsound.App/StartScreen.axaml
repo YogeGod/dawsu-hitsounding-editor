@@ -2,9 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OsuHitsound.App.StartScreen"
              Background="#16191f">
-  <!-- What opens before a map does: four large choices over the empty editor. The title bar stays above it. -->
   <UserControl.Resources>
-    <!-- Bundled OFL fonts (Assets/Fonts); Inter and the LCD's mono fonts if they are missing. -->
     <FontFamily x:Key="StartHeading">avares://OsuHitsoundEditor/Assets/Fonts#Archivo Expanded, $Default</FontFamily>
     <FontFamily x:Key="StartMono">avares://OsuHitsoundEditor/Assets/Fonts#Martian Mono, Cascadia Mono, Consolas</FontFamily>
     <SolidColorBrush x:Key="StartCard" Color="#1f242c" />
@@ -13,7 +11,7 @@
     <SolidColorBrush x:Key="StartText" Color="#e9edf2" />
     <SolidColorBrush x:Key="StartMuted" Color="#a3adbb" />
     <SolidColorBrush x:Key="StartFaint" Color="#7d8796" />
-    <!-- Lucide icons (ISC licence), 24×24, drawn as strokes like the editor's own icons -->
+    <!-- Lucide icons (ISC). See THIRD-PARTY-NOTICES.txt. -->
     <StreamGeometry x:Key="IconFolderOpen">M6 14l1.5 -2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1 -1.95 1.5H4a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h3.9a2 2 0 0 1 1.69 0.9l0.81 1.2a2 2 0 0 0 1.67 0.9H18a2 2 0 0 1 2 2v2</StreamGeometry>
     <StreamGeometry x:Key="IconHistory">M3 12a9 9 0 1 0 9 -9a9.75 9.75 0 0 0 -6.74 2.74L3 8 M3 3v5h5 M12 7v5l4 2</StreamGeometry>
     <StreamGeometry x:Key="IconWaveform">M2 13a2 2 0 0 0 2 -2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2 -2</StreamGeometry>
@@ -97,7 +95,6 @@
   </UserControl.Styles>
 
   <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" RowDefinitions="Auto,22,Auto,22,Auto">
-    <!-- Name and version -->
     <DockPanel>
       <TextBlock Name="Version" DockPanel.Dock="Right" VerticalAlignment="Bottom" Margin="0,0,0,4" Classes="mono" Foreground="{StaticResource StartFaint}" FontSize="11" Text="hitsound studio" />
       <TextBlock FontFamily="{StaticResource StartHeading}" FontWeight="ExtraBold" FontSize="26" Foreground="{StaticResource StartText}">
@@ -140,7 +137,6 @@
       </Button>
 
       <Panel Classes="soon" AutomationProperties.Name="Keysounding, coming soon" ToolTip.Tip="Keysounding isn't in the editor yet">
-        <!-- Keysounding isn't built yet: a dashed, greyed outline instead of a card -->
         <Rectangle RadiusX="6" RadiusY="6" Stroke="#3a414c" StrokeThickness="1" StrokeDashArray="4,3" />
         <Grid Margin="18">
           <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-8" Padding="8,1" CornerRadius="9" BorderThickness="1" BorderBrush="#3a414c">
@@ -155,7 +151,6 @@
       </Panel>
     </UniformGrid>
 
-    <!-- Footer: the app's own entry points, and where imports go -->
     <Border Grid.Row="4" BorderBrush="#262c35" BorderThickness="0,1,0,0" Padding="0,10,0,0">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">

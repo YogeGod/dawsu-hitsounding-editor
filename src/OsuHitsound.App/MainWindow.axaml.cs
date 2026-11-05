@@ -1248,7 +1248,7 @@ public partial class MainWindow : Window
         Resources["LcdFontSize"] = t.Number("lcd.fontSize");
         Resources["PlayIcon"] = B("play.icon");
         Resources["VolumeSide"] = B("volume.side");
-        Resources["WaveLow"] = B("wave.low"); // the start screen's icons follow the waveform colours
+        Resources["WaveLow"] = B("wave.low");
         Resources["WaveMid"] = B("wave.mid");
         Resources["WaveHigh"] = B("wave.high");
         if (Avalonia.Application.Current is { } app)

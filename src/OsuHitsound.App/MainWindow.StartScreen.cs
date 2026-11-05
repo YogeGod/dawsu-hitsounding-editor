@@ -2,8 +2,7 @@ using Avalonia.Input;
 
 namespace OsuHitsound.App;
 
-/// <summary>The start screen over the empty editor (<see cref="StartScreen"/>): shown when the app opens without a map,
-/// gone once one opens. The title bar, menus and drag-and-drop keep working while it shows.</summary>
+/// <summary>The start screen (<see cref="StartScreen"/>): shown when the app opens without a map, hidden once one opens.</summary>
 public partial class MainWindow
 {
     private void SetupStartScreen(bool show)
@@ -30,8 +29,7 @@ public partial class MainWindow
 
     private void HideStartScreen() => Start.IsVisible = false;
 
-    /// <summary>"Edit samples": the empty editor, the right-hand file browser open, and the Active lane card on top, unfolded.
-    /// The file browser is no longer an inspector card.</summary>
+    /// <summary>Leaves the start screen with the file browser and the Active lane card open.</summary>
     private void ShowSampleTools()
     {
         HideStartScreen();
