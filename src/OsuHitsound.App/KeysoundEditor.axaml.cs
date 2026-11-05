@@ -26,6 +26,8 @@ public partial class KeysoundEditor : UserControl
     private static Task<SfzInstrument>? piano;
     private CancellationTokenSource? waveCancel;
     private string status = "";
+    // Copied notes, shared between projects in a session (not the system clipboard).
+    private static IReadOnlyList<KeyNote> clipboard = [];
     private string trackListKey = "";
     private static readonly Cursor Hand = new(StandardCursorType.Hand);
 
@@ -41,6 +43,9 @@ public partial class KeysoundEditor : UserControl
         SelectTool.Click += (_, _) => SetTool(KeyTool.Select);
         DrawTool.Click += (_, _) => SetTool(KeyTool.Draw);
         EraseTool.Click += (_, _) => SetTool(KeyTool.Erase);
+        SplitTool.Click += (_, _) => SetTool(KeyTool.Split);
+        GlueTool.Click += (_, _) => SetTool(KeyTool.Glue);
+        InsertVelocityBox.ValueChanged += (_, _) => Roll.InsertVelocity = (int)Math.Clamp(InsertVelocityBox.Value ?? 100, 1, 127);
         UndoButton.Click += (_, _) => doc?.Session.Undo();
         RedoButton.Click += (_, _) => doc?.Session.Redo();
         ZoomInButton.Click += (_, _) => Roll.ZoomTime(1.25);
@@ -203,6 +208,8 @@ public partial class KeysoundEditor : UserControl
         SelectTool.IsChecked = tool == KeyTool.Select;
         DrawTool.IsChecked = tool == KeyTool.Draw;
         EraseTool.IsChecked = tool == KeyTool.Erase;
+        SplitTool.IsChecked = tool == KeyTool.Split;
+        GlueTool.IsChecked = tool == KeyTool.Glue;
     }
 
     // Tracks.
@@ -396,13 +403,23 @@ public partial class KeysoundEditor : UserControl
             case Key.Delete or Key.Back when mods == KeyModifiers.None: Roll.DeleteSelection(); return true;
             case Key.Up when !ctrl: Roll.Transpose(shift ? 12 : 1); return true;
             case Key.Down when !ctrl: Roll.Transpose(shift ? -12 : -1); return true;
-            case Key.Left when !ctrl: Roll.Nudge(-1); return true;
-            case Key.Right when !ctrl: Roll.Nudge(1); return true;
+            case Key.Left when ctrl: Roll.Nudge(-1); return true; // Cubase's Nudge Left/Right: one grid step
+            case Key.Right when ctrl: Roll.Nudge(1); return true;
+            case Key.Left: Roll.SelectNeighbour(-1, extend: shift); return true; // previous / next note; Shift adds it
+            case Key.Right: Roll.SelectNeighbour(1, extend: shift); return true;
+            case Key.D when ctrl && !shift: Roll.Duplicate(); return true;
+            case Key.C when ctrl && !shift: clipboard = Roll.CopySelection(); return true;
+            case Key.X when ctrl && !shift: clipboard = Roll.CopySelection(); Roll.DeleteSelection(); return true;
+            case Key.V when ctrl && !shift: Roll.Paste(clipboard, Roll.Playhead); return true;
+            case Key.Q when mods == KeyModifiers.None: Roll.QuantizeSelection(); return true;
             case Key.Space when mods == KeyModifiers.None: TogglePlay(); return true;
             case Key.Home when mods == KeyModifiers.None: Seek(0); return true;
+            // Cubase's tool numbers.
             case Key.D1 or Key.NumPad1 when mods == KeyModifiers.None: SetTool(KeyTool.Select); return true;
-            case Key.D3 or Key.NumPad3 when mods == KeyModifiers.None: SetTool(KeyTool.Draw); return true;
-            case Key.D4 or Key.NumPad4 when mods == KeyModifiers.None: SetTool(KeyTool.Erase); return true;
+            case Key.D3 or Key.NumPad3 when mods == KeyModifiers.None: SetTool(KeyTool.Split); return true;
+            case Key.D4 or Key.NumPad4 when mods == KeyModifiers.None: SetTool(KeyTool.Glue); return true;
+            case Key.D5 or Key.NumPad5 when mods == KeyModifiers.None: SetTool(KeyTool.Erase); return true;
+            case Key.D8 or Key.NumPad8 when mods == KeyModifiers.None: SetTool(KeyTool.Draw); return true;
             case Key.J when mods == KeyModifiers.None: SnapToggle.IsChecked = SnapToggle.IsChecked != true; return true;
             case Key.H when mods == KeyModifiers.None: Roll.ZoomTime(1.25); return true;
             case Key.G when mods == KeyModifiers.None: Roll.ZoomTime(0.8); return true;

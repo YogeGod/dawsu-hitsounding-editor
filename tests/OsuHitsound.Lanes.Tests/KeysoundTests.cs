@@ -293,3 +293,81 @@ public class KeysoundStoreTests : IDisposable
         Assert.Equal("A_ B [C] (2)", Path.GetFileName(KeysoundStore.SuggestFolder(root, @"C:\x\A: B [C].osu")));
     }
 }
+
+public class KeyEditingTests
+{
+    private static KeyNote N(long start, long length, int pitch = 60) => new(Guid.NewGuid(), start, length, pitch, 100);
+
+    [Fact]
+    public void Split_cuts_only_notes_that_contain_the_tick_and_keeps_the_left_id()
+    {
+        var inside = N(0, 960);
+        var edge = N(480, 480); // starts exactly at the tick: untouched
+        var (changed, added) = KeyEditing.Split([inside, edge], 480);
+        var left = Assert.Single(changed);
+        var right = Assert.Single(added);
+        Assert.Equal((inside.Id, 0L, 480L), (left.Id, left.Start, left.Length));
+        Assert.Equal((480L, 480L, 60, 100), (right.Start, right.Length, right.Pitch, right.Velocity));
+        Assert.NotEqual(inside.Id, right.Id);
+    }
+
+    [Fact]
+    public void Glue_joins_with_the_next_note_of_the_same_pitch()
+    {
+        var a = N(0, 240);
+        var other = N(300, 100, pitch: 62);
+        var b = N(480, 480);
+        var later = N(2000, 100);
+        var (joined, removed) = KeyEditing.Glue([later, b, other, a], a)!.Value;
+        Assert.Equal(b.Id, removed.Id);
+        Assert.Equal((a.Id, 0L, 960L), (joined.Id, joined.Start, joined.Length));
+        Assert.Null(KeyEditing.Glue([a, later], later));
+    }
+
+    [Fact]
+    public void Duplicate_places_copies_after_the_selection_and_paste_keeps_spacing()
+    {
+        var notes = new[] { N(960, 480), N(1440, 960, 64) };
+        var copies = KeyEditing.Duplicate(notes);
+        Assert.Equal([2400L, 2880L], copies.Select(c => c.Start));
+        Assert.DoesNotContain(copies, c => notes.Any(n => n.Id == c.Id));
+
+        var pasted = KeyEditing.PasteAt(notes, 100);
+        Assert.Equal([100L, 580L], pasted.Select(c => c.Start));
+    }
+
+    [Fact]
+    public void Quantize_moves_starts_onto_the_grid()
+    {
+        var notes = new[] { N(250, 100), N(700, 100) };
+        var q = KeyEditing.Quantize(notes, t => (long)Math.Round(t / 480.0) * 480);
+        Assert.Equal([480L, 480L], q.Select(n => n.Start));
+        Assert.Equal([100L, 100L], q.Select(n => n.Length));
+    }
+
+    [Fact]
+    public void Neighbours_follow_time_then_pitch_and_following_of_pitch_selects_later_notes()
+    {
+        var a = N(0, 10, 60); var b = N(0, 10, 64); var c = N(480, 10, 60);
+        Assert.Same(a, KeyEditing.Neighbour([c, b, a], null, 1));
+        Assert.Same(b, KeyEditing.Neighbour([c, b, a], a, 1));
+        Assert.Same(c, KeyEditing.Neighbour([c, b, a], b, 1));
+        Assert.Null(KeyEditing.Neighbour([c, b, a], c, 1));
+        Assert.Same(a, KeyEditing.Neighbour([c, b, a], b, -1));
+        Assert.Equal([a.Id, c.Id], KeyEditing.FollowingOfPitch([a, b, c], a).Select(n => n.Id));
+    }
+
+    [Fact]
+    public void Replace_notes_is_one_undo_step()
+    {
+        var track = KeyTrack.Create("Piano");
+        var s = new KeysoundSession(new KeysoundState([track]));
+        var a = N(0, 960);
+        s.AddNotes(track.Id, [a]);
+        var (changed, added) = KeyEditing.Split([a], 480);
+        s.ReplaceNotes(track.Id, new HashSet<Guid>(), changed, added, "Split");
+        Assert.Equal(2, s.State.Track(track.Id)!.Notes.Count);
+        s.Undo();
+        Assert.Equal(a, Assert.Single(s.State.Track(track.Id)!.Notes));
+    }
+}

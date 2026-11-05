@@ -129,6 +129,17 @@ public sealed class KeysoundSession
             : s);
     }
 
+    /// <summary>One step that removes, changes and adds notes together (split, glue, paste over).</summary>
+    public void ReplaceNotes(Guid track, IReadOnlySet<Guid> remove, IReadOnlyCollection<KeyNote> changed, IReadOnlyCollection<KeyNote> add, string label)
+    {
+        if (remove.Count == 0 && changed.Count == 0 && add.Count == 0) return;
+        var byId = changed.ToDictionary(n => n.Id);
+        Change(label, s => s.Track(track) is null ? s : s.WithTrack(track, t => t with
+        {
+            Notes = t.Notes.RemoveAll(n => remove.Contains(n.Id)).ConvertAll(n => byId.GetValueOrDefault(n.Id, n)).AddRange(add),
+        }));
+    }
+
     /// <summary>Replaces the notes with these ids by the given versions (moves, resizes, velocity and pitch changes).</summary>
     public void UpdateNotes(Guid track, IReadOnlyCollection<KeyNote> updated, string label)
     {

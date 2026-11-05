@@ -9,7 +9,8 @@ using OsuHitsound.Lanes.Keysound;
 
 namespace OsuHitsound.App;
 
-internal enum KeyTool { Select, Draw, Erase }
+/// <summary>The key editor's tools, numbered as Cubase's (1 Select, 3 Split, 4 Glue, 5 Erase, 8 Draw).</summary>
+internal enum KeyTool { Select, Draw, Erase, Split, Glue }
 
 /// <summary>
 /// Keysound mode's key editor, after Cubase's Key Editor: a ruler, a strip with the reference's gameplay objects over the
@@ -20,7 +21,6 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 {
     public const double KeyboardWidth = 64, RulerHeight = 24, StripHeight = 46, VelocityHeight = 88, MinRow = 6, MaxRow = 30;
     private const double EdgeGrab = 6, DragThreshold = 3;
-    private const int DefaultVelocity = 100;
 
     private static readonly IBrush WhiteRow = Paint.Brush("#26272b"), BlackRow = Paint.Brush("#1d1e21");
     private static readonly IBrush WhiteKey = Paint.Brush("#e8e8ea"), BlackKey = Paint.Brush("#1a1a1c"), KeyText = Paint.Brush("#55565c");
@@ -56,6 +56,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public int SnapDivisions { get; set; } = 4; // beats are split into this many grid steps
     public bool ShowGhosts { get; set; } = true;
     public bool ShowMarkers { get; set; } = true;
+    /// <summary>Cubase's Note Insert Velocity: what drawn notes get.</summary>
+    public int InsertVelocity { get; set; } = 100;
 
     /// <summary>A note to hear now (pitch, velocity): a clicked key, a drawn, selected or re-pitched note.</summary>
     public event Action<int, int>? AuditionRequested;
@@ -407,7 +409,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     // Editing.
 
-    private enum DragKind { Move, Resize, Draw, Box, Erase, Velocity }
+    private enum DragKind { Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity }
 
     private sealed class Drag(DragKind kind, Point start)
     {
@@ -418,6 +420,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         public Dictionary<Guid, KeyNote> Originals { get; } = [];
         public KeyNote? Anchor { get; set; } // the note under the pointer
         public HashSet<Guid> BoxBase { get; } = [];
+        public Dictionary<Guid, Guid> CopyIds { get; } = []; // original → copy, for Alt+drag
         public int PitchShift { get; set; } // the last pitch change of a move, to audition each new pitch once
     }
 
@@ -445,7 +448,16 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         if (p.X < KeyboardWidth && Grid.Contains(new Point(KeyboardWidth, p.Y)))
         {
-            AuditionRequested?.Invoke(PitchOfY(p.Y), DefaultVelocity); // the keyboard plays its key
+            int key = PitchOfY(p.Y);
+            AuditionRequested?.Invoke(key, InsertVelocity); // the keyboard plays its key
+            if (mods.HasFlag(KeyModifiers.Control) && Track is { } keyTrack) // Ctrl+click selects every note of that pitch
+            {
+                if (!mods.HasFlag(KeyModifiers.Shift)) selection.Clear();
+                selection.UnionWith(keyTrack.Notes.Where(n => n.Pitch == key).Select(n => n.Id));
+                InvalidateVisual();
+                ViewChanged?.Invoke();
+            }
+
             e.Handled = true;
             return;
         }
@@ -475,9 +487,30 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             return;
         }
 
-        var tool = mods.HasFlag(KeyModifiers.Alt) ? KeyTool.Draw : Tool;
-        switch (tool)
+        switch (Tool)
         {
+            case KeyTool.Split when hit is not null:
+            {
+                // At the snapped click; a click on a selected note splits every selected note there.
+                long at = doc.Tempo.RoundTick(SnapTime(TimeOfX(p.X)));
+                var targets = selection.Contains(hit.Id) ? track.Notes.Where(n => selection.Contains(n.Id)) : [hit];
+                var (changed, added) = KeyEditing.Split(targets, at);
+                session.ReplaceNotes(track.Id, new HashSet<Guid>(), changed, added, "Split notes");
+                break;
+            }
+
+            case KeyTool.Glue when hit is not null:
+                if (KeyEditing.Glue(track.Notes, hit) is var (joined, removed))
+                {
+                    session.ReplaceNotes(track.Id, new HashSet<Guid> { removed.Id }, [joined], [], "Glue notes");
+                    selection.Remove(removed.Id);
+                }
+
+                break;
+
+            case KeyTool.Split or KeyTool.Glue:
+                break;
+
             case KeyTool.Erase:
                 drag = new Drag(DragKind.Erase, p);
                 session.BeginGesture("Erase notes");
@@ -491,7 +524,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             case KeyTool.Draw:
             {
                 long startTick = doc.Tempo.RoundTick(FloorSnap(TimeOfX(p.X)));
-                var note = new KeyNote(Guid.NewGuid(), startTick, StepTicks, PitchOfY(p.Y), LastVelocity());
+                var note = new KeyNote(Guid.NewGuid(), startTick, StepTicks, PitchOfY(p.Y), InsertVelocity);
                 selection.Clear();
                 selection.Add(note.Id);
                 StartGesture(DragKind.Draw, p, note, track, "Draw note");
@@ -500,15 +533,37 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 break;
             }
 
+            case KeyTool.Select when hit is not null && e.ClickCount == 2 && mods.HasFlag(KeyModifiers.Shift):
+                // Cubase: Shift+double-click selects this note and every later one of its pitch.
+                selection.UnionWith(KeyEditing.FollowingOfPitch(track.Notes, hit).Select(n => n.Id));
+                break;
+
             case KeyTool.Select when hit is not null:
             {
-                if (mods.HasFlag(KeyModifiers.Control)) { if (!selection.Remove(hit.Id)) selection.Add(hit.Id); }
-                else if (mods.HasFlag(KeyModifiers.Shift)) selection.Add(hit.Id);
+                bool velocity = mods.HasFlag(KeyModifiers.Control) && mods.HasFlag(KeyModifiers.Shift);
+                if (!velocity)
+                {
+                    if (mods.HasFlag(KeyModifiers.Control)) { if (!selection.Remove(hit.Id)) selection.Add(hit.Id); }
+                    else if (mods.HasFlag(KeyModifiers.Shift)) selection.Add(hit.Id);
+                    else if (!selection.Contains(hit.Id)) { selection.Clear(); selection.Add(hit.Id); }
+                }
                 else if (!selection.Contains(hit.Id)) { selection.Clear(); selection.Add(hit.Id); }
+
                 if (!selection.Contains(hit.Id)) break;
                 AuditionRequested?.Invoke(hit.Pitch, hit.Velocity);
-                bool resize = OnRightEdge(hit, p);
-                StartGesture(resize ? DragKind.Resize : DragKind.Move, p, hit, track, resize ? "Resize notes" : "Move notes");
+                var (kind, label) = velocity ? (DragKind.NoteVelocity, "Velocity")
+                    : OnRightEdge(hit, p) ? (DragKind.Resize, "Resize notes")
+                    : OnLeftEdge(hit, p) ? (DragKind.ResizeStart, "Resize notes")
+                    : mods.HasFlag(KeyModifiers.Alt) ? (DragKind.Copy, "Copy notes") // Cubase: Alt+drag copies
+                    : (DragKind.Move, "Move notes");
+                StartGesture(kind, p, hit, track, label);
+                if (kind == DragKind.Copy)
+                {
+                    foreach (var id in drag!.Originals.Keys) drag.CopyIds[id] = Guid.NewGuid();
+                    selection.Clear();
+                    selection.UnionWith(drag.CopyIds.Values); // the copies are what's selected afterwards
+                }
+
                 break;
             }
 
@@ -540,10 +595,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         selection.Remove(note.Id);
     }
 
-    // The resize handle: the last few pixels, at most a quarter of a short note so it can still be moved.
+    // The resize handles: the first and last few pixels, at most a quarter of a short note so it can still be moved.
     private bool OnRightEdge(KeyNote n, Point p) => NoteRect(n) is var r && p.X >= r.Right - Math.Min(EdgeGrab, r.Width / 4);
-
-    private int LastVelocity() => Track?.Notes.Where(n => selection.Contains(n.Id)).Select(n => n.Velocity).DefaultIfEmpty(DefaultVelocity).First() ?? DefaultVelocity;
+    private bool OnLeftEdge(KeyNote n, Point p) => NoteRect(n) is var r && p.X <= r.Left + Math.Min(EdgeGrab, r.Width / 4);
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
@@ -551,7 +605,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         var p = e.GetPosition(this);
         if (drag is null)
         {
-            Cursor = Tool == KeyTool.Select && NoteAt(p) is { } n && OnRightEdge(n, p) ? ResizeCursor : Cursor.Default;
+            Cursor = Tool == KeyTool.Select && NoteAt(p) is { } n && (OnRightEdge(n, p) || OnLeftEdge(n, p)) ? ResizeCursor : Cursor.Default;
             return;
         }
 
@@ -562,7 +616,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     {
         if (drag is null || doc is null || Track is not { } track) return;
         drag.Current = p;
-        if (!drag.Moved && Math.Abs(p.X - drag.Start.X) + Math.Abs(p.Y - drag.Start.Y) < DragThreshold && drag.Kind is DragKind.Move or DragKind.Resize) return;
+        if (!drag.Moved && Math.Abs(p.X - drag.Start.X) + Math.Abs(p.Y - drag.Start.Y) < DragThreshold && drag.Kind is DragKind.Move or DragKind.Copy or DragKind.Resize or DragKind.ResizeStart) return;
         drag.Moved = true;
         var session = doc.Session;
         var tempo = doc.Tempo;
@@ -583,7 +637,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 EraseAt(p);
                 break;
 
-            case DragKind.Move when drag.Anchor is { } anchor:
+            case DragKind.Move or DragKind.Copy when drag.Anchor is { } anchor:
             {
                 // The anchor note's start follows the pointer (snapped); the others keep their distance to it.
                 double anchorTime = tempo.TimeAt(anchor.Start);
@@ -603,7 +657,34 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                     AuditionRequested?.Invoke(anchor.Pitch + dp, anchor.Velocity);
                 }
 
-                session.UpdateNotes(track.Id, [.. drag.Originals.Values.Select(n => n with { Start = n.Start + dt, Pitch = n.Pitch + dp })], "Move notes");
+                var moved = drag.Originals.Values.Select(n => n with { Start = n.Start + dt, Pitch = n.Pitch + dp });
+                if (drag.Kind == DragKind.Copy)
+                {
+                    session.ResetToGestureStart(); // the copies are added again at each new place
+                    session.AddNotes(track.Id, [.. moved.Select(n => n with { Id = drag.CopyIds[n.Id] })], "Copy notes");
+                }
+                else session.UpdateNotes(track.Id, [.. moved], "Move notes");
+                break;
+            }
+
+            case DragKind.ResizeStart when drag.Anchor is { } anchor:
+            {
+                // The start follows the pointer (snapped); the end stays.
+                double start = SnapTime(tempo.TimeAt(anchor.Start) + (TimeOfX(p.X) - TimeOfX(drag.Start.X)));
+                long ds = tempo.RoundTick(start) - anchor.Start;
+                session.UpdateNotes(track.Id, [.. drag.Originals.Values.Select(n =>
+                {
+                    long d = Math.Min(ds, n.Length - MinLength);
+                    return n with { Start = n.Start + d, Length = n.Length - d };
+                })], "Resize notes");
+                break;
+            }
+
+            case DragKind.NoteVelocity:
+            {
+                // Ctrl+Shift+drag on a note: up is louder, for every selected note.
+                int delta = (int)Math.Round((drag.Start.Y - p.Y) / 2);
+                session.UpdateNotes(track.Id, [.. drag.Originals.Values.Select(n => n with { Velocity = Math.Clamp(n.Velocity + delta, KeyNote.MinVelocity, KeyNote.MaxVelocity) })], "Velocity");
                 break;
             }
 
@@ -659,6 +740,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     {
         if (drag is null) return;
         var kind = drag.Kind;
+        if (kind == DragKind.Copy && !drag.Moved)
+        {
+            // An Alt+click without a drag copies nothing: the originals stay selected.
+            selection.Clear();
+            selection.UnionWith(drag.Originals.Keys);
+        }
+
         drag = null;
         if (kind != DragKind.Box) doc?.Session.EndGesture();
         InvalidateVisual();
@@ -752,6 +840,55 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         semitones = Math.Clamp(semitones, KeyNote.MinPitch - notes.Min(n => n.Pitch), KeyNote.MaxPitch - notes.Max(n => n.Pitch));
         if (semitones == 0) return;
         doc!.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Pitch = n.Pitch + semitones })], "Transpose");
+    }
+
+    private List<KeyNote> SelectedNotes() => Track is { } t ? [.. t.Notes.Where(n => selection.Contains(n.Id))] : [];
+
+    /// <summary>Left/Right: the previous or next note in time; with <paramref name="extend"/> (Shift) it is added.</summary>
+    public void SelectNeighbour(int direction, bool extend)
+    {
+        if (Track is not { } t) return;
+        var ordered = KeyEditing.InTimeOrder(SelectedNotes()).ToList();
+        var current = direction > 0 ? ordered.LastOrDefault() : ordered.FirstOrDefault();
+        if (KeyEditing.Neighbour(t.Notes, current, direction) is not { } next) return;
+        if (!extend) selection.Clear();
+        selection.Add(next.Id);
+        AuditionRequested?.Invoke(next.Pitch, next.Velocity);
+        InvalidateVisual();
+        ViewChanged?.Invoke();
+    }
+
+    /// <summary>Ctrl+D: copies of the selection right after it; the copies become the selection.</summary>
+    public void Duplicate()
+    {
+        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
+        var copies = KeyEditing.Duplicate(notes);
+        doc!.Session.AddNotes(t.Id, copies, "Duplicate");
+        selection.Clear();
+        selection.UnionWith(copies.Select(n => n.Id));
+        ViewChanged?.Invoke();
+    }
+
+    /// <summary>The selected notes, for the clipboard.</summary>
+    public IReadOnlyList<KeyNote> CopySelection() => SelectedNotes();
+
+    /// <summary>Pastes notes with the earliest at <paramref name="time"/>; the pasted notes become the selection.</summary>
+    public void Paste(IReadOnlyCollection<KeyNote> notes, double time)
+    {
+        if (Track is not { } t || notes.Count == 0) return;
+        var pasted = KeyEditing.PasteAt(notes, doc!.Tempo.RoundTick(time));
+        doc.Session.AddNotes(t.Id, pasted, "Paste");
+        selection.Clear();
+        selection.UnionWith(pasted.Select(n => n.Id));
+        ViewChanged?.Invoke();
+    }
+
+    /// <summary>Q: moves the selected notes' starts onto the grid (always, even with Snap off).</summary>
+    public void QuantizeSelection()
+    {
+        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
+        var tempo = doc!.Tempo;
+        doc.Session.UpdateNotes(t.Id, KeyEditing.Quantize(notes, tick => tempo.RoundTick(tempo.Snap(tempo.TimeAt(tick), 1, SnapDivisions))), "Quantize");
     }
 
     /// <summary>Moves the selected notes by whole grid steps.</summary>
