@@ -28,6 +28,12 @@ public partial class StartScreen : UserControl
     public event Action? QuickStartRequested;
     public event Action? HelpRequested;
 
+    public void SetMessage(string? message)
+    {
+        Message.Text = message;
+        MessagePanel.IsVisible = !string.IsNullOrEmpty(message);
+    }
+
     /// <summary>Recent maps, newest first.</summary>
     public void SetRecent(IReadOnlyList<string> paths)
     {

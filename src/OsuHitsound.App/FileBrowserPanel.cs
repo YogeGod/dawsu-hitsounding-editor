@@ -32,6 +32,7 @@ internal sealed class FileBrowserPanel : DockPanel
     private readonly Button use = new() { Content = "Add to selected lane", HorizontalAlignment = HorizontalAlignment.Stretch };
     private string? samplesRoot, mapsRoot, activeMapRoot, libraryRoot, assignmentTarget;
     private bool canAssign, refreshing;
+    private string? assignmentUnavailable;
     private int scanNumber;
     private Entry? root;
     private Point? dragStart;
@@ -113,7 +114,8 @@ internal sealed class FileBrowserPanel : DockPanel
         RefreshActions();
     }
 
-    public void SetAssignmentTarget(string? name, bool editable) { assignmentTarget = name; canAssign = editable; RefreshActions(); }
+    public void SetAssignmentTarget(string? name, bool editable, string? unavailableReason = null)
+    { assignmentTarget = name; canAssign = editable; assignmentUnavailable = unavailableReason; RefreshActions(); }
     public void SetRoots(string? samples, string? maps) { (samplesRoot, mapsRoot) = (samples, maps); SetFolder(mode.SelectedIndex == 0 ? samples : maps); }
     public void SetShortcuts(string? map, string? library) => (activeMapRoot, libraryRoot) = (map, library);
 
@@ -121,9 +123,9 @@ internal sealed class FileBrowserPanel : DockPanel
     {
         bool samples = mode.SelectedIndex == 0;
         bool file = entries.SelectedItem is Entry { Folder: false };
-        assignment.Text = samples ? assignmentTarget is null ? "Select a lane to replace its sample."
+        assignment.Text = samples ? assignmentUnavailable ?? (assignmentTarget is null ? "Select a lane to replace its sample."
             : !canAssign ? $"{assignmentTarget} is read-only."
-            : $"Replaces the sample for every hit in {assignmentTarget}." : "Open a difficulty to edit it.";
+            : $"Replaces the sample for every hit in {assignmentTarget}.") : "Open a difficulty to edit it.";
         use.Content = samples ? "Add to selected lane" : "Open map";
         use.IsVisible = file;
         use.IsEnabled = file && (!samples || canAssign);

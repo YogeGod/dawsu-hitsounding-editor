@@ -184,13 +184,14 @@ internal sealed class InspectorPanel : Border
     }
 
     /// <summary>Fills the cards from the editor's state.</summary>
-    public void Refresh(EditSession? session, ArrangeModel? model, IReadOnlyCollection<EditHit> selected, Func<double, string> time)
+    public void Refresh(EditSession? session, ArrangeModel? model, IReadOnlyCollection<EditHit> selected, Func<double, string> time, bool canEdit = true)
     {
         filling = true;
         try
         {
             var active = model?.ActiveLane;
-            Browser.SetAssignmentTarget(active is null ? null : model!.NameOf(active), active is not null && model!.CanReplaceSample(active));
+            Browser.SetAssignmentTarget(active is null ? null : model!.NameOf(active), canEdit && active is not null && model!.CanReplaceSample(active),
+                canEdit ? null : "Open a beatmap to assign samples. You can still preview files.");
             var selectionLanes = selected.Select(h => h.Lane).Distinct().Take(2).ToList();
             selectedLane = selectionLanes.Count == 1 ? selectionLanes[0] : null;
             useSelectedLane.IsVisible = selectedLane is not null && selectedLane != active;
@@ -209,14 +210,16 @@ internal sealed class InspectorPanel : Border
                 channelSample.SelectedIndex = active is null ? -1 : channelChoices.IndexOf(active);
             }
             channelName.Text = active is null ? "No active lane" : model!.NameOf(active);
-            laneHelp.Text = active is null ? "Click a lane name to choose its sample. Selecting hits is separate."
+            laneHelp.Text = !canEdit ? "Click a lane to preview its sample. Open a beatmap to change it."
+                : active is null ? "Click a lane name to choose its sample. Selecting hits is separate."
                 : model!.CanReplaceSample(active) ? "Changing this sample updates every hit in this lane."
                 : "This lane is read-only; you can preview its sample.";
             sampleFile.Text = active is null ? "" : active.Source == LaneSource.Skin ? "Sample: default hitsound" : $"Sample: {active.Name}";
             if (active is not null && model!.SlotOf(active) != active)
                 sampleFile.Text = $"Lane: {model.SlotOf(active).Name}\nSample: {active.Name}";
             previewSample.IsEnabled = active is not null;
-            channelSample.IsEnabled = replaceSample.IsEnabled = active is not null && model!.CanReplaceSample(active);
+            channelSample.IsEnabled = canEdit && active is not null && model!.CanReplaceSample(active);
+            replaceSample.IsEnabled = active is not null && (!canEdit || model!.CanReplaceSample(active));
             currentSession = session;
             var from = (session, session?.Position ?? 0, session?.StepCount ?? 0, (object?)session?.State.Bookmarks, model);
             if (from == listsFrom) return;

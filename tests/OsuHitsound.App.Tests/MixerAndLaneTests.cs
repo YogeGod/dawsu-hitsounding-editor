@@ -294,11 +294,10 @@ public class MixerAndLaneTests
         var session = model.Session;
         var first = model.LaneRows[1].Lane;
         var second = model.LaneRows[2].Lane;
-        var other = model.LaneRows.First(r => r.Group == LaneGroup.DrumSet).Lane;
         var hits = session.State.Hits;
         model.MoveLaneTo(first, first, true);
         model.MoveLaneTo(first, second, false);
-        model.MoveLaneTo(first, other, true);
+        model.MoveLaneTo(first, new Lane(LaneSource.Skin, "missing"), true);
         model.MoveFolderTo(LaneGroup.SoftSet, LaneGroup.SoftSet, true);
         Assert.Equal(0, session.StepCount);
         Assert.Same(hits, session.State.Hits);

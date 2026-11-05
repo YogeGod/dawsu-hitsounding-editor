@@ -100,6 +100,6 @@ public class SampleReplacementTests
         Assert.True(model.ReplaceSample(lane, replacement));
         model.Session.Undo();
         Assert.True(model.IsSoloed(lane)); Assert.False(model.IsSoloed(replacement));
-        Assert.Contains(model.Rows.OfType<GroupRow>(), r => r.Group == LaneGroup.SoftSet);
+        Assert.Empty(model.Rows.OfType<GroupRow>());
     }
 }

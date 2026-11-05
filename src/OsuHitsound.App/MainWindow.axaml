@@ -307,7 +307,7 @@
             <MenuItem Header="View">
               <MenuItem Name="ZoomInItem" Header="Zoom in" />
               <MenuItem Name="ZoomOutItem" Header="Zoom out" />
-              <MenuItem Name="CollapseAllItem" Header="Collapse all groups" />
+              <MenuItem Name="CollapseAllItem" Header="Collapse sample layers" />
               <MenuItem Name="BrowserPanelItem" Header="File browser" ToggleType="CheckBox" />
               <MenuItem Name="HistoryPanelItem" Header="History" ToggleType="CheckBox" />
               <MenuItem Name="SoundSetsPanelItem" Header="Sound sets" ToggleType="CheckBox" />

@@ -49,6 +49,7 @@ public partial class MainWindow : Window
         set
         {
             flashMessage = value;
+            if (Start is { IsVisible: true }) Start.SetMessage(value);
             // Editing clears the compact status, but operation results remain available until dismissed or replaced.
             if (value is not null) workflowResult = value;
         }
@@ -86,7 +87,8 @@ public partial class MainWindow : Window
         Lanes.PlacementPreviewRequested += hit => audio?.Preview(hit.Lane, (session?.VolumeOf(hit) ?? 100) / 100f);
         Lanes.LaneListPreviewRequested += lane =>
         {
-            if (audio is null || doc is null) return;
+            if (audio is null) return;
+            if (doc is null) { audio.Preview(lane); return; }
             double time = audio.IsPlaying ? audio.Position : Lanes.Playhead;
             var preview = doc.LanePreviewAt(lane, time);
             try
@@ -225,6 +227,12 @@ public partial class MainWindow : Window
         VolumeModeBox.ItemsSource = new[] { "Relative", "Set all" };
         VolumeModeBox.SelectedIndex = 1;
         VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
+        VolumeValueBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            ApplyVolumeValue();
+            e.Handled = true;
+        };
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
         SaveButton.Click += (_, _) => Save();
         menuCommands =
@@ -315,6 +323,8 @@ public partial class MainWindow : Window
         if (audio is not null) audio.IsAudible = preview.IsAudible;
         Lanes.IsPreview = true;
         Lanes.SetModel(preview);
+        preview.Changed += UpdateActiveLaneText;
+        UpdateActiveLaneText();
     }
 
     private int loadNumber; // a newer Open makes an older one still loading drop its result
@@ -323,7 +333,8 @@ public partial class MainWindow : Window
     internal Task Loading { get; private set; } = Task.CompletedTask;
 
     /// <summary>Opens a map: reading and decoding run off the UI thread. Errors are shown in the status bar, never thrown.</summary>
-    public Task Open(string path) => Loading = OpenAsync(path);
+    public Task Open(string path) => Loading = Path.GetExtension(path).Equals(".osz", StringComparison.OrdinalIgnoreCase)
+        ? OpenDropped(path) : OpenAsync(path);
 
     private async Task<bool> OpenAsync(string path, bool restoreUnanchored = true, HsProject? hsOverride = null)
     {
@@ -538,9 +549,9 @@ public partial class MainWindow : Window
             Title = "Open a map",
             AllowMultiple = false,
             SuggestedStartLocation = prefs.SongsFolder is { } songs ? await StorageProvider.TryGetFolderFromPathAsync(songs) : null,
-            FileTypeFilter = [new FilePickerFileType("osu! map") { Patterns = ["*.osu"] }],
+            FileTypeFilter = [new FilePickerFileType("osu! map or archive") { Patterns = ["*.osu", "*.osz"] }],
         });
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } local && await MayLeaveMap()) await Open(local);
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { } local) await OpenDropped(local);
     }
 
     // Holding Alt shows the pen over the grid and the bars (Alt draws with any tool), as in V6.39.
@@ -738,7 +749,8 @@ public partial class MainWindow : Window
     // The controller bar names the active lane, as in V6.39.
     private void UpdateActiveLaneText()
     {
-        ActiveLaneText.Text = model?.ActiveLane is { } lane ? model.NameOf(lane) : "";
+        var displayed = model ?? Lanes.Model;
+        ActiveLaneText.Text = displayed?.ActiveLane is { } lane ? displayed.NameOf(lane) : "";
         RefreshInspector();
     }
 
@@ -852,7 +864,11 @@ public partial class MainWindow : Window
         Inspector.BrowseChannelSampleRequested += lane => { BrowserPanelItem.IsChecked = true; ShowBrowser(true); Inspector.Browser.Focus(); };
         Inspector.PreviewChannelRequested += lane =>
         {
-            try { if (doc is not null) audio?.Preview(doc.LanePreviewAt(lane, Lanes.Playhead), doc.Folder); }
+            try
+            {
+                if (doc is not null) audio?.Preview(doc.LanePreviewAt(lane, Lanes.Playhead), doc.Folder);
+                else audio?.Preview(lane);
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { flash = ex.Message; UpdateStatus(); }
         };
         Inspector.ActivateLaneRequested += lane =>
@@ -919,7 +935,8 @@ public partial class MainWindow : Window
 
     private void RefreshInspector()
     {
-        Inspector.Refresh(session, model, Lanes.Selection, FormatTime);
+        var displayed = model ?? Lanes.Model;
+        Inspector.Refresh(session ?? displayed?.Session, displayed, Lanes.Selection, FormatTime, canEdit: doc is not null);
         Inspector.SoundSets.Refresh(session, Lanes.Selection);
         RefreshDrumMapToggle();
         Lanes.DrawSoundSetActive = Inspector.SoundSets.SelectedSet is { } id && session?.State.SoundSets.Any(s => s.Id == id) == true;
@@ -1373,8 +1390,8 @@ public partial class MainWindow : Window
     private void CollapseAll()
     {
         if (model is null) return;
-        foreach (var group in model.LaneRows.Select(r => r.Group).Distinct())
-            if (!model.IsCollapsed(group)) model.ToggleCollapsed(group);
+        foreach (var parent in model.Rows.OfType<LaneRow>().Where(r => model.IsFamilyParent(r.Lane)).ToList())
+            if (!model.IsFamilyCollapsed(parent.Lane)) model.ToggleFamily(parent.Lane);
         SyncScrollBars();
     }
 

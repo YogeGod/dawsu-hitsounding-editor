@@ -94,7 +94,9 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" RowDefinitions="Auto,22,Auto,22,Auto">
+  <ScrollViewer Name="StartScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+  <Border Padding="20">
+  <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" RowDefinitions="Auto,22,Auto,Auto,22,Auto">
     <DockPanel>
       <TextBlock Name="Version" DockPanel.Dock="Right" VerticalAlignment="Bottom" Margin="0,0,0,4" Classes="mono" Foreground="{StaticResource StartFaint}" FontSize="11" Text="hitsound studio" />
       <TextBlock FontFamily="{StaticResource StartHeading}" FontWeight="ExtraBold" FontSize="26" Foreground="{StaticResource StartText}">
@@ -151,7 +153,10 @@
       </Panel>
     </UniformGrid>
 
-    <Border Grid.Row="4" BorderBrush="#262c35" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+    <Border Name="MessagePanel" Grid.Row="3" IsVisible="False" Margin="0,16,0,0" Padding="12" Background="{StaticResource StartCard}" BorderBrush="{StaticResource StartCardBorder}" BorderThickness="1" CornerRadius="4">
+      <TextBlock Name="Message" TextWrapping="Wrap" Foreground="{StaticResource StartText}" AutomationProperties.Name="Start screen status" />
+    </Border>
+    <Border Grid.Row="5" BorderBrush="#262c35" BorderThickness="0,1,0,0" Padding="0,10,0,0">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <TextBlock Text="Songs folder" FontSize="11" Foreground="{StaticResource StartFaint}" VerticalAlignment="Center" />
@@ -167,4 +172,6 @@
       </DockPanel>
     </Border>
   </Grid>
+  </Border>
+  </ScrollViewer>
 </UserControl>

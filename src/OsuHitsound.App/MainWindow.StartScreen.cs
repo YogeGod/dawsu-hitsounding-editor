@@ -9,8 +9,7 @@ public partial class MainWindow
     {
         // Snapshots and tests (no preferences) keep the plain empty editor they expect.
         Start.IsVisible = show && usePreferences;
-        if (!Start.IsVisible) return;
-        RefreshStartScreen();
+        if (Start.IsVisible) RefreshStartScreen();
         Start.OpenRequested += () => Run("open");
         Start.RecentRequested += async path => { if (await MayLeaveMap()) await Open(path); };
         Start.SamplesRequested += ShowSampleTools;

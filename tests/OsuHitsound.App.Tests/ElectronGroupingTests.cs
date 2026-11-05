@@ -44,8 +44,8 @@ public class ElectronGroupingTests
     {
         var (model, _) = Setup();
         Assert.True(model.IsFamilyParent(Base)); Assert.False(model.IsFamilyParent(Skin));
-        Assert.Equal(2, model.DepthOf(Base));
-        Assert.Equal(3, model.DepthOf(Skin)); Assert.Equal(3, model.DepthOf(Two));
+        Assert.Equal(1, model.DepthOf(Base));
+        Assert.Equal(2, model.DepthOf(Skin)); Assert.Equal(2, model.DepthOf(Two));
         Assert.Equal(1, model.DepthOf(new Lane(LaneSource.Skin, "soft-hitnormal")));
         model.ToggleFamily(Base);
         Assert.Equal(new[] { Base }, model.Rows.OfType<LaneRow>().Where(r => model.FamilyKey(r.Lane) == "Soft:hitclap").Select(r => r.Lane));
@@ -53,16 +53,16 @@ public class ElectronGroupingTests
     }
 
     [Fact]
-    public void Folder_and_family_summaries_reveal_the_source_without_changing_hits_or_volume()
+    public void Family_summaries_reveal_the_source_without_sample_set_folders()
     {
         var (model, _) = Setup(); var s = model.Session;
         var hit = s.HitAt(Two, 1000); s.Add([hit]); s.SetVolume([hit.Anchor!.Value], 35);
         var state = s.State;
         model.ToggleFamily(Base); model.ToggleCollapsed(LaneGroup.SoftSet);
         var view = new ArrangeView(); view.SetModel(model); view.Axis.Left = 0; view.Axis.Zoom = 1;
-        var folder = model.Rows.OfType<GroupRow>().Single(r => r.Group == LaneGroup.SoftSet);
-        Assert.Equal(Two, view.SummaryLaneUnder(folder, 1000));
-        Assert.Contains(model.FolderChildren(LaneGroup.SoftSet), r => r.Lane == Two);
+        Assert.Empty(model.Rows.OfType<GroupRow>());
+        var parent = model.Rows.OfType<LaneRow>().Single(r => r.Lane == Base);
+        Assert.Equal(Two, view.SummaryLaneUnder(parent, 1000));
         model.RevealLane(Two);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == Two);
         Assert.Equal(Two, model.ActiveLane); Assert.Same(state, s.State);
@@ -70,14 +70,14 @@ public class ElectronGroupingTests
     }
 
     [Fact]
-    public void Filtering_a_closed_folder_shows_parent_context_and_matching_children_without_duplicate_ghosts()
+    public void Filtering_a_closed_family_keeps_parent_context_without_duplicate_ghosts()
     {
         var (model, _) = Setup(); model.ToggleFamily(Base); model.ToggleCollapsed(LaneGroup.SoftSet);
         model.SetFilter("hitclap2");
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == Base);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == Two);
         Assert.Empty(model.CollapsedChildren(Base)); Assert.Empty(model.FolderChildren(LaneGroup.SoftSet));
-        model.SetFilter(""); Assert.NotEmpty(model.FolderChildren(LaneGroup.SoftSet));
+        model.SetFilter(""); Assert.NotEmpty(model.CollapsedChildren(Base)); Assert.Empty(model.Rows.OfType<GroupRow>());
     }
 
     [Fact]
@@ -98,12 +98,11 @@ public class ElectronGroupingTests
     }
 
     [Fact]
-    public void Family_parents_and_hitnormal_stay_pinned()
+    public void Family_parent_cannot_be_reordered_among_its_own_children()
     {
         var (model, _) = Setup(); int before = model.Session.StepCount;
         model.MoveLaneTo(Base, Two, true);
         model.MoveLaneTo(Two, Base, false);
-        model.MoveLaneTo(Base, new Lane(LaneSource.Skin, "soft-hitnormal"), false);
         Assert.Equal(before, model.Session.StepCount);
     }
 

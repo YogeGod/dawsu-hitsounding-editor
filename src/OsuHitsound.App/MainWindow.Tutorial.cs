@@ -110,7 +110,7 @@ public partial class MainWindow
             () => On(SongOptionsButton)),
         new("Inspector", "Active lane and Bookmarks stay on the left. Optional bookmark labels appear in the list and on flag hover. View shows History or Sound sets when you need them. Browse samples opens the right sidebar; selecting a file previews, and the bottom button or a lane drop replaces its sample.",
             () => On(Inspector)),
-        new("Sample lanes", "Every sample you can use, grouped by sampleset: hitnormal, whistle, finish and clap, each with the default sound first and the map's own files under it. Type in the filter to find one. Above it, + adds a lane for a sample file already in the mapset, − deletes the highlighted lane (the one you touched last), and ‹ hides or shows the names.",
+        new("Sample lanes", "Every sample you can use in a reorderable lane list: hitnormal, whistle, finish and clap, each with the default sound first and the map's own files under it. Type in the filter to find one. Above it, + adds a lane for a sample file already in the mapset, − deletes the highlighted lane (the one you touched last), and ‹ hides or shows the names.",
             () => InLanes(Lanes.LaneListHeaderRect)),
         new("A lane's buttons", "The icon shows the sound (normal, whistle, finish, clap). + immediately adds the next numbered layer with the default family sound; choose another sample through Active lane, ● plays the sample, M mutes the lane and S solos it while you listen. The Song audio row has M and S too.",
             () => InLanes(Lanes.FirstLaneButtonsRect())),
