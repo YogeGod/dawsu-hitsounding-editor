@@ -358,6 +358,18 @@ public class KeyEditingTests
     }
 
     [Fact]
+    public void Resizing_from_the_start_keeps_the_end_and_never_flips_a_short_note()
+    {
+        var normal = N(960, 960);
+        var shortNote = N(100, 120); // shorter than the 240-tick minimum
+        var resized = KeyEditing.ResizeStart([normal, shortNote], 480, minLength: 240);
+        Assert.Equal((1440L, 480L), (resized[0].Start, resized[0].Length));
+        Assert.Equal((100L, 120L), (resized[1].Start, resized[1].Length)); // unchanged, not pushed backwards
+        var longer = KeyEditing.ResizeStart([normal], -480, minLength: 240)[0];
+        Assert.Equal((480L, 1440L), (longer.Start, longer.Length));
+    }
+
+    [Fact]
     public void Replace_notes_is_one_undo_step()
     {
         var track = KeyTrack.Create("Piano");

@@ -120,6 +120,20 @@ public class KeysoundPianoTests
     }
 
     [Fact]
+    public void A_part_s_pitch_bend_changes_how_fast_its_notes_read_the_sample()
+    {
+        var data = Ramp(10_000);
+        var player = new KeysoundPlayer(Instrument(new SfzRegion("r", 0, 127, 60, 1, 127), data));
+        player.SetNotes([new PlayedNote(0, 1000, 60, 127, Part: 0)], [[new PlayedBend(0, 12)]]); // an octave up from the start
+        var output = Render(player, 100, start: 0);
+        Assert.Equal(data[20 * 2] * 0.7f, output[10 * 2], 5); // two frames per output frame
+
+        var plain = new KeysoundPlayer(Instrument(new SfzRegion("r", 0, 127, 60, 1, 127), data));
+        plain.SetNotes([new PlayedNote(0, 1000, 60, 127)], [[new PlayedBend(0, 12)]]); // part -1: no bend
+        Assert.Equal(data[10 * 2] * 0.7f, Render(plain, 100, start: 0)[10 * 2], 5);
+    }
+
+    [Fact]
     public void A_scheduled_note_starts_on_its_frame_only_while_playing()
     {
         var region = new SfzRegion("r", 0, 127, 60, 1, 127);

@@ -104,6 +104,13 @@ public sealed class KeysoundSession
         return track;
     }
 
+    /// <summary>Adds several tracks as one step (a MIDI import).</summary>
+    public void AddTracks(IReadOnlyCollection<KeyTrack> tracks, string label)
+    {
+        if (tracks.Count == 0) return;
+        Change(label, s => s with { Tracks = s.Tracks.AddRange(tracks) });
+    }
+
     public void DeleteTrack(Guid id) => Change("Delete track", s => s.Track(id) is { } t ? s with { Tracks = s.Tracks.Remove(t) } : s);
 
     public void RenameTrack(Guid id, string name) =>

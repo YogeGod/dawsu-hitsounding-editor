@@ -110,8 +110,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     private void OnSessionChanged()
     {
-        // Undo may remove notes that are selected.
-        if (Track is { } t) selection.IntersectWith(t.Notes.Select(n => n.Id));
+        // Undo may remove notes that are selected. During a drag the selection is the drag's own (an Alt+drag selects copies
+        // that come and go with each move).
+        if (drag is not null) { }
+        else if (Track is { } t) selection.IntersectWith(t.Notes.Select(n => n.Id));
         else selection.Clear();
         InvalidateVisual();
     }
@@ -540,14 +542,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
             case KeyTool.Select when hit is not null:
             {
-                bool velocity = mods.HasFlag(KeyModifiers.Control) && mods.HasFlag(KeyModifiers.Shift);
-                if (!velocity)
-                {
-                    if (mods.HasFlag(KeyModifiers.Control)) { if (!selection.Remove(hit.Id)) selection.Add(hit.Id); }
-                    else if (mods.HasFlag(KeyModifiers.Shift)) selection.Add(hit.Id);
-                    else if (!selection.Contains(hit.Id)) { selection.Clear(); selection.Add(hit.Id); }
-                }
-                else if (!selection.Contains(hit.Id)) { selection.Clear(); selection.Add(hit.Id); }
+                bool ctrl = mods.HasFlag(KeyModifiers.Control), shift = mods.HasFlag(KeyModifiers.Shift), velocity = ctrl && shift;
+                if (ctrl && !shift) { if (!selection.Remove(hit.Id)) selection.Add(hit.Id); }
+                else if (shift && !ctrl) selection.Add(hit.Id);
+                else if (!selection.Contains(hit.Id)) SelectOnly([hit.Id]);
 
                 if (!selection.Contains(hit.Id)) break;
                 AuditionRequested?.Invoke(hit.Pitch, hit.Velocity);
@@ -560,8 +558,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 if (kind == DragKind.Copy)
                 {
                     foreach (var id in drag!.Originals.Keys) drag.CopyIds[id] = Guid.NewGuid();
-                    selection.Clear();
-                    selection.UnionWith(drag.CopyIds.Values); // the copies are what's selected afterwards
+                    SelectOnly(drag.CopyIds.Values); // the copies are what's selected afterwards
                 }
 
                 break;
@@ -584,7 +581,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private void StartGesture(DragKind kind, Point p, KeyNote anchor, KeyTrack track, string label)
     {
         drag = new Drag(kind, p) { Anchor = anchor };
-        foreach (var n in track.Notes.Where(n => selection.Contains(n.Id))) drag.Originals[n.Id] = n;
+        foreach (var n in SelectedNotes()) drag.Originals[n.Id] = n;
         drag.Originals[anchor.Id] = anchor;
         doc!.Session.BeginGesture(label);
     }
@@ -596,8 +593,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     }
 
     // The resize handles: the first and last few pixels, at most a quarter of a short note so it can still be moved.
-    private bool OnRightEdge(KeyNote n, Point p) => NoteRect(n) is var r && p.X >= r.Right - Math.Min(EdgeGrab, r.Width / 4);
-    private bool OnLeftEdge(KeyNote n, Point p) => NoteRect(n) is var r && p.X <= r.Left + Math.Min(EdgeGrab, r.Width / 4);
+    private static double GrabWidth(Rect r) => Math.Min(EdgeGrab, r.Width / 4);
+    private bool OnRightEdge(KeyNote n, Point p) => NoteRect(n) is var r && p.X >= r.Right - GrabWidth(r);
+    private bool OnLeftEdge(KeyNote n, Point p) => NoteRect(n) is var r && p.X <= r.Left + GrabWidth(r);
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
@@ -672,11 +670,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 // The start follows the pointer (snapped); the end stays.
                 double start = SnapTime(tempo.TimeAt(anchor.Start) + (TimeOfX(p.X) - TimeOfX(drag.Start.X)));
                 long ds = tempo.RoundTick(start) - anchor.Start;
-                session.UpdateNotes(track.Id, [.. drag.Originals.Values.Select(n =>
-                {
-                    long d = Math.Min(ds, n.Length - MinLength);
-                    return n with { Start = n.Start + d, Length = n.Length - d };
-                })], "Resize notes");
+                session.UpdateNotes(track.Id, KeyEditing.ResizeStart(drag.Originals.Values, ds, MinLength), "Resize notes");
                 break;
             }
 
@@ -836,10 +830,18 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public void Transpose(int semitones)
     {
         if (Track is not { } t || selection.Count == 0) return;
-        var notes = t.Notes.Where(n => selection.Contains(n.Id)).ToList();
+        var notes = SelectedNotes();
         semitones = Math.Clamp(semitones, KeyNote.MinPitch - notes.Min(n => n.Pitch), KeyNote.MaxPitch - notes.Max(n => n.Pitch));
         if (semitones == 0) return;
         doc!.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Pitch = n.Pitch + semitones })], "Transpose");
+    }
+
+    private void SelectOnly(IEnumerable<Guid> ids)
+    {
+        selection.Clear();
+        selection.UnionWith(ids);
+        InvalidateVisual();
+        ViewChanged?.Invoke();
     }
 
     private List<KeyNote> SelectedNotes() => Track is { } t ? [.. t.Notes.Where(n => selection.Contains(n.Id))] : [];
@@ -864,9 +866,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
         var copies = KeyEditing.Duplicate(notes);
         doc!.Session.AddNotes(t.Id, copies, "Duplicate");
-        selection.Clear();
-        selection.UnionWith(copies.Select(n => n.Id));
-        ViewChanged?.Invoke();
+        SelectOnly(copies.Select(n => n.Id));
     }
 
     /// <summary>The selected notes, for the clipboard.</summary>
@@ -878,9 +878,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         if (Track is not { } t || notes.Count == 0) return;
         var pasted = KeyEditing.PasteAt(notes, doc!.Tempo.RoundTick(time));
         doc.Session.AddNotes(t.Id, pasted, "Paste");
-        selection.Clear();
-        selection.UnionWith(pasted.Select(n => n.Id));
-        ViewChanged?.Invoke();
+        SelectOnly(pasted.Select(n => n.Id));
     }
 
     /// <summary>Q: moves the selected notes' starts onto the grid (always, even with Snap off).</summary>
@@ -896,13 +894,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     {
         if (Track is not { } t || selection.Count == 0) return;
         long dt = steps * StepTicks;
-        doc!.Session.UpdateNotes(t.Id, [.. t.Notes.Where(n => selection.Contains(n.Id)).Select(n => n with { Start = n.Start + dt })], "Move notes");
+        doc!.Session.UpdateNotes(t.Id, [.. SelectedNotes().Select(n => n with { Start = n.Start + dt })], "Move notes");
     }
 
     public string SelectionText()
     {
         if (Track is not { } t || selection.Count == 0) return "No notes selected";
-        var notes = t.Notes.Where(n => selection.Contains(n.Id)).ToList();
+        var notes = SelectedNotes();
         if (notes.Count != 1) return $"{notes.Count} notes selected";
         var n = notes[0];
         var (bar, beat) = doc!.Tempo.BarBeatAt(doc.Tempo.TimeAt(n.Start));

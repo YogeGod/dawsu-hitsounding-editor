@@ -122,6 +122,24 @@ public sealed class TempoMap
         return (bar, 1);
     }
 
+    /// <summary>
+    /// The tick where a bar and beat start (bar 1 beat 1 is tick 0, the first red line), counting bars as
+    /// <see cref="BarBeatAt"/> does: each red line starts a new bar. Bars before 1 extend the first red line backwards.
+    /// </summary>
+    public double TickOfBarBeat(int bar, int beat)
+    {
+        long startBar = 1;
+        for (int i = 0; ; i++)
+        {
+            var s = Segments[i];
+            bool last = i + 1 == Segments.Count;
+            // Bars before the first red line extend it backwards; otherwise the bar lies in this red line's span or later.
+            if (last || bar < startBar + Math.Max(1, (long)Math.Ceiling((Segments[i + 1].Time - s.Time) / s.BeatLength / s.Meter - 1e-6)))
+                return s.StartTick + ((double)(bar - startBar) * s.Meter + (beat - 1)) * Ppq;
+            startBar += Math.Max(1, (long)Math.Ceiling((Segments[i + 1].Time - s.Time) / s.BeatLength / s.Meter - 1e-6));
+        }
+    }
+
     private static long Mod(long a, long m) => ((a % m) + m) % m;
 
     // Index of the last segment matching (segments are sorted), or 0 when none does.

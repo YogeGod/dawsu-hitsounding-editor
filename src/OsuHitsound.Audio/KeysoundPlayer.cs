@@ -16,8 +16,11 @@ public interface ILivePart
     void ReleaseAll();
 }
 
-/// <summary>A note to play, in timeline ms.</summary>
-public readonly record struct PlayedNote(double Start, double End, int Pitch, int Velocity);
+/// <summary>A note to play, in timeline ms. <see cref="Part"/> picks its pitch-bend curve (a track); -1 for none.</summary>
+public readonly record struct PlayedNote(double Start, double End, int Pitch, int Velocity, int Part = -1);
+
+/// <summary>A pitch-bend change of one part, in timeline ms and semitones.</summary>
+public readonly record struct PlayedBend(double Time, double Semitones);
 
 /// <summary>
 /// Keysound mode's live piano: plays the scheduled notes of the audible tracks with an <see cref="SfzInstrument"/>,
@@ -30,16 +33,28 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
     private const int Rate = PlaybackMixer.Rate;
 
     private PlayedNote[] notes = [];
+    private PlayedBend[][] bends = [];
     private readonly ConcurrentQueue<(int Pitch, int Velocity, double Ms)> auditions = new();
     private readonly List<Voice> voices = [];
     private long clock; // frames rendered so far
 
-    /// <summary>Replaces what plays. Safe from any thread.</summary>
-    public void SetNotes(IEnumerable<PlayedNote> played)
+    /// <summary>
+    /// Replaces what plays: the notes, and per part its pitch-bend changes sorted by time. Safe from any thread.
+    /// </summary>
+    public void SetNotes(IEnumerable<PlayedNote> played, IReadOnlyList<PlayedBend[]>? partBends = null)
     {
         var sorted = played.ToArray();
         Array.Sort(sorted, (a, b) => a.Start.CompareTo(b.Start));
+        Volatile.Write(ref bends, partBends is null ? [] : [.. partBends]);
         Volatile.Write(ref notes, sorted);
+    }
+
+    // The bend of a part at a time: the last change at or before it (none before the first).
+    private static double BendAt(PlayedBend[][] all, int part, double time)
+    {
+        if (part < 0 || part >= all.Length || all[part].Length == 0) return 0;
+        int i = Sorted.LowerBound(all[part], time + 1e-9, b => b.Time) - 1;
+        return i >= 0 ? all[part][i].Semitones : 0;
     }
 
     /// <summary>Plays one note now, for <paramref name="ms"/> before its release, whether or not playback runs.</summary>
@@ -54,7 +69,7 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
 
     public void Render(Span<float> stereo, int frames, double start, double msPerFrame, bool playing)
     {
-        while (auditions.TryDequeue(out var a)) Start(a.Pitch, a.Velocity, 0, (long)Math.Round(a.Ms * Rate / 1000));
+        while (auditions.TryDequeue(out var a)) Start(a.Pitch, a.Velocity, 0, (long)Math.Round(a.Ms * Rate / 1000), part: -1);
 
         if (playing && msPerFrame > 0)
         {
@@ -65,21 +80,27 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
                 var n = list[i];
                 int offset = (int)Math.Clamp(Math.Round((n.Start - start) / msPerFrame), 0, frames - 1);
                 long length = Math.Max(1, (long)Math.Round((n.End - n.Start) / msPerFrame));
-                Start(n.Pitch, n.Velocity, offset, length);
+                Start(n.Pitch, n.Velocity, offset, length, n.Part);
             }
         }
 
+        var partBends = Volatile.Read(ref bends);
         for (int v = voices.Count - 1; v >= 0; v--)
-            if (!voices[v].Mix(stereo, frames, clock)) voices.RemoveAt(v);
+        {
+            var voice = voices[v];
+            // Bends follow the timeline while playing; a stopped voice keeps its last bend.
+            if (playing && voice.Part >= 0) voice.Bend = Math.Pow(2, BendAt(partBends, voice.Part, start) / 12);
+            if (!voice.Mix(stereo, frames, clock)) voices.RemoveAt(v);
+        }
         clock += frames;
     }
 
-    private void Start(int pitch, int velocity, int offset, long length)
+    private void Start(int pitch, int velocity, int offset, long length, int part)
     {
         if (instrument.RegionFor(pitch, velocity) is not { } region) return;
         if (voices.Count >= MaxVoices) voices.RemoveAt(0); // the oldest goes
         float amp = Gain * MathF.Pow(Math.Clamp(velocity, 1, 127) / 127f, 2); // SFZ's default amp_veltrack=100
-        voices.Add(new Voice(region, instrument.Sample(region), pitch, amp, clock + offset, clock + offset + length));
+        voices.Add(new Voice(region, instrument.Sample(region), pitch, amp, clock + offset, clock + offset + length) { Part = part });
     }
 
     /// <summary>One sounding note: resampled from its region, looping while held, fading over the release time.</summary>
@@ -96,6 +117,9 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
         private float fade = 1;
 
         public long ReleaseAt { get; set; }
+        public int Part { get; init; } = -1;
+        /// <summary>The pitch-bend factor (1 = none), set before each block.</summary>
+        public double Bend { get; set; } = 1;
 
         public Voice(SfzRegion region, float[] data, int pitch, float amp, long startAt, long releaseAt)
         {
@@ -132,7 +156,7 @@ public sealed class KeysoundPlayer(SfzInstrument instrument) : ILivePart
                 float g = amp * fade;
                 stereo[i * 2] += l * g;
                 stereo[i * 2 + 1] += r * g;
-                position += step;
+                position += step * Bend;
             }
 
             return true;

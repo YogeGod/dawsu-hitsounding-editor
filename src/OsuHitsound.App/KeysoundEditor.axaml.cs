@@ -3,6 +3,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using OsuHitsound.Audio;
 using OsuHitsound.Lanes.Keysound;
@@ -56,6 +57,7 @@ public partial class KeysoundEditor : UserControl
         RenameTrackButton.Click += async (_, _) => await RenameTrack();
         DeleteTrackButton.Click += (_, _) => DeleteTrack();
         CloseButton.Click += (_, _) => CloseRequested?.Invoke();
+        ImportMidiButton.Click += async (_, _) => await ImportMidi();
         StartButton.Click += (_, _) => Seek(0);
         PlayButton.Click += (_, _) => TogglePlay();
         Roll.SeekRequested += Seek;
@@ -175,10 +177,27 @@ public partial class KeysoundEditor : UserControl
         if (player is null || doc is null) return;
         var session = doc.Session;
         var tempo = doc.Tempo;
-        var played = session.State.Tracks.Where(t => session.IsAudible(t.Id))
-            .SelectMany(t => t.Notes).Select(n => new PlayedNote(tempo.TimeAt(n.Start), tempo.TimeAt(n.End), n.Pitch, n.Velocity)).ToList();
-        player.SetNotes(played);
-        audio?.SetMinimumLength(played.Count > 0 ? played.Max(n => n.End) + 2000 : 0); // notes after the song, or no song at all
+        var played = new List<PlayedNote>();
+        var bends = new List<PlayedBend[]>();
+        double last = 0;
+        foreach (var (t, part) in session.State.Tracks.Where(t => session.IsAudible(t.Id)).Select((t, i) => (t, i)))
+        {
+            // Controllers are kept sorted by tick. The bundled piano can't read pedal events, so the sustain pedal holds
+            // its notes until the pedal is released, as the dampers would.
+            var sustain = t.Controllers.Where(c => c.Kind == ControllerKind.Sustain).ToList();
+            foreach (var n in t.Notes)
+            {
+                var note = new PlayedNote(tempo.TimeAt(n.Start), tempo.TimeAt(sustain.Count > 0 ? KeyControllers.SustainedEnd(sustain, n.End) : n.End), n.Pitch, n.Velocity, part);
+                played.Add(note);
+                last = Math.Max(last, note.End);
+            }
+
+            bends.Add([.. t.Controllers.Where(c => c.Kind == ControllerKind.PitchBend)
+                .Select(c => new PlayedBend(tempo.TimeAt(c.Tick), c.Value / 8192.0 * t.Instrument.PitchBendRange))]);
+        }
+
+        player.SetNotes(played, bends);
+        audio?.SetMinimumLength(played.Count > 0 ? last + 2000 : 0); // notes after the song, or no song at all
     }
 
     private void LoadWaveform()
@@ -231,10 +250,11 @@ public partial class KeysoundEditor : UserControl
             var name = new TextBlock { Text = track.Name, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
             var detail = new TextBlock
             {
-                Text = $"{track.Instrument.DisplayName} · {track.Notes.Count} note{(track.Notes.Count == 1 ? "" : "s")}" + (track.IncludeInGenerate ? "" : " · excluded from Generate"),
+                Text = $"{track.Instrument.DisplayName} · {track.Notes.Count} note{(track.Notes.Count == 1 ? "" : "s")}"
+                    + (track.Percussion ? " · percussion" : "") + (track.IncludeInGenerate ? "" : " · excluded from Generate"),
                 FontSize = 11,
                 Opacity = 0.75,
-                Foreground = track.IncludeInGenerate ? null : new SolidColorBrush(Color.Parse("#ff8a5c")),
+                Foreground = track.IncludeInGenerate ? null : Paint.Brush("#ff8a5c"),
             };
             var mute = Toggle("M", session.Muted.Contains(id), "Mute while editing (playback only)", on => Flag(session.Muted, id, on));
             var solo = Toggle("S", session.Soloed.Contains(id), "Solo while editing (playback only)", on => Flag(session.Soloed, id, on));
@@ -294,6 +314,43 @@ public partial class KeysoundEditor : UserControl
         Roll.TrackChanged();
         RefreshTracks();
         Roll.Focus();
+    }
+
+    /// <summary>Import MIDI…: pick a file, preview its tracks and placement, then add them as one undo step.</summary>
+    private async Task ImportMidi()
+    {
+        if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
+        var picked = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import a MIDI file",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("MIDI file") { Patterns = ["*.mid", "*.midi"] }],
+        });
+        if (picked.Count == 0 || picked[0].TryGetLocalPath() is not { } path || doc is not { } project) return;
+
+        MidiFile file;
+        try { file = await Task.Run(() => MidiFile.Read(path)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        {
+            SetStatus($"Couldn't read {Path.GetFileName(path)}: {ex.Message}");
+            return;
+        }
+
+        var parts = MidiImport.Parts(file);
+        if (parts.Count == 0)
+        {
+            SetStatus($"{Path.GetFileName(path)} has no notes to import.");
+            return;
+        }
+
+        double mapEnd = project.Objects.Count > 0 ? project.Objects[^1].End : 0;
+        if (await Dialogs.ImportMidi(owner, Path.GetFileName(path), file, parts, project.Tempo, mapEnd) is not var (chosen, origin) || !ReferenceEquals(doc, project)) return;
+        var tracks = MidiImport.Tracks(chosen, file.TicksPerBeat, origin);
+        project.Session.AddTracks(tracks, "Import MIDI");
+        SelectTrack(tracks[0].Id);
+        Roll.CentrePitch();
+        int notes = tracks.Sum(t => t.Notes.Count);
+        SetStatus($"Imported {tracks.Count} track{(tracks.Count == 1 ? "" : "s")} with {notes} notes from {Path.GetFileName(path)}. Undo removes them together.");
     }
 
     private void AddTrack()

@@ -41,13 +41,21 @@ public static class KeyEditing
     public static List<KeyNote> Quantize(IEnumerable<KeyNote> notes, Func<long, long> snapTick) =>
         [.. notes.Select(n => n with { Start = snapTick(n.Start) }).Where(n => n.IsValid)];
 
-    /// <summary>Copies of the notes placed right after them (Cubase's Duplicate): shifted by the selection's span.</summary>
-    public static List<KeyNote> Duplicate(IReadOnlyCollection<KeyNote> notes)
-    {
-        if (notes.Count == 0) return [];
-        long span = notes.Max(n => n.End) - notes.Min(n => n.Start);
-        return [.. notes.Select(n => n with { Id = Guid.NewGuid(), Start = n.Start + span })];
-    }
+    /// <summary>Copies of the notes placed right after them (Cubase's Duplicate): starting where the selection ends.</summary>
+    public static List<KeyNote> Duplicate(IReadOnlyCollection<KeyNote> notes) => notes.Count == 0 ? [] : PasteAt(notes, notes.Max(n => n.End));
+
+    /// <summary>
+    /// Moves the notes' starts by <paramref name="delta"/> ticks keeping their ends, never shorter than
+    /// <paramref name="minLength"/> (a note already shorter keeps its length).
+    /// </summary>
+    public static List<KeyNote> ResizeStart(IEnumerable<KeyNote> notes, long delta, long minLength) =>
+    [
+        .. notes.Select(n =>
+        {
+            long d = Math.Min(delta, Math.Max(0, n.Length - minLength));
+            return n with { Start = n.Start + d, Length = n.Length - d };
+        }),
+    ];
 
     /// <summary>Copies of the notes with the earliest one starting at <paramref name="at"/>, keeping their spacing.</summary>
     public static List<KeyNote> PasteAt(IReadOnlyCollection<KeyNote> notes, long at)
