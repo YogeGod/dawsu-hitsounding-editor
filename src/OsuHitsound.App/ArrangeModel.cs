@@ -78,7 +78,7 @@ internal sealed partial class ArrangeModel
         LastTime = Math.Max(Map.Moments.Count > 0 ? Map.Moments[^1].Time : 0, Map.Passive.Count > 0 ? Map.Passive.Max(p => p.EndTime) : 0);
         Rows = BuildRows();
         GroupCount = laneRows.Select(r => r.Group).Distinct().Count();
-        passive = Map.Passive.GroupBy(p => p.Lane).ToDictionary(g => g.Key, g => g.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList());
+        passive = PassiveNotes(passiveSource = Map.Passive);
         RebuildNotes();
         combos = ComboOf(file);
         ComboColours = ComboColourList(file);
@@ -87,8 +87,12 @@ internal sealed partial class ArrangeModel
         session.Changed += RestoreHistoryOrder;
     }
 
-    // The map's read-only sounds never change, so their notes are built once.
-    private readonly Dictionary<Lane, List<Note>> passive;
+    // The map's read-only sounds: built again only when they change (a slider's body sound was edited).
+    private Dictionary<Lane, List<Note>> passive;
+    private IReadOnlyList<PassiveSound> passiveSource;
+
+    private static Dictionary<Lane, List<Note>> PassiveNotes(IReadOnlyList<PassiveSound> sounds) =>
+        sounds.GroupBy(p => p.Lane).ToDictionary(g => g.Key, g => g.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList());
 
     public EditSession Session { get; }
 
@@ -131,6 +135,13 @@ internal sealed partial class ArrangeModel
     /// <summary>Rebuilds the notes from the session's hits after an edit.</summary>
     public void RebuildNotes()
     {
+        if (!ReferenceEquals(Map.Passive, passiveSource))
+        {
+            passive = PassiveNotes(passiveSource = Map.Passive);
+            foreach (var lane in passive.Keys)
+                if (!laneRows.Any(r => r.Lane == lane)) AddLane(lane);
+        }
+
         var notes = passive.ToDictionary(kv => kv.Key, kv => new List<Note>(kv.Value));
         var groups = new Dictionary<MomentKey, LaneGroup>();
         foreach (var hit in Session.State.Hits)

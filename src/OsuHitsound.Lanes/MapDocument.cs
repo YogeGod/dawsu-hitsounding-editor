@@ -119,7 +119,9 @@ public sealed partial class MapDocument
     public SaveResult Save(string backupRoot)
     {
         if (Session.HasHsObjects) throw new InvalidOperationException("Use the HS save plan to preserve generated circles and mix incompatible sounds.");
-        return MapSaver.Save(Path, Opened, Folder, Session.Wanted(), backupRoot, Session.State.Bookmarks);
+        var state = Session.State;
+        return MapSaver.Save(Path, Opened, Folder, Session.Wanted(state), backupRoot, state.Bookmarks,
+            alsoEdit: copy => EditSession.ApplySlides(state, copy.HitObjects));
     }
 
     /// <summary>

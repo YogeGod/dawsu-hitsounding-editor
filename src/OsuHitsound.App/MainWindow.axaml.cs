@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     }
     private object? drawnHits; // the hit list the notes were last built from
     private object? drawnHsCircles;
+    private object? drawnSlides;
 
     public MainWindow() : this(null, startAudio: true)
     {
@@ -1154,8 +1155,10 @@ public partial class MainWindow : Window
     private void OnEdited()
     {
         if (model is null || session is null) return;
-        if (!ReferenceEquals(session.State.Hits, drawnHits) || !ReferenceEquals(session.State.HsCircles, drawnHsCircles))
+        if (!ReferenceEquals(session.State.Hits, drawnHits) || !ReferenceEquals(session.State.HsCircles, drawnHsCircles)
+            || !ReferenceEquals(session.State.Slides, drawnSlides))
         {
+            drawnSlides = session.State.Slides;
             // Volume-only edits (bar drags, ramps) skip this: the notes and the selection only depend on the hits.
             drawnHits = session.State.Hits;
             drawnHsCircles = session.State.HsCircles;

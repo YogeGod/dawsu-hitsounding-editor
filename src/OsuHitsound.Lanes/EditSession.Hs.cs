@@ -152,6 +152,7 @@ public sealed partial class EditSession
     {
         var copy = OsuFile.Parse(opened);
         var originalObjects = copy.HitObjects.ToList();
+        ApplySlides(state, originalObjects);
         foreach (var key in ownedOriginals.Where(k => !state.HsCircles.ContainsKey(k))) copy.RemoveHitObject(originalObjects[key.ObjectIndex]);
         var generated = new Dictionary<MomentKey, HitObject>();
         foreach (var circle in state.HsCircles.Where(c => c.Key.ObjectIndex < 0).OrderBy(c => c.Value))

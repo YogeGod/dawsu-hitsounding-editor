@@ -18,6 +18,7 @@ public partial class MainWindow
         SetupDrumMaps();
         Lanes.LaneLayoutChanged += ScheduleProjectSave;
         Lanes.LaneMenuRequested += ShowLaneMenu;
+        Lanes.SliderMenuRequested += ShowSliderMenu;
         // Standard families add a numbered default immediately, like Electron V6.39.
         Lanes.AddLaneRequested += async lane => await AddExtraLane(lane);
         Lanes.RemoveLaneRequested += async () => await DeleteActiveLane();
@@ -83,6 +84,52 @@ public partial class MainWindow
             },
         };
         menu.Open(Lanes);
+    }
+
+    /// <summary>
+    /// The right-click menu on sliders in the object strip: what their bodies play, as osu!'s editor sets it on a whole
+    /// slider. The slide and ticks use the sample set; the slide whistle uses the additions.
+    /// </summary>
+    private void ShowSliderMenu(IReadOnlyList<int> sliders)
+    {
+        if (model is null || session is null || sliders.Count == 0) return;
+        var now = sliders.Select(session.SlideOf).ToList();
+        string Name(SampleSet set) => set == SampleSet.None ? "Auto" : set.ToString();
+        void Apply(Func<SlideSound, SlideSound> change, string label)
+        {
+            session.SetSlides(sliders, change, label);
+            // A slide sound the map didn't use before needs its audio (loading one already loaded does nothing).
+            foreach (var lane in session.Map.Passive.Select(p => p.Lane).Distinct())
+                audio?.LoadLane(lane, lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name)
+                    : folder?.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null);
+            Lanes.InvalidateVisual();
+        }
+
+        MenuItem SetMenu(string header, Func<SlideSound, SampleSet> read, Func<SlideSound, SampleSet, SlideSound> write) => new()
+        {
+            Header = header,
+            ItemsSource = new[] { SampleSet.None, SampleSet.Normal, SampleSet.Soft, SampleSet.Drum }.Select(set =>
+            {
+                var item = new MenuItem { Header = Name(set), ToggleType = MenuItemToggleType.Radio, IsChecked = now.All(s => read(s) == set) };
+                item.Click += (_, _) => Apply(s => write(s, set), $"{header}: {Name(set)}");
+                return item;
+            }).ToList(),
+        };
+
+        var whistle = new MenuItem { Header = "Whistle on slide", ToggleType = MenuItemToggleType.CheckBox, IsChecked = now.All(s => s.Whistle) };
+        bool whistleOn = !now.All(s => s.Whistle);
+        whistle.Click += (_, _) => Apply(s => s with { Whistle = whistleOn }, whistleOn ? "Slide whistle on" : "Slide whistle off");
+        var title = new MenuItem { Header = sliders.Count == 1 ? "Slider body" : $"{sliders.Count} slider bodies", IsEnabled = false };
+        new ContextMenu
+        {
+            ItemsSource = new object[]
+            {
+                title,
+                SetMenu("Slide sample set (also the ticks)", s => s.Normal, (s, set) => s with { Normal = set }),
+                SetMenu("Slide additions (the whistle)", s => s.Addition, (s, set) => s with { Addition = set }),
+                whistle,
+            },
+        }.Open(Lanes);
     }
 
     /// <summary>Deletes a lane: its hits go (Undo brings them and the lane back); the sample file stays in the mapset.</summary>

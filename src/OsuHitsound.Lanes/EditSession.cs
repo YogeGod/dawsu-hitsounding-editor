@@ -29,6 +29,8 @@ public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<
     public ImmutableDictionary<EditHit, int> LayerVolumes { get; init; } = ImmutableDictionary<EditHit, int>.Empty;
     public ImmutableList<SoundSet> SoundSets { get; init; } = [];
     public ImmutableList<SoundSetPlacement> SoundPlacements { get; init; } = [];
+    /// <summary>Slider body sounds changed in the editor, by object index (see <see cref="SlideSound"/>).</summary>
+    public ImmutableDictionary<int, SlideSound> Slides { get; init; } = ImmutableDictionary<int, SlideSound>.Empty;
 }
 
 /// <summary>What a range edit does with the hits in a time range.</summary>
@@ -75,8 +77,9 @@ public sealed partial class EditSession
         HsStartedEmpty = file.HitObjects.Count == 0;
     }
 
-    public DecompiledMap Map => State.HsCircles.Count == 0 && ownedOriginals.Count == 0 ? baseMap
-        : baseMap with { Moments = Moments.Select(m => m.Moment).ToList() };
+    public DecompiledMap Map => State.HsCircles.Count == 0 && ownedOriginals.Count == 0
+        ? State.Slides.Count == 0 ? baseMap : baseMap with { Passive = PassiveNow() }
+        : baseMap with { Moments = Moments.Select(m => m.Moment).ToList(), Passive = PassiveNow() };
 
     public IReadOnlyDictionary<MomentKey, Moment> MomentByKey { get { RefreshMoments(); return currentByKey; } }
 
@@ -100,7 +103,7 @@ public sealed partial class EditSession
         !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks)
         || !ReferenceEquals(a.HsCircles, b.HsCircles) || !ReferenceEquals(a.LayerVolumes, b.LayerVolumes)
         || !ReferenceEquals(a.SoundSets, b.SoundSets) || !ReferenceEquals(a.SoundPlacements, b.SoundPlacements)
-        || !ReferenceEquals(a.BookmarkLabels, b.BookmarkLabels);
+        || !ReferenceEquals(a.BookmarkLabels, b.BookmarkLabels) || !ReferenceEquals(a.Slides, b.Slides);
 
     /// <summary>Seeds the editor-only layout on load or after adding lanes, without creating an edit.</summary>
     public void RestoreLaneOrder(IEnumerable<Lane> lanes)

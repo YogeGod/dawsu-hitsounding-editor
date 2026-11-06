@@ -1350,6 +1350,13 @@ internal sealed class ArrangeView : Control
         // The header, and just under it over the grid: the strip's bottom edge can be grabbed from either side.
         if (p.Y < HeaderHeight || (p.X >= GridLeft && p.Y < HeaderHeight + 4))
         {
+            // A right-click on a slider in the object strip: what its body plays.
+            if (point.Properties.IsRightButtonPressed && p.X >= GridLeft && p.Y >= RulerBottom && p.Y < RulerBottom + StripHeight)
+            {
+                SliderPressed(model, session, Math.Max(0, Axis.Time(p.X - GridLeft)));
+                return;
+            }
+
             if (!point.Properties.IsLeftButtonPressed) return;
             // The + − ‹ in the SAMPLE LANES title.
             bool On(double fromRight) => p.X >= GridLeft - fromRight && p.X < GridLeft - fromRight + ToggleWidth && p.Y < 22;
@@ -1857,6 +1864,27 @@ internal sealed class ArrangeView : Control
         SeekRequested?.Invoke(onNode ? node.Time : o.Start);
         if (doubleClick) HitsPreviewRequested?.Invoke(hits);
     }
+    /// <summary>A right-click on sliders in the object strip: change what their bodies play (the slide, its whistle, ticks).</summary>
+    public event Action<IReadOnlyList<int>>? SliderMenuRequested;
+
+    // On a slider that's selected whole: all such sliders; on another slider: that one, selected first.
+    private void SliderPressed(ArrangeModel model, EditSession session, double time)
+    {
+        if (model.ObjectAt(time, ObjectRadius / Axis.Zoom) is not { Kind: HitObjectKind.Slider } slider || slider.Nodes[0].Key.ObjectIndex < 0) return;
+        var keys = slider.Nodes.Select(n => n.Key).ToHashSet();
+        CollectSelectedObjects(model);
+        if (!slider.Nodes.All(n => selectedKeys.Contains(n.Key)))
+        {
+            SetSelection(session.State.Hits.Where(h => h.Anchor is { } k && keys.Contains(k)));
+            selectedKeys = keys;
+        }
+
+        var sliders = model.Objects.Where(o => o.Kind == HitObjectKind.Slider && o.Nodes.Count > 0 && o.Nodes[0].Key.ObjectIndex >= 0
+            && o.Nodes.All(n => selectedKeys.Contains(n.Key))).Select(o => o.Nodes[0].Key.ObjectIndex).ToList();
+        InvalidateVisual();
+        SliderMenuRequested?.Invoke(sliders.Count > 0 ? sliders : [slider.Nodes[0].Key.ObjectIndex]);
+    }
+
     // ---------------------------------------------------------------- selection (the commands are in HitEditor)
 
     private void SetSelection(IEnumerable<EditHit> hits) => Edits.Select(hits);
