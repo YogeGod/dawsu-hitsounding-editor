@@ -20,6 +20,7 @@ public partial class MainWindow
     {
         hsSaveButton = (SaveButton.Content, ToolTip.GetTip(SaveButton));
         Keys.CloseRequested += async () => { if (await MayLeaveKeysound()) await CloseKeysound(); };
+        SetupKeysoundMenu();
         Keys.Changed += UpdateKeysoundTitle;
         Start.KeysoundNewRequested += () => _ = NewKeysound();
         Start.KeysoundOpenRequested += () => _ = PickKeysound();
@@ -190,7 +191,38 @@ public partial class MainWindow
         ToolTip.SetTip(SaveButton, on
             ? "Save the Keysound project (Ctrl+S): tracks, notes and instrument settings. The reference beatmap is never changed."
             : hsSaveButton.Tip);
-        HsModeButton.IsVisible = HeaderMenu.IsVisible = OpenButton.IsVisible = !on;
+        HsModeButton.IsVisible = HeaderMenu.IsVisible = !on;
+        KeysoundMenu.IsVisible = on;
+    }
+
+    /// <summary>
+    /// The Keysound menus: each item's Tag names its command, "ks:" for the key editor's own (see
+    /// <see cref="KeysoundEditor.CommandIds"/>), otherwise the window's (open, save, preferences, help).
+    /// </summary>
+    private void SetupKeysoundMenu()
+    {
+        foreach (var top in KeysoundMenu.Items.OfType<MenuItem>())
+        {
+            foreach (var item in top.Items.OfType<MenuItem>())
+                item.Click += async (_, _) =>
+                {
+                    switch (item.Tag as string)
+                    {
+                        case { } ks when ks.StartsWith("ks:", StringComparison.Ordinal): await Keys.RunCommand(ks[3..]); break;
+                        case "save": await SaveKeysound(); break;
+                        case { } id: Run(id); break;
+                    }
+                };
+
+            // Greyed out when they can't run, and the view items show their state.
+            top.SubmenuOpened += (_, _) =>
+            {
+                foreach (var item in top.Items.OfType<MenuItem>())
+                    if (item.Tag is string tag && tag.StartsWith("ks:", StringComparison.Ordinal)) item.IsEnabled = Keys.CanRun(tag[3..]);
+                KsGhostsItem.IsChecked = Keys.GhostsShown;
+                KsObjectLinesItem.IsChecked = Keys.ObjectLinesShown;
+            };
+        }
     }
 
     private void UpdateKeysoundTitle()

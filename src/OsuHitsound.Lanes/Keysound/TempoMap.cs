@@ -35,7 +35,13 @@ public sealed class TempoMap
         }
 
         Segments = segments;
+        // Bars count as in Hitsound mode: from a whole bar at or before 0 ms, so bars before the first red line exist.
+        var first = segments[0];
+        FirstBar = 1 + Math.Max(0, (int)Math.Ceiling(first.Time / (first.BeatLength * first.Meter) - 1e-6));
     }
+
+    /// <summary>The bar number of the first red line: 1, plus the whole bars that fit between 0 ms and it.</summary>
+    public int FirstBar { get; }
 
     /// <summary>The reference's red lines, in play time (<paramref name="timeOffset"/> added, as the editor shows them).</summary>
     public static TempoMap FromBeatmap(OsuFile file, double timeOffset = 0) =>
@@ -101,10 +107,10 @@ public sealed class TempoMap
         }
     }
 
-    /// <summary>"bar.beat" at a time, counting bars from 1 at the first red line and restarting the bar at each red line.</summary>
+    /// <summary>"bar.beat" at a time: the first red line is bar <see cref="FirstBar"/>, and each red line starts a new bar.</summary>
     public (int Bar, int Beat) BarBeatAt(double time)
     {
-        int bar = 1;
+        int bar = FirstBar;
         for (int i = 0; i < Segments.Count; i++)
         {
             var s = Segments[i];
@@ -128,7 +134,7 @@ public sealed class TempoMap
     /// </summary>
     public double TickOfBarBeat(int bar, int beat)
     {
-        long startBar = 1;
+        long startBar = FirstBar;
         for (int i = 0; ; i++)
         {
             var s = Segments[i];
@@ -138,6 +144,14 @@ public sealed class TempoMap
                 return s.StartTick + ((double)(bar - startBar) * s.Meter + (beat - 1)) * Ppq;
             startBar += Math.Max(1, (long)Math.Ceiling((Segments[i + 1].Time - s.Time) / s.BeatLength / s.Meter - 1e-6));
         }
+    }
+
+    /// <summary>bar.beat.tick for the time display: the tick is the sixteenth of the beat, from 1 (as Hitsound mode shows it).</summary>
+    public (int Bar, int Beat, int Tick) BarBeatTickAt(double time)
+    {
+        var (bar, beat) = BarBeatAt(time);
+        double beats = (TickAt(time) - TickOfBarBeat(bar, beat)) / Ppq;
+        return (bar, beat, Math.Clamp((int)Math.Floor(beats * 16 + 1e-6), 0, 15) + 1);
     }
 
     private static long Mod(long a, long m) => ((a % m) + m) % m;

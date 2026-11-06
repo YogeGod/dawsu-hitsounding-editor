@@ -49,6 +49,9 @@ public class TempoMapTests
         Assert.Equal((2, 3), map.BarBeatAt(2500)); // 1400 ms into the 3/4 section: 2 beats
         Assert.Equal((2, 1), map.BarBeatAt(1100)); // the partial bar before the red line counts as one bar
         Assert.Equal((3, 1), map.BarBeatAt(1100 + 3 * 600));
+        Assert.Equal((1, 1, 1), map.BarBeatTickAt(0));
+        Assert.Equal((1, 1, 9), map.BarBeatTickAt(250)); // half a beat: the ninth sixteenth
+        Assert.Equal((3, 4, 1), new TempoMap([(5000, 500, 4)]).BarBeatTickAt(5000 - 500)); // bars before the first red line
     }
 
     [Fact]

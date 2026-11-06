@@ -74,10 +74,11 @@ public class MidiImportTests
     {
         var part = new MidiImportPart("Lead", 0, [new MidiNote(96, 48, 0, 60, 100)], [new MidiController(96, 0, ControllerKind.Sustain, 127)]);
         var map = new TempoMap([(1000, 500, 4)]);
-        long origin = (long)map.TickOfBarBeat(3, 1); // the file's beat 1 lands on bar 3
+        Assert.Equal(2, map.FirstBar); // as Hitsound mode counts: one whole bar fits before the red line at 1000 ms
+        long origin = (long)map.TickOfBarBeat(4, 1); // the file's beat 1 lands on bar 4, two bars after the red line
         var track = Assert.Single(MidiImport.Tracks([part], ticksPerBeat: 96, origin));
         var note = Assert.Single(track.Notes);
-        Assert.Equal((8L * 960 + 960, 480L), (note.Start, note.Length)); // bar 3 = 8 beats in, then one more beat; half a beat long
+        Assert.Equal((8L * 960 + 960, 480L), (note.Start, note.Length)); // bar 4 = 8 beats in, then one more beat; half a beat long
         Assert.Equal(1000 + 9 * 500, map.TimeAt(note.Start), 6);
         Assert.Equal(note.Start, track.Controllers.Single().Tick);
         Assert.Equal(KeyInstrument.Piano, track.Instrument);

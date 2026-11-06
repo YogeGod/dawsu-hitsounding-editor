@@ -57,10 +57,18 @@ public partial class KeysoundEditor : UserControl
         AddTrackButton.Click += (_, _) => AddTrack();
         RenameTrackButton.Click += async (_, _) => await RenameTrack();
         DeleteTrackButton.Click += (_, _) => DeleteTrack();
-        CloseButton.Click += (_, _) => CloseRequested?.Invoke();
-        ImportMidiButton.Click += async (_, _) => await ImportMidi();
-        SyncButton.Click += async (_, _) => await SyncNotes();
-        GenerateButton.Click += async (_, _) => await Generate();
+        StopButton.Click += (_, _) => { if (audio?.IsPlaying == true || IsRecording) TogglePlay(); else Seek(0); };
+        VelocityModeBox.ItemsSource = new[] { "Set all", "Relative" };
+        VelocityModeBox.SelectedIndex = 0;
+        VelocityApplyButton.Click += (_, _) => ApplyVelocity();
+        VelocityValueBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            ApplyVelocity();
+            e.Handled = true;
+        };
+        DismissButton.Click += (_, _) => SetStatus("");
+        ProjectFolderButton.Click += (_, _) => OpenProjectFolder();
         VolumeBox.ValueChanged += (_, _) =>
         {
             if (showingVolume || doc?.SelectedTrack is not { } id || VolumeBox.Value is not { } db) return;
@@ -368,7 +376,7 @@ public partial class KeysoundEditor : UserControl
     }
 
     /// <summary>Import MIDI…: pick a file, preview its tracks and placement, then add them as one undo step.</summary>
-    private async Task ImportMidi()
+    internal async Task ImportMidi()
     {
         if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
         var picked = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -405,7 +413,7 @@ public partial class KeysoundEditor : UserControl
     }
 
     /// <summary>Sync…: preview moving notes onto gameplay positions, then apply as one undo step.</summary>
-    private async Task SyncNotes()
+    internal async Task SyncNotes()
     {
         if (doc is not { } project || TopLevel.GetTopLevel(this) is not Window owner) return;
         if (project.Targets.Count == 0)
@@ -499,25 +507,81 @@ public partial class KeysoundEditor : UserControl
         UpdateTransport();
     }
 
-    /// <summary>The clock: time, bar.beat and tempo at the playhead (every playback tick).</summary>
+    /// <summary>The clock, as in Hitsound mode: time, bar.beat.tick, tempo, and signature · snap at the playhead.</summary>
     private void UpdateTransport()
     {
         if (doc is null) return;
         double t = Roll.Playhead;
         TimeText.Text = TimeSpan.FromMilliseconds(Math.Max(0, t)).ToString(@"m\:ss\.fff");
-        var (bar, beat) = doc.Tempo.BarBeatAt(t);
-        BarText.Text = $"{bar}.{beat}";
-        BpmText.Text = $"{60000 / doc.Tempo.SegmentAtTime(t).BeatLength:0.##}";
+        var (bar, beat, tick) = doc.Tempo.BarBeatTickAt(t);
+        BarText.Text = $"{bar}.{beat}.{tick}";
+        var segment = doc.Tempo.SegmentAtTime(t);
+        BpmText.Text = $"{60000 / segment.BeatLength:0.##}";
+        MeterText.Text = $"{segment.Meter}/4 /{Roll.SnapDivisions}";
     }
+
+    /// <summary>The info bar: what is selected, where it starts, its pitch, velocity and gameplay object.</summary>
+    private void UpdateSelectionInfo()
+    {
+        if (doc is null) return;
+        var notes = Roll.Selected;
+        InfoSelection.Text = notes.Count switch { 0 => "No notes", 1 => "1 note", var n => $"{n} notes" };
+        if (notes.Count == 0)
+        {
+            InfoStart.Text = InfoPitch.Text = InfoObject.Text = "—";
+            VelocityValueBox.Watermark = "1-127";
+            return;
+        }
+
+        var first = notes.MinBy(n => n.Start)!;
+        double ms = doc.Tempo.TimeAt(first.Start);
+        var (bar, beat, tick) = doc.Tempo.BarBeatTickAt(ms);
+        InfoStart.Text = $"{ms:0} · {bar}.{beat}.{tick}";
+        var pitches = notes.Select(n => n.Pitch).Distinct().ToList();
+        InfoPitch.Text = pitches.Count == 1 ? PianoRollView.PitchName(pitches[0]) : $"{PianoRollView.PitchName(pitches.Min())}–{PianoRollView.PitchName(pitches.Max())}";
+        var velocities = notes.Select(n => n.Velocity).Distinct().ToList();
+        VelocityValueBox.Watermark = velocities.Count == 1 ? velocities[0].ToString() : "mixed";
+        int synced = notes.Count(n => KeySync.Status(n, doc.TargetIndex) == KeySyncStatus.Synced);
+        InfoObject.Text = notes.Count == 1
+            ? KeySync.Status(first, doc.TargetIndex) switch
+            {
+                KeySyncStatus.Synced => $"{first.Target!.Position} #{first.Target.ObjectIndex + 1} at {TimeSpan.FromMilliseconds(Math.Max(0, first.Target.Time)):m\\:ss\\.fff}",
+                KeySyncStatus.Moved => "Its object moved: Sync again",
+                KeySyncStatus.Missing => "Its object is gone: Sync again",
+                _ => "Not synced",
+            }
+            : $"{synced} of {notes.Count} synced";
+    }
+
+    private void ApplyVelocity()
+    {
+        if (!int.TryParse(VelocityValueBox.Text?.Trim(), out int value)) return;
+        bool relative = VelocityModeBox.SelectedIndex == 1;
+        Roll.SetSelectionVelocity(v => relative ? v + value : value);
+        VelocityValueBox.Text = "";
+        Roll.Focus();
+    }
+
+    private void OpenProjectFolder()
+    {
+        if (doc is null) return;
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(doc.Folder) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException) { SetStatus($"Couldn't open the project folder: {ex.Message}"); }
+    }
+
+    /// <summary>The menu's Close project: the window asks about unsaved edits first.</summary>
+    public void RequestClose() => CloseRequested?.Invoke();
 
     /// <summary>Everything else that changes with edits, the selection or a status message.</summary>
     private void UpdateTexts()
     {
         if (doc is null) return;
         UpdateTransport();
-        SelectionText.Text = Roll.SelectionText();
+        UpdateSelectionInfo();
         StatusText.Text = status;
-        ToolTip.SetTip(StatusText, status);
+        MessageRow.IsVisible = status.Length > 0;
+        ProjectPathText.Text = doc.ProjectPath;
+        ToolTip.SetTip(ProjectPathText, doc.ProjectPath);
         UndoButton.IsEnabled = doc.Session.CanUndo;
         RedoButton.IsEnabled = doc.Session.CanRedo;
         ToolTip.SetTip(UndoButton, doc.Session.UndoLabel is { } u ? $"Undo {u} (Ctrl+Z)" : "Undo (Ctrl+Z)");

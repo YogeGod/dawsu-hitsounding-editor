@@ -15,7 +15,7 @@ public partial class KeysoundEditor
 {
     private bool generating;
 
-    private async Task Generate()
+    internal async Task Generate()
     {
         if (doc is not { } project || TopLevel.GetTopLevel(this) is not Window owner || generating) return;
         if (project.SongPath is null || !File.Exists(project.SongPath))

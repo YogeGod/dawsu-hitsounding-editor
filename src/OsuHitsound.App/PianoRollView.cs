@@ -874,6 +874,18 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         ViewChanged?.Invoke();
     }
 
+    /// <summary>The selected notes of the selected track.</summary>
+    public IReadOnlyList<KeyNote> Selected => SelectedNotes();
+
+    /// <summary>The info bar's velocity edit: a new velocity for every selected note, as one undo step.</summary>
+    public void SetSelectionVelocity(Func<int, int> velocity)
+    {
+        if (Track is not { } track) return;
+        var notes = SelectedNotes();
+        if (notes.Count == 0) return;
+        doc!.Session.UpdateNotes(track.Id, [.. notes.Select(n => n with { Velocity = Math.Clamp(velocity(n.Velocity), KeyNote.MinVelocity, KeyNote.MaxVelocity) })], "Velocity");
+    }
+
     /// <summary>Ctrl+D: copies of the selection right after it; the copies become the selection.</summary>
     public void Duplicate()
     {

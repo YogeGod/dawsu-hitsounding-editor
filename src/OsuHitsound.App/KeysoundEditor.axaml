@@ -3,49 +3,86 @@
              xmlns:app="using:OsuHitsound.App"
              x:Class="OsuHitsound.App.KeysoundEditor"
              Background="{DynamicResource VolumeSide}">
-  <Grid RowDefinitions="46,*,52" ColumnDefinitions="232,1,*">
-    <!-- Toolbar: compact tools, snap and view toggles, as in the key-editor design. -->
-    <Border Grid.ColumnSpan="3" Classes="toolbar" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource ChromeBorder}">
-      <DockPanel Margin="12,0" LastChildFill="False">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <Button Name="ImportMidiButton" Content="Import MIDI…" ToolTip.Tip="Import a .mid file's tracks as new instrument tracks, placed by beats from a bar you choose" />
-          <Button Name="SyncButton" Content="Sync…" ToolTip.Tip="Move notes onto the reference's gameplay objects (preview first). Generate exports only synced notes." />
-          <Button Name="GenerateButton" Content="Generate…" ToolTip.Tip="Render each synced note to a WAV and write a [Keysounds] copy of the reference into the project's output folder, then export a .osz" />
-          <Button Name="CloseButton" Content="◀ Close" ToolTip.Tip="Close this Keysound project: back to the beatmap that was open before, or to the start screen" />
-          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
+  <!-- The same rows as the main window's Hitsound view: toolbar, info bar, editing area, transport, footer. -->
+  <Grid RowDefinitions="46,46,*,56,Auto" ColumnDefinitions="250,4,*">
+    <!-- Toolbar: undo/redo, tools, snap and hearing; view toggles, MIDI input and zoom on the right. -->
+    <Border Grid.ColumnSpan="3" Classes="toolbar" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
+        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Name="UndoButton" Classes="icon" ToolTip.Tip="Undo (Ctrl+Z)" AutomationProperties.Name="Undo"><Path Data="M 5,3 L 1,7 L 5,11 M 1,7 L 9,7 C 15,7 15,15 9,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
           <Button Name="RedoButton" Classes="icon" ToolTip.Tip="Redo (Ctrl+Y)" AutomationProperties.Name="Redo"><Path Data="M 11,3 L 15,7 L 11,11 M 15,7 L 7,7 C 1,7 1,15 7,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
-          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
-          <ToggleButton Name="SelectTool" Classes="tool" IsChecked="True" ToolTip.Tip="Object Selection (1): click or box-select notes; drag to move (Ctrl: one direction, Alt: copy); drag either edge to resize; Ctrl+Shift+drag changes velocity; Shift+double-click selects the later notes of that pitch" AutomationProperties.Name="Select"><Path Data="M 3,1 L 3,14 L 7,10 L 11,15 L 14,13 L 10,8 L 15,7 Z" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-          <ToggleButton Name="DrawTool" Classes="tool" ToolTip.Tip="Draw (8): click to add a note at the Note Insert Velocity, drag right to set its length; clicking a note deletes it" AutomationProperties.Name="Draw"><Path Data="M 2,11 L 11,2 L 14,5 L 5,14 L 1,15 Z M 9,4 L 12,7" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-          <ToggleButton Name="EraseTool" Classes="tool" ToolTip.Tip="Erase (5): click or drag across notes to delete them" AutomationProperties.Name="Erase"><Path Data="M 2,10 L 10,2 L 15,7 L 7,15 L 5,15 Z M 7,5 L 12,10 M 5,15 L 15,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-          <ToggleButton Name="SplitTool" Classes="tool" ToolTip.Tip="Split (3): click a note to split it at the (snapped) pointer; on a selected note, every selected note splits there" AutomationProperties.Name="Split"><Path Data="M 4,1 L 12,15 M 12,1 L 4,15 M 1,8 L 15,8" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-          <ToggleButton Name="GlueTool" Classes="tool" ToolTip.Tip="Glue (4): click a note to join it with the next note of the same pitch" AutomationProperties.Name="Glue"><Path Data="M 3,2 L 3,9 Q 3,14 8,14 Q 13,14 13,9 L 13,2 M 8,2 L 8,10" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
-          <ToggleButton Name="SnapToggle" Classes="viewToggle" Content="Snap" IsChecked="True" ToolTip.Tip="Snap notes to the grid (J). The grid counts from each red line of the reference beatmap." />
-          <ComboBox Name="SnapBox" Width="72" ToolTip.Tip="Grid spacing in beats; also the length of drawn notes, nudges and Quantize (Q)" />
-          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
-          <TextBlock Text="Velocity" Classes="caption" VerticalAlignment="Center" />
-          <NumericUpDown Name="InsertVelocityBox" Minimum="1" Maximum="127" Increment="1" Value="100" FormatString="0" Width="104" ToolTip.Tip="Note Insert Velocity: the velocity of drawn notes (1–127)" />
-          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
-          <ToggleButton Name="GhostToggle" Classes="viewToggle" Content="Ghost notes" IsChecked="True" ToolTip.Tip="Show other tracks' notes faintly. Only the selected track is editable." />
-          <ToggleButton Name="HearToggle" Classes="viewToggle" Content="Hear" IsChecked="True" ToolTip.Tip="Hear notes while editing: clicked keys, drawn, selected and re-pitched notes" />
-          <ToggleButton Name="MarkerToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines at the reference's circles, slider heads, repeats and tails, and spinner ends. Notes drawn on a line still need Sync before Generate." />
         </StackPanel>
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <ComboBox Name="MidiInputBox" Width="190" ToolTip.Tip="MIDI keyboard input (all channels)" />
-          <Button Name="MidiRescanButton" Content="⟳" Width="28" ToolTip.Tip="Look for MIDI keyboards again (after plugging one in)" />
-          <Border Classes="separator" Width="1" Height="24" Margin="4,0" />
+        <Border Grid.Column="1" Classes="tools" Margin="12,0" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal">
+            <ToggleButton Name="SelectTool" Classes="tool" IsChecked="True" ToolTip.Tip="Object Selection (1): click or box-select notes; drag to move (Ctrl: one direction, Alt: copy); drag either edge to resize; Ctrl+Shift+drag changes velocity; Shift+double-click selects the later notes of that pitch" AutomationProperties.Name="Select"><Path Data="M 3,1 L 3,14 L 7,10 L 11,15 L 14,13 L 10,8 L 15,7 Z" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+            <ToggleButton Name="DrawTool" Classes="tool" ToolTip.Tip="Draw (8): click to add a note at the insert velocity, drag right to set its length; clicking a note deletes it" AutomationProperties.Name="Draw"><Path Data="M 2,11 L 11,2 L 14,5 L 5,14 L 1,15 Z M 9,4 L 12,7" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+            <ToggleButton Name="EraseTool" Classes="tool" ToolTip.Tip="Erase (5): click or drag across notes to delete them" AutomationProperties.Name="Erase"><Path Data="M 2,10 L 10,2 L 15,7 L 7,15 L 5,15 Z M 7,5 L 12,10 M 5,15 L 15,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+            <ToggleButton Name="SplitTool" Classes="tool" ToolTip.Tip="Split (3): click a note to split it at the (snapped) pointer; on a selected note, every selected note splits there" AutomationProperties.Name="Split"><Path Data="M 4,1 L 12,15 M 12,1 L 4,15 M 1,8 L 15,8" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+            <ToggleButton Name="GlueTool" Classes="tool" ToolTip.Tip="Glue (4): click a note to join it with the next note of the same pitch" AutomationProperties.Name="Glue"><Path Data="M 3,2 L 3,9 Q 3,14 8,14 Q 13,14 13,9 L 13,2 M 8,2 L 8,10" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+          </StackPanel>
+        </Border>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <ToggleButton Name="SnapToggle" Classes="viewToggle" Content="Snap" IsChecked="True" ToolTip.Tip="Snap notes to the grid (J). The grid counts from each red line of the reference beatmap." />
+          <ComboBox Name="SnapBox" Width="70" Focusable="True" ToolTip.Tip="Grid spacing in beats; also the length of drawn notes, nudges and Quantize (Q)" />
+          <ToggleButton Name="HearToggle" Classes="viewToggle" Content="Audition" IsChecked="True" Height="28" MinHeight="28" Padding="10,4" Margin="6,0,0,0"
+                        ToolTip.Tip="Hear notes while editing: clicked keys, drawn, selected and re-pitched notes" />
+        </StackPanel>
+        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <ToggleButton Name="GhostToggle" Classes="viewToggle" Content="Ghost notes" IsChecked="True" ToolTip.Tip="Show other tracks' notes faintly. Only the selected track is editable." />
+          <ToggleButton Name="MarkerToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines at the reference's circles, slider heads, repeats and tails, and spinner ends. Notes drawn on a line still need Sync before Generate." />
+          <TextBlock Text="MIDI" Classes="toolLabel" Margin="6,0,0,0" />
+          <ComboBox Name="MidiInputBox" Width="180" ToolTip.Tip="MIDI keyboard input (all channels)" />
+          <Button Name="MidiRescanButton" Classes="icon" ToolTip.Tip="Look for MIDI keyboards again (after plugging one in)" AutomationProperties.Name="Look for MIDI keyboards">
+            <Path Data="M 13,4 A 6,6 0 1 0 14,9 M 13,1 L 13,4 L 10,4" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" />
+          </Button>
+          <TextBlock Text="Zoom" Classes="toolLabel" Margin="6,0,0,0" />
           <Button Name="ZoomOutButton" Content="−" Width="28" ToolTip.Tip="Zoom out in time (G)" />
           <Button Name="ZoomInButton" Content="+" Width="28" ToolTip.Tip="Zoom in in time (H)" />
           <Button Name="RowsOutButton" Content="↕−" ToolTip.Tip="Smaller key rows (Ctrl+Shift+wheel)" />
           <Button Name="RowsInButton" Content="↕+" ToolTip.Tip="Larger key rows (Ctrl+Shift+wheel)" />
         </StackPanel>
-      </DockPanel>
+      </Grid>
+    </Border>
+
+    <!-- Info bar: the selected notes, as Hitsound mode's selection bar shows the selected hits. -->
+    <Border Grid.Row="1" Grid.ColumnSpan="3" Classes="info" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Margin="12,0">
+        <StackPanel Classes="field" MinWidth="130">
+          <TextBlock Text="SELECTION" Classes="fieldLabel" />
+          <TextBlock Name="InfoSelection" Text="No notes" Classes="fieldValue" />
+        </StackPanel>
+        <StackPanel Classes="field" MinWidth="150">
+          <TextBlock Text="START · ms" Classes="fieldLabel" />
+          <TextBlock Name="InfoStart" Text="—" Classes="fieldValue" />
+        </StackPanel>
+        <StackPanel Classes="field" MinWidth="80">
+          <TextBlock Text="PITCH" Classes="fieldLabel" />
+          <TextBlock Name="InfoPitch" Text="—" Classes="fieldValue" />
+        </StackPanel>
+        <StackPanel Classes="field">
+          <TextBlock Text="VELOCITY · 1–127" Classes="fieldLabel" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBox Name="VelocityValueBox" Width="60" Watermark="1-127" ToolTip.Tip="Velocity for the selected notes. Enter or Apply commits it." />
+            <Button Name="VelocityApplyButton" Content="Apply" Focusable="True" ToolTip.Tip="Apply to the selected notes (one undo step)" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Classes="field">
+          <TextBlock Text="VALUE EDIT" Classes="fieldLabel" />
+          <ComboBox Name="VelocityModeBox" Width="100" Focusable="True" ToolTip.Tip="Relative moves every selected velocity by the value; Set all gives them that value" />
+        </StackPanel>
+        <StackPanel Classes="field">
+          <TextBlock Text="INSERT VELOCITY" Classes="fieldLabel" />
+          <NumericUpDown Name="InsertVelocityBox" Minimum="1" Maximum="127" Increment="1" Value="100" FormatString="0" Width="104" ToolTip.Tip="The velocity of drawn notes (1–127)" />
+        </StackPanel>
+        <StackPanel Classes="field" MinWidth="200">
+          <TextBlock Text="GAMEPLAY OBJECT" Classes="fieldLabel" />
+          <TextBlock Name="InfoObject" Text="—" Classes="fieldValue" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+      </StackPanel>
     </Border>
 
     <!-- Tracks: the inspector side of the key editor. -->
-    <Border Grid.Row="1" Background="{DynamicResource PaneTitle}" Padding="10,8">
+    <Border Grid.Row="2" Background="{DynamicResource PaneTitle}" Padding="10,8">
       <DockPanel>
         <TextBlock DockPanel.Dock="Top" Classes="sectionLabel" Text="TRACKS" Margin="0,0,0,6" />
         <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
@@ -71,33 +108,50 @@
         </ScrollViewer>
       </DockPanel>
     </Border>
-    <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource ChromeBorder}" />
-    <app:PianoRollView Grid.Row="1" Grid.Column="2" Name="Roll" />
+    <Border Grid.Row="2" Grid.Column="1" Background="#1c1c1e" />
+    <app:PianoRollView Grid.Row="2" Grid.Column="2" Name="Roll" />
 
-    <!-- Transport. -->
-    <Border Grid.Row="2" Grid.ColumnSpan="3" Classes="transportBar" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource ChromeBorder}">
-      <DockPanel Margin="12,0">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+    <!-- Transport, as in Hitsound mode: buttons, then time, bar.beat.tick, tempo and signature · snap. -->
+    <Border Grid.Row="3" Grid.ColumnSpan="3" Classes="transportBar" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="Auto,Auto,*" Margin="12,0">
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
             <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
           </Button>
+          <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:SkinIcon Glyph="Stop" /></Button>
           <Button Name="PlayButton" Classes="transport" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop (Space): the song and the audible tracks' notes" AutomationProperties.Name="Play or stop"><app:SkinIcon Name="PlayGlyph" Glyph="Play" /></Button>
           <ToggleButton Name="RecordButton" Classes="transport" ToolTip.Tip="Record (Numpad *): from the playhead into the selected track, from your MIDI keyboard. Notes starting in the recorded range are replaced; Space or Record stops." AutomationProperties.Name="Record">
             <Ellipse Width="12" Height="12" Fill="#e5484d" />
           </ToggleButton>
-          <ToggleButton Name="CountInToggle" Content="Count-in" IsChecked="True" Height="28" MinHeight="28" Padding="8,0" Margin="6,0,0,0" ToolTip.Tip="One bar of clicks before recording starts (shorter at the very start of the song)" />
-          <ToggleButton Name="MetronomeToggle" Content="Click" IsChecked="True" Height="28" MinHeight="28" Padding="8,0" ToolTip.Tip="Metronome while recording: the bar's first beat is higher" />
-          <Border Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Margin="12,0,0,0" Height="40">
-            <StackPanel Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
-              <StackPanel><TextBlock Name="TimeText" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>
-              <StackPanel><TextBlock Name="BarText" Classes="lcd" Text="1.1" /><TextBlock Classes="caption" Text="BAR · BEAT" /></StackPanel>
-              <StackPanel><TextBlock Name="BpmText" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="TEMPO" /></StackPanel>
-            </StackPanel>
-          </Border>
+          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
+            <ToggleButton Name="CountInToggle" Content="Count-in" IsChecked="True" Height="28" MinHeight="28" Padding="6,0" FontSize="11" ToolTip.Tip="One bar of clicks before recording starts (shorter at the very start of the song)" />
+            <ToggleButton Name="MetronomeToggle" Content="Click" IsChecked="True" Height="28" MinHeight="28" Padding="6,0" FontSize="11" ToolTip.Tip="Metronome while recording: the bar's first beat is higher" />
+          </StackPanel>
         </StackPanel>
-        <TextBlock Name="StatusText" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{DynamicResource ButtonText}" TextTrimming="CharacterEllipsis" MaxWidth="760" />
-        <TextBlock Name="SelectionText" VerticalAlignment="Center" Margin="18,0" Foreground="{DynamicResource LcdCaption}" />
-      </DockPanel>
+        <Border Grid.Column="1" Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Margin="16,0,0,0" Height="44" VerticalAlignment="Center">
+          <Grid ColumnDefinitions="102,88,54,84" VerticalAlignment="Center">
+            <StackPanel Grid.Column="0"><TextBlock Name="TimeText" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>
+            <StackPanel Grid.Column="1"><TextBlock Name="BarText" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="BAR · BEAT · TICK" /></StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Name="BpmText" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="TEMPO" /></StackPanel>
+            <StackPanel Grid.Column="3"><TextBlock Name="MeterText" Classes="lcd" Text="4/4 /4" /><TextBlock Classes="caption" Text="SIGNATURE · SNAP" /></StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- Footer, as in Hitsound mode: what is being edited, then the latest message until dismissed. -->
+    <Border Grid.Row="4" Grid.ColumnSpan="3" Background="{DynamicResource HeaderBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
+      <StackPanel Margin="12,6" Spacing="4">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <TextBlock Text="Editing:" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <TextBlock Grid.Column="1" Name="ProjectPathText" Foreground="{DynamicResource LcdCaption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2" Name="ProjectFolderButton" Content="Open project folder" Margin="8,0,0,0" ToolTip.Tip="Show the Keysound project folder (its reference copy and Generate's output) in Explorer" />
+        </Grid>
+        <Grid Name="MessageRow" ColumnDefinitions="*,Auto" IsVisible="False">
+          <TextBlock Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Name="DismissButton" Content="Dismiss" Margin="8,0,0,0" VerticalAlignment="Top" />
+        </Grid>
+      </StackPanel>
     </Border>
   </Grid>
 </UserControl>
