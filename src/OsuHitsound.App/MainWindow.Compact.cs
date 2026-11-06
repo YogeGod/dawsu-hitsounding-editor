@@ -20,6 +20,10 @@ public partial class MainWindow
         void Add(Button button, params Control[] controls)
         {
             var popup = new StackPanel { Spacing = 12, Margin = new Thickness(4) };
+            // A flyout routes keys inside its own pop-up, past the window's handler: Space must still play or stop
+            // here instead of toggling Mute or moving a slider.
+            popup.AddHandler(KeyDownEvent, OnPlayKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            popup.AddHandler(KeyUpEvent, OnPlayKeyUp, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             button.Flyout = new Flyout
             {
                 Content = new ScrollViewer { Content = popup, MaxHeight = 360, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled },

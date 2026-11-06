@@ -561,26 +561,34 @@ public partial class MainWindow : Window
         Volume.UpdateCursor(modifiers);
     }
 
-    private bool playKeyHeld;
+    private Key? shortcutKeyHeld;
 
-    // Space (the play key) after clicking a button used to press that button again: the play key now goes to playback
-    // first, wherever focus is, except while typing in a text box or with a drop-down list open.
+    // A focused button, toggle, slider, list or tree used to take the editor's keys first: Space pressed the button just
+    // clicked, and a number key searched the file browser's list instead of picking a tool. Shortcuts now reach the editor
+    // first wherever focus is, except while typing in a text box, with a drop-down list open, and for the keys those
+    // controls need to work (arrows, Enter, Esc, Tab, Page Up/Down, Home/End). On the editor's own canvases the normal
+    // key handling (OnKeyDown) runs as before.
     private void OnPlayKeyDown(object? sender, KeyEventArgs e)
     {
-        if (Start.IsVisible || EditorCommands.Match(e)?.Id != "play") return;
-        var focused = FocusManager?.GetFocusedElement();
+        if (Start.IsVisible || EditorCommands.Match(e) is not { } command) return;
+        // In a flyout the key comes from its pop-up, whose focus the window doesn't track: the event's source is it.
+        object? focused = e.Source as Control ?? FocusManager?.GetFocusedElement();
         if (focused is TextBox || focused is ComboBox { IsDropDownOpen: true }) return;
+        if (focused is ArrangeView or PianoRollView or VolumeLane or OverviewStrip or Window or null && command.Id != "play") return;
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Enter or Key.Escape or Key.Tab
+            or Key.PageUp or Key.PageDown or Key.Home or Key.End) return;
+        if (command.Id is "help" or "preferences" or "inspector" or "save") return; // OnKeyDown runs these in both modes
         e.Handled = true;
-        playKeyHeld = true;
-        if (Keys.Document is not null) Keys.RunShortcut("play");
-        else Run("play");
+        shortcutKeyHeld = e.Key;
+        if (Keys.Document is not null) Keys.HandleKey(e);
+        else Run(command.Id);
     }
 
     // The key's release would click a focused button: it belongs to the press above.
     private void OnPlayKeyUp(object? sender, KeyEventArgs e)
     {
-        if (!playKeyHeld || e.Key != Key.Space && EditorCommands.Match(e)?.Id != "play") return;
-        playKeyHeld = false;
+        if (shortcutKeyHeld != e.Key) return;
+        shortcutKeyHeld = null;
         e.Handled = true;
     }
 
