@@ -33,6 +33,7 @@ public partial class KeysoundEditor
             case "last": Seek(FirstOrLast(first: false)); return true;
 
             case "toolSelect": SetTool(KeyTool.Select); return true;
+            case "toolGrab": SetTool(KeyTool.Grab); return true;
             case "toolDraw": SetTool(KeyTool.Draw); return true;
             case "toolErase": SetTool(KeyTool.Erase); return true;
             case "ks.toolSplit": SetTool(KeyTool.Split); return true;
@@ -88,6 +89,7 @@ public partial class KeysoundEditor
     {
         static string Keys(string id) => EditorCommands.All.FirstOrDefault(c => c.Id == id)?.KeysText is { Length: > 0 } k ? $" ({k})" : "";
         ToolTip.SetTip(SelectTool, $"Object Selection{Keys("toolSelect")}: click or box-select notes; drag to move (Ctrl: one direction, Alt: copy); drag either edge to resize; Ctrl+Shift+drag changes velocity; Shift+double-click selects the later notes of that pitch");
+        ToolTip.SetTip(GrabTool, $"Grab{Keys("toolGrab")}: drag to pan time and keys");
         ToolTip.SetTip(DrawTool, $"Draw{Keys("toolDraw")}: click to add a note at the insert velocity, drag right to set its length; clicking a note deletes it");
         ToolTip.SetTip(EraseTool, $"Erase{Keys("toolErase")}: click or drag across notes to delete them");
         ToolTip.SetTip(SplitTool, $"Split{Keys("ks.toolSplit")}: click a note to split it at the (snapped) pointer; on a selected note, every selected note splits there");

@@ -8,6 +8,11 @@ internal sealed class TimeAxis
 {
     public const double MinZoom = 0.01, MaxZoom = 2;
 
+    // The zoom slider (both modes) is logarithmic: equal steps zoom by equal factors.
+    public static double ZoomFromSlider(double v) => MinZoom * Math.Pow(MaxZoom / MinZoom, v);
+
+    public static double SliderFromZoom(double zoom) => Math.Log(zoom / MinZoom) / Math.Log(MaxZoom / MinZoom);
+
     private double left;
     private double zoom = 0.15;
 

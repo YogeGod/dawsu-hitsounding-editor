@@ -1449,10 +1449,9 @@ public partial class MainWindow : Window
         syncingScroll = false;
     }
 
-    // The zoom slider is logarithmic: equal steps zoom by equal factors.
-    private static double ZoomFromSlider(double v) => TimeAxis.MinZoom * Math.Pow(TimeAxis.MaxZoom / TimeAxis.MinZoom, v);
+    private static double ZoomFromSlider(double v) => TimeAxis.ZoomFromSlider(v);
 
-    private static double SliderFromZoom(double zoom) => Math.Log(zoom / TimeAxis.MinZoom) / Math.Log(TimeAxis.MaxZoom / TimeAxis.MinZoom);
+    private static double SliderFromZoom(double zoom) => TimeAxis.SliderFromZoom(zoom);
 
     private void UpdateLcd()
     {

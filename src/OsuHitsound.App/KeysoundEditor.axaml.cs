@@ -30,6 +30,7 @@ public partial class KeysoundEditor : UserControl
     // Copied notes, shared between projects in a session (not the system clipboard).
     private static IReadOnlyList<KeyNote> clipboard = [];
     private string trackListKey = "";
+    private bool showingZoom; // the slider shows the zoom set elsewhere (wheel, keys), which isn't a slider change
     private bool showingVolume; // the volume box shows the selected track's value, which isn't an edit
     private static readonly Cursor Hand = new(StandardCursorType.Hand);
 
@@ -50,8 +51,9 @@ public partial class KeysoundEditor : UserControl
         InsertVelocityBox.ValueChanged += (_, _) => Roll.InsertVelocity = (int)Math.Clamp(InsertVelocityBox.Value ?? 100, 1, 127);
         UndoButton.Click += (_, _) => doc?.Session.Undo();
         RedoButton.Click += (_, _) => doc?.Session.Redo();
-        ZoomInButton.Click += (_, _) => Roll.ZoomTime(1.25);
-        ZoomOutButton.Click += (_, _) => Roll.ZoomTime(0.8);
+        GrabTool.Click += (_, _) => SetTool(KeyTool.Grab);
+        ZoomSlider.ValueChanged += (_, e) => { if (!showingZoom) { Roll.Axis.Zoom = TimeAxis.ZoomFromSlider(e.NewValue); Roll.InvalidateVisual(); } };
+        FitButton.Click += (_, _) => FitTimeline();
         RowsInButton.Click += (_, _) => Roll.ZoomRows(1.2);
         RowsOutButton.Click += (_, _) => Roll.ZoomRows(1 / 1.2);
         AddTrackButton.Click += (_, _) => AddTrack();
@@ -269,6 +271,7 @@ public partial class KeysoundEditor : UserControl
     {
         Roll.Tool = tool;
         SelectTool.IsChecked = tool == KeyTool.Select;
+        GrabTool.IsChecked = tool == KeyTool.Grab;
         DrawTool.IsChecked = tool == KeyTool.Draw;
         EraseTool.IsChecked = tool == KeyTool.Erase;
         SplitTool.IsChecked = tool == KeyTool.Split;
@@ -541,6 +544,18 @@ public partial class KeysoundEditor : UserControl
         MeterText.Text = $"{segment.Meter}/4 /{Roll.SnapDivisions}";
     }
 
+    /// <summary>Fit: the whole song (or the notes past its end) in view.</summary>
+    private void FitTimeline()
+    {
+        if (doc is null) return;
+        double end = Math.Max(audio?.Length ?? 0, doc.Session.State.Tracks.SelectMany(t => t.Notes).Select(n => doc.Tempo.TimeAt(n.End)).DefaultIfEmpty(0).Max());
+        if (end <= 0) return;
+        Roll.Axis.ZoomAt(Roll.Axis.VisibleDuration / end, 0);
+        Roll.Axis.Left = 0;
+        Roll.InvalidateVisual();
+        UpdateTexts();
+    }
+
     /// <summary>The info bar: what is selected, where it starts, its pitch, velocity and gameplay object.</summary>
     private void UpdateSelectionInfo()
     {
@@ -598,6 +613,9 @@ public partial class KeysoundEditor : UserControl
     {
         if (doc is null) return;
         UpdateTransport();
+        showingZoom = true;
+        ZoomSlider.Value = TimeAxis.SliderFromZoom(Roll.Axis.Zoom);
+        showingZoom = false;
         UpdateSelectionInfo();
         StatusText.Text = status;
         MessageRow.IsVisible = status.Length > 0;

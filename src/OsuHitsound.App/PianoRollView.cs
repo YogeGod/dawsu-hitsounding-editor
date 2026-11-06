@@ -10,7 +10,7 @@ using OsuHitsound.Lanes.Keysound;
 namespace OsuHitsound.App;
 
 /// <summary>The key editor's tools, numbered as Cubase's (1 Select, 3 Split, 4 Glue, 5 Erase, 8 Draw).</summary>
-internal enum KeyTool { Select, Draw, Erase, Split, Glue }
+internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue }
 
 /// <summary>
 /// Keysound mode's key editor, after Cubase's Key Editor: a ruler, a strip with the reference's gameplay objects over the
@@ -279,6 +279,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         ctx.DrawLine(Paint.DividerPen, new Point(KeyboardWidth - 0.5, 0), new Point(KeyboardWidth - 0.5, Bounds.Height));
         Paint.DrawText(ctx, "Velocity", new Point(6, VelocityArea.Top + 4), 10, Paint.Dim, KeyboardWidth - 8);
+        Paint.DrawText(ctx, "Drag bars · Alt = paint · Shift = ramp", new Point(Math.Max(KeyboardWidth + 6, Bounds.Width - 230), VelocityArea.Top + 4), 10, Paint.Dim, 224);
     }
 
     private void DrawNotes(DrawingContext ctx, (long From, long To) ticks)
@@ -328,9 +329,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 if (level == 2) continue;
                 double x = Math.Round(XOfTime(time)) + 0.5;
                 ctx.DrawLine(level == 0 ? Paint.BarPen : Paint.BeatPen, new Point(x, level == 0 ? 4 : 14), new Point(x, RulerHeight));
-                if (level == 0 && x - lastLabel > 34)
+                if (x - lastLabel > (level == 0 ? 34 : 40))
                 {
-                    Paint.DrawText(ctx, doc!.Tempo.BarBeatAt(time).Bar.ToString(), new Point(x + 3, 3), 10, Paint.Text, 0);
+                    var (bar, beat) = doc!.Tempo.BarBeatAt(time);
+                    Paint.DrawText(ctx, level == 0 ? bar.ToString() : $"{bar}.{beat}", new Point(x + 3, 3), 10, level == 0 ? Paint.Text : Paint.Dim, 0);
                     lastLabel = x;
                 }
             }
@@ -456,7 +458,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     // Editing.
 
-    private enum DragKind { Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity }
+    private enum DragKind { Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity, Pan, VelocityPaint, VelocityRamp }
 
     private sealed class Drag(DragKind kind, Point start)
     {
@@ -523,6 +525,17 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         if (VelocityArea.Contains(p))
         {
+            if (mods.HasFlag(KeyModifiers.Alt) || mods.HasFlag(KeyModifiers.Shift))
+            {
+                drag = new Drag(mods.HasFlag(KeyModifiers.Alt) ? DragKind.VelocityPaint : DragKind.VelocityRamp, p);
+                lastPaintX = null;
+                session.BeginGesture("Velocity");
+                ApplyDrag(p, mods);
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
             if (VelocityNoteAt(p) is not { } vn) return;
             if (!selection.Contains(vn.Id)) { selection.Clear(); selection.Add(vn.Id); }
             StartGesture(DragKind.Velocity, p, vn, track, "Velocity");
@@ -534,6 +547,14 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         }
 
         if (!Grid.Contains(p)) return;
+        if (Tool == KeyTool.Grab && !point.IsRightButtonPressed)
+        {
+            drag = new Drag(DragKind.Pan, p);
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
+
         var hit = NoteAt(p);
 
         if (point.IsRightButtonPressed)
@@ -661,7 +682,32 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             return;
         }
 
+        if (drag.Kind == DragKind.Pan)
+        {
+            // The view follows the pointer: right shows earlier time, down shows higher keys.
+            Axis.Left -= (p.X - drag.Current.X) / Axis.Zoom;
+            ScrollPitch((p.Y - drag.Current.Y) / rowHeight);
+            drag.Current = p;
+            ViewChanged?.Invoke();
+            return;
+        }
+
         ApplyDrag(p, e.KeyModifiers);
+    }
+
+    private double? lastPaintX; // where the last Alt+drag step painted
+
+    private int VelocityAtY(double y)
+    {
+        var area = VelocityArea;
+        return Math.Clamp((int)Math.Round((area.Bottom - y) / (area.Height - 8) * 127), KeyNote.MinVelocity, KeyNote.MaxVelocity);
+    }
+
+    // Notes of the track whose velocity bar (at their start) lies between two x positions.
+    private List<KeyNote> NotesBetween(KeyTrack track, double x0, double x1)
+    {
+        double from = Math.Min(x0, x1) - 4, to = Math.Max(x0, x1) + 4;
+        return [.. track.Notes.Where(n => XOfTick(n.Start) + 1.5 is var x && x >= from && x <= to)];
     }
 
     private void ApplyDrag(Point p, KeyModifiers mods)
@@ -750,6 +796,30 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 double end = SnapTime(TimeOfX(p.X));
                 long length = Math.Max(MinLength, tempo.RoundTick(end) - note.Start);
                 session.UpdateNotes(track.Id, [note with { Length = length }], "Draw note");
+                break;
+            }
+
+            case DragKind.VelocityPaint:
+            {
+                // Alt+drag: every bar the pointer passes takes the pointer's height.
+                int value = VelocityAtY(p.Y);
+                session.UpdateNotes(track.Id, [.. NotesBetween(track, lastPaintX ?? p.X, p.X).Select(n => n with { Velocity = value })], "Velocity");
+                lastPaintX = p.X; // the next move paints everything in between too
+                break;
+            }
+
+            case DragKind.VelocityRamp:
+            {
+                // Shift+drag: a straight ramp from where the drag started to the pointer, recomputed from the start.
+                session.ResetToGestureStart();
+                if (session.State.Track(track.Id) is not { } fresh) break;
+                double x0 = drag.Start.X, x1 = p.X;
+                int v0 = VelocityAtY(drag.Start.Y), v1 = VelocityAtY(p.Y);
+                session.UpdateNotes(track.Id, [.. NotesBetween(fresh, x0, x1).Select(n =>
+                {
+                    double x = XOfTick(n.Start), f = Math.Abs(x1 - x0) < 1 ? 1 : Math.Clamp((x - x0) / (x1 - x0), 0, 1);
+                    return n with { Velocity = Math.Clamp((int)Math.Round(v0 + (v1 - v0) * f), KeyNote.MinVelocity, KeyNote.MaxVelocity) };
+                })], "Velocity");
                 break;
             }
 
