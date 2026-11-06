@@ -1164,6 +1164,16 @@ internal sealed class ArrangeView : Control
     }
 
     /// <summary>The editable hit nearest a grid x in a lane, within a note's width.</summary>
+    private double? lastPaintX; // where the paint stroke placed last, to fill the grid points it passed
+
+    // The hit in a lane at exactly this time (within a millisecond), if any.
+    private EditHit? HitAtTime(LaneRow row, double time)
+    {
+        if (Model?.Notes.TryGetValue(row.Lane, out var notes) != true) return null;
+        int i = Sorted.Nearest(notes!, time, 1, n => n.Time, n => n.Hit is not null);
+        return i >= 0 ? notes![i].Hit : null;
+    }
+
     private EditHit? HitUnder(LaneRow row, double gridX)
     {
         if (Model?.Notes.TryGetValue(row.Lane, out var notes) != true) return null;
@@ -1369,6 +1379,10 @@ internal sealed class ArrangeView : Control
 
         double gridX = p.X - GridLeft;
         var under = row is LaneRow lr ? HitUnder(lr, gridX) : null;
+        // Draw erases when it starts on a hit, but zoomed out a diamond covers several grid points: with snapping, only a
+        // hit on the grid point the click snaps to counts, so a free point next to a hit still gets drawn.
+        var drawOver = under;
+        if (under is not null && SnapOn && row is LaneRow lrSnap && HitAtTime(lrSnap, SnapTime(Axis.Time(gridX))) is null) drawOver = null;
 
         if ((point.Properties.IsLeftButtonPressed || point.Properties.IsRightButtonPressed)
             && under is null && SummaryLaneUnder(row, gridX) is { } summary)
@@ -1403,10 +1417,11 @@ internal sealed class ArrangeView : Control
                 drag = Drag.None;
                 break;
 
-            case Tool.Draw when row is LaneRow lane && (under is null || DrawSoundSetActive):
+            case Tool.Draw when row is LaneRow lane && (drawOver is null || DrawSoundSetActive):
                 session.BeginGesture("Draw");
                 drag = Drag.Paint;
                 paintRow = lane;
+                lastPaintX = gridX;
                 PlaceHit(lane.Lane, SnapTime(Axis.Time(gridX)));
                 break;
 
@@ -1415,7 +1430,7 @@ internal sealed class ArrangeView : Control
                 session.BeginGesture("Erase");
                 drag = Drag.Wipe;
                 wipeLane = tool == Tool.Draw ? (row as LaneRow)?.Lane : null;
-                if (under is not null) EraseHit(under);
+                if ((tool == Tool.Draw ? drawOver : under) is { } erased) EraseHit(erased);
                 break;
 
             case Tool.Range:
@@ -1521,8 +1536,19 @@ internal sealed class ArrangeView : Control
                 UpdateLaneDrop(p);
                 break;
             case Drag.Paint when paintRow is not null:
+            {
+                if (SnapOn && lastPaintX is { } last)
+                {
+                    double step = Math.Sign(gridX - last);
+                    double placed = double.NaN;
+                    for (double x = last; step != 0 && (x - gridX) * step < 0; x += step)
+                        if (SnapTime(Axis.Time(x)) is var t && t != placed) PlaceHit(paintRow.Lane, placed = t);
+                }
+
                 PlaceHit(paintRow.Lane, SnapTime(Axis.Time(gridX)));
+                lastPaintX = gridX;
                 break;
+            }
 
             case Drag.Wipe:
             {
@@ -1630,11 +1656,14 @@ internal sealed class ArrangeView : Control
     private IEnumerable<EditHit> HitsIn(Rect area)
     {
         if (Model is not { } model) yield break;
-        double from = Axis.Time(area.Left - GridLeft), to = Axis.Time(area.Right - GridLeft);
+        // A hit counts when its diamond overlaps the box: zoomed out, a diamond spans far more time than its own instant.
+        double radius = NoteSize / 2;
+        double from = Axis.Time(area.Left - GridLeft - radius), to = Axis.Time(area.Right - GridLeft + radius);
         for (int i = 0; i < model.Rows.Count; i++)
         {
             double y = HeaderHeight + RowTop(i) - scrollY + HeightOf(model.Rows[i]) / 2;
-            if (y < area.Top || y > area.Bottom || model.Rows[i] is not LaneRow lane || !model.Notes.TryGetValue(lane.Lane, out var notes)) continue;
+            double r = Math.Min(radius, HeightOf(model.Rows[i]) / 2);
+            if (y + r < area.Top || y - r > area.Bottom || model.Rows[i] is not LaneRow lane || !model.Notes.TryGetValue(lane.Lane, out var notes)) continue;
             foreach (var n in notes)
                 if (n.Hit is { } hit && n.Time >= from && n.Time <= to) yield return hit;
         }

@@ -289,6 +289,9 @@ public partial class MainWindow : Window
 
         // Pick mode: while the inspector's Pick is on, a click selects the part under it instead of acting on it.
         AddHandler(PointerPressedEvent, OnPickPressed, RoutingStrategies.Tunnel);
+        // The play key (Space) always plays or stops, before a focused button, toggle or list can take it.
+        AddHandler(KeyDownEvent, OnPlayKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, OnPlayKeyUp, RoutingStrategies.Tunnel);
         UiTheme.Current.Changed += OnThemeChanged;
         WireMapFeatures();
         ApplyTheme();
@@ -556,6 +559,29 @@ public partial class MainWindow : Window
     {
         Lanes.UpdateCursor(modifiers);
         Volume.UpdateCursor(modifiers);
+    }
+
+    private bool playKeyHeld;
+
+    // Space (the play key) after clicking a button used to press that button again: the play key now goes to playback
+    // first, wherever focus is, except while typing in a text box or with a drop-down list open.
+    private void OnPlayKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (Start.IsVisible || EditorCommands.Match(e)?.Id != "play") return;
+        var focused = FocusManager?.GetFocusedElement();
+        if (focused is TextBox || focused is ComboBox { IsDropDownOpen: true }) return;
+        e.Handled = true;
+        playKeyHeld = true;
+        if (Keys.Document is not null) Keys.RunShortcut("play");
+        else Run("play");
+    }
+
+    // The key's release would click a focused button: it belongs to the press above.
+    private void OnPlayKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (!playKeyHeld || e.Key != Key.Space && EditorCommands.Match(e)?.Id != "play") return;
+        playKeyHeld = false;
+        e.Handled = true;
     }
 
     protected override void OnKeyUp(KeyEventArgs e)
