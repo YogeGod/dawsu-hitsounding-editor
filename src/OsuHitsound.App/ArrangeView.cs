@@ -689,9 +689,10 @@ internal sealed class ArrangeView : Control
         {
             double mid = top + h / 2, half = h / 2 - 2, msPerPixel = 1 / Axis.Zoom;
             // [0] the loudness; then [1 + rank·3 + band]: per column the bands tallest first (rank 0) to shortest (rank 2),
-            // so a shorter band is drawn over a taller one and every band stays visible.
-            var layers = new StreamGeometry[10];
-            var open = new StreamGeometryContext[10];
+            // so a shorter band is drawn over a taller one and every band stays visible. Layers 1–9 are the dim body of
+            // the sound, 10–18 the same for transients (attacks), which are drawn in full colour.
+            var layers = new StreamGeometry[1 + 2 * BandLayers];
+            var open = new StreamGeometryContext[layers.Length];
             for (int i = 0; i < layers.Length; i++) open[i] = (layers[i] = new StreamGeometry()).Open();
             void Bar(StreamGeometryContext g, double x, double a)
             {
@@ -703,32 +704,58 @@ internal sealed class ArrangeView : Control
             }
 
             Span<int> order = stackalloc int[3];
+            float[] bands = new float[3];
+            Span<double> attack = stackalloc double[3]; // per band: kicks (low), snares (mid), hats (high)
+            double decay = Math.Exp(-msPerPixel / TransientHoldMs);
             for (double x = GridLeft; x < width; x++)
             {
                 double t = Axis.Time(x - GridLeft) - SongOffset;
                 float peak = wave.Max(t, t + msPerPixel);
+                var (low, mids, high) = wave.Bands(t, t + msPerPixel);
+                (bands[0], bands[1], bands[2]) = (low, mids, high);
+                // A transient in a band: that band much louder than in the moment before. Its colour holds briefly, then fades.
+                float before = wave.Max(t - TransientLookBackMs, t);
+                var (bLow, bMid, bHigh) = wave.Bands(t - TransientLookBackMs, t);
+                ReadOnlySpan<float> earlier = [before * bLow, before * bMid, before * bHigh];
+                for (int b = 0; b < 3; b++)
+                {
+                    float now = peak * bands[b];
+                    double rise = now > 0.01f ? Math.Clamp((now - earlier[b] * 1.1) / now * 3, 0, 1) : 0;
+                    attack[b] = Math.Max(rise, attack[b] * decay);
+                }
+
                 if (peak <= 0.002f) continue;
                 Bar(open[0], x, Math.Max(0.5, peak * half));
-                var (low, mids, high) = wave.Bands(t, t + msPerPixel);
-                float[] bands = [low, mids, high];
                 (order[0], order[1], order[2]) = (0, 1, 2);
                 order.Sort((a, b) => bands[b].CompareTo(bands[a]));
                 for (int rank = 0; rank < 3; rank++)
-                    if (peak * bands[order[rank]] > 0.002f) Bar(open[1 + rank * 3 + order[rank]], x, Math.Max(0.5, peak * bands[order[rank]] * half));
+                {
+                    int band = order[rank];
+                    int layer = attack[band] >= TransientThreshold ? 1 + BandLayers : 1;
+                    if (peak * bands[band] > 0.002f) Bar(open[layer + rank * 3 + band], x, Math.Max(0.5, peak * bands[band] * half));
+                }
             }
 
             foreach (var g in open) g.Dispose();
             (waveGeometry, waveKey) = (layers, key);
         }
 
-        // Without bands (none decoded) the loudness alone is drawn, brighter.
+        // Without bands (none decoded) the loudness alone is drawn, brighter. With bands: the body of the sound dim, its
+        // transients (kicks, snares, hats) in full colour so they stand out.
         double opacity = Theme_.Number("wave.opacity");
         bool banded = wave.Low is not null;
-        ctx.DrawGeometry(Paint.Brush(Theme_.Color("wave.base"), banded ? opacity * 0.35 : opacity), null, waveGeometry[0]);
+        ctx.DrawGeometry(Paint.Brush(Theme_.Color("wave.base"), banded ? opacity * 0.2 : opacity), null, waveGeometry[0]);
         if (!banded) return;
-        IBrush[] colours = [Paint.Brush(Theme_.Color("wave.low"), opacity), Paint.Brush(Theme_.Color("wave.mid"), opacity), Paint.Brush(Theme_.Color("wave.high"), opacity)];
-        for (int i = 1; i < waveGeometry.Length; i++) ctx.DrawGeometry(colours[(i - 1) % 3], null, waveGeometry[i]);
+        IBrush Band(string key, double o) => Paint.Brush(Theme_.Color(key), o);
+        IBrush[] dim = [Band("wave.low", opacity * 0.3), Band("wave.mid", opacity * 0.3), Band("wave.high", opacity * 0.3)];
+        IBrush[] bright = [Band("wave.low", 1), Band("wave.mid", 1), Band("wave.high", 1)];
+        for (int i = 1; i < waveGeometry.Length; i++)
+            ctx.DrawGeometry((i > BandLayers ? bright : dim)[(i - 1) % 3], null, waveGeometry[i]);
     }
+
+    // Transients in the waveform: the loudness rise over the last 60 ms that counts, and how long its colour holds.
+    private const int BandLayers = 9;
+    private const double TransientLookBackMs = 60, TransientHoldMs = 35, TransientThreshold = 0.25;
 
     /// <summary>
     /// The object strip: circles as dots, sliders as a body with H at the head, chevrons at repeats and E at the end,
