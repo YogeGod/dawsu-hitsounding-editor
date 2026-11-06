@@ -1,6 +1,6 @@
 # Keysounding - planning interview
 
-Current scope: the separate Drums VST workflow supports live timeline playback, lane audition and explicit WAV export. Keysound Milestone 1 (2026-11-05) adds the start screen's Keysounding panel, editable and saveable Keysound projects with a copied reference snapshot, instrument tracks, an undoable piano roll and song playback. Milestone 2 adds the bundled piano (FreePats Upright Piano KW, CC0) for playback and editing audition. Milestone 3 adds editing after Cubase 15's Key Editor and MIDI import (tracks by channel, beat placement, sustain/modulation/pitch bend). Milestone 4 adds MIDI keyboard playing and replacement recording (count-in, metronome, controller restoration). VST instruments, Sync and Generate remain to be built. The interview below records design intent; it is not a claim that those features are implemented.
+Current scope: the separate Drums VST workflow supports live timeline playback, lane audition and explicit WAV export. Keysound Milestone 1 (2026-11-05) adds the start screen's Keysounding panel, editable and saveable Keysound projects with a copied reference snapshot, instrument tracks, an undoable piano roll and song playback. Milestone 2 adds the bundled piano (FreePats Upright Piano KW, CC0) for playback and editing audition. Milestone 3 adds DAW-style key editing and MIDI import (tracks by channel, beat placement, sustain/modulation/pitch bend). Milestone 4 adds MIDI keyboard playing and replacement recording (count-in, metronome, controller restoration). VST instruments, Sync and Generate remain to be built. The interview below records design intent; it is not a claim that those features are implemented.
 
 ## Confirmed
 - Access Keysounding from the app's start menu through its Keysounding panel (confirmed 2026-11-05).
@@ -64,7 +64,7 @@ Current scope: the separate Drums VST workflow supports live timeline playback, 
 - Eligible sync targets are circles, slider heads/repeats/tails and spinner ends, matching the existing Hitsound-mode positions. Provide type filters in the Sync dialog.
 - Sync uses an adjustable maximum start-time shift, default 20 ms. Notes outside the limit stay unsynced; equally close target matches are flagged for review rather than resolved automatically.
 - Export preserves separate rendered notes whenever native osu! fields can represent the chord. Mix only otherwise, retaining individual note renders and editable MIDI in the Keysound project.
-- Use Cubase 15's Key Editor as the reference for exact editing behavior.
+- Use a DAW key editor as the reference for exact editing behavior.
 - Keep the existing dawsu! interface; replace sample lanes with a piano roll in keysounding mode.
 - Initial plug-in scope: Windows 64-bit VST3 instruments, their native editor windows and saved plug-in state/settings. VST2, 32-bit plug-ins and effect-insert chains are deferred.
 - First version uses one saved instrument preset per track. Sustain, pitch bend and modulation vary over time; arbitrary VST parameter/knob automation is deferred.
@@ -83,7 +83,7 @@ On 2026-11-05, the user delegated remaining routine design choices to the agent'
 
 ## Consolidated implementation sequence
 
-1. Inspect the current Keysound and VST implementation, verify reusable components and research the remaining Cubase gestures, lightweight piano redistribution options and per-instrument crash isolation. Record evidence and select concrete implementation approaches.
+1. Inspect the current Keysound and VST implementation, verify reusable components and research the remaining key-editor gestures, lightweight piano redistribution options and per-instrument crash isolation. Record evidence and select concrete implementation approaches.
 2. Wire the start menu's Keysounding panel to the editable Keysound project. Establish asset persistence, reference snapshots, tempo authority, instrument tracks and reversible editing commands. Preserve existing Hitsound-mode behavior.
 3. Build the piano roll and MIDI import/recording workflows using the confirmed interaction, timing, controller and undo rules. Add ghost notes and gameplay markers.
 4. Integrate the lightweight bundled piano and isolated VST instruments, saved state, missing-instrument handling and recovery.
@@ -103,10 +103,10 @@ Present this sequence for implementation approval before starting feature code, 
 
 ## Approved build plan
 1. Establish a separate Keysound project accessed through the start menu's Keysounding panel, with a piano roll using the existing editor layout. Reuse the inspector for instrument tracks, controller area for velocity/MIDI controls, and transport for recording.
-2. Match Cubase 15 Key Editor interactions for drawing, selecting, moving, resizing, duplicating, splitting/gluing, quantizing, velocity editing, auditioning, pan/zoom and relevant shortcuts. Verify concrete gestures against the installed reference.
+2. Match DAW key-editor interactions for drawing, selecting, moving, resizing, duplicating, splitting/gluing, quantizing, velocity editing, auditioning, pan/zoom and relevant shortcuts. Verify concrete gestures against the installed reference.
 3. Add the bundled piano, MIDI import, live keyboard audition/recording and sustain/pitch-bend/modulation handling. Use reference beatmap red lines for project/export timing; require a reference beatmap before Generate.
 4. Add Windows x64 VST3 hosting, native plug-in editors and saved instrument state. Research and validate the host boundary and built-in piano licensing before implementation of those components. VST2, 32-bit and insert-effect chains remain deferred.
 5. Add individual WAV note rendering with release tails and native-first [Keysounds] export for synced notes only, highlighting/skipping unsynced notes and mixing only unrepresentable chords. Reuse byte-identical rendered audio without changing note placements. Detect non-ending tails and ask for a render limit rather than silently truncating them.
-6. Validate MIDI/controller persistence, Cubase editing gestures, rendering/exports on disposable beatmaps, VST recovery and existing Hitsound-mode regressions.
+6. Validate MIDI/controller persistence, key-editor gestures, rendering/exports on disposable beatmaps, VST recovery and existing Hitsound-mode regressions.
 
 The user approved the scope/build plan and subsequently authorized the JUCE VST3 host proof, first requesting GGD Matt Garstka and then switching to Kontakt plus GGD PV (installed as P5 Matt Halpern Signature Pack). See docs/validation/vst3-host-proof.md. No new release or push is authorized by this planning document.

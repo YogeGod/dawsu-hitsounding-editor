@@ -91,11 +91,11 @@ Assign to gameplay objects, and the Objects and Cursor snap modes.
 
 ## Keys
 
-| Command | Built-in | Cubase command (the user's file) | osu! preset |
+| Command | Built-in | DAW command (the user's file) | osu! preset |
 |---|---|---|---|
 | Quantize | Q | `MIDI|Quantize` (Q) | Q |
 | Quantize… dialog | none | none | none |
-| Repeat… | Ctrl+R | `Edit|Repeat` (Ctrl+K in Cubase 15) | Ctrl+R |
+| Repeat… | Ctrl+R | `Edit|Repeat` (Ctrl+K in the user's DAW) | Ctrl+R |
 | New hitsound diff… | Ctrl+N | `File|New` (Ctrl+N) | Ctrl+N |
 | Import .osz…, Time signatures…, Colour by, Inspector | none | none | none |
 

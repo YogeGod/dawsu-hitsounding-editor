@@ -40,7 +40,7 @@ Inline review only, per CLAUDE.md. Existing edit-session history, Lane/EditHit i
 
 ## Spec
 
-Compared against `docs/ideas/cubase-drum-maps.md` and user screenshots. Confirmed exact kit names/order, no folders, freely movable rows, explicit samples choice, mapset sharing, current-diff migration and no MIDI routing. Existing editing and export reuse the ordinary engine. No outstanding implementation gaps identified; user usability testing remains.
+Compared against `docs/ideas/drum-maps.md` and user screenshots. Confirmed exact kit names/order, no folders, freely movable rows, explicit samples choice, mapset sharing, current-diff migration and no MIDI routing. Existing editing and export reuse the ordinary engine. No outstanding implementation gaps identified; user usability testing remains.
 
 Review finding counts: Correctness 0 outstanding (2 fixed), Standards 0, Spec 0.
 

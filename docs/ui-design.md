@@ -120,7 +120,7 @@ Fonts: Inter for the UI, JetBrains Mono for times, indexes and numbers. Base siz
 
 ## Not decided yet
 
-- Exact keybinds (these follow Cubase's drum editor and are listed elsewhere).
+- Exact keybinds (these follow a DAW drum editor and are listed elsewhere).
 - What the "What gets saved" tab shows. The likely content is the encoded
   `hitSound`/`hitSample` and any green lines for the selected moment.
 - Whether lanes can be dragged between groups.

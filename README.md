@@ -16,7 +16,7 @@ A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you 
 - Drum maps, reusable sound sets, and a drum VST for playback and WAV export.
 
 **Keysound mode** (start screen → Keysounding)
-- A project made from a reference beatmap, with instrument tracks in a piano roll (Cubase-style editing).
+- A project made from a reference beatmap, with instrument tracks in a piano roll (DAW-style editing).
 - Draw notes, import MIDI, or play and record from a MIDI keyboard.
 - Each track plays the bundled piano or a VST3 instrument. Every plug-in runs in its own process, so a crash only silences its track.
 - **Sync…** moves notes onto the map's circles, slider ends and spinner ends.

@@ -2,7 +2,7 @@
 
 Status: approved by the user on 2026-10-30. The decisions behind it are in `docs/merge-decisions.md`. V6.39's behaviour comes from `src/app.js`, `src/model.js` and `src/help.js` on tag `V6.39` (read them with `git show V6.39:<path>`).
 
-Wave 1 has three parts: the Range tool, scale by volume, and Cubase keys for both.
+Wave 1 has three parts: the Range tool, scale by volume, and DAW keys for both.
 
 ## Ground rules (from the existing editor)
 
@@ -17,7 +17,7 @@ Wave 1 has three parts: the Range tool, scale by volume, and Cubase keys for bot
 
 **Dragging a range.**
 - Drag in the lane grid to mark a time range. Its start and end snap to the grid when Snap is on.
-- The range covers **the lanes you drag across**: from the lane where the drag starts to the lane where it ends (Cubase behaviour).
+- The range covers **the lanes you drag across**: from the lane where the drag starts to the lane where it ends (DAW behaviour).
 - The range is drawn as a shaded box over those lanes. Clicking outside it, pressing Escape or switching tools clears it.
 - The range is separate from the hit selection and from the cycle locators. "Locators to selection" (P) uses the range when one exists, as in V6.39.
 - The range end is excluded: a sound exactly on the end time is outside it.
@@ -52,12 +52,12 @@ V6.39's "split crossing MIDI lengths" option is left out, because this editor ha
 - Unanchored sounds have no volume yet and are skipped.
 - Selecting, setting and muting by volume are **not** in wave 1 (the user chose scale only).
 
-## 3. Cubase keys
+## 3. DAW keys
 
-The Cubase Key Commands import is already built (`KeyBindings.cs`, commit `cfe95c5`). Wave 1 adds the two new commands:
+The DAW Key Commands import is already built (`KeyBindings.cs`, commit `cfe95c5`). Wave 1 adds the two new commands:
 
-- `toolRange` → `Tool|Range Tool` (the name appears in the user's Cubase 9.5 key file; check its category when implementing).
-- `editRange` and `scaleByVolume` have no Cubase equivalent and keep their built-in keys (none by default).
+- `toolRange` → `Tool|Range Tool` (the name appears in the user's DAW key file; check its category when implementing).
+- `editRange` and `scaleByVolume` have no DAW equivalent and keep their built-in keys (none by default).
 - The osu! preset leaves `toolRange` without a key: it already gives 2 to Draw, as osu!'s editor uses 2 for placing circles. (Changed while building.)
 
 The uncommitted keybind changes in the working tree (a parse cache and comparing `KeyGesture` values directly) come from another session. They are not part of this spec. Commit or drop them before wave 1 starts.
@@ -66,9 +66,9 @@ The uncommitted keybind changes in the working tree (a parse cache and comparing
 
 - **Lanes:** a range Copy, Move or Delete keeps or changes only the expected hits, and objects stay put. Copying onto a circle takes that circle's volume. Moving off a circle gives an unanchored hit (Apply shows a conflict, Generate adds a circle). A sound on the range end is not included.
 - **Lanes:** scale-by-volume picks the right moments, scales the whole moment, rounds and clamps, and skips unanchored hits.
-- **App:** the range follows the lanes you drag across and snaps when Snap is on. Key 2 picks the Range tool in the built-in and osu! presets, and a Cubase file with a Range Tool key maps to it.
+- **App:** the range follows the lanes you drag across and snaps when Snap is on. Key 2 picks the Range tool in the built-in and osu! presets, and a DAW key file with a Range Tool key maps to it.
 - **Corpus:** a no-edit round-trip is still byte-identical.
 
 ## Not in wave 1
 
-Quantize and Repeat (wave 2), MIDI (wave 3), select/set/mute by volume, and Cubase-style dragging of a range.
+Quantize and Repeat (wave 2), MIDI (wave 3), select/set/mute by volume, and DAW-style dragging of a range.

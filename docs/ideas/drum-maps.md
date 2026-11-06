@@ -1,4 +1,4 @@
-# Cubase-style Drum Maps
+# DAW-style Drum Maps
 
 Confirmed concept, 2026-11-04. Implemented locally; see [verification](../feedback/2026-11-04-drum-maps-verification.md). Not committed or pushed.
 
@@ -8,7 +8,7 @@ How might we let osu! hitsounders edit by instrument name and freely arranged dr
 
 ## Recommended Direction
 
-Use Cubase's Drum Editor drum-sound list and Drum Map Setup as the functional reference. Add a toggle between the existing Sample view and a separate Drum-map view. The latter is a flat list without folders: every row has an editable instrument name, an assigned osu! sample lane and a freely movable position. Named drum maps are shared across difficulties within a mapset and can be saved and reused in other mapsets. Creating a new drum map means a new editing preset, not a new .osu difficulty.
+Use a DAW drum editor's drum-sound list and drum map setup as the functional reference. Add a toggle between the existing Sample view and a separate Drum-map view. The latter is a flat list without folders: every row has an editable instrument name, an assigned osu! sample lane and a freely movable position. Named drum maps are shared across difficulties within a mapset and can be saved and reused in other mapsets. Creating a new drum map means a new editing preset, not a new .osu difficulty.
 
 Drum Map Setup provides New Map, New Copy, Rename, Remove, Save and Load. On loading a preset, ask: **Use the samples saved with this preset?** Use preset samples loads its actual saved audio and instrument layout. Use my own samples loads the names/order, keeps matching assignments from the current mapset and asks about missing assignments. Matching assignments do not prove audio identity; the user can check and change them. Existing sample files must be protected. Switching views or presets never moves existing hits.
 
@@ -23,7 +23,7 @@ Example rows: Kick (drum-hitnormal), Snare (soft-hitclap), T1–T4 (drum-hitclap
 
 ## Editing Behavior: Preserve the Existing Editor
 
-This feature is primarily an alternate UI over the same editor, not a new note-editing system. Select, Draw, Erase, Mute, Range, volume editing, snapping, dragging/moving hits, copy/paste, shortcuts, audition, Undo/Redo and export continue to use the existing behavior. Do not change these workflows just to resemble Cubase; Cubase's drum-sound list and map setup inform the presentation.
+This feature is primarily an alternate UI over the same editor, not a new note-editing system. Select, Draw, Erase, Mute, Range, volume editing, snapping, dragging/moving hits, copy/paste, shortcuts, audition, Undo/Redo and export continue to use the existing behavior. Do not change these workflows just to resemble a DAW; a DAW drum editor's drum-sound list and map setup inform the presentation.
 
 The UI changes are the Sample/Drum-map toggle, a flat folder-free instrument list, editable instrument names and sample assignments, freely reordered rows and drum-map presets. A row's position or alias does not create a new sound or alter the hit data. Mirrored rows address the same underlying sample lane. Existing editing actions must resolve visible rows to their actual assigned sample lanes, and operate on each underlying hit only once.
 
@@ -49,7 +49,7 @@ The previously agreed explicit reassignment action (assignment only versus movin
 - One instrument row triggering a multi-sample sound set — the first version maps each row to one sample lane; multiple aliases of that same lane are supported.
 - Automatically moving existing hits when loading or switching a preset — migration is a separate explicit action.
 - Moving hits in other difficulties — migration is limited to the current difficulty.
-- Per-instrument quantize, notation and copying every Cubase column — outside the confirmed first version.
+- Per-instrument quantize, notation and copying every DAW column — outside the confirmed first version.
 - The earlier general UI simplification project — cancelled by the user; no related app code was changed.
 
 ## Implementation Decisions
@@ -59,11 +59,3 @@ The user approved building after the concept interview and toggle-location scree
 Migration previews affected hit count and destination overlap times/sample lanes. Assignment-only is the default; moving requires choosing Keep both, Keep destination or Replace destination when overlaps exist. Multiple aliases continue to address one underlying sample lane. Channel sample replacement updates preset references to that replaced lane with the existing note-change Undo step.
 
 The two Yoge starter kits use the exact screenshot names/order, with all samples initially unassigned as explicitly requested. Later clarification adds family-based numbered-layer creation in Setup, freely assignable to every instrument, default audio for imported missing numbered samples, and instrument-only lane labels. Pending new defaults are installed only after acceptance. No MIDI routing was added.
-
-## Local Cubase Reference and Evidence Limits
-
-- [Cubase 15 Drum Editor analysis](../../keysounding-docs/rea/cubase/cubase15-feature-analysis.md), section4: drum-sound list, instrument/sample-mapping concept, visibility options and setup actions.
-- [Extracted Drum Map Setup UI](../../keysounding-docs/rea/cubase/srf/skin/skin.xml), template DrumMapSetup near line1509: newMap, copyMap, deleteMap, saveMap, loadMap, drumMapList and drumMapView.
-- [Extracted editor layout](../../keysounding-docs/rea/cubase/srf/skin/editors.xml), DrumEditorMainView and DrumMainView: editor zones and timeline container.
-
-The reference establishes the available controls and structure. The local analysis explicitly leaves native grid interactions and exact I-Note/O-Note playback behavior unverified. Our osu! sample assignments are an adaptation; no claim of an exact native Cubase remapping reproduction is made, and MIDI routing is excluded.

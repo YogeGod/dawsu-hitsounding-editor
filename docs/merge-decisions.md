@@ -12,7 +12,7 @@ Why: one language, one audio clock (BASS, which osu! uses), the existing tests k
 
 ## 2. Which features, in what order
 
-- **Wave 1:** the Range tool (key 2), select and scale by volume, and the Cubase Key Commands import (planned in the hs-editor-next session).
+- **Wave 1:** the Range tool (key 2), select and scale by volume, and the DAW Key Commands import (planned in the hs-editor-next session).
 - **Wave 2:** Quantize (Q), Repeat (Ctrl+R), more snap modes, time signatures, assigning sounds to objects, event colour modes, the recent-edits list, playback start mode and return on stop, lane rename/reorder/add/delete, inspector panels, `.osz` import and a new empty project, and song volume/offset/speed.
 - **Wave 3:** MIDI import and export, MIDI note/channel/velocity per lane (editor-only), event lengths, WASAPI/ASIO output, and the editor screenshot.
 - **Dropped:** per-sound volume with mixed WAVs, and preview tones for empty lanes.

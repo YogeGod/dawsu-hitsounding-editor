@@ -4,9 +4,9 @@ A summary of the planning chat from 2026-10-29, updated at the end of the 2026-1
 
 ## What we're building
 
-A standalone hitsound editor for **osu!standard** maps that works like **Cubase's drum editor**: same workflow, same keybinds, same painting feel. It has to be **100% compatible with the osu! editor**, especially when exporting back into a map.
+A standalone hitsound editor for **osu!standard** maps that works like **a DAW's drum editor**: same workflow, same keybinds, same painting feel. It has to be **100% compatible with the osu! editor**, especially when exporting back into a map.
 
-- **Lanes are sample files.** Each lane is one sound (kick, snare, crash), like a row in a Cubase drum map. Clicking in a lane places only that lane's sound, so you can see which sound is on which object.
+- **Lanes are sample files.** Each lane is one sound (kick, snare, crash), like a row in a DAW drum map. Clicking in a lane places only that lane's sound, so you can see which sound is on which object.
 - **Two jobs, used about equally:**
   1. Import an empty diff (timing only), hitsound everything, and export. Hit objects are generated automatically and every sample comes out correct.
   2. Open maps other people made and hitsounded (their hitsound diffs *or* playable diffs), change some hitsounds, and export with only those changes.
@@ -31,7 +31,7 @@ A standalone hitsound editor for **osu!standard** maps that works like **Cubase'
 - **Source of truth:** osu!**stable**. Where stable and lazer disagree, stable decides. The compiler only writes patterns both clients play the same way.
 - **License:** free and open source, so BASS stays free under its non-commercial terms.
 - **Speed goal:** no measured number. "10× faster" describes the spirit; success is judged by feel after hitsounding a real map.
-- **Keybinds:** import the user's own Cubase Key Commands XML file.
+- **Keybinds:** import the user's own DAW Key Commands XML file.
 - **Hitsound copying to other diffs:** keep using Mapping Tools' Hitsound Copier in v1.
 
 ### Export rules (non-negotiable)
@@ -56,7 +56,7 @@ A standalone hitsound editor for **osu!standard** maps that works like **Cubase'
   - one velocity per moment, written as green lines
   - Apply and Generate export
   - storyboard samples shown as a read-only lane
-  - mouse plus imported Cubase keybinds
+  - mouse plus imported DAW keybinds
 - **Out:**
   - taiko, catch and mania
   - editing slider body and tick sounds (shown read-only)
@@ -79,7 +79,7 @@ The user played the test maps in stable. Details are in `docs/osu-hitsound-rules
 2. **Null round-trip:** lossless parser and writer, no UI.
 3. **Decompiler:** .osu → lanes plus per-moment velocity.
 4. **Compiler (Apply mode):** lanes → fields, indices and green lines; small edits change only the lines they touch.
-5. **Lane grid UI:** drum-editor UI, audio sync, Cubase keybinds, conflict display.
+5. **Lane grid UI:** drum-editor UI, audio sync, DAW keybinds, conflict display.
 6. **Generate mode:** an empty diff becomes a hitsound diff that Mapping Tools' Hitsound Copier copies without warnings.
 
 
@@ -87,7 +87,7 @@ The user played the test maps in stable. Details are in `docs/osu-hitsound-rules
 
 Repo: `E:\Claude\osu-hitsound-editor`, branch `main`. It is pushed to the **`csharp-rewrite` branch** of the remote `dawsu` (https://github.com/YogeGod/dawsu-hitsounding-editor). That remote's `main` is a different project (the Electron dawsu! app, releases up to V6.39) with no shared history, so **never push to its `main`**: use `git push dawsu main:refs/heads/csharp-rewrite`. `/security-review` looks for `origin/HEAD` and fails here, so the security pass is done by hand.
 
-**Milestones:** M1–M4 and M6 are done. M5 (lane grid UI) is built and the audio check passes; the Cubase Key Commands import is done (`KeyBindings.cs`, commit cfe95c5). Next is wave 1 of the V6.39 port: `docs/spec-wave1.md`.
+**Milestones:** M1–M4 and M6 are done. M5 (lane grid UI) is built and the audio check passes; the DAW Key Commands import is done (`KeyBindings.cs`, commit cfe95c5). Next is wave 1 of the V6.39 port: `docs/spec-wave1.md`.
 
 | Path | What |
 |---|---|
@@ -110,7 +110,7 @@ V6.39's features are documented in its `README.md` (Features section) and `src/h
 
 ## Next steps
 
-1. Start the next feature with `/mattpocock-skills:grill-with-docs`: either the Cubase keybind import (last v1 item) or porting V6.39 features. For several features: `/to-spec` → `/to-tickets` → `/implement`.
+1. Start the next feature with `/mattpocock-skills:grill-with-docs`: either the DAW keybind import (last v1 item) or porting V6.39 features. For several features: `/to-spec` → `/to-tickets` → `/implement`.
 2. Before each commit, follow CLAUDE.md: `/simplify`, `/code-review`, security pass by hand, then `dotnet test`. Push only when asked, to `csharp-rewrite`.
 3. CLAUDE.md's periodic `codebase-design` architecture pass is due after the 2026-10-30 build.
 4. Still open in the research note: questions 5–10 (missing-file fallback, spinner samples, volume over 100, filename case, field history, line endings).

@@ -4,7 +4,7 @@ Implemented using Impeccable4.3.1. The user expanded the scope from the recent f
 
 ## Scope and visual authority
 
-Preserved the existing dark DAW/Cubase presentation, diamond notes, colored sample families and current note-editing/audio/export behavior. Existing MainWindow/App styles, ui-theme.json and docs/ui-design.md were the incumbent visual evidence. PRODUCT.md/DESIGN.md are absent; the scoped polish proceeded against the actual implementation, without creating a replacement visual direction.
+Preserved the existing dark DAW presentation, diamond notes, colored sample families and current note-editing/audio/export behavior. Existing MainWindow/App styles, ui-theme.json and docs/ui-design.md were the incumbent visual evidence. PRODUCT.md/DESIGN.md are absent; the scoped polish proceeded against the actual implementation, without creating a replacement visual direction.
 
 ## Prioritized fixes
 

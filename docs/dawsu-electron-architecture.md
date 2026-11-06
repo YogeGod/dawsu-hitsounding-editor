@@ -97,7 +97,7 @@ This is a long way from the new editor's BASS plan, and the lesson transfers: re
 |---|---|---|
 | Stack | Electron, JS, native NAudio helper | C# (.NET 10), Avalonia, BASS |
 | Export | Exports `.osz`, with merged/numbered samples and an optional separate HS difficulty | Minimal-diff patching with a byte-identical null round-trip |
-| Lane model | Sampleset folders containing sample lanes | One lane per sample file, like a Cubase drum map |
+| Lane model | Sampleset folders containing sample lanes | One lane per sample file, like a DAW drum map |
 | Source of truth | Not stated in the notes | osu!stable |
 
 Treat dawsu!'s export behavior with care: its notes do not claim a null round-trip or minimal-diff patching, and this project's export rules in `docs/project-context.md` are stricter.

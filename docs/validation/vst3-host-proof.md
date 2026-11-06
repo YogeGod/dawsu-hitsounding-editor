@@ -54,7 +54,7 @@ Kontakt 7 was used for the successful test.
 These checks prove the native/managed boundary, MIDI-triggered stereo rendering and
 state reopening for the tested local kit. They do not prove live keyboard latency,
 real-time mixer safety, controller/tempo accuracy, full release-tail detection, osu!
-assignment/export, plugin crash isolation or Cubase piano-roll editing behavior.
+assignment/export, plugin crash isolation or DAW piano-roll editing behavior.
 The WAVs have a fixed test tail; they do not implement the planned full-tail exporter.
 The script/resources warnings emitted by Kontakt are retained in local logs; the kit
 nevertheless loaded and rendered. Plugin UI styling is controlled by the plugin.

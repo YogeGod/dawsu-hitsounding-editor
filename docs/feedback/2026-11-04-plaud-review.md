@@ -23,7 +23,7 @@ The feedback summary and its bottom Action Items were read in the browser. The f
 | Grouping in this commit | Normal/Soft/Drum folders, hitnormal first, parent/child sample families, distinct skin0/file1, collapsed note previews and reveal, family-aware dragging, stable logical slots and persisted metadata. | Preserve these behaviors when adding pairing or changing warnings. |
 | Navigation and snap | Ruler seek, first/last object shortcuts, cycle markers, zoom/row sizing, straight/triplet divisor cycling, 1/n grid and relative snap. | Z currently uses session object moments. Loose client hits are not explicitly included. 2/1–4/1 grids are absent from the divisor list. |
 | Playback | Frequency-colored waveform, 25–150% pitch-preserving speed, sample audition toggle, song/lane mute and solo, global volume, per-map and global song offset, selectable audio outputs. | Timing investigation must separate playback offset, waveform alignment, map timing and exported timestamps. |
-| Interface | Foldable/reorderable inspector cards, bookmarks/history, key customization/Cubase import, shortcut help and built-in tutorial. | The tester values these features; use them as preservation criteria. |
+| Interface | Foldable/reorderable inspector cards, bookmarks/history, key customization/DAW key import, shortcut help and built-in tutorial. | The tester values these features; use them as preservation criteria. |
 
 ## Imported to-do list
 
