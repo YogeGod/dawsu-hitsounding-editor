@@ -1,0 +1,346 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:OsuHitsound.App">
+  <!--
+    The design system's control styles (docs/design-system.md). Colours and sizes are tokens: UiTheme holds them and
+    ThemeResources puts them into the application's resources, so the UI inspector can change any of them live.
+    Classes:
+      Button            default: grey, 30 px, 2 px corners          Button.primary   the screen's main action (blue)
+      Button.flat       text-only, lights up on hover               Button.icon      a square icon button
+      ToggleButton      switched on = blue                          ToggleButton.tool  a tool in a joined tool row
+      .transport        a joined transport button (.playing = green, Cycle on = gold, .record on = red)
+      RadioButton.tab   a tab with an underline                     Border.header / toolbar / info / transportBar / footer
+      (Dialogs use Button.primary for OK and Save.)
+      TextBlock.fieldLabel / fieldValue / toolLabel / caption / lcd / sectionLabel
+  -->
+
+  <!-- Base -->
+  <Style Selector="Window">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="Background" Value="{DynamicResource PanelBg}" />
+  </Style>
+
+  <!-- Buttons -->
+  <Style Selector="Button, ToggleButton">
+    <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="FontSize" Value="{DynamicResource ButtonFontSize}" />
+    <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Focusable" Value="True" />
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter, ToggleButton:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}" />
+  </Style>
+  <Style Selector="Button:pressed /template/ ContentPresenter, ToggleButton:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ControlPressed}" />
+  </Style>
+  <Style Selector="Button:disabled /template/ ContentPresenter, ToggleButton:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}" />
+  </Style>
+  <Style Selector="Button:disabled, ToggleButton:disabled">
+    <Setter Property="Opacity" Value="0.55" />
+  </Style>
+  <Style Selector="ToggleButton:checked /template/ ContentPresenter, Button.primary /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}" />
+  </Style>
+  <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter, Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonActiveHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}" />
+  </Style>
+  <Style Selector="Window.editorDialog Button">
+    <Setter Property="MinWidth" Value="64" />
+  </Style>
+  <Style Selector="Button:focus-visible, ToggleButton:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+  </Style>
+
+  <!-- Text-only buttons (Open…, links in bars) -->
+  <Style Selector="Button.flat">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+  </Style>
+  <Style Selector="Button.flat:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+  </Style>
+
+  <!-- Square icon buttons -->
+  <Style Selector="Button.icon">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- Tools: a joined row of square buttons; the selected tool is light with a dark icon -->
+  <Style Selector="Border.tools">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Border.tools > StackPanel">
+    <Setter Property="Spacing" Value="1" />
+  </Style>
+  <Style Selector="ToggleButton.tool">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+  </Style>
+  <Style Selector="ToggleButton.tool:checked /template/ ContentPresenter, ToggleButton.tool:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ToolActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource ToolActiveIcon}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="ToggleButton.tool:pointerover /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- Transport: joined square buttons; Play turns green while playing, Cycle gold when on, Record red -->
+  <Style Selector="Button.transport, ToggleButton.transport">
+    <Setter Property="Width" Value="38" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.transport.wide">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Padding" Value="10,0" />
+  </Style>
+  <Style Selector="Button.transport.playing /template/ ContentPresenter, Button.transport.playing:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PlayBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="ToggleButton.transport:checked /template/ ContentPresenter, ToggleButton.transport:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource CycleBg}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="ToggleButton.transport.record:checked /template/ ContentPresenter, ToggleButton.transport.record:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource RecordBg}" />
+  </Style>
+  <Style Selector="ToggleButton.transport.record Ellipse">
+    <Setter Property="Fill" Value="{DynamicResource RecordBg}" />
+  </Style>
+  <Style Selector="ToggleButton.transport.record:checked Ellipse">
+    <Setter Property="Fill" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="ToggleButton.wide">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <!-- Text boxes, lists, tooltips -->
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Background" Value="{DynamicResource FieldBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}" />
+  </Style>
+  <!-- Number boxes pass their own alignment to the text box inside them. -->
+  <Style Selector="NumericUpDown">
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible, TextBox:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+  </Style>
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="{DynamicResource FieldBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+  </Style>
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource PanelBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="MaxWidth" Value="440" />
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+  </Style>
+  <Style Selector="Menu > MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource HeaderText}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- Tabs: dim text, the chosen one bright and underlined -->
+  <Style Selector="RadioButton.tab">
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="TabBorder" Padding="14,8" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="Transparent">
+          <ContentPresenter Content="{TemplateBinding Content}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.tab:checked">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="RadioButton.tab:checked /template/ Border#TabBorder">
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+  </Style>
+  <Style Selector="RadioButton.tab:pointerover /template/ Border#TabBorder, RadioButton.tab:focus-visible /template/ Border#TabBorder">
+    <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+  </Style>
+
+  <!-- Bars, top to bottom -->
+  <Style Selector="Border.header">
+    <Setter Property="Background" Value="{DynamicResource HeaderBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+  </Style>
+  <Style Selector="Border.toolbar">
+    <Setter Property="Background" Value="{DynamicResource ChromeBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+  </Style>
+  <Style Selector="Border.info">
+    <Setter Property="Background" Value="{DynamicResource InfoBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+  </Style>
+  <Style Selector="Border.transportBar">
+    <Setter Property="Background" Value="{DynamicResource StatusBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+  </Style>
+  <Style Selector="Border.footer">
+    <Setter Property="Background" Value="{DynamicResource FooterBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+  </Style>
+
+  <!-- The window's own title bar: flat caption buttons; Close turns red -->
+  <Style Selector="Button.windowButton">
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="{DynamicResource WindowBarHeight}" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource WindowText}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.windowButton:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#22000000" />
+    <Setter Property="Foreground" Value="{DynamicResource WindowText}" />
+  </Style>
+  <Style Selector="Button.windowButton:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="#44000000" />
+  </Style>
+  <Style Selector="Button.windowButton.close:pointerover /template/ ContentPresenter, Button.windowButton.close:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource WindowClose}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+
+  <!-- The app mark and file name in the menu bar -->
+  <Style Selector="Border.logo">
+    <Setter Property="Background" Value="{DynamicResource Brand}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+  </Style>
+  <Style Selector="Border.logo TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.appTitle">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.projectName">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- Labels and values -->
+  <Style Selector="StackPanel.field">
+    <Setter Property="Margin" Value="0,0,18,0" />
+    <Setter Property="Spacing" Value="2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.fieldLabel, TextBlock.sectionLabel">
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="FontSize" Value="10" />
+  </Style>
+  <Style Selector="TextBlock.sectionLabel">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.fieldValue">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.toolLabel">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- The time display -->
+  <Style Selector="TextBlock.lcd">
+    <Setter Property="Foreground" Value="{DynamicResource LcdText}" />
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="{DynamicResource LcdFontSize}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
+    <Setter Property="FontSize" Value="9" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+  </Style>
+</Styles>

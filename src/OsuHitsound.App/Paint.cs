@@ -10,6 +10,20 @@ internal static class Paint
     // Every value comes from the UI theme (ui-theme.json, editable in the inspector); brushes and pens are cached until it changes.
     private static UiTheme T => UiTheme.Current;
 
+    // Cubase's velocity colours: blue (soft) through purple to red (loud).
+    private static readonly Color LevelSoft = Color.Parse("#3a6cf0"), LevelMiddle = Color.Parse("#9a48d8"), LevelLoud = Color.Parse("#ec3a3a");
+
+    /// <summary>A level from 0 (quiet) to 1 (loud) as a colour: hit volumes and note velocities share it.</summary>
+    public static Color LevelColor(double level)
+    {
+        double v = Math.Clamp(level, 0, 1);
+        (Color a, Color b, double t) = v < 0.5 ? (LevelSoft, LevelMiddle, v * 2) : (LevelMiddle, LevelLoud, (v - 0.5) * 2);
+        return Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+    }
+
+    /// <summary>The brush of a colour token, cached until the theme changes.</summary>
+    public static IBrush Token(string key) => B(key);
+
     private static IBrush B(string key) => T.Cached("brush:" + key, () => (IBrush)Brush(T.Color(key)));
 
     private static IPen P(string key, double width) => T.Cached($"pen:{key}:{width}", () => (IPen)new ImmutablePen(Brush(T.Color(key)), width));
@@ -34,29 +48,20 @@ internal static class Paint
     public static IBrush White => B("playhead.color");
     public static IBrush MissingText => B("lane.missing");
     public static IBrush MutedFill => B("colors.muted");
+    public static IBrush RollWhite => B("roll.white");
+    public static IBrush RollBlack => B("roll.black");
 
     public static IPen BeatPen => P("line.beat", 1);
     public static IPen BarPen => P("line.bar", 1);
 
-    /// <summary>
-    /// Snap line colour by beat fraction, osu!'s convention: 1/2 red, 1/4 blue, 1/8 yellow, 1/3 and 1/6 purple, finer
-    /// ones grey; 1/5, 1/7 and 1/9 (not in osu!) teal. Dimmed so the lanes stay readable.
-    /// </summary>
-    public static IPen SnapPen(int fraction) => SnapPens.TryGetValue(SnapColour(fraction), out var pen) ? pen : SnapPens[SnapColour(fraction)] = new ImmutablePen(Brush(Color.Parse(SnapColour(fraction)), 0.6), 1);
+    /// <summary>Snap lines between the beats: one quiet grey, dimmer than the beat lines, as in Cubase.</summary>
+    public static IPen SnapPen(int fraction) => P("line.snap", 1);
 
-    public static string SnapColour(int fraction) => fraction switch
-    {
-        2 => "#ff4b4b",
-        4 => "#4b8cff",
-        8 => "#f0d24b",
-        3 => "#b46ef0",
-        6 => "#8a5ad0",
-        5 or 7 or 9 => "#3cc8b4",
-        _ => "#6e6e74",
-    };
-
-    private static readonly Dictionary<string, IPen> SnapPens = [];
-    public static IPen LongSnapPen { get; } = new ImmutablePen(Brush(Color.Parse("#b46ef0"), 0.75), 2);
+    /// <summary>The faint lines at gameplay objects (circles, slider nodes, spinner ends) in both editors.</summary>
+    public static IPen ObjectLinePen { get; } = new ImmutablePen(Brush(Color.Parse("#ff66aa"), 0.24), 1);
+    /// <summary>The same, a little stronger, for the Hitsound grid, whose busy lanes would hide the faint one.</summary>
+    public static IPen StrongObjectLinePen { get; } = new ImmutablePen(Brush(Color.Parse("#ff66aa"), 0.38), 1);
+    public static IPen LongSnapPen => P("line.bar", 2);
     public static IPen DividerPen => P("divider", 1);
     public static IPen PlayheadPen => P("playhead.color", T.Number("playhead.width"));
     public static IPen NoteRingPen => P("note.ring", 1);
@@ -65,7 +70,7 @@ internal static class Paint
 
     public static readonly Typeface Ui = new("Inter");
     public static readonly Typeface UiBold = new("Inter", FontStyle.Normal, FontWeight.Bold);
-    public static readonly Typeface Mono = new("Consolas, Cascadia Mono, monospace");
+    public static readonly Typeface Mono = new(new FontFamily("avares://OsuHitsoundEditor/Assets/Fonts#Roboto Mono, Consolas, monospace"));
 
     public const double BaseSize = 13;
 

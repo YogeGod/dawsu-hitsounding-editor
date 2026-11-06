@@ -34,7 +34,9 @@ internal readonly record struct GridLine(double Time, bool IsBar, int Bar, int B
 internal readonly record struct Section(double Start, double End, string Name);
 
 /// <summary>A gameplay object for the object strip: its time span and its hit positions (circle, slider nodes, spinner end).</summary>
-internal sealed record ObjectSpan(double Start, double End, HitObjectKind Kind, IReadOnlyList<(double Time, MomentKey Key, HitPosition Position)> Nodes);
+/// <summary>A gameplay object in the strip: its time span, nodes, combo number (0 for spinners) and combo colour index.</summary>
+internal sealed record ObjectSpan(double Start, double End, HitObjectKind Kind, IReadOnlyList<(double Time, MomentKey Key, HitPosition Position)> Nodes,
+    int Combo = 1, int Colour = 0);
 
 /// <summary>
 /// What the arrange area shows for one map being edited: lanes in their groups with colours (docs/ui-design.md), the
@@ -78,7 +80,9 @@ internal sealed partial class ArrangeModel
         GroupCount = laneRows.Select(r => r.Group).Distinct().Count();
         passive = Map.Passive.GroupBy(p => p.Lane).ToDictionary(g => g.Key, g => g.Select(p => new Note(p.Time, p.EndTime, p.Lane, null)).ToList());
         RebuildNotes();
-        Objects = BuildObjects(session, Map.Settings.TimeOffset);
+        combos = ComboOf(file);
+        ComboColours = ComboColourList(file);
+        Objects = BuildObjects(session, Map.Settings.TimeOffset, combos);
         session.RestoreLaneOrder(laneRows.Select(r => r.Lane));
         session.Changed += RestoreHistoryOrder;
     }
@@ -139,7 +143,7 @@ internal sealed partial class ArrangeModel
         foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
         previewMuted.IntersectWith(Session.State.Hits); // forget mutes of hits that were moved or removed
         (Notes, MomentGroups) = (notes, groups);
-        Objects = BuildObjects(Session, timeOffset);
+        Objects = BuildObjects(Session, timeOffset, combos);
         LastTime = Math.Max(Session.Moments.Select(m => m.Moment.Time).Concat(Session.State.Hits.Select(h => h.Time)).DefaultIfEmpty(0).Max(),
             Map.Passive.Select(p => p.EndTime).DefaultIfEmpty(0).Max());
         UpdateProblemTimes();
@@ -294,7 +298,21 @@ internal sealed partial class ArrangeModel
     /// <summary>Every gameplay object, in time order, for the object strip.</summary>
     public IReadOnlyList<ObjectSpan> Objects { get; private set; } = [];
 
-    private static List<ObjectSpan> BuildObjects(EditSession session, double offset) =>
+    private (int Combo, int Colour)[] combos = [];
+
+    /// <summary>The combo colours objects are drawn in: the map's own, else osu!'s defaults.</summary>
+    public IReadOnlyList<Color> ComboColours { get; private set; } = DefaultComboColours;
+
+    private static readonly Color[] DefaultComboColours =
+        [Color.FromRgb(255, 192, 0), Color.FromRgb(0, 202, 0), Color.FromRgb(18, 124, 255), Color.FromRgb(242, 24, 57)];
+
+    private static IReadOnlyList<Color> ComboColourList(OsuFile file) =>
+        OsuHitsound.Lanes.Keysound.KeysoundStore.ComboColours(file) is { Count: > 0 } own ? [.. own.Select(c => Color.FromRgb(c.R, c.G, c.B))] : DefaultComboColours;
+
+    /// <summary>Each object's combo number and colour index (shared with the key editor's reading of the map).</summary>
+    internal static (int Combo, int Colour)[] ComboOf(OsuFile file) => OsuHitsound.Lanes.Keysound.KeysoundStore.ComboOf(file);
+
+    private static List<ObjectSpan> BuildObjects(EditSession session, double offset, (int Combo, int Colour)[] combos) =>
     [
         .. session.Moments.GroupBy(x => x.Key.ObjectIndex).Select(g =>
         {
@@ -302,7 +320,9 @@ internal sealed partial class ArrangeModel
             var obj = g.First().Moment.Object;
             // A spinner's only moment is its end; it starts at the object's own time.
             double start = obj.Kind == HitObjectKind.Spinner ? obj.Time + offset : nodes[0].Time;
-            return new ObjectSpan(start, nodes[^1].Time, obj.Kind, nodes);
+            int index = g.Key;
+            var (combo, colour) = index >= 0 && index < combos.Length ? combos[index] : (1, 0);
+            return new ObjectSpan(start, nodes[^1].Time, obj.Kind, nodes, obj.Kind == HitObjectKind.Spinner ? 0 : combo, colour);
         }).OrderBy(o => o.Start),
     ];
 
@@ -337,8 +357,6 @@ internal sealed partial class ArrangeModel
         LaneGroup.OwnFiles => "colors.own",
         _ => "colors.skin",
     });
-
-    public static Color GroupColor(LaneGroup group) => ColorsOf(group)[0];
 
     /// <summary>A lane's group in the lane list: a default (skin) sound sits in its own sampleset's group.</summary>
     public static LaneGroup DisplayGroup(Lane lane) => lane.Source == LaneSource.Skin && lane.Sample is { Set: var set } ? set switch
@@ -577,9 +595,20 @@ internal sealed partial class ArrangeModel
     public string NameOf(Lane lane) => names.TryGetValue(lane, out var n) ? n : DrumRenders.TryGetValue(ProjectStore.KeyOf(lane), out var rendered) ? $"Velocity {rendered.Velocity} · WAV" : SlotOf(lane).Name;
 
     private bool MatchesFilter(Lane lane) =>
-        Filter.Length == 0 || NameOf(lane).Contains(Filter, StringComparison.OrdinalIgnoreCase) || lane.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase);
+        (usedLanes is null || usedLanes.Contains(lane))
+        && (Filter.Length == 0 || NameOf(lane).Contains(Filter, StringComparison.OrdinalIgnoreCase) || lane.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase));
 
     public void SetFilter(string text) => Relayout(() => Filter = text.Trim());
+
+    // "Used lanes only": the lanes that had hits when it was switched on (a snapshot, so a lane doesn't vanish while
+    // its last hit is being moved); null shows every lane.
+    private HashSet<Lane>? usedLanes;
+
+    public bool UsedLanesOnly => usedLanes is not null;
+
+    /// <summary>Shows only the lanes that have hits (on), or every lane (off). Switching it on again refreshes the list.</summary>
+    public void SetUsedLanesOnly(bool on) => Relayout(() =>
+        usedLanes = on ? [.. Notes.Where(kv => kv.Value.Count > 0).Select(kv => kv.Key)] : null);
 
     /// <summary>Renames a lane on screen only; its file and what it saves as stay the same. Blank restores the file name.</summary>
     public void RenameLane(Lane lane, string name) => Relayout(() =>

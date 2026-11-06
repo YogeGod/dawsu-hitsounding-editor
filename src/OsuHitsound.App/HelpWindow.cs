@@ -20,7 +20,6 @@ internal sealed class HelpWindow : Window
         Width = 640;
         Height = 620;
         RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
-        Background = new SolidColorBrush(Color.Parse("#2b2b2d"));
 
         var search = new TextBox { Watermark = "Search shortcuts…", Margin = new Thickness(12, 12, 12, 6) };
         var list = new StackPanel { Spacing = 2, Margin = new Thickness(12, 0, 12, 12) };

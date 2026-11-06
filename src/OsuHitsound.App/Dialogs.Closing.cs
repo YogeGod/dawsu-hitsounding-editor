@@ -22,7 +22,7 @@ internal static partial class Dialogs
         var save = new Button { Content = "Save", IsDefault = true };
         var discard = new Button { Content = "Discard" };
         var cancel = new Button { Content = "Cancel", IsCancel = true };
-        save.Classes.Add("dialogPrimary");
+        save.Classes.Add("primary");
         save.Click += (_, _) => dialog.Close(CloseChoice.Save);
         discard.Click += (_, _) => dialog.Close(CloseChoice.Discard);
         cancel.Click += (_, _) => dialog.Close(CloseChoice.Cancel);

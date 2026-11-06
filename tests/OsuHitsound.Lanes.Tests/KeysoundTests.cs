@@ -285,6 +285,11 @@ public class KeysoundStoreTests : IDisposable
         again.SongOffset = -12.5; // the listening offset, as Hitsound mode keeps one per map
         KeysoundStore.Save(again);
         Assert.Equal(-12.5, KeysoundStore.Open(project).SongOffset);
+        Assert.Null(again.LocatorLeft);
+        (again.LocatorLeft, again.LocatorRight, again.Cycle) = (1000, 2500, true); // the cycle range, kept with the project
+        KeysoundStore.Save(again);
+        var cycled = KeysoundStore.Open(project);
+        Assert.Equal((1000.0, 2500.0, true), (cycled.LocatorLeft!.Value, cycled.LocatorRight!.Value, cycled.Cycle));
         Assert.NotNull(again.SongPath);
         Assert.Empty(again.Warnings);
     }

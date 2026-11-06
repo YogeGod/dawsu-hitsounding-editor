@@ -46,7 +46,12 @@ public static class DefaultSkin
     }
 
     /// <summary>Sample name without extension (e.g. "soft-hitnormal") → file contents.</summary>
-    public static Dictionary<string, byte[]> LoadSamples(string resourcesDll)
+    public static Dictionary<string, byte[]> LoadSamples(string resourcesDll) => Load(resourcesDll, ".wav", ".ogg", ".mp3");
+
+    /// <summary>The classic skin's images, name without extension (e.g. "hitcircle@2x") → PNG bytes; read as data only.</summary>
+    public static Dictionary<string, byte[]> LoadTextures(string resourcesDll) => Load(resourcesDll, ".png");
+
+    private static Dictionary<string, byte[]> Load(string resourcesDll, params string[] extensions)
     {
         var samples = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         using var stream = File.OpenRead(resourcesDll);
@@ -61,7 +66,7 @@ public static class DefaultSkin
             var resource = metadata.GetManifestResource(handle);
             var name = metadata.GetString(resource.Name);
             var ext = Path.GetExtension(name);
-            if (!resource.Implementation.IsNil || !name.StartsWith(Prefix, StringComparison.Ordinal) || ext is not (".wav" or ".ogg" or ".mp3"))
+            if (!resource.Implementation.IsNil || !name.StartsWith(Prefix, StringComparison.Ordinal) || !extensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
                 continue;
             if (resource.Offset < 0 || resource.Offset + 4 > directory.Size) continue;
 

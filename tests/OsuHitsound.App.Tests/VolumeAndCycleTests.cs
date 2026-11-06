@@ -43,4 +43,12 @@ public class VolumeAndCycleTests
     [InlineData(2000, 1000, 2500, null)]   // reversed: after it
     public void Cycles_repeat_and_reversed_cycles_skip(double start, double end, double now, double? expected) =>
         Assert.Equal(expected, AudioEngine.LoopJump((start, end), now));
+
+    [Theory]
+    [InlineData(1900, 2000, 1000.0)]       // reached R from inside: back to L
+    [InlineData(2500, 2600, null)]         // started after R: plays on, as in Cubase
+    [InlineData(double.NaN, 2500, null)]   // just started (or sought) past R
+    [InlineData(double.NaN, 2000, null)]   // started exactly at R
+    public void A_cycle_wraps_only_when_playback_reaches_its_end_from_inside(double previous, double now, double? expected) =>
+        Assert.Equal(expected, AudioEngine.LoopJump((1000, 2000), now, previous));
 }

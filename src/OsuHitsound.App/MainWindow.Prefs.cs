@@ -63,7 +63,7 @@ public partial class MainWindow
             prefs = prefs with
             {
                 WindowX = Position.X, WindowY = Position.Y, WindowWidth = Bounds.Width, WindowHeight = Bounds.Height,
-                SnapMode = Lanes.Edits.SnapMode, QuantizeStrength = Lanes.Edits.QuantizeStrength, ColourByVolume = Lanes.ColourByVolume,
+                SnapMode = Lanes.Edits.SnapMode, QuantizeStrength = Lanes.Edits.QuantizeStrength,
                 InspectorOpen = narrowLayout ? wideInspectorOpen : InspectorToggle.IsChecked == true,
                 InspectorWidth = InspectorWidthToSave,
                 GlobalVolume = GlobalVolumeSlider.Value,

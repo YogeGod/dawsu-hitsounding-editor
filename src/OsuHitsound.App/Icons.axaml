@@ -1,0 +1,39 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Lucide icons v0.469.0 (ISC), 24x24 outlines drawn by app:AppIcon. See THIRD-PARTY-NOTICES.txt.
+       Generated from the Lucide SVGs: each element becomes one figure of the geometry. -->
+  <StreamGeometry x:Key="IconArrowLeft">M12 19l-7-7 7-7 M19 12H5</StreamGeometry>
+  <StreamGeometry x:Key="IconAudioWaveform">M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2</StreamGeometry>
+  <StreamGeometry x:Key="IconCircleCheck">M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z M9 12l2 2 4-4</StreamGeometry>
+  <StreamGeometry x:Key="IconCircleHelp">M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3 M12 17h.01</StreamGeometry>
+  <StreamGeometry x:Key="IconCopy">M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2</StreamGeometry>
+  <StreamGeometry x:Key="IconDownload">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10L12 15L17 10 M12 15L12 3</StreamGeometry>
+  <StreamGeometry x:Key="IconEraser">M7 21l-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21 M22 21H7 M5 11l9 9</StreamGeometry>
+  <StreamGeometry x:Key="IconFoldVertical">M12 22v-6 M12 8V2 M4 12H2 M10 12H8 M16 12h-2 M22 12h-2 M15 19l-3-3-3 3 M15 5l-3 3-3-3</StreamGeometry>
+  <StreamGeometry x:Key="IconFolderOpen">M6 14l1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2</StreamGeometry>
+  <StreamGeometry x:Key="IconHand">M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2 M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2 M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8 M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15</StreamGeometry>
+  <StreamGeometry x:Key="IconHistory">M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5 M12 7v5l4 2</StreamGeometry>
+  <StreamGeometry x:Key="IconKeyboardMusic">M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z M6 8h4 M14 8h.01 M18 8h.01 M2 12h20 M6 12v4 M10 12v4 M14 12v4 M18 12v4</StreamGeometry>
+  <StreamGeometry x:Key="IconLink2">M9 17H7A5 5 0 0 1 7 7h2 M15 7h2a5 5 0 1 1 0 10h-2 M8 12L16 12</StreamGeometry>
+  <StreamGeometry x:Key="IconMinus">M5 12h14</StreamGeometry>
+  <StreamGeometry x:Key="IconMousePointer2">M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z</StreamGeometry>
+  <StreamGeometry x:Key="IconPause">M15 4h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1Z M7 4h2a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1Z</StreamGeometry>
+  <StreamGeometry x:Key="IconPencil">M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5l4 4</StreamGeometry>
+  <StreamGeometry x:Key="IconPiano">M18.5 8c-1.4 0-2.6-.8-3.2-2A6.87 6.87 0 0 0 2 9v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.5C22 9.6 20.4 8 18.5 8 M2 14h20 M6 14v4 M10 14v4 M14 14v4 M18 14v4</StreamGeometry>
+  <StreamGeometry x:Key="IconPlay">M6 3L20 12L6 21L6 3Z</StreamGeometry>
+  <StreamGeometry x:Key="IconRedo2">M15 14l5-5-5-5 M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13</StreamGeometry>
+  <StreamGeometry x:Key="IconRepeat2">M2 9l3-3 3 3 M13 18H7a2 2 0 0 1-2-2V6 M22 15l-3 3-3-3 M11 6h6a2 2 0 0 1 2 2v10</StreamGeometry>
+  <StreamGeometry x:Key="IconRotateCw">M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5</StreamGeometry>
+  <StreamGeometry x:Key="IconScan">M3 7V5a2 2 0 0 1 2-2h2 M17 3h2a2 2 0 0 1 2 2v2 M21 17v2a2 2 0 0 1-2 2h-2 M7 21H5a2 2 0 0 1-2-2v-2</StreamGeometry>
+  <StreamGeometry x:Key="IconScissors">M3 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z M8.12 8.12 12 12 M20 4 8.12 15.88 M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z M14.8 14.8 20 20</StreamGeometry>
+  <StreamGeometry x:Key="IconSettings">M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconSkipBack">M19 20L9 12L19 4L19 20Z M5 19L5 5</StreamGeometry>
+  <StreamGeometry x:Key="IconSquare">M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z</StreamGeometry>
+  <StreamGeometry x:Key="IconTrendingUp">M22 7L13.5 15.5L8.5 10.5L2 17 M16 7L22 7L22 13</StreamGeometry>
+  <StreamGeometry x:Key="IconUndo2">M9 14 4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11</StreamGeometry>
+  <StreamGeometry x:Key="IconUnfoldVertical">M12 22v-6 M12 8V2 M4 12H2 M10 12H8 M16 12h-2 M22 12h-2 M15 19l-3 3-3-3 M15 5l-3-3-3 3</StreamGeometry>
+  <StreamGeometry x:Key="IconVolume2">M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z M16 9a5 5 0 0 1 0 6 M19.364 18.364a9 9 0 0 0 0-12.728</StreamGeometry>
+  <StreamGeometry x:Key="IconVolumeX">M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z M22 9L16 15 M16 9L22 15</StreamGeometry>
+  <StreamGeometry x:Key="IconX">M18 6 6 18 M6 6l12 12</StreamGeometry>
+  <StreamGeometry x:Key="IconZoomIn">M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z M21 21L16.65 16.65 M11 8L11 14 M8 11L14 11</StreamGeometry>
+</ResourceDictionary>

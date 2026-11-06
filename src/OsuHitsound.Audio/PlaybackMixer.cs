@@ -102,6 +102,9 @@ public sealed class PlaybackMixer : ISampleProvider
     /// <summary>When set, playback jumps back to Start on reaching End (End before Start skips the stretch between).</summary>
     public (double Start, double End)? Loop { get; set; }
 
+    // Where the last rendered block began (NaN right after a seek): tells reaching the cycle's end from starting past it.
+    private double blockStart = double.NaN;
+
     /// <summary>Where playback stops: the song's end, or past the last hitsound.</summary>
     public double Length
     {
@@ -268,6 +271,7 @@ public sealed class PlaybackMixer : ISampleProvider
     {
         ResetInstruments();
         timeline = rendered = startedAt = time;
+        blockStart = double.NaN; // a jump or seek: the cycle only wraps once playback reaches its end from inside
         renderedAt = startedTicks = Now();
         reported = double.NegativeInfinity;
         cueFrom = Math.BitDecrement(time);
@@ -299,7 +303,7 @@ public sealed class PlaybackMixer : ISampleProvider
             int frames = buffer.Length / 2, done = 0;
             while (playing && done < frames)
             {
-                if (Loop is { } loop && AudioEngine.LoopJump(loop, timeline) is { } jumpNow)
+                if (Loop is { } loop && AudioEngine.LoopJump(loop, timeline, blockStart) is { } jumpNow)
                 {
                     StartAt(jumpNow);
                     continue;
@@ -317,6 +321,7 @@ public sealed class PlaybackMixer : ISampleProvider
                 if (Loop is { } l && timeline < l.End) stop = Math.Min(stop, l.End);
                 n = (int)Math.Clamp(Math.Ceiling((stop - timeline) / (MsPerFrame * speed)), 1, n);
 
+                blockStart = timeline;
                 RenderPlaying(buffer.Slice(done * 2, n * 2), n);
                 done += n;
             }

@@ -329,11 +329,12 @@ public sealed class AudioEngine : IDisposable
     }
 
     /// <summary>
-    /// Where playback jumps to at <paramref name="now"/>, or null to carry on. Start before End repeats the range;
-    /// End before Start skips the stretch between them (a reversed cycle, as in dawsu).
+    /// Where playback jumps to at <paramref name="now"/>, or null to carry on. Start before End repeats the range once
+    /// playback reaches End from before it (<paramref name="previous"/>, where the last block began): started past End,
+    /// it plays on, as in Cubase. End before Start skips the stretch between them (a reversed cycle, as in dawsu).
     /// </summary>
-    public static double? LoopJump((double Start, double End) loop, double now) =>
-        loop.End > loop.Start && now >= loop.End ? loop.Start
+    public static double? LoopJump((double Start, double End) loop, double now, double previous = double.NegativeInfinity) =>
+        loop.End > loop.Start && now >= loop.End && previous < loop.End ? loop.Start
         : loop.Start > loop.End && now >= loop.End && now < loop.Start ? loop.Start
         : null;
 

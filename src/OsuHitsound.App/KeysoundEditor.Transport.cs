@@ -34,6 +34,13 @@ public partial class KeysoundEditor
         }
 
         Roll.LocatorRequested += (left, time) => SetLocator(left, time);
+        Roll.CycleRangeChanged += (left, right, drawn) =>
+        {
+            (locatorLeft, locatorRight) = (left, right);
+            if (drawn) LoopButton.IsChecked = true; // drawing a range turns cycling on, as in Cubase
+            ShowLocators();
+        };
+        Roll.CycleToggleRequested += () => { LoopButton.IsChecked = LoopButton.IsChecked != true; ToggleCycle(); };
         LoopButton.Click += (_, _) => ToggleCycle();
 
         foreach (double speed in Speeds)
@@ -126,10 +133,12 @@ public partial class KeysoundEditor
 
     private void ToggleCycle()
     {
+        // No range yet: as in Hitsound mode, the locators go around the selected notes first.
+        if (LoopButton.IsChecked == true && (locatorLeft is null || locatorRight is null)) LocatorsToSelection();
         if (LoopButton.IsChecked == true && (locatorLeft is null || locatorRight is null))
         {
             LoopButton.IsChecked = false;
-            SetStatus("Set the L and R locators first: Ctrl+click the ruler for L, Alt+click for R.");
+            SetStatus("Set a cycle range first: drag in the top of the ruler, or Ctrl+click it for L and Alt+click for R.");
             return;
         }
 
@@ -141,6 +150,7 @@ public partial class KeysoundEditor
     {
         bool on = LoopButton.IsChecked == true && locatorLeft is not null && locatorRight is not null;
         Roll.Cycle = on;
+        if (doc is not null) (doc.LocatorLeft, doc.LocatorRight, doc.Cycle) = (locatorLeft, locatorRight, on); // saved with the project
         if (audio is not null) audio.Loop = on && recorder is null ? (locatorLeft!.Value, locatorRight!.Value) : null;
     }
 

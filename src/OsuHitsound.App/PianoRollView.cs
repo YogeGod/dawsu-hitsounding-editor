@@ -22,11 +22,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public const double KeyboardWidth = 64, RulerHeight = 24, StripHeight = 46, VelocityHeight = 88, MinRow = 6, MaxRow = 30;
     private const double EdgeGrab = 6, DragThreshold = 3;
 
-    private static readonly IBrush WhiteRow = Paint.Brush("#26272b"), BlackRow = Paint.Brush("#1d1e21");
     private static readonly IBrush WhiteKey = Paint.Brush("#e8e8ea"), BlackKey = Paint.Brush("#1a1a1c"), KeyText = Paint.Brush("#55565c");
     private static readonly IBrush Ghost = Paint.Brush(Color.Parse("#8a8f99"), 0.28), WaveFill = Paint.Brush(Color.Parse("#5b6b80"), 0.45);
     private static readonly IBrush BoxFill = Paint.Brush(Colors.White, 0.08), SpinnerFill = Paint.Brush(Color.Parse("#c7c9d1"), 0.55);
-    private static readonly IPen MarkerPen = new ImmutablePen(Paint.Brush(Color.Parse("#ff66aa"), 0.24), 1);
     private static readonly IPen RowLine = new ImmutablePen(Paint.Brush(Colors.Black, 0.35), 1), OctaveLine = new ImmutablePen(Paint.Brush(Colors.Black, 0.7), 1);
     private static readonly IPen NoteEdge = new ImmutablePen(Paint.Brush(Colors.Black, 0.55), 1);
     private static readonly IBrush RecordFill = Paint.Brush(Color.Parse("#e5484d"), 0.8);
@@ -36,10 +34,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private static readonly IPen BoxPen = new ImmutablePen(Paint.Brush(Colors.White, 0.6), 1, new ImmutableDashStyle([3, 3], 0));
     // osu!'s default combo colours, for references that set none.
     private static readonly Color[] DefaultCombo = [Color.Parse("#ffc000"), Color.Parse("#00ca00"), Color.Parse("#127cff"), Color.Parse("#f21839")];
-    private static readonly Color Soft = Color.Parse("#3a6cf0"), Middle = Color.Parse("#9a48d8"), Loud = Color.Parse("#ec3a3a");
     private static readonly IBrush[] VelocityFills = [.. Enumerable.Range(0, 128).Select(v => (IBrush)Paint.Brush(VelocityColor(v)))];
     private static readonly string[] NoteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast);
+    private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast), HandCursor = new(StandardCursorType.Hand);
 
     private KeysoundDocument? doc;
     private readonly HashSet<Guid> selection = [];
@@ -72,6 +69,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public event Action<double>? SeekRequested;
     /// <summary>Ctrl+click (left) or Alt+click (right) in the ruler, as in Hitsound mode: set that locator here.</summary>
     public event Action<bool, double>? LocatorRequested;
+    /// <summary>The upper half of the ruler, as in Cubase: a drawn, moved or resized cycle range (left, right; true for a new one).</summary>
+    public event Action<double, double, bool>? CycleRangeChanged;
+    /// <summary>A click inside the cycle range in the upper ruler: turn cycling on or off.</summary>
+    public event Action? CycleToggleRequested;
 
     public double? LocatorLeft { get; set; }
     public double? LocatorRight { get; set; }
@@ -152,12 +153,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     internal static string PitchName(int pitch) => $"{NoteNames[pitch % 12]}{pitch / 12 - 2}";
 
     /// <summary>Velocity colour, as in Cubase's default: blue (soft) through purple to red (loud).</summary>
-    private static Color VelocityColor(int velocity)
-    {
-        double v = Math.Clamp((velocity - 1) / 126.0, 0, 1);
-        (Color a, Color b, double t) = v < 0.5 ? (Soft, Middle, v * 2) : (Middle, Loud, (v - 0.5) * 2);
-        return Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
-    }
+    private static Color VelocityColor(int velocity) => Paint.LevelColor((velocity - 1) / 126.0);
 
     private static IBrush VelocityFill(int velocity) => VelocityFills[Math.Clamp(velocity, 0, 127)];
 
@@ -215,7 +211,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                     foreach (var (time, _) in o.Nodes)
                     {
                         double x = Math.Round(XOfTime(time)) + 0.5;
-                        ctx.DrawLine(MarkerPen, new Point(x, grid.Top), new Point(x, grid.Bottom));
+                        ctx.DrawLine(Paint.ObjectLinePen, new Point(x, grid.Top), new Point(x, grid.Bottom));
                     }
         }
 
@@ -255,9 +251,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     private void DrawRows(DrawingContext ctx, Rect grid)
     {
+        IBrush white = Paint.RollWhite, black = Paint.RollBlack;
         foreach (var (p, y) in VisiblePitches())
         {
-            ctx.FillRectangle(IsBlack(p) ? BlackRow : WhiteRow, new Rect(grid.Left, y, grid.Width, rowHeight));
+            ctx.FillRectangle(IsBlack(p) ? black : white, new Rect(grid.Left, y, grid.Width, rowHeight));
             ctx.DrawLine(p % 12 == 0 ? OctaveLine : RowLine, new Point(grid.Left, y + rowHeight - 0.5), new Point(grid.Right, y + rowHeight - 0.5));
         }
     }
@@ -279,7 +276,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         ctx.DrawLine(Paint.DividerPen, new Point(KeyboardWidth - 0.5, 0), new Point(KeyboardWidth - 0.5, Bounds.Height));
         Paint.DrawText(ctx, "Velocity", new Point(6, VelocityArea.Top + 4), 10, Paint.Dim, KeyboardWidth - 8);
-        Paint.DrawText(ctx, "Drag bars · Alt = paint · Shift = ramp", new Point(Math.Max(KeyboardWidth + 6, Bounds.Width - 230), VelocityArea.Top + 4), 10, Paint.Dim, 224);
+        Paint.DrawText(ctx, "Drag bars · Ctrl = spread · Alt = paint · Shift = ramp", new Point(Math.Max(KeyboardWidth + 6, Bounds.Width - 300), VelocityArea.Top + 4), 10, Paint.Dim, 294);
     }
 
     private void DrawNotes(DrawingContext ctx, (long From, long To) ticks)
@@ -395,7 +392,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         if (LocatorLeft is { } l && LocatorRight is { } r)
         {
             double x0 = XOfTime(Math.Min(l, r)), x1 = XOfTime(Math.Max(l, r));
-            ctx.FillRectangle(Cycle ? CycleFill : RangeFill, new Rect(x0, 0, Math.Max(1, x1 - x0), RulerHeight));
+            ctx.FillRectangle(Cycle ? CycleFill : RangeFill, new Rect(x0, 0, Math.Max(1, x1 - x0), RulerHeight / 2));
         }
 
         foreach (var t in new[] { LocatorLeft, LocatorRight })
@@ -458,7 +455,50 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     // Editing.
 
-    private enum DragKind { Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity, Pan, VelocityPaint, VelocityRamp }
+    private enum DragKind { Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity, Pan, VelocityPaint, VelocityRamp, VelocityScale, CycleNew, CycleMove, CycleLeft, CycleRight }
+
+    private (double Left, double Right) cycleAtStart; // the locators when a cycle move or resize began
+
+    // The upper half of the ruler holds the cycle range; the lower half and the strip move the playhead.
+    private static bool InCycleRuler(Point p) => p.X >= KeyboardWidth && p.Y < RulerHeight / 2;
+
+    /// <summary>What a press at this x in the upper ruler does: resize an end of the cycle range, move it, or draw a new one.</summary>
+    private DragKind CycleDragAt(double x)
+    {
+        if (LocatorLeft is not { } l || LocatorRight is not { } r) return DragKind.CycleNew;
+        double xl = XOfTime(l), xr = XOfTime(r);
+        if (Math.Abs(x - xl) <= 5) return DragKind.CycleLeft;
+        if (Math.Abs(x - xr) <= 5) return DragKind.CycleRight;
+        return x > Math.Min(xl, xr) && x < Math.Max(xl, xr) ? DragKind.CycleMove : DragKind.CycleNew;
+    }
+
+    private void ApplyCycleDrag(Point p)
+    {
+        if (drag is null || doc is null) return;
+        drag.Current = p;
+        if (!drag.Moved && Math.Abs(p.X - drag.Start.X) < DragThreshold && drag.Kind is DragKind.CycleNew or DragKind.CycleMove) return;
+        drag.Moved = true;
+        double at = Math.Max(0, SnapTime(Math.Max(0, TimeOfX(p.X))));
+        var (l0, r0) = cycleAtStart;
+        switch (drag.Kind)
+        {
+            case DragKind.CycleNew:
+                double from = Math.Max(0, SnapTime(Math.Max(0, TimeOfX(drag.Start.X))));
+                CycleRangeChanged?.Invoke(Math.Min(from, at), Math.Max(from, at), true);
+                break;
+            case DragKind.CycleMove:
+                double moved = SnapTime(l0 + TimeOfX(p.X) - TimeOfX(drag.Start.X)) - l0;
+                moved = Math.Max(moved, -Math.Min(l0, r0));
+                CycleRangeChanged?.Invoke(l0 + moved, r0 + moved, false);
+                break;
+            case DragKind.CycleLeft:
+                CycleRangeChanged?.Invoke(at, r0, false);
+                break;
+            case DragKind.CycleRight:
+                CycleRangeChanged?.Invoke(l0, at, false);
+                break;
+        }
+    }
 
     private sealed class Drag(DragKind kind, Point start)
     {
@@ -487,6 +527,15 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         var p = e.GetPosition(this);
         var point = e.GetCurrentPoint(this).Properties;
         var mods = e.KeyModifiers;
+
+        if (InCycleRuler(p) && !mods.HasFlag(KeyModifiers.Control) && !mods.HasFlag(KeyModifiers.Alt) && point.IsLeftButtonPressed)
+        {
+            drag = new Drag(CycleDragAt(p.X), p);
+            if (LocatorLeft is { } l0 && LocatorRight is { } r0) cycleAtStart = (l0, r0);
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
 
         if (p.Y < RulerHeight + StripHeight && p.X >= KeyboardWidth)
         {
@@ -538,7 +587,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
             if (VelocityNoteAt(p) is not { } vn) return;
             if (!selection.Contains(vn.Id)) { selection.Clear(); selection.Add(vn.Id); }
-            StartGesture(DragKind.Velocity, p, vn, track, "Velocity");
+            // Ctrl+drag compresses or expands the selected velocities around their average, as in Cubase.
+            StartGesture(mods.HasFlag(KeyModifiers.Control) ? DragKind.VelocityScale : DragKind.Velocity, p, vn, track, "Velocity");
             ApplyDrag(p, mods);
             e.Pointer.Capture(this);
             e.Handled = true;
@@ -678,7 +728,14 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         var p = e.GetPosition(this);
         if (drag is null)
         {
-            Cursor = Tool == KeyTool.Select && NoteAt(p) is { } n && (OnRightEdge(n, p) || OnLeftEdge(n, p)) ? ResizeCursor : Cursor.Default;
+            Cursor = InCycleRuler(p) ? CycleDragAt(p.X) switch { DragKind.CycleLeft or DragKind.CycleRight => ResizeCursor, DragKind.CycleMove => HandCursor, _ => Cursor.Default }
+                : Tool == KeyTool.Select && NoteAt(p) is { } n && (OnRightEdge(n, p) || OnLeftEdge(n, p)) ? ResizeCursor : Cursor.Default;
+            return;
+        }
+
+        if (drag.Kind is DragKind.CycleNew or DragKind.CycleMove or DragKind.CycleLeft or DragKind.CycleRight)
+        {
+            ApplyCycleDrag(p);
             return;
         }
 
@@ -823,6 +880,17 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 break;
             }
 
+            case DragKind.VelocityScale when drag.Originals.Count > 0:
+            {
+                double factor = Math.Clamp(1 + (drag.Start.Y - p.Y) / 60, 0, 4);
+                double mean = drag.Originals.Values.Average(n => n.Velocity);
+                session.UpdateNotes(track.Id, [.. drag.Originals.Values.Select(n => n with
+                {
+                    Velocity = Math.Clamp((int)Math.Round(mean + (n.Velocity - mean) * factor), KeyNote.MinVelocity, KeyNote.MaxVelocity),
+                })], "Velocity");
+                break;
+            }
+
             case DragKind.Velocity when drag.Anchor is { } anchor:
             {
                 var area = VelocityArea;
@@ -858,6 +926,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     {
         if (drag is null) return;
         var kind = drag.Kind;
+        if (kind is DragKind.CycleNew or DragKind.CycleMove && !drag.Moved && LocatorLeft is { } l && LocatorRight is { } r
+            && TimeOfX(drag.Start.X) is var t && t >= Math.Min(l, r) && t <= Math.Max(l, r))
+            CycleToggleRequested?.Invoke(); // a click (no drag) inside the range, as in Cubase
         if (kind == DragKind.Copy && !drag.Moved)
         {
             // An Alt+click without a drag copies nothing: the originals stay selected.
@@ -1026,6 +1097,29 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     }
 
     /// <summary>Moves the selected notes by whole grid steps.</summary>
+    /// <summary>The info bar's Start: the selected notes move so the first starts at this tick (the others keep their spacing).</summary>
+    public void MoveSelectionTo(long tick)
+    {
+        if (Track is not { } t || selection.Count == 0) return;
+        var notes = SelectedNotes();
+        long dt = Math.Max(0, tick) - notes.Min(n => n.Start);
+        if (dt != 0) doc!.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Start = n.Start + dt })], "Move notes");
+    }
+
+    /// <summary>Cubase's Nudge Start/End: moves the selected notes' starts and/or ends by snap steps; the end stays put when the start moves, and a note keeps at least one step.</summary>
+    public void NudgeEdges(int startSteps, int endSteps)
+    {
+        if (Track is not { } t || selection.Count == 0) return;
+        long step = StepTicks, ds = startSteps * step, de = endSteps * step;
+        var moved = SelectedNotes().Select(n =>
+        {
+            long start = Math.Max(0, n.Start + ds), end = n.End + de;
+            if (end - start < MinLength) { if (ds != 0) start = end - MinLength; else end = start + MinLength; }
+            return n with { Start = start, Length = end - start };
+        }).ToList();
+        doc!.Session.UpdateNotes(t.Id, moved, ds != 0 ? "Nudge start" : "Nudge end");
+    }
+
     public void Nudge(int steps)
     {
         if (Track is not { } t || selection.Count == 0) return;

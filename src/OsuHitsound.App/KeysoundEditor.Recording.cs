@@ -113,7 +113,7 @@ public partial class KeysoundEditor
         recordTrack = trackId;
         audio.Seek(preroll);
         audio.Play();
-        PlayGlyph.Glyph = "Pause";
+        ShowPlaying(true);
         clock.Start();
         SetStatus($"Recording into {track.Name}… Space or Record stops; notes starting from here are replaced."
             + (keyboard.Open.Count == 0 ? " No MIDI keyboard is open: connect one and press ⟳." : ""));

@@ -710,7 +710,7 @@ internal static partial class Dialogs
         var body = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         var (ok, okText) = build(body, Close);
         var okButton = new Button { Content = okText, IsDefault = true, MinWidth = 80 };
-        okButton.Classes.Add("dialogPrimary");
+        okButton.Classes.Add("primary");
         configureOk?.Invoke(okButton);
         var cancel = new Button { Content = cancelText, IsCancel = true, MinWidth = 80 };
         okButton.Click += (_, _) => ok();

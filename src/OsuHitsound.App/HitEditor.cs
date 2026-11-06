@@ -141,6 +141,56 @@ internal sealed class HitEditor
         Move(offset, h => h.Lane, "Nudge");
     }
 
+    /// <summary>The info bar's Start: the selection moves so its first hit lands at this time (the others keep their spacing).</summary>
+    public void MoveStartTo(double time)
+    {
+        if (Selected.Count == 0) return;
+        double offset = Math.Max(0, time) - Selected.Min(h => h.Time);
+        if (Math.Abs(offset) >= 0.5) Move(offset, h => h.Lane, "Move");
+    }
+
+    /// <summary>
+    /// Left/Right (Shift adds), as Cubase's Navigate: the next or previous hit in the lane of the last or first selected
+    /// hit; with nothing selected, the first hit after (or before) the playhead in the active lane.
+    /// </summary>
+    public void SelectNeighbour(int direction, bool extend, double playhead)
+    {
+        if (model is null || Session is not { } session) return;
+        var anchor = direction > 0 ? Selected.MaxBy(h => h.Time) : Selected.MinBy(h => h.Time);
+        var lane = anchor?.Lane ?? model.ActiveLane;
+        if (lane is null) return;
+        double from = anchor?.Time ?? playhead;
+        var inLane = session.State.Hits.Where(h => h.Lane == lane);
+        var next = direction > 0
+            ? inLane.Where(h => anchor is null ? h.Time >= from - 0.5 : h.Time > from + 0.5).MinBy(h => h.Time)
+            : inLane.Where(h => anchor is null ? h.Time <= from + 0.5 : h.Time < from - 0.5).MaxBy(h => h.Time);
+        if (next is null) return;
+        Select(extend ? Selected.Append(next) : [next]);
+    }
+
+    /// <summary>
+    /// Up/Down (Shift adds), as Cubase's Navigate: the hit nearest in time in the next lane above or below that has one
+    /// within <paramref name="maxDistance"/> ms (lanes with nothing that close are skipped).
+    /// </summary>
+    public void SelectAcross(int direction, bool extend, double maxDistance)
+    {
+        if (model is null || Session is not { } session) return;
+        var anchor = Selected.MinBy(h => h.Time);
+        if (anchor is null) return;
+        var lane = anchor.Lane;
+        for (int guard = 0; guard < 256; guard++)
+        {
+            var other = ShiftLane(model, lane, direction);
+            if (other == lane) return; // the first or last lane: nothing further
+            lane = other;
+            if (session.State.Hits.Where(h => h.Lane == lane && Math.Abs(h.Time - anchor.Time) <= maxDistance).MinBy(h => Math.Abs(h.Time - anchor.Time)) is { } found)
+            {
+                Select(extend ? Selected.Append(found) : [found]);
+                return;
+            }
+        }
+    }
+
     /// <summary>Moves the selection to the adjacent visible lane.</summary>
     public void ShiftLanes(int direction)
     {

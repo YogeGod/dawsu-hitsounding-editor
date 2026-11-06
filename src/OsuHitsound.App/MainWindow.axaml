@@ -4,224 +4,11 @@
         x:Class="OsuHitsound.App.MainWindow"
         Title="osu! Hitsound Editor"
         Width="1600" Height="900" MinWidth="900" MinHeight="500"
-        Background="#262628" RequestedThemeVariant="Dark">
-  <Window.Styles>
-    <!-- Shared control styling; colour resources remain editable in the UI inspector. -->
-    <Style Selector="Border.chrome">
-      <Setter Property="Background" Value="{DynamicResource ChromeBg}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
-    </Style>
-    <Style Selector="Border.chrome TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-    </Style>
-    <Style Selector="Button, ToggleButton">
-      <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-      <Setter Property="Padding" Value="10,4" />
-      <Setter Property="MinHeight" Value="28" />
-      <Setter Property="FontSize" Value="{DynamicResource ButtonFontSize}" />
-      <Setter Property="Focusable" Value="True" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
-    </Style>
-    <Style Selector="MenuItem">
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-    </Style>
-    <Style Selector="Button:pointerover /template/ ContentPresenter, ToggleButton:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-    </Style>
-    <Style Selector="ToggleButton:checked /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
-      <Setter Property="Foreground" Value="#ffffff" />
-    </Style>
-    <Style Selector="ToggleButton.viewToggle:checked /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource PanelActive}" />
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
-    </Style>
-    <Style Selector="Button.transport, ToggleButton.transport">
-      <Setter Property="Width" Value="34" />
-      <Setter Property="Height" Value="34" />
-      <Setter Property="FontSize" Value="17" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Button.primary">
-      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
-      <Setter Property="Foreground" Value="#ffffff" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Padding" Value="16,6" />
-    </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
-      <Setter Property="Foreground" Value="#ffffff" />
-    </Style>
-    <Style Selector="ComboBox, TextBox">
-      <Setter Property="Background" Value="{DynamicResource LcdBg}" />
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="MinHeight" Value="28" />
-      <Setter Property="Padding" Value="8,3" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-    <Style Selector="TextBlock.sectionLabel">
-      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
-      <Setter Property="FontSize" Value="10" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Border.separator">
-      <Setter Property="Background" Value="{DynamicResource ChromeBorder}" />
-      <Setter Property="Width" Value="1" />
-      <Setter Property="Height" Value="20" />
-      <Setter Property="Margin" Value="10,0" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="TextBlock.lcd">
-      <Setter Property="Foreground" Value="{DynamicResource LcdText}" />
-      <Setter Property="FontFamily" Value="Consolas, Cascadia Mono, monospace" />
-      <Setter Property="FontSize" Value="{DynamicResource LcdFontSize}" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="TextBlock.caption">
-      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
-      <Setter Property="FontSize" Value="10" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="RadioButton.tab">
-      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Template">
-        <ControlTemplate>
-          <Border Name="TabBorder" Padding="14,8" Background="Transparent" BorderThickness="0,0,0,2" BorderBrush="Transparent">
-            <ContentPresenter Content="{TemplateBinding Content}" />
-          </Border>
-        </ControlTemplate>
-      </Setter>
-    </Style>
-    <Style Selector="RadioButton.tab:checked">
-      <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="RadioButton.tab:checked /template/ Border#TabBorder">
-      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
-    </Style>
-    <Style Selector="RadioButton.tab:pointerover /template/ Border#TabBorder">
-      <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
-    </Style>
-    <!-- V6.39 (macOS dark) regions: header, toolbar, selection info bar, transport bar -->
-    <Style Selector="Border.header">
-      <Setter Property="Background" Value="{DynamicResource HeaderBg}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Divider}" />
-    </Style>
-    <Style Selector="Border.toolbar">
-      <Setter Property="Background">
-        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-          <GradientStop Color="#34343a" Offset="0" />
-          <GradientStop Color="#2d2d33" Offset="1" />
-        </LinearGradientBrush>
-      </Setter>
-      <Setter Property="BorderBrush" Value="{DynamicResource Divider}" />
-    </Style>
-    <Style Selector="Border.info">
-      <Setter Property="Background" Value="{DynamicResource InfoBg}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Divider}" />
-    </Style>
-    <Style Selector="Border.transportBar">
-      <Setter Property="Background" Value="{DynamicResource HeaderBg}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Divider}" />
-    </Style>
-    <Style Selector="Border.logo">
-      <Setter Property="Background" Value="#ff66aa" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Width" Value="24" />
-      <Setter Property="Height" Value="24" />
-    </Style>
-    <Style Selector="Border.logo TextBlock">
-      <Setter Property="Foreground" Value="#ffffff" />
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="TextBlock.appTitle">
-      <Setter Property="Foreground" Value="#e0e0e7" />
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="FontSize" Value="14" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="TextBlock.projectName">
-      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Button.flat">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="#b6b6c3" />
-    </Style>
-    <Style Selector="Button.flat:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#3c3c44" />
-      <Setter Property="Foreground" Value="#eeeef8" />
-    </Style>
-    <Style Selector="Button.icon">
-      <Setter Property="Width" Value="32" />
-      <Setter Property="Height" Value="28" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="FontSize" Value="15" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Border.tools">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="0" />
-    </Style>
-    <Style Selector="ToggleButton.tool">
-      <Setter Property="Width" Value="32" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="FontSize" Value="15" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="#c5c5d3" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Margin" Value="2,0" />
-    </Style>
-    <Style Selector="TextBlock.toolLabel">
-      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="RadioButton.tab:focus-visible /template/ Border#TabBorder">
-      <Setter Property="Background" Value="{DynamicResource ControlHover}" />
-    </Style>
-    <Style Selector="Button:focus-visible, ToggleButton:focus-visible, ComboBox:focus-visible, TextBox:focus">
-      <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
-    </Style>
-    <Style Selector="StackPanel.field">
-      <Setter Property="Margin" Value="0,0,18,0" />
-      <Setter Property="Spacing" Value="2" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="TextBlock.fieldLabel">
-      <Setter Property="Foreground" Value="{DynamicResource LcdCaption}" />
-      <Setter Property="FontSize" Value="10" />
-    </Style>
-    <Style Selector="TextBlock.fieldValue">
-      <Setter Property="Foreground" Value="#a9c5e9" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="ToggleButton.wide">
-      <Setter Property="Width" Value="NaN" />
-      <Setter Property="Padding" Value="10,0" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-  </Window.Styles>
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaChromeHints="NoChrome" ExtendClientAreaTitleBarHeightHint="-1"
+        RequestedThemeVariant="Dark">
+  <!-- The window's own title bar (WindowTitleBar) above the editor. -->
+  <DockPanel Name="WindowRoot">
+  <app:WindowTitleBar Name="WindowBar" DockPanel.Dock="Top" />
 
   <Grid Name="Root" RowDefinitions="44,46,46,20,*,160,56,Auto" ColumnDefinitions="280,4,250,4,*">
     <!-- 1. Header (V6.39: logo, title, file buttons, menus; map name and settings on the right) -->
@@ -233,7 +20,7 @@
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Name="OpenButton" Classes="flat" Content="Open…" ToolTip.Tip="Open a map (Ctrl+O)" />
           <Button Name="SaveButton" Classes="primary" Content="Save .osu" ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
-          <ToggleButton Name="HsModeButton" Classes="wide" Content="HS mode" IsEnabled="False" Height="28" MinHeight="28"
+          <ToggleButton Name="HsModeButton" Classes="wide" Content="HS mode" IsEnabled="False"
                         ToolTip.Tip="Open an empty difficulty or one named HS / hitsounds to create circles as you place sounds." />
           <Menu Name="HeaderMenu" VerticalAlignment="Center" Margin="4,0,0,0">
             <MenuItem Header="File">
@@ -310,16 +97,14 @@
               <MenuItem Name="ZoomInItem" Header="Zoom in" />
               <MenuItem Name="ZoomOutItem" Header="Zoom out" />
               <MenuItem Name="CollapseAllItem" Header="Collapse sample layers" />
+              <MenuItem Name="ObjectLinesItem" Header="Object lines" ToggleType="CheckBox" IsChecked="{Binding #ObjectLinesToggle.IsChecked, Mode=TwoWay}" />
+              <MenuItem Name="UsedLanesItem" Header="Only lanes with hits" ToggleType="CheckBox" IsChecked="{Binding #UsedLanesToggle.IsChecked, Mode=TwoWay}" />
               <MenuItem Name="BrowserPanelItem" Header="File browser" ToggleType="CheckBox" />
               <MenuItem Name="HistoryPanelItem" Header="History" ToggleType="CheckBox" />
               <MenuItem Name="SoundSetsPanelItem" Header="Sound sets" ToggleType="CheckBox" />
               <MenuItem Name="RangeToolItem" Header="Range selection tool" />
               <MenuItem Name="InspectorPanelItem" Header="Inspector panel" ToggleType="CheckBox" />
               <MenuItem Name="TimeSignaturesItem" Header="Time signatures…" />
-              <MenuItem Header="Colour by">
-                <MenuItem Name="ColourLaneItem" Header="Lane" ToggleType="Radio" GroupName="colour" IsChecked="True" />
-                <MenuItem Name="ColourVolumeItem" Header="Volume" ToggleType="Radio" GroupName="colour" />
-              </MenuItem>
               <MenuItem Name="InspectorItem" Header="UI inspector" />
               <MenuItem Name="HelpItem" Header="Shortcuts and help" />
             </MenuItem>
@@ -373,8 +158,8 @@
         </StackPanel>
         <TextBlock Grid.Column="3" Name="FileTitle" Text="No map open" Classes="projectName" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" Margin="16,0" />
         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <Button Name="PreferencesButton" Classes="flat icon" AutomationProperties.Name="Preferences" ToolTip.Tip="Preferences: Songs folder, audio output and keys (Ctrl+,)"><app:SkinIcon Glyph="Settings" /></Button>
-          <Button Name="HelpButton" Classes="flat icon" AutomationProperties.Name="Shortcuts and help" ToolTip.Tip="Every shortcut and mouse action, with search (F1)"><app:SkinIcon Glyph="Help" /></Button>
+          <Button Name="PreferencesButton" Classes="flat icon" AutomationProperties.Name="Preferences" ToolTip.Tip="Preferences: Songs folder, audio output and keys (Ctrl+,)"><app:AppIcon Glyph="Settings" /></Button>
+          <Button Name="HelpButton" Classes="flat icon" AutomationProperties.Name="Shortcuts and help" ToolTip.Tip="Every shortcut and mouse action, with search (F1)"><app:AppIcon Glyph="CircleHelp" /></Button>
         </StackPanel>
       </Grid>
       </ScrollViewer>
@@ -385,16 +170,16 @@
       <ScrollViewer Name="ControlBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
       <Grid Name="ControlBarContent" MinWidth="1360" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
         <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <Button Name="UndoButton" Classes="icon" ToolTip.Tip="Undo (Ctrl+Z)" AutomationProperties.Name="Undo"><Path Data="M 5,3 L 1,7 L 5,11 M 1,7 L 9,7 C 15,7 15,15 9,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
-          <Button Name="RedoButton" Classes="icon" ToolTip.Tip="Redo (Ctrl+Y)" AutomationProperties.Name="Redo"><Path Data="M 11,3 L 15,7 L 11,11 M 15,7 L 7,7 C 1,7 1,15 7,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></Button>
+          <Button Name="UndoButton" Classes="icon" ToolTip.Tip="Undo (Ctrl+Z)" AutomationProperties.Name="Undo"><app:AppIcon Glyph="Undo2" /></Button>
+          <Button Name="RedoButton" Classes="icon" ToolTip.Tip="Redo (Ctrl+Y)" AutomationProperties.Name="Redo"><app:AppIcon Glyph="Redo2" /></Button>
         </StackPanel>
         <Border Grid.Column="1" Classes="tools" Margin="12,0" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
-            <ToggleButton Name="SelectTool" Classes="tool" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." AutomationProperties.Name="Select"><Path Data="M 3,1 L 3,14 L 7,10 L 11,15 L 14,13 L 10,8 L 15,7 Z" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-            <ToggleButton Name="GrabTool" Classes="tool" ToolTip.Tip="Grab (2). Drag the canvas to pan time and lanes. Space plays or stops." AutomationProperties.Name="Grab"><Path Data="M 4,8 L 4,5 Q 4,3 6,5 L 6,2 Q 7,0 8,2 L 8,5 L 8,2 Q 10,1 10,3 L 10,6 Q 12,3 13,6 L 13,10 Q 13,14 10,15 L 6,15 L 2,11 Q 0,8 2,8 Z" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.3" Width="16" Height="16" Stretch="Uniform" /></ToggleButton>
-            <ToggleButton Name="DrawTool" Classes="tool" ToolTip.Tip="Draw (3, or hold Alt). Click or drag along a lane; starting on a hit erases instead." AutomationProperties.Name="Draw"><Path Data="M 2,11 L 11,2 L 14,5 L 5,14 L 1,15 Z M 9,4 L 12,7" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-            <ToggleButton Name="EraseTool" Classes="tool" ToolTip.Tip="Erase (4). Drag across hits to remove them." AutomationProperties.Name="Erase"><Path Data="M 2,10 L 10,2 L 15,7 L 7,15 L 5,15 Z M 7,5 L 12,10 M 5,15 L 15,15" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
-            <ToggleButton Name="MuteTool" Classes="tool" ToolTip.Tip="Mute (5). Click a hit to silence it while listening. Preview only: osu! cannot store a muted sound, so this is never saved." AutomationProperties.Name="Mute"><Path Data="M 2,6 L 5,6 L 9,2 L 9,14 L 5,10 L 2,10 Z M 12,5 L 16,11 M 16,5 L 12,11" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+            <ToggleButton Name="SelectTool" Classes="tool" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." AutomationProperties.Name="Select"><app:AppIcon Glyph="MousePointer2" /></ToggleButton>
+            <ToggleButton Name="GrabTool" Classes="tool" ToolTip.Tip="Grab (2). Drag the canvas to pan time and lanes. Space plays or stops." AutomationProperties.Name="Grab"><app:AppIcon Glyph="Hand" /></ToggleButton>
+            <ToggleButton Name="DrawTool" Classes="tool" ToolTip.Tip="Draw (3, or hold Alt). Click or drag along a lane; starting on a hit erases instead." AutomationProperties.Name="Draw"><app:AppIcon Glyph="Pencil" /></ToggleButton>
+            <ToggleButton Name="EraseTool" Classes="tool" ToolTip.Tip="Erase (4). Drag across hits to remove them." AutomationProperties.Name="Erase"><app:AppIcon Glyph="Eraser" /></ToggleButton>
+            <ToggleButton Name="MuteTool" Classes="tool" ToolTip.Tip="Mute (5). Click a hit to silence it while listening. Preview only: osu! cannot store a muted sound, so this is never saved." AutomationProperties.Name="Mute"><app:AppIcon Glyph="VolumeX" /></ToggleButton>
 
           </StackPanel>
         </Border>
@@ -403,7 +188,7 @@
           <ComboBox Name="SnapModeBox" Width="120" Focusable="True" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
           <ComboBox Name="SnapBox" Width="70" Focusable="True" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." />
           <ToggleButton Name="TripletSnapToggle" Content="Triplets" ToolTip.Tip="Alt+wheel: on cycles 3/1, 1/1, 1/3, 1/6, 1/12; off cycles 4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16. The drop-down offers every spacing; Shift+number still selects 1/n." />
-          <ToggleButton Name="AuditionPlacementButton" Classes="viewToggle" Content="Audition" Height="28" MinHeight="28" Padding="10,4" Margin="6,0,0,0"
+          <ToggleButton Name="AuditionPlacementButton" Classes="viewToggle" Content="Audition" Margin="6,0,0,0"
                         ToolTip.Tip="Play a sample whenever you draw a new note, including while painting. Saved for all projects." />
           <Button Name="GridOptionsButton" Content="Grid…" IsVisible="False" ToolTip.Tip="Grid mode and triplet cycling" />
         </StackPanel>
@@ -412,11 +197,9 @@
           <StackPanel Name="ViewExtras" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="6">
           <ToggleButton Name="LaneDetailsToggle" Classes="viewToggle" Content="Info" IsChecked="False" ToolTip.Tip="Show each lane's file index after its name" />
+          <ToggleButton Name="UsedLanesToggle" Classes="viewToggle" Content="Used lanes" IsChecked="False" ToolTip.Tip="Show only the lanes that have hits on them (switch off and on again to refresh the list after adding hits)" />
+          <ToggleButton Name="ObjectLinesToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines down the lanes at every circle, slider head, repeat and tail, and spinner end, whatever the snap" />
           <ToggleButton Name="VolumeToggle" Classes="viewToggle" Content="Controller" IsChecked="True" ToolTip.Tip="Show the volume controller at the bottom" />
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Text="Colour" Classes="toolLabel" Margin="6,0,0,0" />
-          <ComboBox Name="ColourBox" Width="96" Focusable="True" ToolTip.Tip="Colour notes by lane, or by volume (quiet dark, loud bright)" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <TextBlock Text="Zoom" Classes="toolLabel" Margin="6,0,0,0" />
@@ -441,7 +224,10 @@
         </StackPanel>
         <StackPanel Name="StartField" Classes="field" MinWidth="150">
           <TextBlock Text="START · ms" Classes="fieldLabel" />
-          <TextBlock Name="InfoStart" Text="—" Classes="fieldValue" />
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBox Name="StartBox" Width="72" Watermark="—" ToolTip.Tip="Where the selection starts, in ms. Type a time and press Enter to move it there (several: all move together); Esc puts it back." />
+            <TextBlock Name="InfoStart" Text="" Classes="fieldValue" VerticalAlignment="Center" />
+          </StackPanel>
         </StackPanel>
         <StackPanel Classes="field">
           <TextBlock Text="VOLUME AT TIMES · %" Classes="fieldLabel" ToolTip.Tip="Edits volumes at selected times using the chosen volume scope." />
@@ -480,7 +266,7 @@
 
     <!-- Inspector (left): Selection, Bookmarks, Recent edits; the splitter resizes it -->
     <app:InspectorPanel Grid.Row="3" Grid.RowSpan="3" Grid.Column="2" Name="Inspector" Background="{DynamicResource VolumeSide}" />
-    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="3" Name="InspectorSplitter" ResizeDirection="Columns" Background="#1c1c1e" />
+    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="3" Name="InspectorSplitter" ResizeDirection="Columns" Background="{DynamicResource Divider}" />
 
     <!-- 5. Arrange area -->
     <Grid Grid.Row="4" Grid.Column="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
@@ -488,7 +274,7 @@
       <TextBox Name="LaneFilterBox" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9,22,0,0" MinHeight="20" Height="20" Padding="6,0" FontSize="9" CornerRadius="5" VerticalContentAlignment="Center" Watermark="Filter samples…" />
       <ToggleButton Name="DrumMapToggle" Width="22" Height="28" MinHeight="28" Padding="3" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True"
                     AutomationProperties.Name="Drum-map view" ToolTip.Tip="Switch Sample / Drum-map view. Right-click for Drum Map Setup." IsEnabled="False">
-        <Path Data="M 0,0 L 16,0 L 16,14 L 0,14 Z M 4,0 L 4,14 M 8,0 L 8,14 M 12,0 L 12,14 M 3,0 L 3,7 M 7,0 L 7,7 M 11,0 L 11,7" Stroke="{DynamicResource ButtonText}" StrokeThickness="1" Stretch="Uniform" />
+        <app:AppIcon Glyph="Piano" />
         <ToggleButton.ContextMenu><ContextMenu><MenuItem Name="DrumMapSetupItem" Header="Drum Map Setup…" /></ContextMenu></ToggleButton.ContextMenu>
       </ToggleButton>
       <ScrollBar Grid.Column="1" Name="VScroll" Orientation="Vertical" />
@@ -506,12 +292,12 @@
           <RadioButton Name="SavedTab" Classes="tab" Content="What gets saved" GroupName="bottom" Focusable="True" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
-          <ToggleButton Name="RampTool" Classes="tool" ToolTip.Tip="Ramp (6). Drag in the volume lane to draw a volume ramp." AutomationProperties.Name="Ramp"><Path Data="M 2,14 L 14,2 M 2,10 L 2,14 L 6,14 M 10,2 L 14,2 L 14,6" Stroke="{DynamicResource ButtonText}" StrokeThickness="1.5" Width="15" Height="15" Stretch="Uniform" /></ToggleButton>
+          <ToggleButton Name="RampTool" Classes="tool" ToolTip.Tip="Ramp (6). Drag in the volume lane to draw a volume ramp." AutomationProperties.Name="Ramp"><app:AppIcon Glyph="TrendingUp" /></ToggleButton>
           <TextBlock Name="VolumeScopeHint" Text="All lanes" Classes="fieldLabel" VerticalAlignment="Center" />
           <ComboBox Name="RampShapeBox" Width="110" Focusable="True" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
         </StackPanel>
         <TextBlock Grid.Column="2" Name="ActiveLaneText" Classes="fieldLabel" VerticalAlignment="Center" Margin="16,0,0,0" ToolTip.Tip="The active lane: the one touched last (highlighted in the lane list)" />
-        <TextBlock Grid.Column="3" Text="Drag bars · Alt = paint · Shift = ramp" Classes="fieldLabel" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="3" Text="Drag bars · Ctrl = spread · Alt = paint · Shift = ramp" Classes="fieldLabel" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </Grid>
         </Border>
         <Panel>
@@ -559,13 +345,13 @@
             </StackPanel>
           </StackPanel>
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
-            <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
+            <app:AppIcon Glyph="SkipBack" />
           </Button>
-          <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:SkinIcon Glyph="Stop" /></Button>
-          <Button Name="PlayButton" Classes="transport" Foreground="{DynamicResource PlayIcon}" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:SkinIcon Name="PlayGlyph" Glyph="Play" /></Button>
+          <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:AppIcon Glyph="Square" /></Button>
+          <Button Name="PlayButton" Classes="transport" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:AppIcon Name="PlayGlyph" Glyph="Play" /></Button>
           <ToggleButton Name="LoopButton" Classes="transport wide" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R, drag in the upper ruler draws a range." AutomationProperties.Name="Loop">
             <StackPanel Orientation="Horizontal" Spacing="4">
-              <app:SkinIcon Glyph="Cycle" />
+              <app:AppIcon Glyph="Repeat2" />
               <TextBlock Text="Cycle" VerticalAlignment="Center" />
             </StackPanel>
           </ToggleButton>
@@ -602,7 +388,7 @@
       </ScrollViewer>
     </Border>
 
-    <Border Name="WorkflowFooter" Grid.Row="7" Grid.ColumnSpan="5" Background="{DynamicResource HeaderBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
+    <Border Name="WorkflowFooter" Grid.Row="7" Grid.ColumnSpan="5" Classes="footer" BorderThickness="0,1,0,0">
       <StackPanel Margin="12,6" Spacing="4">
         <Grid Name="WorkingCopyRow" ColumnDefinitions="Auto,*,Auto,Auto">
           <TextBlock Name="WorkingCopyLabel" Text="Editing:" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -639,4 +425,5 @@
     <!-- The tutorial: over everything, hidden until it runs -->
     <app:TutorialOverlay Name="Tutorial" Grid.RowSpan="8" Grid.ColumnSpan="5" ZIndex="100" />
   </Grid>
+  </DockPanel>
 </Window>

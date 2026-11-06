@@ -60,8 +60,21 @@ public partial class KeysoundEditor : UserControl
         RenameTrackButton.Click += async (_, _) => await RenameTrack();
         DeleteTrackButton.Click += (_, _) => DeleteTrack();
         StopButton.Click += (_, _) => { if (audio?.IsPlaying == true || IsRecording) TogglePlay(); else Seek(0); };
+        StartBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                if (doc is not null && OsuHitsound.Format.OsuNumber.TryParseDouble(StartBox.Text?.Trim() ?? "", out double ms) && double.IsFinite(ms))
+                    Roll.MoveSelectionTo((long)Math.Round(doc.Tempo.TickAt(Math.Max(0, ms))));
+                Roll.Focus();
+                UpdateSelectionInfo();
+                e.Handled = true;
+            }
+            else if (e.Key == Avalonia.Input.Key.Escape) { Roll.Focus(); UpdateSelectionInfo(); e.Handled = true; }
+        };
+        StartBox.LostFocus += (_, _) => UpdateSelectionInfo();
         VelocityModeBox.ItemsSource = new[] { "Set all", "Relative" };
-        VelocityModeBox.SelectedIndex = 0;
+        VelocityModeBox.SelectedIndex = 1; // relative: several notes keep their differences
         VelocityApplyButton.Click += (_, _) => ApplyVelocity();
         VelocityValueBox.KeyDown += (_, e) =>
         {
@@ -110,8 +123,9 @@ public partial class KeysoundEditor : UserControl
         _ = LoadPiano(doc);
         RefreshMidiInputs();
         status = doc.Warnings.Count > 0 ? string.Join(" ", doc.Warnings) : $"Opened {doc.Name}. Save project (Ctrl+S) keeps your tracks and notes.";
-        locatorLeft = locatorRight = null;
-        LoopButton.IsChecked = false;
+        // The project's own locators and Cycle, as saved.
+        (locatorLeft, locatorRight) = (doc.LocatorLeft, doc.LocatorRight);
+        LoopButton.IsChecked = doc.Cycle;
         ShowLocators();
         ApplyTransport();
         RefreshTracks();
@@ -492,7 +506,7 @@ public partial class KeysoundEditor : UserControl
         playStartedAt = Roll.Playhead;
         UpdateLoop();
         audio.Play();
-        PlayGlyph.Glyph = "Pause";
+        ShowPlaying(true);
         clock.Start();
     }
 
@@ -507,7 +521,7 @@ public partial class KeysoundEditor : UserControl
             Roll.InvalidateVisual();
         }
         clock.Stop();
-        PlayGlyph.Glyph = "Play";
+        ShowPlaying(false);
     }
 
     private void Tick()
@@ -564,7 +578,9 @@ public partial class KeysoundEditor : UserControl
         InfoSelection.Text = notes.Count switch { 0 => "No notes", 1 => "1 note", var n => $"{n} notes" };
         if (notes.Count == 0)
         {
-            InfoStart.Text = InfoPitch.Text = InfoObject.Text = "—";
+            InfoPitch.Text = InfoObject.Text = "—";
+            InfoStart.Text = "";
+            if (!StartBox.IsFocused) StartBox.Text = "";
             VelocityValueBox.Watermark = "1-127";
             return;
         }
@@ -572,7 +588,8 @@ public partial class KeysoundEditor : UserControl
         var first = notes.MinBy(n => n.Start)!;
         double ms = doc.Tempo.TimeAt(first.Start);
         var (bar, beat, tick) = doc.Tempo.BarBeatTickAt(ms);
-        InfoStart.Text = $"{ms:0} · {bar}.{beat}.{tick}";
+        if (!StartBox.IsFocused) StartBox.Text = ms.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+        InfoStart.Text = $"{bar}.{beat}.{tick}";
         var pitches = notes.Select(n => n.Pitch).Distinct().ToList();
         InfoPitch.Text = pitches.Count == 1 ? PianoRollView.PitchName(pitches[0]) : $"{PianoRollView.PitchName(pitches.Min())}–{PianoRollView.PitchName(pitches.Max())}";
         var velocities = notes.Select(n => n.Velocity).Distinct().ToList();
@@ -627,4 +644,5 @@ public partial class KeysoundEditor : UserControl
         ToolTip.SetTip(RedoButton, doc.Session.RedoLabel is { } r ? $"Redo {r} (Ctrl+Y)" : "Redo (Ctrl+Y)");
     }
 
+    private void ShowPlaying(bool playing) => AppIcon.ShowPlaying(PlayButton, PlayGlyph, playing);
 }

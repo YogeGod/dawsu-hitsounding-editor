@@ -37,7 +37,6 @@ internal sealed class InspectorWindow : Window
         Width = 420;
         Height = 760;
         MinWidth = 320;
-        Background = new SolidColorBrush(Color.Parse("#2b2b2d"));
         RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
         ShowActivated = false;
 

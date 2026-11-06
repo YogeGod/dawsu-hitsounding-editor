@@ -99,7 +99,8 @@ internal sealed class OverviewStrip : Control
 
     private static IBrush GroupBrush(LaneGroup group)
     {
-        var color = ArrangeModel.GroupColor(group);
+        // Lanes have no colours of their own: every mark is the dim text grey.
+        var color = UiTheme.Current.Color("text.dim");
         return GroupBrushes.TryGetValue(color, out var brush) ? brush : GroupBrushes[color] = Paint.Brush(color);
     }
 

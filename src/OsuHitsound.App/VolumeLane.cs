@@ -41,6 +41,12 @@ internal sealed class VolumeLane : Control
     private TimeAxis? axis;
     private Gesture gesture;
     private List<MomentKey>? dragging;
+    // Dragging one of several selected bars moves them all by the same amount (as Cubase's velocity lane):
+    // each hit's volume when the drag began, and the pointer's level at the press.
+    private Dictionary<EditHit, int>? dragStart;
+    private int grabStart;
+    private bool compressing; // Ctrl+drag on one of several selected bars: spread them apart (up) or together (down)
+    private double grabY;
     private Point last, rampStart, rampEnd;
 
     /// <summary>How many times the bars were invalidated. A playhead tick does not increment this.</summary>
@@ -163,7 +169,7 @@ internal sealed class VolumeLane : Control
                 var levels = scoped[key].Select(session.VolumeOf).Distinct().ToArray();
                 int volume = levels.Max();
                 double h = height * Math.Clamp(volume, 0, 100) / 100.0;
-                var color = ArrangeModel.GroupColor(group);
+                var color = ArrangeView.VolumeColor(volume); // blue (quiet) to red (loud), as the hits
                 bool selected = SelectedMoments.Contains(key);
                 bool conflict = ShowExportWarnings && model.Conflicted.Contains(key);
                 var stem = selected ? Paint.White : conflict ? ConflictBar : StemBrush(color);
@@ -209,6 +215,34 @@ internal sealed class VolumeLane : Control
             .ToDictionary(h => h, h => values[h.Anchor!.Value]));
     }
 
+    /// <summary>
+    /// Moves every dragged hit by <paramref name="delta"/> from its volume when the drag began, each kept within 1–100,
+    /// so their differences stay (dragging back restores them). Objects whose sounds all share one volume keep a single
+    /// object volume; the others change per sound.
+    /// </summary>
+    private void ApplyRelative(int delta) =>
+        ApplyTargets(dragStart?.ToDictionary(kv => kv.Key, kv => Math.Clamp(kv.Value + delta, 1, 100)));
+
+    /// <summary>Scales the dragged hits' distances from their average volume by <paramref name="factor"/> (0 = all the same).</summary>
+    private void ApplyScaled(double factor)
+    {
+        if (dragStart is not { Count: > 0 } start) return;
+        double mean = start.Values.Average();
+        ApplyTargets(start.ToDictionary(kv => kv.Key, kv => Math.Clamp((int)Math.Round(mean + (kv.Value - mean) * factor), 1, 100)));
+    }
+
+    // New volumes per dragged hit: one object volume where an object's sounds all started equal, per sound otherwise.
+    private void ApplyTargets(Dictionary<EditHit, int>? target)
+    {
+        if (model is null || dragStart is null || target is null) return;
+        if (SelectedLanesOnly) { model.Session.SetLayerVolumes(target); return; }
+        var byMoment = target.GroupBy(kv => kv.Key.Anchor!.Value).ToList();
+        var whole = byMoment.Where(g => g.Select(kv => dragStart[kv.Key]).Distinct().Count() == 1).ToDictionary(g => g.Key, g => g.First().Value);
+        var layers = byMoment.Where(g => !whole.ContainsKey(g.Key)).SelectMany(g => g).ToDictionary(kv => kv.Key, kv => kv.Value);
+        if (whole.Count > 0) model.Session.SetVolumes(whole);
+        if (layers.Count > 0) model.Session.SetLayerVolumes(layers);
+    }
+
     /// <summary>Moments with hits between two times (the bars that are drawn).</summary>
     private IEnumerable<(double Time, MomentKey Key)> BarsBetween(double from, double to)
     {
@@ -240,6 +274,16 @@ internal sealed class VolumeLane : Control
             var k = session.Moments[i].Key;
             dragging = SelectedMoments.Contains(k) ? [.. SelectedMoments] : [k];
             gesture = Gesture.Bar;
+            if (dragging.Count > 1)
+            {
+                var keys = dragging.ToHashSet();
+                dragStart = session.State.Hits
+                    .Where(h => h.Anchor is { } a && keys.Contains(a) && (!SelectedLanesOnly || model.SelectedLanes.Contains(h.Lane)))
+                    .ToDictionary(h => h, session.VolumeOf);
+                grabStart = VolumeAt(p.Y); // relative to the press, so pressing anywhere on the bar doesn't jump them
+                compressing = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+                grabY = p.Y;
+            }
         }
 
         session.BeginGesture(gesture switch { Gesture.Ramp => "Ramp", Gesture.Paint => "Paint volumes", _ => "Volume" });
@@ -274,6 +318,8 @@ internal sealed class VolumeLane : Control
         model?.Session.EndGesture();
         gesture = Gesture.None;
         dragging = null;
+        dragStart = null;
+        compressing = false;
         e.Pointer.Capture(null);
         InvalidateVisual();
     }
@@ -284,6 +330,15 @@ internal sealed class VolumeLane : Control
         var session = model.Session;
         switch (gesture)
         {
+            case Gesture.Bar when dragStart is not null && compressing:
+                // Cubase's compress/expand: the volumes move away from (drag up) or towards (down) their average.
+                ApplyScaled(Math.Clamp(1 + (grabY - p.Y) / 60, 0, 4));
+                break;
+
+            case Gesture.Bar when dragStart is not null:
+                ApplyRelative(VolumeAt(p.Y) - grabStart);
+                break;
+
             case Gesture.Bar when dragging is not null:
                 ApplyVolumes(dragging.ToDictionary(k => k, _ => VolumeAt(p.Y)));
                 break;

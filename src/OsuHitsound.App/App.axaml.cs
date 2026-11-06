@@ -6,7 +6,11 @@ namespace OsuHitsound.App;
 
 public partial class App : Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        ThemeResources.Attach(this);
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

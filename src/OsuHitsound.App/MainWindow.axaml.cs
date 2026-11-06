@@ -120,6 +120,9 @@ public partial class MainWindow : Window
         LoopButton.Click += (_, _) => ToggleCycle();
         Lanes.LocatorsChanged += UpdateLoop;
         LaneDetailsToggle.IsCheckedChanged += (_, _) => { Lanes.ShowIndexes = LaneDetailsToggle.IsChecked == true; Lanes.InvalidateVisual(); };
+        ObjectLinesToggle.IsCheckedChanged += (_, _) => { Lanes.ShowObjectLines = ObjectLinesToggle.IsChecked == true; Lanes.InvalidateVisual(); };
+        SkinTextures.LoadAsync(prefs.LazerResources, () => Lanes.InvalidateVisual()); // lazer's hit-circle textures for the strip
+        UsedLanesToggle.IsCheckedChanged += (_, _) => { model?.SetUsedLanesOnly(UsedLanesToggle.IsChecked == true); SyncScrollBars(); };
         VolumeToggle.IsCheckedChanged += (_, _) => ApplyTheme();
         VolumeTab.IsCheckedChanged += (_, _) =>
         {
@@ -159,8 +162,6 @@ public partial class MainWindow : Window
             Lanes.InvalidateVisual();
             UpdateStatus();
         };
-        ColourBox.ItemsSource = new[] { "Lane", "Volume" };
-        ColourBox.SelectionChanged += (_, _) => SetColourByVolume(ColourBox.SelectedIndex == 1);
         FitButton.Click += (_, _) => FitTimeline();
         SelectTool.Click += (_, _) => SetTool(Tool.Select);
         GrabTool.Click += (_, _) => SetTool(Tool.Grab);
@@ -227,8 +228,20 @@ public partial class MainWindow : Window
         RampShapeBox.ItemsSource = new[] { "Linear", "Ease in", "Ease out", "S-curve" };
         RampShapeBox.SelectedIndex = 0;
         RampShapeBox.SelectionChanged += (_, _) => Volume.Shape = (RampShape)Math.Max(0, RampShapeBox.SelectedIndex);
+        StartBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                if (OsuNumber.TryParseDouble(StartBox.Text?.Trim() ?? "", out double ms) && double.IsFinite(ms)) Lanes.Edits.MoveStartTo(ms);
+                Lanes.Focus();
+                UpdateInfoBar();
+                e.Handled = true;
+            }
+            else if (e.Key == Avalonia.Input.Key.Escape) { Lanes.Focus(); UpdateInfoBar(); e.Handled = true; }
+        };
+        StartBox.LostFocus += (_, _) => UpdateInfoBar();
         VolumeModeBox.ItemsSource = new[] { "Relative", "Set all" };
-        VolumeModeBox.SelectedIndex = 1;
+        VolumeModeBox.SelectedIndex = 0; // relative: several hits keep their differences
         VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
         VolumeValueBox.KeyDown += (_, e) =>
         {
@@ -252,9 +265,6 @@ public partial class MainWindow : Window
         ZoomSlider.ValueChanged += (_, e) => { if (!syncingScroll) Lanes.Axis.Zoom = ZoomFromSlider(e.NewValue); };
         CollapseAllItem.Click += (_, _) => CollapseAll();
         TimeSignaturesItem.Click += async (_, _) => await EditTimeSignatures();
-        ColourLaneItem.Click += (_, _) => SetColourByVolume(false);
-        ColourVolumeItem.Click += (_, _) => SetColourByVolume(true);
-        SetColourByVolume(prefs.ColourByVolume);
         SetupInspector();
         SetupCompactLayout();
         SetupTutorial();
@@ -386,6 +396,7 @@ public partial class MainWindow : Window
                 audio.Apply(prepared);
             else
                 prepared?.Dispose();
+            UsedLanesToggle.IsChecked = false; // a new map shows all its lanes
             model = new ArrangeModel(editing, file, audio?.SilentLanes ?? new HashSet<Lane>());
             if (audio is not null) audio.IsAudible = model.IsAudible;
             editing.Changed += OnEdited;
@@ -690,9 +701,21 @@ public partial class MainWindow : Window
             case "scaleByVolume": _ = ScaleByVolume(); break;
             case "delete": Lanes.Edits.DeleteSelection(); break;
             case "nudgeLeft": Lanes.Edits.Nudge(-1, fine: false, toGrid: false); break;
+            case "selectPrevious": Lanes.Edits.SelectNeighbour(-1, extend: false, Lanes.Playhead); break;
+            case "selectNext": Lanes.Edits.SelectNeighbour(1, extend: false, Lanes.Playhead); break;
+            case "addPrevious": Lanes.Edits.SelectNeighbour(-1, extend: true, Lanes.Playhead); break;
+            case "addNext": Lanes.Edits.SelectNeighbour(1, extend: true, Lanes.Playhead); break;
+            case "navUp": Lanes.Edits.SelectAcross(-1, extend: false, Lanes.Axis.VisibleDuration / 2); break;
+            case "navDown": Lanes.Edits.SelectAcross(1, extend: false, Lanes.Axis.VisibleDuration / 2); break;
+            case "navAddUp": Lanes.Edits.SelectAcross(-1, extend: true, Lanes.Axis.VisibleDuration / 2); break;
+            case "navAddDown": Lanes.Edits.SelectAcross(1, extend: true, Lanes.Axis.VisibleDuration / 2); break;
+            case "rowsOut": Lanes.ZoomRows(1 / 1.15); break;
+            case "rowsIn": Lanes.ZoomRows(1.15); break;
+            case "volumeUp": ShiftSelectedVolumes(5); break;
+            case "volumeDown": ShiftSelectedVolumes(-5); break;
+            case "volumeUpFine": ShiftSelectedVolumes(1); break;
+            case "volumeDownFine": ShiftSelectedVolumes(-1); break;
             case "nudgeRight": Lanes.Edits.Nudge(1, fine: false, toGrid: false); break;
-            case "nudgeLeftFine": Lanes.Edits.Nudge(-1, fine: true, toGrid: false); break;
-            case "nudgeRightFine": Lanes.Edits.Nudge(1, fine: true, toGrid: false); break;
             case "gridLeft": Lanes.Edits.Nudge(-1, fine: false, toGrid: true); break;
             case "gridRight": Lanes.Edits.Nudge(1, fine: false, toGrid: true); break;
             case "laneUp": Lanes.Edits.ShiftLanes(-1); break;
@@ -838,22 +861,41 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (VolumeModeBox.SelectedIndex == 0) ShiftSelectedVolumes(value);
+        else if (Volume.SelectedLanesOnly && model is not null)
+        {
+            var selected = model.SelectedLanes;
+            var values = session.State.Hits.Where(h => selected.Contains(h.Lane) && h.Anchor is { } key && keys.Contains(key))
+                .ToDictionary(h => h, _ => Math.Clamp(value, 1, 100));
+            if (values.Count == 0) { flash = "Select lanes with hits at the selected times."; UpdateStatus(); return; }
+            session.SetLayerVolumes(values);
+        }
+        else session.SetVolume(keys, Math.Clamp(value, 1, 100));
+    }
+
+    /// <summary>
+    /// Moves the selected hits' volumes by <paramref name="delta"/>, each kept within 1–100, so their differences stay
+    /// (the Value box's Relative, and Alt+Up/Down). In "Selected lanes" scope only those lanes' sounds change.
+    /// </summary>
+    private void ShiftSelectedVolumes(int delta, string label = "Volume")
+    {
+        if (session is null) return;
+        var keys = Lanes.SelectedMoments;
+        if (keys.Count == 0) { flash = "Select some hits first."; UpdateStatus(); return; }
         if (Volume.SelectedLanesOnly && model is not null)
         {
             var selected = model.SelectedLanes;
             var values = session.State.Hits.Where(h => selected.Contains(h.Lane) && h.Anchor is { } key && keys.Contains(key))
-                .ToDictionary(h => h, h => VolumeModeBox.SelectedIndex == 0 ? Math.Clamp(session.VolumeOf(h) + value, 0, 100) : Math.Clamp(value, 1, 100));
+                .ToDictionary(h => h, h => Math.Clamp(session.VolumeOf(h) + delta, 1, 100));
             if (values.Count == 0) { flash = "Select lanes with hits at the selected times."; UpdateStatus(); return; }
-            session.SetLayerVolumes(values);
+            session.SetLayerVolumes(values, label);
+            return;
         }
-        else if (VolumeModeBox.SelectedIndex == 0)
-        {
-            var affected = session.State.Hits.Where(h => h.Anchor is { } key && keys.Contains(key)).ToList();
-            if (affected.Any(session.State.LayerVolumes.ContainsKey))
-                session.SetLayerVolumes(affected.ToDictionary(h => h, h => Math.Clamp(session.VolumeOf(h) + value, 0, 100)));
-            else session.SetVolumes(VolumeRamp.Shift(session.State.Volumes, keys, value));
-        }
-        else session.SetVolume(keys, Math.Clamp(value, 1, 100));
+
+        var affected = session.State.Hits.Where(h => h.Anchor is { } key && keys.Contains(key)).ToList();
+        if (affected.Any(session.State.LayerVolumes.ContainsKey))
+            session.SetLayerVolumes(affected.ToDictionary(h => h, h => Math.Clamp(session.VolumeOf(h) + delta, 1, 100)), label);
+        else session.SetVolumes(VolumeRamp.Shift(session.State.Volumes, keys, delta), label);
     }
 
     private void SelectByVolume()
@@ -949,13 +991,15 @@ public partial class MainWindow : Window
         var selected = Lanes.Selection;
         if (session is null || selected.Count == 0)
         {
-            (InfoSelection.Text, InfoStart.Text, InfoObject.Text) = ("No events", "—", "—");
+            (InfoSelection.Text, InfoStart.Text, InfoObject.Text) = ("No events", "", "—");
+            if (!StartBox.IsFocused) StartBox.Text = "";
             return;
         }
 
         InfoSelection.Text = selected.Count == 1 ? "1 event" : $"{selected.Count} events";
         double start = selected.Min(h => h.Time);
-        InfoStart.Text = $"{Math.Round(start)}  ({FormatTime(start)})";
+        if (!StartBox.IsFocused) StartBox.Text = Math.Round(start).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        InfoStart.Text = $"({FormatTime(start)})";
         var anchors = selected.Where(h => h.Anchor is not null).Select(h => h.Anchor!.Value).Distinct().ToList();
         InfoObject.Text = anchors.Count switch
         {
@@ -986,16 +1030,6 @@ public partial class MainWindow : Window
         if (Lanes.Axis.End <= 0) return;
         Lanes.Axis.ZoomAt(Lanes.Axis.VisibleDuration / Lanes.Axis.End, 0);
         Lanes.Axis.Left = 0;
-        Lanes.InvalidateVisual();
-    }
-
-    /// <summary>View → Colour by: lane colours, or notes from dark (quiet) to bright (loud).</summary>
-    private void SetColourByVolume(bool byVolume)
-    {
-        if (ColourBox.SelectedIndex != (byVolume ? 1 : 0)) ColourBox.SelectedIndex = byVolume ? 1 : 0;
-        Lanes.ColourByVolume = byVolume;
-        ColourLaneItem.IsChecked = !byVolume;
-        ColourVolumeItem.IsChecked = byVolume;
         Lanes.InvalidateVisual();
     }
 
@@ -1113,7 +1147,7 @@ public partial class MainWindow : Window
         audio.Seek(start);
         playStartedAt = start;
         if (!audio.IsPlaying) audio.Play();
-        PlayGlyph.Glyph = "Pause";
+        ShowPlaying(true);
     }
 
     /// <summary>After any edit: redraw from the session, play what's wanted now, and check it in the background.</summary>
@@ -1259,6 +1293,7 @@ public partial class MainWindow : Window
             if (ReferenceEquals(v, PlayButton)) return "playbutton";
             if (ReferenceEquals(v, Lcd)) return "lcd";
             if (v is Button or Avalonia.Controls.Primitives.ToggleButton && !ReferenceEquals(v, PlayButton)) return "button";
+            if (ReferenceEquals(v, WindowBar)) return "window";
             if (ReferenceEquals(v, TitleBar)) return "titlebar";
             if (ReferenceEquals(v, ControlBar)) return "controlbar";
             if (ReferenceEquals(v, EditBar)) return "editbar";
@@ -1279,41 +1314,24 @@ public partial class MainWindow : Window
         ApplyTheme();
     }
 
+    private void ShowPlaying(bool playing) => AppIcon.ShowPlaying(PlayButton, PlayGlyph, playing);
+
+    // With our own title bar, a maximised window's frame reaches past the screen edges: the content steps in by that margin.
+    protected override void OnPropertyChanged(Avalonia.AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // WindowRoot is null while the XAML is still loading.
+        if ((change.Property == WindowStateProperty || change.Property == OffScreenMarginProperty) && WindowRoot is not null)
+            WindowRoot.Margin = WindowState == WindowState.Maximized ? OffScreenMargin : default;
+    }
+
     /// <summary>Applies the theme to the window's bars and controls and redraws the drawn parts.</summary>
     private void ApplyTheme()
     {
         var t = UiTheme.Current;
         Avalonia.Media.IBrush B(string key) => Paint.Brush(t.Color(key));
 
-        Resources["ChromeBg"] = B("control.bg");
-        Resources["HeaderBg"] = B("title.bg");
-        Resources["InfoBg"] = B("edit.bg");
-        Resources["Divider"] = B("divider");
-        Resources["PaneTitle"] = Paint.Brush(Paint.Brighten(t.Color("volume.side"), 0.06));
-        Resources["ChromeBorder"] = B("chrome.border");
-        Resources["ControlHover"] = Paint.Brush(Paint.Brighten(t.Color("button.bg"), 0.12));
-        Resources["ButtonBg"] = B("button.bg");
-        Resources["ButtonText"] = B("button.text");
-        Resources["ButtonActive"] = B("button.active");
-        Resources["PanelActive"] = Paint.Brush(Paint.Brighten(t.Color("button.bg"), 0.08));
-        Resources["ButtonFontSize"] = t.Number("button.fontSize");
-        Resources["LcdBg"] = B("lcd.bg");
-        Resources["LcdText"] = B("lcd.text");
-        Resources["LcdCaption"] = B("lcd.caption");
-        Resources["LcdFontSize"] = t.Number("lcd.fontSize");
-        Resources["PlayIcon"] = B("play.icon");
-        Resources["VolumeSide"] = B("volume.side");
-        Resources["WaveLow"] = B("wave.low");
-        Resources["WaveMid"] = B("wave.mid");
-        Resources["WaveHigh"] = B("wave.high");
-        if (Avalonia.Application.Current is { } app)
-            foreach (var key in new[] { "HeaderBg", "ButtonBg", "ButtonText", "ChromeBorder", "ControlHover", "ButtonActive", "LcdBg", "LcdCaption" })
-                app.Resources[key] = Resources[key];
-
-        TitleBar.Background = B("title.bg");
-        ControlBar.Background = B("control.bg");
-        EditBar.Background = B("edit.bg");
-        StatusBar.Background = B("status.bg");
+        // Colours and control sizes come from the application resources (ThemeResources); this places the bars.
         FileTitle.Foreground = B("title.text");
         FileTitle.FontSize = t.Number("title.fontSize");
         StatusLeft.Foreground = StatusRight.Foreground = B("status.text");
@@ -1366,8 +1384,9 @@ public partial class MainWindow : Window
         double chrome = rows[0].Height.Value + rows[1].Height.Value + rows[2].Height.Value
                         + rows[3].Height.Value + rows[6].Height.Value + WorkflowFooter.Bounds.Height;
         // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
-        double available = Math.Max(0, Bounds.Height - chrome - Lanes.HeaderHeight - 80);
-        double maximum = Math.Max(0, Bounds.Height - chrome - Lanes.HeaderHeight - 8);
+        double height = Root.Bounds.Height > 0 ? Root.Bounds.Height : Bounds.Height - WindowBar.Bounds.Height;
+        double available = Math.Max(0, height - chrome - Lanes.HeaderHeight - 80);
+        double maximum = Math.Max(0, height - chrome - Lanes.HeaderHeight - 8);
         rows[5].Height = new GridLength(VolumeToggle.IsChecked == true
             ? Math.Min(maximum, Math.Min(UiTheme.Current.Number("volume.height"), Math.Max(80, available))) : 0);
     }
@@ -1392,7 +1411,7 @@ public partial class MainWindow : Window
             audio.Play();
         }
 
-        PlayGlyph.Glyph = audio.IsPlaying ? "Pause" : "Play";
+        ShowPlaying(audio.IsPlaying);
     }
 
     private void StopPlaying()
@@ -1408,7 +1427,7 @@ public partial class MainWindow : Window
         if (audio is null) return;
         if (audio.IsPlaying) StopPlaying();
         else audio.Seek(0);
-        PlayGlyph.Glyph = "Play";
+        ShowPlaying(false);
     }
 
     private void Seek(double time)
@@ -1438,7 +1457,7 @@ public partial class MainWindow : Window
         if (audio is not null)
         {
             Lanes.Playhead = audio.Position;
-            if (!audio.IsPlaying && PlayGlyph.Glyph == "Pause") PlayGlyph.Glyph = "Play";
+            if (!audio.IsPlaying && PlayGlyph.Glyph == "Pause") ShowPlaying(false);
 
             // Page when the playhead reaches the right edge (or is off screen to the left), as Cubase does.
             if (audio.IsPlaying && FollowItem.IsChecked)

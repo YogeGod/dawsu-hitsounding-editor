@@ -24,6 +24,10 @@ public sealed record KeysoundProjectFile
     public List<Guid> Soloed { get; init; } = [];
     /// <summary>The song's listening offset for this project in ms (as Hitsound mode keeps one per map); not part of the map.</summary>
     public double SongOffset { get; init; }
+    /// <summary>The L/R locators in ms and whether Cycle is on, kept with the project as Hitsound mode keeps them per map.</summary>
+    public double? LocatorLeft { get; init; }
+    public double? LocatorRight { get; init; }
+    public bool Cycle { get; init; }
 }
 
 /// <summary>
@@ -55,6 +59,10 @@ public sealed class KeysoundDocument
     public Guid? SelectedTrack { get; set; }
     /// <summary>The project's song offset in ms (saved with the project).</summary>
     public double SongOffset { get; set; }
+    /// <summary>The L/R locators (ms) and Cycle, saved with the project.</summary>
+    public double? LocatorLeft { get; set; }
+    public double? LocatorRight { get; set; }
+    public bool Cycle { get; set; }
 
     public string Name => Path.GetFileNameWithoutExtension(File.Reference);
 }
@@ -217,8 +225,14 @@ public static class KeysoundStore
             Warnings = warnings,
             SelectedTrack = project.SelectedTrack is { } sel && ids.Contains(sel) ? sel : project.Tracks.FirstOrDefault()?.Id,
             SongOffset = double.IsFinite(project.SongOffset) ? Math.Clamp(project.SongOffset, -10000, 10000) : 0,
+            LocatorLeft = Locator(project.LocatorLeft),
+            LocatorRight = Locator(project.LocatorRight),
+            Cycle = project.Cycle && Locator(project.LocatorLeft) is not null && Locator(project.LocatorRight) is not null,
         };
     }
+
+    // A saved locator: a time from 0 to a day, anything else is dropped.
+    private static double? Locator(double? ms) => ms is { } v && double.IsFinite(v) && v >= 0 && v <= 86_400_000 ? v : null;
 
     /// <summary>Writes the session's tracks into the project file and marks the session saved.</summary>
     public static void Save(KeysoundDocument document)
@@ -232,6 +246,9 @@ public static class KeysoundStore
             Muted = [.. session.Muted],
             Soloed = [.. session.Soloed],
             SongOffset = document.SongOffset,
+            LocatorLeft = document.LocatorLeft,
+            LocatorRight = document.LocatorRight,
+            Cycle = document.Cycle,
         });
         session.MarkSaved(state);
     }
@@ -289,28 +306,48 @@ public static class KeysoundStore
         var nodes = map.Moments.GroupBy(m => m.Object, ReferenceEqualityComparer.Instance)
             .ToDictionary(g => g.Key, g => g.Select(m => (m.Time + offset, m.Position)).OrderBy(n => n.Item1).ToList(), ReferenceEqualityComparer.Instance);
         var objects = new List<KeyObject>();
-        int combo = 0, colour = -1;
-        bool afterSpinner = true;
-        foreach (var o in file.HitObjects)
+        var combos = ComboOf(file);
+        for (int i = 0; i < file.HitObjects.Count; i++)
         {
+            var o = file.HitObjects[i];
             bool spinner = o.Kind == HitObjectKind.Spinner;
-            if ((o.Type & 4) != 0 || afterSpinner)
-            {
-                combo = 1;
-                colour++;
-            }
-            else combo++;
-            afterSpinner = spinner;
             if (!nodes.TryGetValue(o, out var n) || n.Count == 0) continue;
             double start = spinner ? o.Time + offset : n[0].Item1;
-            objects.Add(new KeyObject(start, n[^1].Item1, o.Kind, spinner ? 0 : combo, Math.Max(colour, 0), n));
+            objects.Add(new KeyObject(start, n[^1].Item1, o.Kind, combos[i].Combo, combos[i].Colour, n));
         }
 
         objects.Sort((a, b) => a.Start.CompareTo(b.Start));
         return (objects, targets);
     }
 
-    private static List<(byte R, byte G, byte B)> ComboColours(OsuFile file) =>
+    /// <summary>
+    /// Each object's combo number (0 for spinners) and colour index, as osu! counts them: a new combo (or the object
+    /// after a spinner) restarts at 1 and moves to the next colour, skipping as many as the object's colour-skip bits say.
+    /// </summary>
+    public static (int Combo, int Colour)[] ComboOf(OsuFile file)
+    {
+        var result = new (int, int)[file.HitObjects.Count];
+        int combo = 0, colour = -1;
+        bool afterSpinner = true;
+        for (int i = 0; i < file.HitObjects.Count; i++)
+        {
+            var o = file.HitObjects[i];
+            bool spinner = o.Kind == HitObjectKind.Spinner;
+            if ((o.Type & 4) != 0 || afterSpinner)
+            {
+                combo = 1;
+                colour += 1 + ((o.Type >> 4) & 7);
+            }
+            else combo++;
+            afterSpinner = spinner;
+            result[i] = (spinner ? 0 : combo, Math.Max(colour, 0));
+        }
+
+        return result;
+    }
+
+    /// <summary>The map's [Colours] Combo1… in order, as (r, g, b); empty when it sets none (osu! then uses its defaults).</summary>
+    public static List<(byte R, byte G, byte B)> ComboColours(OsuFile file) =>
     [
         .. file.Lines.Where(l => l.Section == "Colours" && l.Text.TrimStart().StartsWith("Combo", StringComparison.OrdinalIgnoreCase))
             .Select(l => l.Text.Split(':', 2))

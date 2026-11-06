@@ -1,0 +1,98 @@
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+
+namespace OsuHitsound.App;
+
+/// <summary>
+/// The window's own title bar (the design's light strip): the window title on the left, minimise, maximise and close
+/// on the right. Dragging it moves the window, double-clicking maximises; Windows still resizes from the edges.
+/// The window opts in with ExtendClientAreaToDecorationsHint and NoChrome, and keeps its content inside the screen
+/// when maximised (see MainWindow.OnPropertyChanged).
+/// </summary>
+public sealed class WindowTitleBar : Border
+{
+    private readonly TextBlock title = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly AppIcon maximiseIcon = new() { Glyph = "Square", Size = 13 };
+    private readonly Button maximise;
+    private Window? window;
+    private IDisposable? titleBinding;
+
+    public WindowTitleBar()
+    {
+        Classes.Add("windowBar");
+        var minimise = Button("Minimise", new AppIcon { Glyph = "Minus", Size = 15 }, () => window!.WindowState = WindowState.Minimized);
+        maximise = Button("Maximise", maximiseIcon, ToggleMaximised);
+        var close = Button("Close", new AppIcon { Glyph = "X", Size = 15 }, () => window!.Close());
+        close.Classes.Add("close");
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Children = { minimise, maximise, close } };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(buttons, 1);
+        grid.Children.AddRange([title, buttons]);
+        Child = grid;
+
+        this.Bind(BackgroundProperty, this.GetResourceObservable("WindowBg"));
+        this.Bind(HeightProperty, this.GetResourceObservable("WindowBarHeight"));
+        title.Bind(TextBlock.ForegroundProperty, this.GetResourceObservable("WindowText"));
+        title.Bind(TextBlock.FontSizeProperty, this.GetResourceObservable("WindowFontSize"));
+        buttons.Bind(TextElement.ForegroundProperty, this.GetResourceObservable("WindowText"));
+    }
+
+    private static Button Button(string name, Control icon, Action click)
+    {
+        var button = new Button { Content = icon, Focusable = false };
+        button.Classes.Add("windowButton");
+        AutomationProperties.SetName(button, name);
+        ToolTip.SetTip(button, name);
+        button.Click += (_, _) => click();
+        return button;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        window = TopLevel.GetTopLevel(this) as Window;
+        if (window is null) return;
+        titleBinding = title.Bind(TextBlock.TextProperty, window.GetObservable(Window.TitleProperty));
+        window.PropertyChanged += OnWindowPropertyChanged;
+        ShowState();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (window is not null) window.PropertyChanged -= OnWindowPropertyChanged;
+        titleBinding?.Dispose();
+        titleBinding = null;
+        window = null;
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == Window.WindowStateProperty) ShowState();
+    }
+
+    private void ShowState()
+    {
+        bool maximised = window?.WindowState == WindowState.Maximized;
+        maximiseIcon.Glyph = maximised ? "Copy" : "Square";
+        ToolTip.SetTip(maximise, maximised ? "Restore" : "Maximise");
+    }
+
+    private void ToggleMaximised() =>
+        window!.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (window is null || e.Handled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (e.ClickCount == 2) ToggleMaximised();
+        else window.BeginMoveDrag(e);
+        e.Handled = true;
+    }
+}

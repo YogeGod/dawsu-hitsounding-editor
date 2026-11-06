@@ -102,11 +102,14 @@ public class VolumeColourTests
     private static double Light(Avalonia.Media.Color c) => 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B;
 
     [Fact]
-    public void Louder_notes_are_brighter_on_one_ramp_for_every_lane()
+    public void Quiet_hits_are_blue_and_loud_hits_red_on_one_ramp_for_every_lane()
     {
-        var levels = new[] { 0, 10, 50, 90, 100 }.Select(v => Light(ArrangeView.VolumeColor(v))).ToList();
-        Assert.Equal(levels.Order(), levels);
-        Assert.True(levels[^1] - levels[0] > 150);
+        var quiet = ArrangeView.VolumeColor(0);
+        var loud = ArrangeView.VolumeColor(100);
+        Assert.True(quiet.B > quiet.R); // blue
+        Assert.True(loud.R > loud.B);   // red
+        var reds = new[] { 0, 25, 50, 75, 100 }.Select(v => (int)ArrangeView.VolumeColor(v).R).ToList();
+        Assert.Equal(reds.Order(), reds); // redder as it gets louder
         Assert.Equal(ArrangeView.VolumeColor(100), ArrangeView.VolumeColor(150)); // clamped
     }
 }

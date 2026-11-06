@@ -30,6 +30,9 @@ internal sealed class ArrangeView : Control
 {
     public bool ShowMissingObjectWarnings { get; set; }
     public bool ShowExportWarnings { get; set; } = true;
+
+    /// <summary>Lines down the lanes at every gameplay object's circles, slider nodes and spinner ends, whatever the snap.</summary>
+    public bool ShowObjectLines { get; set; } = true;
     public IReadOnlyList<Conflict> ExportProblems { get; set; } = [];
 
     internal IEnumerable<(double Time, string Reason)> VisibleWarnings()
@@ -54,7 +57,10 @@ internal sealed class ArrangeView : Control
     public static double GridLeft => NumberWidth + ListWidth;
     public static double SectionsHeight => Theme_.Number("header.sections");
     public const double RulerHeight = 24;
-    public double HeaderHeight => RulerBottom + WaveHeight + ObjectsHeight;
+    public double HeaderHeight => RulerBottom + StripHeight;
+
+    /// <summary>The song strip: the waveform with the gameplay objects drawn over it (at least tall enough for the objects).</summary>
+    public double StripHeight => Math.Max(WaveHeight, ObjectsHeight);
 
     /// <summary>Bottom of the ruler: the waveform lane and the object strip sit between it and the lanes.</summary>
     public static double RulerBottom => SectionsHeight + RulerHeight;
@@ -62,7 +68,7 @@ internal sealed class ArrangeView : Control
     /// <summary>Height of the waveform lane; drag the line under it to resize, double-click to reset.</summary>
     public double WaveHeight { get; set; } = DefaultWaveHeight;
 
-    public const double DefaultWaveHeight = 44, ObjectsHeight = 26;
+    public const double DefaultWaveHeight = 56, ObjectsHeight = 26;
     public const double MinRowHeight = 16, MaxRowHeight = 64;
 
     private static readonly IPen ConflictRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
@@ -96,6 +102,9 @@ internal sealed class ArrangeView : Control
         Paint,
         Wipe,
         Cycle,
+        CycleMove,
+        CycleLeft,
+        CycleRight,
         ResizeWave,
         Layout,
         Pan,
@@ -108,6 +117,7 @@ internal sealed class ArrangeView : Control
     private LaneRow? paintRow;
     private double waveHeightAtStart;
     private double panLeft, panScroll;
+    private (double Left, double Right) cycleAtStart; // the locators when a move or resize of the cycle range began
     public event Action<Lane, string>? SampleDropped;
     private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
     private HashSet<EditHit> marqueeBase = [];
@@ -215,19 +225,13 @@ internal sealed class ArrangeView : Control
 
     public bool SnapOn { get => Edits.SnapOn; set => Edits.SnapOn = value; }
 
-    /// <summary>View → Colour by Volume: notes go from dark (quiet) to bright (loud) instead of their lane's colour.</summary>
-    public bool ColourByVolume { get; set; }
-
     private static readonly IBrush[] VolumeFills = [.. Enumerable.Range(0, 101).Select(v => Paint.Brush(VolumeColor(v)))];
 
-    /// <summary>The Volume colour mode's fill: one ramp for every lane, dark blue-grey at 0 % to warm white at 100 %.</summary>
-    public static Color VolumeColor(int volume)
-    {
-        double k = Math.Clamp(volume, 0, 100) / 100.0;
-        static byte Mix(byte a, byte b, double k) => (byte)Math.Round(a + (b - a) * k);
-        Color dark = Color.Parse("#2a3442"), bright = Color.Parse("#ffe9b0");
-        return Color.FromRgb(Mix(dark.R, bright.R, k), Mix(dark.G, bright.G, k), Mix(dark.B, bright.B, k));
-    }
+    /// <summary>A hit's colour by its volume, as Cubase colours notes by velocity: blue (quiet) through purple to red (loud).</summary>
+    public static Color VolumeColor(int volume) => Paint.LevelColor(Math.Clamp(volume, 0, 100) / 100.0);
+
+    /// <summary>The fill for a volume, 0–100 (cached).</summary>
+    public static IBrush VolumeFill(int volume) => VolumeFills[Math.Clamp(volume, 0, 100)];
 
     // ---- areas the tutorial points at (this control's coordinates)
 
@@ -445,6 +449,7 @@ internal sealed class ArrangeView : Control
         double from = Axis.Time(0), to = Axis.Time(gridWidth);
         var lines = VisibleGridLines(model, gridWidth);
         CollectLinkedPlacements(selection, linkedSelection);
+        CollectSelectedObjects(model);
 
         using (ctx.PushClip(new Rect(0, HeaderHeight, size.Width, size.Height - HeaderHeight)))
         {
@@ -459,6 +464,7 @@ internal sealed class ArrangeView : Control
             using (ctx.PushClip(new Rect(GridLeft, HeaderHeight, gridWidth, size.Height - HeaderHeight)))
             {
                 DrawGridLines(ctx, model, lines, from, to, HeaderHeight, size.Height);
+                if (ShowObjectLines) DrawObjectLines(ctx, model, from, to, HeaderHeight, size.Height);
 
                 var range = Edits.Range;
                 var hoveredLane = HoveredLane;
@@ -528,13 +534,12 @@ internal sealed class ArrangeView : Control
         ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom - 0.5), new Point(GridLeft, RulerBottom - 0.5));
         if (WaveHeight >= 14)
         {
-            Paint.DrawText(ctx, "Song audio", new Point(12, RulerBottom + WaveHeight / 2 - 7), 11, Paint.Dim, ListWidth - 60);
+            Paint.DrawText(ctx, "Song audio · objects", new Point(12, RulerBottom + WaveHeight / 2 - 7), 11, Paint.Dim, ListWidth - 60);
             double songY = RulerBottom + (WaveHeight - RowHeight) / 2;
             DrawToggle(ctx, "M", GridLeft - MuteFromRight, songY, SongMuted ? Paint.MuteOn : null);
             DrawToggle(ctx, "S", GridLeft - SoloFromRight, songY, model.SongSoloed ? Paint.SoloOn : null);
         }
-        ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom + WaveHeight - 0.5), new Point(GridLeft, RulerBottom + WaveHeight - 0.5));
-        Paint.DrawText(ctx, "Gameplay objects", new Point(12, RulerBottom + WaveHeight + ObjectsHeight / 2 - 7), 11, Paint.Dim, ListWidth - 20);
+        else Paint.DrawText(ctx, "Gameplay objects", new Point(12, RulerBottom + StripHeight / 2 - 7), 11, Paint.Dim, ListWidth - 20);
 
         using (ctx.PushClip(new Rect(GridLeft, 0, gridWidth, HeaderHeight)))
         {
@@ -633,12 +638,29 @@ internal sealed class ArrangeView : Control
             }
     }
 
+    // As the key editor's object lines: one faint line per hit position of the objects in view.
+    private void DrawObjectLines(DrawingContext ctx, ArrangeModel model, double from, double to, double top, double bottom)
+    {
+        var objects = model.Objects;
+        for (int i = Sorted.LowerBound(objects, from - ObjectLookBack, o => o.Start); i < objects.Count && objects[i].Start <= to; i++)
+        {
+            if (objects[i].End < from) continue;
+            foreach (var node in objects[i].Nodes)
+            {
+                if (node.Time < from || node.Time > to) continue;
+                double x = Math.Round(GridLeft + Axis.X(node.Time)) + 0.5;
+                ctx.DrawLine(Paint.StrongObjectLinePen, new Point(x, top), new Point(x, bottom));
+            }
+        }
+    }
+
     private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
         SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
 
     private static readonly IBrush StripBg = Paint.Brush("#1f1f21"),
-        ObjectFill = Paint.Brush(Color.Parse("#c9c9cf"), 0.85), SliderBody = Paint.Brush(Color.Parse("#c9c9cf"), 0.35),
-        SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.45), BookmarkFill = Paint.Brush("#4cc3d1");
+        SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.75), BookmarkFill = Paint.Brush("#4cc3d1");
+    // A dark outline keeps the objects readable over the waveform.
+    private static readonly IPen ObjectRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#171a1c"), 1.5);
     private static readonly IPen ObjectConflictPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
 
     /// <summary>The song's waveform (set when decoding finishes) and its offset, so it lines up with the song as heard.</summary>
@@ -712,47 +734,115 @@ internal sealed class ArrangeView : Control
     /// The object strip: circles as dots, sliders as a body with H at the head, chevrons at repeats and E at the end,
     /// spinners as a bar. Objects with a conflict get a red outline.
     /// </summary>
+    /// <summary>The visible radius of a hit circle in the strip: a share of the strip's height, so it scales with it.</summary>
+    private double ObjectRadius => Math.Clamp(StripHeight * 0.36, 5, 60);
+
+    // Objects whose hits are all selected are drawn selected; a selected slider's slide sounds light up in their lanes.
+    private HashSet<MomentKey> selectedKeys = [];
+    private List<(double Start, double End)> selectedSliders = [];
+
+    private void CollectSelectedObjects(ArrangeModel model)
+    {
+        selectedKeys = [.. selection.Where(h => h.Anchor is not null).Select(h => h.Anchor!.Value)];
+        if (selectedKeys.Count == 0) { selectedSliders = []; return; } // the usual case while playing: nothing to scan
+        selectedSliders = [.. model.Objects.Where(o => o.Kind == HitObjectKind.Slider && o.Nodes.All(n => selectedKeys.Contains(n.Key))).Select(o => (o.Start, o.End))];
+    }
+
+    private bool InSelectedSlider(double start, double end) => selectedSliders.Any(s => start >= s.Start - 1 && end <= s.End + 1);
+
     private void DrawObjects(DrawingContext ctx, ArrangeModel model, double width)
     {
-        double top = RulerBottom + WaveHeight, h = ObjectsHeight, cy = top + h / 2;
-        ctx.FillRectangle(Paint.Chrome2, new Rect(GridLeft, top, width - GridLeft, h));
+        // Over the waveform, as osu!'s editor timeline draws them: combo-coloured circles with their combo number and
+        // slider bodies between head and tail, sized by the strip's height (drag its bottom edge) so they keep their
+        // proportions; on their own background only when the waveform is folded away.
+        double top = RulerBottom, h = StripHeight, cy = top + h / 2;
+        if (WaveHeight < ObjectsHeight) ctx.FillRectangle(Paint.Chrome2, new Rect(GridLeft, top, width - GridLeft, h));
+        double radius = ObjectRadius;
+        var colours = ComboBrushes(model);
         double from = Axis.Time(0) - 50, to = Axis.Time(width - GridLeft) + 50;
         var objects = model.Objects;
-        for (int i = Sorted.LowerBound(objects, from - ObjectLookBack, o => o.Start); i < objects.Count && objects[i].Start <= to; i++)
-        {
-            var o = objects[i];
-            if (o.End < from) continue;
-            double x0 = GridLeft + Axis.X(o.Start), x1 = GridLeft + Axis.X(o.End);
-            bool conflict = ShowExportWarnings && o.Nodes.Any(n => model.Conflicted.Contains(n.Key));
-            var outline = conflict ? ObjectConflictPen : null;
-            switch (o.Kind)
+        using (ctx.PushClip(new Rect(GridLeft, top, Math.Max(0, width - GridLeft), h)))
+            for (int i = Sorted.LowerBound(objects, from - ObjectLookBack, o => o.Start); i < objects.Count && objects[i].Start <= to + radius / Axis.Zoom; i++)
             {
-                case HitObjectKind.Slider:
-                    ctx.DrawRectangle(SliderBody, outline, new Rect(x0, cy - 6, Math.Max(2, x1 - x0), 12), 6, 6);
-                    // Node letters only when there is room for them; otherwise dots.
-                    bool labels = o.Nodes.Count < 2 || (x1 - x0) / (o.Nodes.Count - 1) >= 16;
-                    foreach (var (time, _, position) in o.Nodes)
-                    {
-                        double x = GridLeft + Axis.X(time);
-                        string mark = position switch { HitPosition.SliderHead => "H", HitPosition.SliderTail => "E", _ => "›" };
-                        ctx.DrawEllipse(ObjectFill, null, new Point(x, cy), 5, 5);
-                        if (labels) Paint.DrawText(ctx, mark, new Point(x - 3, cy - 7), 9, Paint.Divider, 0, Paint.UiBold);
-                    }
+                var o = objects[i];
+                if (o.End < from - radius / Axis.Zoom) continue;
+                double x0 = GridLeft + Axis.X(o.Start), x1 = GridLeft + Axis.X(o.End);
+                bool conflict = ShowExportWarnings && o.Nodes.Any(n => model.Conflicted.Contains(n.Key));
+                var ring = conflict ? ObjectConflictPen : ObjectWhiteRing;
+                var (body, head) = colours[o.Colour % colours.Length];
+                bool selected = o.Nodes.Count > 0 && o.Nodes.All(n => selectedKeys.Contains(n.Key));
+                switch (o.Kind)
+                {
+                    case HitObjectKind.Slider:
+                        // The body runs head to tail; repeats and the tail are smaller circles; the head with its number on top.
+                        ctx.DrawRectangle(body, selected ? Paint.SelectedRingPen : ObjectRing, new Rect(x0, cy - radius, Math.Max(2, x1 - x0), radius * 2), radius, radius);
+                        for (int n = o.Nodes.Count - 1; n >= 1; n--)
+                        {
+                            var (time, _, position) = o.Nodes[n];
+                            double r = position == HitPosition.SliderTail ? radius * 0.8 : radius * 0.55;
+                            if (SkinTextures.Loaded) DrawComboCircle(ctx, GridLeft + Axis.X(time), cy, r, head, ring, 0, arrow: position != HitPosition.SliderTail);
+                            else ctx.DrawEllipse(head, ring, new Point(GridLeft + Axis.X(time), cy), r, r);
+                        }
 
-                    break;
+                        DrawComboCircle(ctx, x0, cy, radius, head, ring, o.Combo);
+                        if (selected) ctx.DrawEllipse(null, Paint.SelectedRingPen, new Point(x0, cy), radius + 2, radius + 2);
+                        break;
 
-                case HitObjectKind.Spinner:
-                    ctx.DrawRectangle(SpinnerFill, outline, new Rect(x0, cy - 5, Math.Max(2, x1 - x0), 10), 2, 2);
-                    break;
+                    case HitObjectKind.Spinner:
+                        ctx.DrawRectangle(SpinnerFill, ObjectRing, new Rect(x0, cy - radius * 0.45, Math.Max(2, x1 - x0), radius * 0.9), radius * 0.45, radius * 0.45);
+                        ctx.DrawEllipse(SpinnerFill, ring, new Point(x1, cy), radius * 0.6, radius * 0.6);
+                        break;
 
-                default:
-                    ctx.DrawEllipse(ObjectFill, outline, new Point(x0, cy), 5, 5);
-                    break;
+                    default:
+                        DrawComboCircle(ctx, x0, cy, radius, head, ring, o.Combo);
+                        if (selected) ctx.DrawEllipse(null, Paint.SelectedRingPen, new Point(x0, cy), radius + 2, radius + 2);
+                        break;
+                }
             }
-        }
 
         ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, top + h - 0.5), new Point(width, top + h - 0.5));
     }
+
+    // A hit circle: the combo colour with a white ring (red when it has a save problem) and its combo number.
+    private void DrawComboCircle(DrawingContext ctx, double x, double y, double radius, IBrush fill, IPen ring, int combo, bool arrow = false)
+    {
+        // lazer's classic skin textures when they could be read (tinted circle, overlay, the skin's digits).
+        if (SkinTextures.Loaded && fill is ISolidColorBrush solid)
+        {
+            SkinTextures.DrawCircle(ctx, new Point(x, y), radius, solid.Color, combo, arrow);
+            if (ReferenceEquals(ring, ObjectConflictPen)) ctx.DrawEllipse(null, ring, new Point(x, y), radius, radius);
+            return;
+        }
+
+        ctx.DrawEllipse(fill, ring, new Point(x, y), radius, radius);
+        if (radius < 6 || combo <= 0) return;
+        var key = (combo, Math.Round(radius));
+        if (!comboLabels.TryGetValue(key, out var text))
+        {
+            if (comboLabels.Count > 400) comboLabels.Clear(); // sizes change while the strip is resized
+            comboLabels[key] = text = Paint.Format(combo.ToString(), radius * 1.05, Brushes.White, Paint.UiBold);
+        }
+
+        ctx.DrawText(text, new Point(x - text.Width / 2, y - text.Height / 2));
+    }
+
+    private readonly Dictionary<(int, double), FormattedText> comboLabels = [];
+    private (IBrush Body, IBrush Head)[] comboBrushes = [];
+    private IReadOnlyList<Color>? comboBrushColours;
+
+    // The combo colours as body (faded) and head brushes, rebuilt when the map changes.
+    private (IBrush Body, IBrush Head)[] ComboBrushes(ArrangeModel model)
+    {
+        if (!ReferenceEquals(comboBrushColours, model.ComboColours))
+        {
+            comboBrushColours = model.ComboColours;
+            comboBrushes = [.. model.ComboColours.Select(c => ((IBrush)Paint.Brush(c, 0.55), (IBrush)Paint.Brush(c)))];
+        }
+
+        return comboBrushes;
+    }
+
+    private static readonly IPen ObjectWhiteRing = new Avalonia.Media.Immutable.ImmutablePen(Brushes.White, 1.5);
 
     /// <summary>Bookmark flags on the ruler (osu!'s editor bookmarks, saved in the .osu).</summary>
     private void DrawBookmarks(DrawingContext ctx)
@@ -797,7 +887,6 @@ internal sealed class ArrangeView : Control
             case GroupRow group:
             {
                 // V6.39: grip, fold arrow, "Soft sampleset", then the lane count, M and S at the right edge.
-                var color = ArrangeModel.GroupColor(group.Group);
                 double gh = HeightOf(row), ty = y + (gh - 14) / 2;
                 ctx.FillRectangle(Paint.GroupHead, new Rect(0, y, NumberWidth + ListWidth, gh));
                 Paint.DrawText(ctx, "⠿", new Point(12, y + (gh - 16) / 2), 12, Paint.Text, 0);
@@ -807,7 +896,7 @@ internal sealed class ArrangeView : Control
                 DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsGroupMuted(group.Group) ? Paint.MuteOn : null, gh);
                 DrawToggle(ctx, "S", NumberWidth + ListWidth - SoloFromRight, y, model.IsGroupSoloed(group.Group) ? Paint.SoloOn : null, gh);
                 ctx.FillRectangle(GroupBand, new Rect(GridLeft, y, gridWidth, gh));
-                Paint.DrawText(ctx, ArrangeModel.GroupName(group.Group), new Point(GridLeft + 6, ty), 10, Paint.Brush(color, 0.8), 0, Paint.UiBold);
+                Paint.DrawText(ctx, ArrangeModel.GroupName(group.Group), new Point(GridLeft + 6, ty), 10, Paint.Dim, 0, Paint.UiBold);
                 break;
             }
 
@@ -819,11 +908,9 @@ internal sealed class ArrangeView : Control
             case LaneRow lane:
             {
                 bool greyed = !model.IsAudible(lane.Lane);
-                var sound = greyed ? ArrangeModel.MutedColor : SoundColor(lane.Lane);
-                // V6.39: the row tinted by sound type; grip, tree line to the group's first lane, "• name", then the
+                // V6.39: grip, tree line to the group's first lane, "• name", then the
                 // sound icon, + (add a lane), ● (hear it), M and S at the right edge.
                 ctx.FillRectangle(Paint.LaneHeadA, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
-                ctx.FillRectangle(Tint(sound, 0.10), new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 if (model.SelectedLanes.Contains(lane.Lane))
                     ctx.FillRectangle(LaneSelectionFill, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 if (lane.Lane == model.ActiveLane)
@@ -866,7 +953,6 @@ internal sealed class ArrangeView : Control
                 DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsMuted(lane.Lane) ? Paint.MuteOn : null);
                 DrawToggle(ctx, "S", NumberWidth + ListWidth - SoloFromRight, y, model.IsSoloed(lane.Lane) ? Paint.SoloOn : null);
 
-                ctx.FillRectangle(Tint(sound, Theme_.Number("lane.tint")), new Rect(GridLeft, y, gridWidth, RowHeight));
                 break;
             }
         }
@@ -874,12 +960,6 @@ internal sealed class ArrangeView : Control
         double bottom = y + HeightOf(row) - 0.5;
         ctx.DrawLine(Paint.DividerPen, new Point(0, bottom), new Point(GridLeft + gridWidth, bottom));
     }
-
-    private static readonly Dictionary<(Color, double), IBrush> Tints = [];
-
-    // A row tint, made once per colour and opacity (rows are redrawn every frame while playing).
-    private static IBrush Tint(Color color, double opacity) =>
-        Tints.TryGetValue((color, opacity), out var brush) ? brush : Tints[(color, opacity)] = Paint.Brush(color, opacity);
 
     // Lane row positions from the list's left edge, measured on V6.39.
     private const double GripX = 16, TreeX = 21, DisclosureX = 36, DotX = 49, NameX = 55, ChildIndent = 18;
@@ -900,15 +980,6 @@ internal sealed class ArrangeView : Control
     private static readonly IBrush TitleBand = Paint.Brush("#303038"), GroupBand = Paint.Brush(Color.Parse("#000000"), 0.18),
         LoadedDot = Paint.Brush("#85b9a9"), MissingDot = Paint.Brush("#c6a772");
 
-    /// <summary>V6.39's lane colours by sound type: hitnormal blue, whistle yellow, finish red, clap purple; other files grey.</summary>
-    public static Color SoundColor(Lane lane) => lane.Sample?.Sound switch
-    {
-        "hitnormal" => Color.Parse("#5b8def"),
-        "hitwhistle" => Color.Parse("#d6c25a"),
-        "hitfinish" => Color.Parse("#e0605f"),
-        "hitclap" => Color.Parse("#a979e6"),
-        _ => Color.Parse("#8a8a9a"),
-    };
 
 
     /// <summary>A small icon for the sound (V6.39 shows one per lane): ring, wave, cymbal or hands; a note for other files.</summary>
@@ -973,9 +1044,9 @@ internal sealed class ArrangeView : Control
     {
         if (!model.Notes.TryGetValue(row.Lane, out var notes)) return;
         bool greyed = !model.IsAudible(row.Lane);
-        var color = greyed ? ArrangeModel.MutedColor : Paint.Brighten(row.Color);
-        var fill = Paint.Brush(color);
-        var span = Paint.Brush(color, 0.45);
+        // Hits are coloured by volume (lanes have no colours of their own); muted lanes are grey.
+        IBrush muted = Paint.MutedFill, mutedSpan = MutedSpans; // once per row, not per note
+        var session = Session;
         double cy = y + (height ?? RowHeight) / 2;
         double noteSize = Math.Min(NoteSize, (height ?? RowHeight) * 0.5);
 
@@ -986,8 +1057,11 @@ internal sealed class ArrangeView : Control
             if (n.Time > to + 50) break;
             if (n.EndTime < from - 50) continue; // spans end at EndTime; one-shot notes have EndTime == Time
             double x = GridLeft + Axis.X(n.Time);
+            int volume = n.Hit is { } h && session is not null ? session.VolumeOf(h) : 100;
+            var fill = greyed ? muted : n.Hit is null ? Paint.Dim : VolumeFill(volume);
             if (n.EndTime > n.Time)
-                ctx.DrawRectangle(span, null, new Rect(x, cy - 3, Math.Max(2, (n.EndTime - n.Time) * Axis.Zoom), 6), 3, 3);
+                ctx.DrawRectangle(greyed ? mutedSpan : n.Hit is null ? NeutralSpan : VolumeSpans[Math.Clamp(volume, 0, 100)],
+                    n.Hit is null && InSelectedSlider(n.Time, n.EndTime) ? Paint.SelectedRingPen : null, new Rect(x, cy - 3, Math.Max(2, (n.EndTime - n.Time) * Axis.Zoom), 6), 3, 3);
             else if (n.Passive)
                 Paint.DrawDiamond(ctx, new Point(x, cy), Math.Max(2, noteSize - 4), fill, Paint.NoteRingPen);
             else if (n.Hit is { } hit && selection.Contains(hit))
@@ -998,12 +1072,15 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.White, ConflictRing);
             else if (model.IsPreviewMuted(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, Paint.MutedFill, Paint.NoteRingPen);
-            else if (ColourByVolume && !greyed && Session is { } session)
-                Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, VolumeFills[Math.Clamp(session.VolumeOf(n.Hit!), 0, 100)], Paint.NoteRingPen);
             else
                 Paint.DrawDiamond(ctx, new Point(x, cy), noteSize, fill, Paint.NoteRingPen);
         }
     }
+
+    // Slider-body spans: the volume colour, faded.
+    private static readonly IBrush[] VolumeSpans = [.. Enumerable.Range(0, 101).Select(v => Paint.Brush(VolumeColor(v), 0.45))];
+    private static readonly IBrush NeutralSpan = Paint.Brush(Color.Parse("#bdbdbd"), 0.45);
+    private static IBrush MutedSpans => UiTheme.Current.Cached("brush:mutedSpan", () => (IBrush)Paint.Brush(ArrangeModel.MutedColor, 0.45));
 
     // ---------------------------------------------------------------- scrolling and zoom
 
@@ -1042,6 +1119,14 @@ internal sealed class ArrangeView : Control
             ScrollChanged?.Invoke();
             InvalidateVisual();
         }
+    }
+
+    /// <summary>Ctrl+Up/Down (Cubase's Zoom Tracks): taller or shorter rows, keeping the top row in place.</summary>
+    public void ZoomRows(double factor)
+    {
+        double old = RowHeight;
+        RowHeight = Math.Round(RowHeight * factor);
+        ScrollY = ScrollKeepingPoint(Model?.Rows ?? [], old, RowHeight, scrollY, 0);
     }
 
     /// <summary>Lets Ctrl+Shift+wheel zoom go and follows the theme's row height again (after it's edited).</summary>
@@ -1235,7 +1320,8 @@ internal sealed class ArrangeView : Control
         // (The + − ‹ above the list still work.)
         if (IsPreview && ((p.Y < HeaderHeight && !(p.Y < 22 && p.X < GridLeft)) || p.X >= GridLeft || !point.Properties.IsLeftButtonPressed)) return;
 
-        if (p.Y < HeaderHeight)
+        // The header, and just under it over the grid: the strip's bottom edge can be grabbed from either side.
+        if (p.Y < HeaderHeight || (p.X >= GridLeft && p.Y < HeaderHeight + 4))
         {
             if (!point.Properties.IsLeftButtonPressed) return;
             // The + − ‹ in the SAMPLE LANES title.
@@ -1276,7 +1362,7 @@ internal sealed class ArrangeView : Control
 
             if (p.X < GridLeft) return;
             double t = Math.Max(0, Axis.Time(p.X - GridLeft));
-            double waveBottom = RulerBottom + WaveHeight;
+            double waveBottom = RulerBottom + StripHeight;
             if (p.Y >= RulerBottom && Math.Abs(p.Y - waveBottom) <= 4)
             {
                 // The line under the waveform: drag to resize it, double-click to reset.
@@ -1292,14 +1378,17 @@ internal sealed class ArrangeView : Control
                 ScrollY = scrollY;
                 ScrollChanged?.Invoke();
             }
-            else if (p.Y >= waveBottom)
-                ObjectPressed(model, session, t, e.ClickCount == 2);
+            else if (p.Y >= RulerBottom && p.Y < waveBottom && Math.Abs(p.Y - (RulerBottom + StripHeight / 2)) <= ObjectRadius && model.ObjectAt(t, ObjectRadius / Axis.Zoom) is not null
+                     && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+                ObjectPressed(model, session, t, e.ClickCount == 2); // an object over the waveform
             else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) SetLocators(SnapTime(t), LocatorRight ?? SnapTime(t));
             else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) SetLocators(LocatorLeft ?? SnapTime(t), SnapTime(t));
             else if (p.Y < SectionsHeight)
             {
-                // The upper ruler: drag to draw a cycle range; a click inside the band toggles cycling.
-                drag = Drag.Cycle;
+                // The upper ruler, as in Cubase: drag the range's ends to resize it, inside it to move it (a click there
+                // toggles cycling), anywhere else to draw a new range.
+                drag = CycleDragAt(p.X);
+                if (LocatorLeft is { } l0 && LocatorRight is { } r0) cycleAtStart = (l0, r0);
                 dragStart = dragNow = p;
                 e.Pointer.Capture(this);
             }
@@ -1445,6 +1534,15 @@ internal sealed class ArrangeView : Control
                 break;
 
             // The Ramp tool works in the volume lane; in the grid it selects like Select.
+            case Tool.Select when under is not null && e.ClickCount == 2 && e.KeyModifiers == KeyModifiers.None:
+                // Double-click: the playhead moves to the hit and it plays (playback doesn't start).
+                selection.Clear();
+                selection.Add(under);
+                SelectionChanged?.Invoke();
+                SeekRequested?.Invoke(under.Time);
+                HitsPreviewRequested?.Invoke([under]);
+                break;
+
             case Tool.Select or Tool.Ramp when under is not null:
                 if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
                 {
@@ -1495,7 +1593,31 @@ internal sealed class ArrangeView : Control
     public void UpdateCursor(KeyModifiers modifiers)
     {
         bool overGrid = pointer is { } p && p.X >= GridLeft && p.Y >= HeaderHeight;
+        // The strip's bottom edge: drag to make the waveform and objects taller or shorter.
+        if (pointer is { } edge && edge.X >= GridLeft && Math.Abs(edge.Y - HeaderHeight) <= 4 && drag is Drag.None or Drag.ResizeWave)
+        {
+            Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
+            return;
+        }
+        // Over the cycle range in the upper ruler: resize arrows at its ends, a hand inside it.
+        if (pointer is { } q && q.X >= GridLeft && q.Y < SectionsHeight && drag is Drag.None or Drag.CycleLeft or Drag.CycleRight or Drag.CycleMove)
+        {
+            var kind = drag != Drag.None ? drag : CycleDragAt(q.X);
+            if (kind is Drag.CycleLeft or Drag.CycleRight) { Cursor = new Cursor(StandardCursorType.SizeWestEast); return; }
+            if (kind is Drag.CycleMove) { Cursor = new Cursor(StandardCursorType.Hand); return; }
+        }
         Cursor = ToolCursors.Get(ToolCursors.For(Tool, modifiers, overGrid));
+    }
+
+    /// <summary>What a press at this x in the upper ruler does with the cycle range: resize an end, move it, or draw a new one.</summary>
+    private Drag CycleDragAt(double x)
+    {
+        if (LocatorLeft is not { } l || LocatorRight is not { } r) return Drag.Cycle;
+        double xl = GridLeft + Axis.X(l), xr = GridLeft + Axis.X(r);
+        const double grip = 5;
+        if (Math.Abs(x - xl) <= grip) return Drag.CycleLeft;
+        if (Math.Abs(x - xr) <= grip) return Drag.CycleRight;
+        return x > Math.Min(xl, xr) && x < Math.Max(xl, xr) ? Drag.CycleMove : Drag.Cycle;
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
@@ -1588,6 +1710,24 @@ internal sealed class ArrangeView : Control
                 ScrollChanged?.Invoke();
                 break;
 
+            case Drag.CycleMove when Math.Abs(p.X - dragStart.X) >= DragThreshold:
+            {
+                // The whole range moves by whole snap steps, keeping its length; it stops at the song's start.
+                var (l0, r0) = cycleAtStart;
+                double moved = SnapTime(l0 + Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft)) - l0;
+                moved = Math.Max(moved, -Math.Min(l0, r0));
+                SetLocators(l0 + moved, r0 + moved);
+                break;
+            }
+
+            case Drag.CycleLeft:
+                SetLocators(SnapTime(Math.Max(0, Axis.Time(gridX))), cycleAtStart.Right);
+                break;
+
+            case Drag.CycleRight:
+                SetLocators(cycleAtStart.Left, SnapTime(Math.Max(0, Axis.Time(gridX))));
+                break;
+
             case Drag.Cycle when Math.Abs(p.X - dragStart.X) >= DragThreshold:
             {
                 double a = SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))), b = SnapTime(Math.Max(0, Axis.Time(gridX)));
@@ -1618,7 +1758,7 @@ internal sealed class ArrangeView : Control
             if (Math.Abs(released.X - dragStart.X) < DragThreshold && Math.Abs(released.Y - dragStart.Y) < DragThreshold)
                 SeekRequested?.Invoke(SnapTime(Math.Max(0, Axis.Time(dragStart.X - GridLeft))));
         }
-        if (drag == Drag.Cycle && Math.Abs(dragNow.X - dragStart.X) < DragThreshold && LocatorLeft is { } l && LocatorRight is { } r)
+        if (drag is Drag.Cycle or Drag.CycleMove && Math.Abs(dragNow.X - dragStart.X) < DragThreshold && LocatorLeft is { } l && LocatorRight is { } r)
         {
             // A click (no drag) inside the band toggles cycling.
             double t = Axis.Time(dragStart.X - GridLeft);
@@ -1679,9 +1819,11 @@ internal sealed class ArrangeView : Control
     /// </summary>
     private void ObjectPressed(ArrangeModel model, EditSession session, double time, bool doubleClick)
     {
-        if (model.ObjectAt(time, 6 / Axis.Zoom) is not { } o) return;
+        // Objects can be selected here (their hits), not moved or edited: they belong to the beatmap.
+        double reach = ObjectRadius / Axis.Zoom;
+        if (model.ObjectAt(time, reach) is not { } o) return;
         var node = o.Nodes.MinBy(n => Math.Abs(n.Time - time));
-        bool onNode = Math.Abs(node.Time - time) <= 7 / Axis.Zoom;
+        bool onNode = Math.Abs(node.Time - time) <= reach; // on a circle: that node; on a slider's body: the whole slider
         var keys = onNode ? [node.Key] : o.Nodes.Select(n => n.Key).ToHashSet();
         var hits = session.State.Hits.Where(h => h.Anchor is { } k && keys.Contains(k)).ToList();
         SetSelection(hits);

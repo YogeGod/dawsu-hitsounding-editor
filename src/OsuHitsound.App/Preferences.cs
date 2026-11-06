@@ -52,7 +52,6 @@ internal sealed record Preferences
     public double QuantizeStrength { get; init; } = 100;
 
     /// <summary>View → Colour by Volume instead of by lane.</summary>
-    public bool ColourByVolume { get; init; }
 
     /// <summary>Audition each newly drawn note, including notes painted while dragging.</summary>
     public bool AuditionOnPlacement { get; init; } = true;

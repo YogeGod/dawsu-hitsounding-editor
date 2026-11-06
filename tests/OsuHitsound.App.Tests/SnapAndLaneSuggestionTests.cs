@@ -26,13 +26,12 @@ public class SnapAndLaneSuggestionTests
     }
 
     [Fact]
-    public void Snap_colours_follow_osu()
+    public void Snap_lines_are_one_grey_for_every_division_as_in_Cubase()
     {
-        Assert.Equal("#ff4b4b", Paint.SnapColour(2)); // red
-        Assert.Equal("#4b8cff", Paint.SnapColour(4)); // blue
-        Assert.Equal("#f0d24b", Paint.SnapColour(8)); // yellow
-        Assert.Equal(Paint.SnapColour(5), Paint.SnapColour(7));
-        Assert.NotEqual(Paint.SnapColour(2), Paint.SnapColour(3));
+        var pens = new[] { 2, 3, 4, 6, 8, 16 }.Select(Paint.SnapPen).ToList();
+        Assert.All(pens, pen => Assert.Same(pens[0], pen));
+        var colour = ((Avalonia.Media.ISolidColorBrush)pens[0].Brush!).Color;
+        Assert.True(colour.R == colour.G && colour.G == colour.B, "grey");
     }
 
     private static readonly string[] Files = ["drum-hitclap2.ogg", "drum-hitclap4.wav", "drum-hitwhistle.wav", "kick.wav", "soft-hitfinish3.wav"];

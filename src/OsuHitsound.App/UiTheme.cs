@@ -19,7 +19,8 @@ internal sealed record Setting(string Key, string Label, SettingKind Kind, strin
 internal sealed record UiPart(string Id, string Group, string Name, IReadOnlyList<Setting> Settings);
 
 /// <summary>
-/// Every colour, size, font size and label of the main screen, with design G's values (docs/ui-design.md) as defaults.
+/// The design system's tokens: every colour, size, font size and label of the app, with the Figma design's values
+/// (docs/design-system.md) as defaults. DesignSystem.axaml styles every control from these through ThemeResources.
 /// Changes made in the inspector are kept in ui-theme.json in the project's source folder, so they become part of the
 /// code when committed. Only values that differ from the defaults are written.
 /// </summary>
@@ -29,48 +30,67 @@ internal sealed class UiTheme
 
     public static readonly IReadOnlyList<UiPart> Parts =
     [
-        // Bars
-        new("titlebar", "Bars", "Title bar", [
-            C("title.bg", "Background", "#d6d6da"), C("title.text", "Text", "#1d1d1f"),
-            N("title.height", "Height", 24, 16, 60), N("title.fontSize", "Font size", 11, 8, 24)]),
-        new("controlbar", "Bars", "Control bar", [
-            C("control.bg", "Background", "#d6d6da"), N("control.height", "Height", 56, 40, 90)]),
-        new("editbar", "Bars", "Edit bar", [
-            C("edit.bg", "Background", "#d6d6da"), N("edit.height", "Height", 64, 40, 110)]),
-        new("statusbar", "Bars", "Status bar", [
-            C("status.bg", "Background", "#d6d6da"), C("status.text", "Text", "#1d1d1f"),
-            N("status.height", "Height", 26, 18, 80), N("status.fontSize", "Font size", 12, 8, 22)]),
-        new("chromeborder", "Bars", "Bar borders", [C("chrome.border", "Colour", "#a9a9ae")]),
+        // Bars, top to bottom
+        new("window", "Bars", "Window title bar", [
+            C("window.bg", "Background", "#adadad"), C("window.text", "Text", "#252525"),
+            N("window.height", "Height", 36, 28, 60), N("window.fontSize", "Font size", 13, 8, 22), C("window.close", "Close under the pointer", "#c42b1c")]),
+        new("titlebar", "Bars", "Menu bar", [
+            C("title.bg", "Background", "#555555"), C("title.text", "Text", "#c1c7cc"),
+            N("title.height", "Height", 44, 16, 60), N("title.fontSize", "Font size", 12, 8, 24)]),
+        new("controlbar", "Bars", "Toolbar", [
+            C("control.bg", "Background", "#494949"), N("control.height", "Height", 46, 40, 90)]),
+        new("editbar", "Bars", "Info bar", [
+            C("edit.bg", "Background", "#2b2b2b"), N("edit.height", "Height", 46, 40, 110)]),
+        new("statusbar", "Bars", "Transport bar", [
+            C("status.bg", "Background", "#383838"), C("status.text", "Text", "#bdbdbd"),
+            N("status.height", "Height", 56, 18, 80), N("status.fontSize", "Font size", 12, 8, 22)]),
+        new("footer", "Bars", "Footer", [C("footer.bg", "Background", "#2b2b2b")]),
+        new("chromeborder", "Bars", "Bar borders", [
+            C("chrome.border", "Edges between bars", "#171a1c"), C("line.divider", "Dividers inside bars", "#5e5e5e")]),
+        new("panels", "Bars", "Panels", [
+            C("panel.bg", "Background", "#383838"), C("panel.raised", "Headers and cards", "#515151")]),
+
+        // Text
+        new("text", "Text", "Text colours", [
+            C("button.text", "Primary", "#edf0f1"), C("text.secondary", "Secondary", "#c1c7cc"), C("text.dim", "Dim", "#bdbdbd"),
+            C("text.onAccent", "On coloured buttons", "#ffffff"), C("brand", "App mark (pink)", "#ff66aa")]),
 
         // Controls
         new("button", "Controls", "Buttons", [
-            C("button.bg", "Background", "#c3c3c8"), C("button.text", "Text", "#1d1d1f"),
-            C("button.active", "Switched on", "#2f6fd0"), N("button.fontSize", "Font size", 13, 9, 22)]),
-        new("playbutton", "Controls", "Play button", [C("play.icon", "Icon", "#2f9a3a")]),
+            C("button.bg", "Background", "#4d4d4d"), C("button.border", "Border", "#414649"),
+            C("button.active", "Primary and switched on", "#287ac3"), C("button.activeBorder", "Primary border", "#7358df"),
+            N("button.fontSize", "Font size", 12, 9, 22), N("button.height", "Height", 30, 20, 44), N("button.radius", "Corner radius", 2, 0, 12)]),
+        new("tools", "Controls", "Tool buttons", [
+            C("tool.active", "Selected tool", "#bfc5c8"), C("tool.activeIcon", "Selected tool icon", "#252525")]),
+        new("fields", "Controls", "Text boxes", [C("field.bg", "Background", "#2b2b2b")]),
+        new("sliders", "Controls", "Sliders", [C("slider.track", "Track", "#5e5e5e"), C("slider.thumb", "Handle", "#c1c7cc")]),
+        new("playbutton", "Controls", "Transport buttons", [
+            C("play.bg", "Playing", "#1cac46"), C("cycle.bg", "Cycle on", "#b19443"),
+            C("record.bg", "Recording", "#c8393d")]),
         new("lcd", "Controls", "Time display", [
-            C("lcd.bg", "Background", "#161618"), C("lcd.text", "Numbers", "#e8eef6"), C("lcd.caption", "Captions", "#8e8e93"),
-            N("lcd.fontSize", "Number size", 19, 10, 36)]),
+            C("lcd.bg", "Background", "#242a32"), C("lcd.text", "Numbers", "#ccdbea"), C("lcd.caption", "Captions", "#afbfce"),
+            N("lcd.fontSize", "Number size", 18, 10, 36)]),
         new("labels", "Controls", "Labels", [
-            T("label.open", "Open button", "Open .osu…"), T("label.save", "Save button", "Save .osu"),
-            T("label.laneDetails", "Lane details button", "Lane details"), T("label.volume", "Volume button", "Volume lane")]),
+            T("label.open", "Open button", "Open…"), T("label.save", "Save button", "Save .osu"),
+            T("label.laneDetails", "Lane details button", "Info"), T("label.volume", "Volume button", "Controller")]),
 
         // Grid
-        new("arrange", "Grid", "Arrange background", [C("arrange.bg", "Background", "#262628")]),
+        new("arrange", "Grid", "Arrange background", [C("arrange.bg", "Background", "#383838")]),
         new("header", "Grid", "Header and ruler", [
-            C("header.bg", "Background", "#2f2f31"), C("ruler.bar", "Bar numbers", "#e4e4e6"), C("ruler.beat", "Beat numbers", "#a4a4a9"),
-            N("ruler.fontSize", "Font size", 11, 8, 20), N("header.sections", "Sections row height", 18, 0, 40)]),
+            C("header.bg", "Background", "#2e2e2e"), C("ruler.bar", "Bar numbers", "#edf0f1"), C("ruler.beat", "Beat numbers", "#bdbdbd"),
+            N("ruler.fontSize", "Font size", 12, 8, 20), N("header.sections", "Sections row height", 18, 0, 40)]),
         new("sections", "Grid", "Song sections", [C("section.fill", "Fill", "#8a6d1e"), N("section.opacity", "Opacity", 0.55, 0, 1)]),
         new("waveform", "Grid", "Song waveform", [
             C("wave.base", "Loudness", "#8fb7e8"), C("wave.low", "Low: kicks, bass", "#4f8dff"), C("wave.mid", "Mid: snares, vocals", "#c27bff"),
             C("wave.high", "High: hi-hats, cymbals", "#ffd166"), N("wave.opacity", "Opacity", 0.85, 0, 1)]),
         new("lanelist", "Grid", "Lane list", [
-            N("list.width", "Width", 300, 160, 600), C("lane.text", "Name text", "#e4e4e6"), C("lane.dim", "Index text", "#a4a4a9"),
+            N("list.width", "Width", 296, 160, 600), C("lane.text", "Name text", "#edf0f1"), C("lane.dim", "Index text", "#bdbdbd"),
             N("lane.fontSize", "Font size", 12, 8, 22), C("lane.missing", "Missing / no sound", "#ff9a92")]),
         new("lanerow", "Grid", "Lane rows", [
-            N("row.height", "Height", 22, 16, 64), C("lane.headA", "List colour (odd)", "#343437"), C("lane.headB", "List colour (even)", "#323235"),
-            N("lane.tint", "Grid tint opacity", 0.22, 0, 1)]),
+            N("row.height", "Height", 31, 16, 64), C("lane.headA", "List colour (odd)", "#515151"), C("lane.headB", "List colour (even)", "#4a4a4a"),
+            N("lane.tint", "Grid tint opacity", 0.09, 0, 1)]),
         new("grouprow", "Grid", "Group rows", [
-            C("group.head", "List colour", "#39393c"), N("group.tint", "Grid tint opacity", 0.10, 0, 1)]),
+            C("group.head", "List colour", "#424242"), N("group.tint", "Grid tint opacity", 0.10, 0, 1)]),
         new("lanecolours", "Grid", "Lane colours", [
             L("colors.soft", "Soft set", "#c04fd0,#a24fd6,#c24dc4,#d0499e,#d4507a"),
             L("colors.normal", "Normal set", "#3fb5b0,#3fb5b0,#2fa38f,#4cc3d1"),
@@ -79,16 +99,18 @@ internal sealed class UiTheme
             L("colors.skin", "Skin (no file)", "#3d8fd1,#3d8fd1"),
             C("colors.muted", "Muted lane", "#5a6a7a")]),
         new("toggles", "Grid", "M / S buttons", [
-            C("toggle.bg", "Off", "#48484c"), C("toggle.mute", "Mute on", "#3d8fd1"), C("toggle.solo", "Solo on", "#ffcc33")]),
+            C("toggle.bg", "Off", "#4d4d4d"), C("toggle.mute", "Mute on", "#3d8fd1"), C("toggle.solo", "Solo on", "#ffcc33")]),
         new("note", "Grid", "Notes", [
-            N("note.size", "Size", 11, 5, 30), C("note.ring", "Ring", "#111113"), C("note.selected", "Selected ring", "#2f6fd0"),
-            N("note.brighten", "Brighten lane colour", 0.25, 0, 1)]),
-        new("gridlines", "Grid", "Beat and bar lines", [C("line.beat", "Beat lines", "#3e3e42"), C("line.bar", "Bar lines", "#5a5a5f")]),
+            N("note.size", "Size", 15, 5, 30), C("note.ring", "Ring", "#111113"), C("note.selected", "Selected ring", "#73b7ff"),
+            N("note.brighten", "Brighten lane colour", 0.3, 0, 1)]),
+        new("gridlines", "Grid", "Beat and bar lines", [C("line.beat", "Beat lines", "#4d4d4d"), C("line.bar", "Bar lines", "#5e5e5e"), C("line.snap", "Snap lines", "#424242")]),
+        new("pianoroll", "Grid", "Key editor rows", [
+            C("roll.white", "White-key rows", "#333333"), C("roll.black", "Black-key rows", "#2b2b2b")]),
         new("playhead", "Grid", "Playhead", [C("playhead.color", "Colour", "#ffffff"), N("playhead.width", "Width", 2, 1, 6)]),
-        new("divider", "Grid", "Separators", [C("divider", "Colour", "#1c1c1e")]),
-        new("overview", "Grid", "Overview strip", [C("overview.bg", "Background", "#2b2b2d"), N("overview.height", "Height", 30, 12, 80)]),
+        new("divider", "Grid", "Separators", [C("divider", "Colour", "#171a1c")]),
+        new("overview", "Grid", "Overview strip", [C("overview.bg", "Background", "#2b2b2b"), N("overview.height", "Height", 20, 12, 80)]),
         new("volume", "Grid", "Volume panel", [
-            C("volume.bg", "Background", "#212123"), C("volume.side", "Side panel", "#2f2f31"), N("volume.height", "Height", 150, 60, 400)]),
+            C("volume.bg", "Background", "#2e2e2e"), C("volume.side", "Side panel", "#383838"), N("volume.height", "Height", 160, 60, 400)]),
     ];
 
     private static readonly Dictionary<string, Setting> ByKey = Parts.SelectMany(p => p.Settings).ToDictionary(s => s.Key);

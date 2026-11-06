@@ -31,9 +31,10 @@ internal class CardPanel : Border
         var close = new Button { Content = "‹", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(8, 0) };
         ToolTip.SetTip(close, $"Hide the {title.ToLowerInvariant()}");
         close.Click += (_, _) => CloseRequested?.Invoke();
-        var bar = new DockPanel { Background = new SolidColorBrush(Color.Parse("#303037")), Height = 32 };
+        var bar = new DockPanel { Height = 32 };
+        bar.Bind(Panel.BackgroundProperty, bar.GetResourceObservable("PaneTitle"));
         DockPanel.SetDock(close, Dock.Right);
-        bar.Children.AddRange([close, new TextBlock { Text = title, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Color.Parse("#bebecb")), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0) }]);
+        bar.Children.AddRange([close, new TextBlock { Text = title, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0) }]);
         var scroller = new ScrollViewer { Content = cards, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         var pane = new DockPanel();
         DockPanel.SetDock(bar, Dock.Top);
@@ -80,8 +81,9 @@ internal class CardPanel : Border
         };
         ToolTip.SetTip(grip, "Drag to move this card");
         var chevron = new IconPath { Data = Geometry.Parse("M 0,0 L 4,4 L 0,8"), Stroke = Brushes.LightSlateGray, StrokeThickness = 1.5, Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, RenderTransform = new RotateTransform(90) };
-        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Padding = new Thickness(6, 4), Foreground = Brushes.Gainsboro, FontWeight = FontWeight.SemiBold, HorizontalContentAlignment = HorizontalAlignment.Left };
+        var header = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brushes.Transparent, Padding = new Thickness(6, 4), FontWeight = FontWeight.SemiBold, HorizontalContentAlignment = HorizontalAlignment.Left };
         header.Classes.Add("flat");
+        header.Bind(Button.ForegroundProperty, header.GetResourceObservable("ButtonText"));
         ToolTip.SetTip(header, $"Expand or collapse {title}");
         header.Click += (_, _) => { body.IsVisible = !body.IsVisible; chevron.RenderTransform = new RotateTransform(body.IsVisible ? 90 : 0); LayoutChanged?.Invoke(); };
         var top = new DockPanel();
@@ -92,11 +94,11 @@ internal class CardPanel : Border
         {
             Tag = id,
             Background = Brushes.Transparent,
-            BorderBrush = new SolidColorBrush(Color.Parse("#3a414c")),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(0, 4, 0, 12),
             Child = new StackPanel { Spacing = 6, Children = { top, body } },
         };
+        card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("ChromeBorder"));
 
         grip.PointerPressed += (_, e) => { dragging = id; e.Pointer.Capture(grip); e.Handled = true; };
         grip.PointerMoved += (_, e) => { if (dragging == id) MoveDragged(e.GetPosition(cards).Y); };

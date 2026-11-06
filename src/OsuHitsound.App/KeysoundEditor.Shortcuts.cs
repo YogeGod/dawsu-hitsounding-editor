@@ -29,6 +29,7 @@ public partial class KeysoundEditor
             case "setLeft": SetLocator(true, Roll.Playhead); return true;
             case "setRight": SetLocator(false, Roll.Playhead); return true;
             case "locatorsToSelection": LocatorsToSelection(); return true;
+            case "playLocatorRange": PlayLocatorRange(); return true;
             case "first": Seek(FirstOrLast(first: true)); return true;
             case "last": Seek(FirstOrLast(first: false)); return true;
 
@@ -50,15 +51,29 @@ public partial class KeysoundEditor
                 return true;
             case "deselect": if (!Roll.CancelDrag()) Roll.Deselect(); return true;
             case "nudgeLeft": Roll.Nudge(-1); return true;
+            case "volumeUp": Roll.SetSelectionVelocity(v => v + 5); return true;
+            case "volumeDown": Roll.SetSelectionVelocity(v => v - 5); return true;
+            case "volumeUpFine": Roll.SetSelectionVelocity(v => v + 1); return true;
+            case "volumeDownFine": Roll.SetSelectionVelocity(v => v - 1); return true;
             case "nudgeRight": Roll.Nudge(1); return true;
 
             case "ks.record": ToggleRecord(); return true;
-            case "ks.transposeUp": Roll.Transpose(1); return true;
-            case "ks.transposeDown": Roll.Transpose(-1); return true;
-            case "ks.octaveUp": Roll.Transpose(12); return true;
-            case "ks.octaveDown": Roll.Transpose(-12); return true;
-            case "ks.selectPrevious": Roll.SelectNeighbour(-1, extend: false); return true;
-            case "ks.selectNext": Roll.SelectNeighbour(1, extend: false); return true;
+            // The arrow keys as in Cubase's Key Editor: Up/Down transpose (Shift: an octave), Left/Right select.
+            case "navUp": Roll.Transpose(1); return true;
+            case "navDown": Roll.Transpose(-1); return true;
+            case "navAddUp": Roll.Transpose(12); return true;
+            case "navAddDown": Roll.Transpose(-12); return true;
+            case "selectPrevious": Roll.SelectNeighbour(-1, extend: false); return true;
+            case "selectNext": Roll.SelectNeighbour(1, extend: false); return true;
+            case "addPrevious": Roll.SelectNeighbour(-1, extend: true); return true;
+            case "addNext": Roll.SelectNeighbour(1, extend: true); return true;
+            case "rowsOut": Roll.ZoomRows(1 / 1.2); return true;
+            case "rowsIn": Roll.ZoomRows(1.2); return true;
+            // Cubase's Nudge Start/End: Alt+Left the start earlier, Alt+Shift+Right later; Alt+Right the end later, Alt+Shift+Left earlier.
+            case "ks.startLeft": Roll.NudgeEdges(-1, 0); return true;
+            case "ks.startRight": Roll.NudgeEdges(1, 0); return true;
+            case "ks.endRight": Roll.NudgeEdges(0, 1); return true;
+            case "ks.endLeft": Roll.NudgeEdges(0, -1); return true;
             case "ks.sync": _ = RunCommand("sync"); return true;
             case "ks.generate": _ = RunCommand("generate"); return true;
             default: return false;
@@ -72,6 +87,17 @@ public partial class KeysoundEditor
         if (doc is null || notes is not { Count: > 0 }) return 0;
         long tick = first ? notes.Min(n => n.Start) : notes.Max(n => n.Start);
         return Math.Max(0, doc.Tempo.TimeAt(tick));
+    }
+
+    // Alt+P, as in Hitsound mode: the locators to the selected notes, Cycle on, and play from L.
+    private void PlayLocatorRange()
+    {
+        LocatorsToSelection();
+        if (locatorLeft is not { } l) { SetStatus("Select notes or set the L and R locators first."); return; }
+        LoopButton.IsChecked = true;
+        ToggleCycle();
+        if (audio?.IsPlaying != true && !IsRecording) { Seek(l); TogglePlay(); }
+        else Seek(l);
     }
 
     // P: the locators around the selected notes.

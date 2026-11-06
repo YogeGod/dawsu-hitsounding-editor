@@ -19,7 +19,7 @@ public class UiThemeTests
         var theme = new UiTheme();
         theme.Set("lane.tint", "0.5");
         theme.Set("title.bg", "#112233");
-        theme.Set("row.height", "22"); // the default: not written
+        theme.Set("row.height", "31"); // the default: not written
 
         var loaded = UiTheme.FromJson(theme.ToJson());
 
@@ -33,8 +33,8 @@ public class UiThemeTests
     {
         var theme = UiTheme.FromJson("""{ "nope": "1", "row.height": "999", "lane.text": "not a colour", "note.size": "14" }""");
 
-        Assert.Equal(22, theme.Number("row.height"));
-        Assert.Equal("#e4e4e6", theme.Get("lane.text"));
+        Assert.Equal(31, theme.Number("row.height"));
+        Assert.Equal("#edf0f1", theme.Get("lane.text"));
         Assert.Equal(14, theme.Number("note.size"));
     }
 
@@ -48,7 +48,7 @@ public class UiThemeTests
         Assert.Throws<FormatException>(() => theme.Set("row.height", "5"));
         Assert.Throws<FormatException>(() => theme.Set("colors.soft", "#c04fd0,purple-ish"));
         Assert.Equal(0, changes);
-        Assert.Equal(22, theme.Number("row.height"));
+        Assert.Equal(31, theme.Number("row.height"));
     }
 
     [Fact]
