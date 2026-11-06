@@ -17,15 +17,18 @@ public class PreferencesAndHelpTests : IDisposable
         {
             SongsFolder = @"F:\osu!\Songs", AudioOutput = OutputKind.Asio, OutputDevice = "ASIO4ALL v2", BufferMs = 60, LazerResources = "x.dll", WindowWidth = 1400,
             SnapMode = SnapMode.GridRelative, QuantizeStrength = 60, ColourByVolume = true, AuditionOnPlacement = false, InspectorOpen = false, InspectorWidth = 300,
-            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], GlobalVolume = 35, TutorialSeen = true, GlobalSongOffset = -25, ClassicBrowser = true,
+            InspectorCards = ["recent", "selection"], InspectorFolded = ["bookmarks"], KeysoundCards = ["midi", "tracks"], KeysoundFolded = ["instrument"], KeysoundInspectorOpen = false, GlobalVolume = 35, TutorialSeen = true, GlobalSongOffset = -25, ClassicBrowser = true,
         }.WithRecent(@"C:\a.osu");
         prefs.Save(path);
 
         var loaded = Preferences.Load(path);
         // Lists compare by reference in a record: they're checked one by one below.
-        Assert.Equal(prefs, loaded with { RecentMaps = prefs.RecentMaps, KeyOverrides = prefs.KeyOverrides, InspectorCards = prefs.InspectorCards, InspectorFolded = prefs.InspectorFolded });
+        Assert.Equal(prefs, loaded with { RecentMaps = prefs.RecentMaps, KeyOverrides = prefs.KeyOverrides, InspectorCards = prefs.InspectorCards, InspectorFolded = prefs.InspectorFolded,
+            KeysoundCards = prefs.KeysoundCards, KeysoundFolded = prefs.KeysoundFolded });
         Assert.Equal(prefs.InspectorCards, loaded.InspectorCards);
         Assert.Equal(prefs.InspectorFolded, loaded.InspectorFolded);
+        Assert.Equal(prefs.KeysoundCards, loaded.KeysoundCards);
+        Assert.Equal(prefs.KeysoundFolded, loaded.KeysoundFolded);
         Assert.Equal(prefs.RecentMaps, loaded.RecentMaps);
     }
 
