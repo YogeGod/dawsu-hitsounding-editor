@@ -71,6 +71,10 @@ internal sealed record Preferences
     public List<string> InspectorCards { get; init; } = [];
 
     public List<string> InspectorFolded { get; init; } = ["soundSets", "recent"];
+    /// <summary>Keysound mode's inspector cards (Tracks, Instrument, MIDI input): order, folded ones, and whether it shows.</summary>
+    public List<string> KeysoundCards { get; init; } = [];
+    public List<string> KeysoundFolded { get; init; } = [];
+    public bool KeysoundInspectorOpen { get; init; } = true;
 
     /// <summary>Global volume in % (20–100): the song, hitsounds and previews together.</summary>
     public double GlobalVolume { get; init; } = 20;

@@ -83,6 +83,7 @@ public partial class KeysoundEditor : UserControl
         SetupRecording();
         SetupInstruments();
         SetupTransport();
+        SetupInspector();
     }
 
     /// <summary>The ◀ Close button: the window asks about unsaved edits, then closes the project.</summary>

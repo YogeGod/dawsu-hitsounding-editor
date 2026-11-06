@@ -23,6 +23,7 @@ public partial class MainWindow
         SetupKeysoundMenu();
         // One global volume for both modes: Keysound's slider drives Hitsound mode's (which saves it in the preferences).
         Keys.GlobalVolumeChanged += value => GlobalVolumeSlider.Value = value;
+        Keys.SetInspectorLayout(prefs.KeysoundCards, prefs.KeysoundFolded, prefs.KeysoundInspectorOpen);
         Keys.Changed += UpdateKeysoundTitle;
         Start.KeysoundNewRequested += () => _ = NewKeysound();
         Start.KeysoundOpenRequested += () => _ = PickKeysound();

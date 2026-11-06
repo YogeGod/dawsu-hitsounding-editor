@@ -71,6 +71,8 @@ public partial class MainWindow
                 BrowserWidth = BrowserWidthToSave,
                 HistoryOpen = HistoryPanelItem.IsChecked, SoundSetsOpen = SoundSetsPanelItem.IsChecked,
                 InspectorCards = [.. Inspector.Order], InspectorFolded = [.. Inspector.Folded],
+                KeysoundCards = [.. Keys.InspectorLayout.Order], KeysoundFolded = [.. Keys.InspectorLayout.Folded],
+                KeysoundInspectorOpen = Keys.InspectorLayout.Open,
             };
             SavePrefs();
         };
