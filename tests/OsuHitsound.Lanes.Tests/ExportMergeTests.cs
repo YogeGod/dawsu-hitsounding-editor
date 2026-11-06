@@ -129,6 +129,7 @@ public class ExportMergeTests
     public void Same_addition_is_generated_in_the_highest_priority_slot_without_an_explicit_rule()
     {
         var (file, folder, session) = Map();
+        session.KeepMixedIndexes = true; // a soft whistle beside the drum whistle on purpose
         session.Remove(session.State.Hits.Where(h => h.Lane == Lane("soft-hitclap")).ToList());
         session.Add([session.HitAt(Lane("soft-hitwhistle"), 1000), session.HitAt(Lane("soft-hitwhistle"), 2000)]);
         var settings = new ExportMergeSettings();

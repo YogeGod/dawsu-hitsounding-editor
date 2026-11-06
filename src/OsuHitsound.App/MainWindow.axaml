@@ -38,6 +38,8 @@
               <MenuItem Header="Export settings">
                 <MenuItem Name="GreenLinesItem" Header="Green lines (default)" ToggleType="Radio" GroupName="exportStyle" />
                 <MenuItem Name="PerObjectItem" Header="Per-object settings (sliders use green lines)" ToggleType="Radio" GroupName="exportStyle" />
+                <Separator />
+                <MenuItem Name="KeepMixedIndexesItem" Header="Allow mixed sample indexes and sets on one object (Save writes combined copies)" ToggleType="CheckBox" />
               </MenuItem>
               <MenuItem Header="Warning markers">
                 <MenuItem Name="MissingWarningsItem" Header="No hit object here" ToggleType="CheckBox" />

@@ -43,6 +43,7 @@ public sealed partial class MapDocument
     {
         var before = Folder.Files.ToHashSet(StringComparer.OrdinalIgnoreCase);
         Folder = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
+        Session.UseFolder(Folder);
         return [.. Folder.Files.Where(f => !before.Contains(f))];
     }
 

@@ -56,7 +56,7 @@ public sealed partial class EditSession
     private EditState? gestureStart;
     private string gestureLabel = "Edit";
     private readonly double timeOffset; // v3/v4 maps show 24 ms later than written; bookmarks are stored as written
-    private readonly MapFolder sampleFolder;
+    private MapFolder sampleFolder; // listed again when the folder is rescanned
 
     public EditSession(OsuFile file, MapFolder folder, DecompiledMap map)
     {
@@ -427,7 +427,7 @@ public sealed partial class EditSession
         var next = edit(State);
         if (!ReferenceEquals(next, State))
         {
-            next = MaintainHsCircles(next);
+            next = MaintainHsCircles(ConformIndexes(State, next));
             if (ReferenceEquals(next.SoundPlacements, State.SoundPlacements) && ReferenceEquals(next.SoundSets, State.SoundSets)) next = ReconcileSoundSets(State, next);
             if (next.LayerVolumes.Count > 0)
             {

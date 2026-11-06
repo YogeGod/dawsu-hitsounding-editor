@@ -19,6 +19,8 @@ internal sealed record Preferences
     public string? LastSampleFolder { get; init; }
     public bool ShowMissingObjectWarnings { get; init; }
     public bool ShowExportWarnings { get; init; } = true;
+    /// <summary>Keep sounds from different sample indexes or addition sets on one object instead of moving the object to the new ones.</summary>
+    public bool KeepMixedIndexes { get; init; }
     public ExportStyle ExportStyle { get; init; } = ExportStyle.GreenLines;
 
     /// <summary>How the sound reaches the speakers: WASAPI shared (the default), WASAPI exclusive, ASIO, DirectSound or MME.</summary>

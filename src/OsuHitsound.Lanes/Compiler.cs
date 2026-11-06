@@ -285,6 +285,9 @@ public static partial class Compiler
             double at = Math.Ceiling(Math.Max(time, Math.Floor(previousLookup) + 1));
             if (at > time + HitsoundRules.ControlPointLeniency)
                 throw new ConflictException("Another sound within 5 ms reads the same timing point, so a green line here would change it too.");
+            // A green line just after the node (within the 5 ms osu! looks ahead) is the one it reads: change that one,
+            // since a new line before it would be ignored. Later moments that read it are set again as they come.
+            if (timing.SamplePointAt(time) is { Uninherited: false } read && read.Time > at) at = read.Time;
 
             var inForce = timing.PointAt(at) ?? throw new ConflictException("No timing point before this slider to copy from.");
             if (inForce.Time == at && !inForce.Uninherited)

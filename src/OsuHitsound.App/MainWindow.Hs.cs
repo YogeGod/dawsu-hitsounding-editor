@@ -79,7 +79,10 @@ public partial class MainWindow
             if (plan.Storage.Conflicts.Count > 0)
                 throw new IOException(plan.Storage.Conflicts[0].Reason);
             if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0 || loose > 0) && !await Dialogs.Confirm(this, hs ? "Save HS difficulty" : "Save difficulty",
-                $"Save this difficulty with {plan.Storage.Mixes.Count} new paired/fused sample(s)? Original layers remain editable; existing shared samples are protected."
+                (plan.Storage.Mixes.Count == 0 ? "Save this difficulty?"
+                    : $"Save this difficulty? Some objects keep sounds osu! can't play together from the map's files (different indexes, sets or volumes), so Save writes {plan.Storage.Mixes.Count} new sample file(s) that combine them: "
+                      + string.Join(", ", plan.Storage.Mixes.Take(6).Select(m => m.FileName)) + (plan.Storage.Mixes.Count > 6 ? ", …" : "")
+                      + ". Your lanes stay as they are; existing samples are not changed.")
                     + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
                     + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return false;
             var written = await Task.Run(() => document.WriteHsSave(plan, mix => SampleMixer.Mix(mix, Decode), MapSaver.DefaultBackupRoot(), manifests));
