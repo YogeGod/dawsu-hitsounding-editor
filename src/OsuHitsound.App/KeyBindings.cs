@@ -14,7 +14,11 @@ internal enum KeyPreset { Cubase, Osu }
 /// </summary>
 internal static partial class CubaseKeyFile
 {
-    /// <summary>Editor command → the Cubase command whose keys it takes. Cubase commands not listed here are ignored.</summary>
+    /// <summary>
+    /// Editor command → the Cubase command whose keys it takes. Cubase commands not listed here are ignored. The tools
+    /// are left out on purpose: their number keys always follow the editor's own numbering (1 Select, 2 Grab, 3 Draw,
+    /// 4 Erase, …), which the toolbar shows, rather than Cubase's.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> CommandMap = new Dictionary<string, string>
     {
         ["open"] = "File|Open",
@@ -30,13 +34,6 @@ internal static partial class CubaseKeyFile
         ["jumpRight"] = "Transport|To Right Locator",
         ["setLeft"] = "Transport|Set Left Locator",
         ["setRight"] = "Transport|Set Right Locator",
-        ["toolSelect"] = "Tool|Select Tool",
-        ["toolRange"] = "Tool|Range Tool",
-        ["toolDraw"] = "Tool|Draw Tool",
-        ["toolErase"] = "Tool|Delete Tool",
-        ["toolMute"] = "Tool|Mute Tool",
-        ["ks.toolSplit"] = "Tool|Split Tool",
-        ["ks.toolGlue"] = "Tool|Glue Tool",
         ["ks.record"] = "Transport|Record",
         ["snap"] = "Edit|Snap On/Off",
         ["undo"] = "Edit|Undo",

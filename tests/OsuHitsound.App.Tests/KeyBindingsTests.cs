@@ -86,12 +86,16 @@ public class KeyBindingsTests : IDisposable
     public void Cubase_preset_takes_cubase_keys_and_keeps_built_in_keys_cubase_leaves_free()
     {
         var map = Keymap.Build(KeyPreset.Cubase, SampleKeys(), NoOverrides);
-        Assert.Equal("8", Keys(map, "toolDraw"));        // from Cubase, not the built-in 3
         Assert.Equal("Ctrl+Z", Keys(map, "undo"));
-        Assert.Equal("1", Keys(map, "toolSelect"));      // no Cubase key: built-in, which is free
-        Assert.Equal("6", Keys(map, "toolRamp"));        // Cubase's Zoom Tool has 6, but this editor has no such command
-        Assert.Equal("4", Keys(map, "toolErase"));       // no key in this file: built-in
-        Assert.Equal("7", Keys(map, "toolRange"));       // Cubase's Range Tool
+        // Tools keep the editor's own numbers (the toolbar's), whatever the Cubase file says: Draw is 3, not Cubase's 8,
+        // and Cubase's Range Tool key doesn't take a tool key.
+        Assert.Equal("1", Keys(map, "toolSelect"));
+        Assert.Equal("2", Keys(map, "toolGrab"));
+        Assert.Equal("3", Keys(map, "toolDraw"));
+        Assert.Equal("4", Keys(map, "toolErase"));
+        Assert.Equal("6", Keys(map, "toolRamp"));
+        Assert.Equal("", Keys(map, "toolRange"));
+        Assert.Equal(("7", "8"), (Keys(map, "ks.toolSplit"), Keys(map, "ks.toolGlue")));
         Assert.Equal("Ctrl+K", Keys(map, "repeat"));     // Cubase's Edit > Repeat, not the built-in Ctrl+R
         Assert.Equal("Q", Keys(map, "quantize"));        // no MIDI > Quantize key in this file: built-in
         Assert.Equal("Ctrl+N", Keys(map, "newDiff"));
