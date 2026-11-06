@@ -28,6 +28,9 @@ public static class KeyRender
         foreach (var c in track.Controllers)
             if (c.Tick > note.Start && c.Tick <= heldEnd)
                 controllers.Add(new KeyRenderController(tempo.TimeAt(c.Tick) - start, c.Kind, c.Value));
+        // A pedal that is never released doesn't hold the note forever (as in playback): it lets go when the key does.
+        if (KeyControllers.ValueAt(track.Controllers, ControllerKind.Sustain, heldEnd) >= KeyControllers.PedalDown)
+            controllers.Add(new KeyRenderController(tempo.TimeAt(heldEnd) - start, ControllerKind.Sustain, 0));
 
         return new KeyRenderJob(track.Id, note.Id, note.Pitch, note.Velocity,
             tempo.TimeAt(note.End) - start, tempo.TimeAt(heldEnd) - start, controllers);

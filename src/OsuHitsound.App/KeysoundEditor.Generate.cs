@@ -115,7 +115,9 @@ public partial class KeysoundEditor
         foreach (var t in tracks.Where(t => t.Synced.Count > 0))
         {
             progress.Report($"Starting {t.Track.Name}'s instrument…", (double)done / total);
-            using var renderer = await RendererFor(t.Track);
+            var renderer = await RendererFor(t.Track);
+            try
+            {
             float gain = KeyWav.Gain(t.Track.VolumeDb);
             var piano = renderer is PianoNoteRenderer ? new Dictionary<string, (string Id, bool Truncated)>() : null; // the piano is deterministic
             foreach (var note in t.Synced)
@@ -142,6 +144,11 @@ public partial class KeysoundEditor
                 list.Add(id);
                 done++;
                 if (done % 8 == 0 || done == total) progress.Report($"Rendering {t.Track.Name}: {done} of {total} notes…", (double)done / total);
+            }
+            }
+            finally
+            {
+                _ = Task.Run(renderer.Dispose); // a render host takes up to 3 s to quit: not on the UI thread
             }
         }
 

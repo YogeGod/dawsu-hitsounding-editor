@@ -118,6 +118,29 @@ public class KeySyncTests
     }
 
     [Fact]
+    public void A_pedal_never_released_lets_go_with_the_key_in_a_render()
+    {
+        var track = KeyTrack.Create("Piano") with { Controllers = [new KeyController(0, ControllerKind.Sustain, 127)] };
+        var job = KeyRender.Job(track, new KeyNote(Guid.NewGuid(), 960, 480, 60, 90), Tempo);
+        Assert.Equal(job.Length, job.Held);
+        Assert.Equal(new KeyRenderController(250, ControllerKind.Sustain, 0), job.Controllers[^1]);
+    }
+
+    [Fact]
+    public void Generate_moves_only_green_lines_that_change_nothing_but_sounds()
+    {
+        var reference = OsuHitsound.Format.OsuFile.Parse(System.Text.Encoding.UTF8.GetBytes(string.Join("\r\n",
+            "osu file format v14", "", "[General]", "AudioFilename: a.mp3", "", "[Metadata]", "Version:Hard", "",
+            "[Difficulty]", "SliderMultiplier:1.4", "SliderTickRate:1", "",
+            "[TimingPoints]", "0,500,4,1,0,100,1,0", "1002,-100,4,1,0,80,0,0", "2003,-50,4,1,0,80,0,0", "3002,-50,4,1,0,60,0,1", "",
+            "[HitObjects]", "256,192,1000,2,0,L|356:192,1,100", "256,192,2000,2,0,L|356:192,1,100", "256,192,3000,2,0,L|356:192,1,100", "")));
+        var lines = KeyGenerate.DiffText(reference).Split("\r\n");
+        Assert.Contains("1000,-100,4,1,0,80,0,0", lines); // only the volume changes: moved onto the slider head
+        Assert.Contains("2003,-50,4,1,0,80,0,0", lines); // a new slider velocity: osu! reads it at the exact time, so it stays
+        Assert.Contains("3002,-50,4,1,0,60,0,1", lines); // kiai starts there: it stays too
+    }
+
+    [Fact]
     public void Split_parts_and_pasted_copies_are_not_synced()
     {
         var note = At(1000) with { Target = CircleA, Length = 960 };

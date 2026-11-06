@@ -96,17 +96,29 @@ public static class KeyGenerate
         var nodes = Decompiler.Decompile(reference, new MapFolder([])).Moments
             .Where(m => m.Position is HitPosition.SliderHead or HitPosition.SliderRepeat or HitPosition.SliderTail)
             .Select(m => m.Time).Order().ToArray();
+        var points = new List<(double Time, bool Red, double BeatLength, int Effects, OsuLine Line)>();
+        foreach (var p in reference.TimingPoints)
+            try { points.Add((p.Time, p.Uninherited, p.BeatLength, p.Effects, p.Line)); }
+            catch (FormatException) { }
+        points.Sort((a, b) => a.Time.CompareTo(b.Time)); // stable: file order at equal times
+
         var moved = new Dictionary<OsuLine, long>();
-        foreach (var point in reference.TimingPoints)
+        foreach (var point in points.Where(p => !p.Red))
         {
-            double time;
-            try { if (point.Uninherited) continue; time = point.Time; }
-            catch (FormatException) { continue; }
-            int i = Array.BinarySearch(nodes, time);
+            int i = Array.BinarySearch(nodes, point.Time);
             if (i >= 0) continue; // already on a node
             i = ~i - 1; // the last node before the line
-            if (i >= 0 && time - nodes[i] <= HitsoundRules.ControlPointLeniency && Math.Floor(nodes[i]) < time)
-                moved[point.Line] = (long)Math.Floor(nodes[i]);
+            if (i < 0 || point.Time - nodes[i] > HitsoundRules.ControlPointLeniency) continue;
+            long to = (long)Math.Floor(nodes[i]);
+            if (to >= point.Time) continue;
+            // osu! reads slider velocity and kiai exactly at the time (only sounds get the lookup), so move only a line
+            // that changes neither from what is in force where it lands.
+            var before = points.Where(p => p.Time <= to && p.Line != point.Line).ToList();
+            var red = before.LastOrDefault(p => p.Red);
+            var green = before.LastOrDefault(p => !p.Red && (red.Line is null || p.Time >= red.Time));
+            double velocity = green.Line is not null ? green.BeatLength : -100;
+            int effects = before.Count > 0 ? before[^1].Effects : 0;
+            if (point.BeatLength == velocity && (point.Effects & 1) == (effects & 1)) moved[point.Line] = to;
         }
 
         return moved;

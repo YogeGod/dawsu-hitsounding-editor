@@ -511,9 +511,33 @@ std::string Render(const std::string& line)
     std::vector<float> l(Chunk), r(Chunk);
     auto Peak = [&](int n) { float p = 0; for (int i = 0; i < n; i++) p = std::max(p, std::max(std::fabs(l[i]), std::fabs(r[i]))); return p; };
 
-    // Silence what the previous note left.
-    block.Begin();
-    for (int pitch = 0; pitch < 128; pitch++) block.Add(0, 0x80, (uint8_t)pitch, 0);
+    // Silence what the previous note left: every key up, the pedal up (it may still hold voices), modulation off and
+    // the bend centred, so nothing carries into this note's render.
+    auto Reset = [&] {
+        block.Begin();
+        for (int pitch = 0; pitch < 128; pitch++) block.Add(0, 0x80, (uint8_t)pitch, 0);
+        block.Add(0, 0xB0, 64, 0);
+        block.Add(0, 0xB0, 1, 0);
+        block.Add(0, 0xE0, 0, 64);
+    };
+
+    // A plug-in with a noise or hum floor never falls below a fixed level: the first render measures the floor of the
+    // idle plug-in (the loudest it gets over half a second) and quiet means below twice that from then on.
+    static float idleFloor = -1;
+    if (idleFloor < 0)
+    {
+        Reset();
+        idleFloor = 0;
+        for (int done = 0; done < 44100; done += Chunk)
+        {
+            block.Process(Chunk, l.data(), r.data());
+            if (done >= 22050) idleFloor = std::max(idleFloor, Peak(Chunk));
+            block.Begin();
+        }
+    }
+    threshold = std::max(threshold, (double)idleFloor * 2);
+
+    Reset();
     for (long long done = 0, quiet = 0; done < 44100LL * 5 && quiet < quietFrames; done += Chunk)
     {
         block.Process(Chunk, l.data(), r.data());
