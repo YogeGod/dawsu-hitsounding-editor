@@ -49,6 +49,14 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     /// <summary>The host exited unexpectedly. Raised on a thread-pool thread.</summary>
     public event Action? Crashed;
 
+    /// <summary>
+    /// A plug-in path dawsu! starts by itself: a fully qualified local .vst3. A project names the plug-in it runs, so a
+    /// network share or another kind of file is refused.
+    /// </summary>
+    public static bool IsLoadablePath(string path) =>
+        Path.IsPathFullyQualified(path) && !path.StartsWith(@"\\", StringComparison.Ordinal) && !path.StartsWith("//", StringComparison.Ordinal)
+        && path.EndsWith(".vst3", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The host program next to dawsu!.</summary>
     public static string DefaultHostPath => Path.Combine(AppContext.BaseDirectory, "dawsu_vst3_host.exe");
 
@@ -92,6 +100,7 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     public static async Task<IsolatedVst3> StartAsync(string pluginPath, string? classId = null, string? state = null, string? hostPath = null, TimeSpan? timeout = null)
     {
         hostPath ??= DefaultHostPath;
+        if (!IsLoadablePath(pluginPath)) throw new InvalidOperationException("Only a .vst3 on this computer can be loaded.");
         if (!File.Exists(hostPath)) throw new InvalidOperationException("The VST3 host (dawsu_vst3_host.exe) isn't installed next to dawsu!.");
         var vst = new IsolatedVst3(pluginPath, hostPath, classId);
         try
@@ -182,7 +191,8 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     public void SetEvents(IEnumerable<TimedMidi> events)
     {
         var sorted = events.ToArray();
-        Array.Sort(sorted, (a, b) => a.Time != b.Time ? a.Time.CompareTo(b.Time) : (a.Status & 0xF0) == 0x80 ? -1 : 1); // offs first at a shared time
+        static int OnLast(TimedMidi e) => (e.Status & 0xF0) == 0x90 && e.Data2 > 0 ? 1 : 0; // note offs first at a shared time
+        Array.Sort(sorted, (a, b) => a.Time != b.Time ? a.Time.CompareTo(b.Time) : OnLast(a).CompareTo(OnLast(b)));
         Volatile.Write(ref scheduled, sorted);
     }
 

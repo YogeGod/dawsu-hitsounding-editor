@@ -53,6 +53,11 @@
             <Button Name="DeleteTrackButton" Content="Delete" ToolTip.Tip="Delete the selected track. Undo brings it back with its notes." />
           </StackPanel>
           <TextBlock Name="InstrumentText" Classes="caption" HorizontalAlignment="Left" TextWrapping="Wrap" />
+          <WrapPanel Orientation="Horizontal">
+            <Button Name="InstrumentButton" Content="Instrument…" Margin="0,0,6,4" ToolTip.Tip="Play the selected track with the bundled piano or a VST3 instrument. Its notes stay as they are (undoable)." />
+            <Button Name="EditorButton" Content="Open editor" Margin="0,0,6,4" ToolTip.Tip="Show the VST3 instrument's own window" />
+            <Button Name="FixButton" Margin="0,0,6,4" IsVisible="False" />
+          </WrapPanel>
         </StackPanel>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
           <StackPanel Name="TrackList" Spacing="4" />

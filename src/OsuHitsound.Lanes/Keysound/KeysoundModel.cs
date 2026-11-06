@@ -18,11 +18,24 @@ public sealed record KeyNote(Guid Id, long Start, long Length, int Pitch, int Ve
 /// </summary>
 public sealed record KeyInstrument(string Kind, string? Path = null, string? State = null)
 {
-    public const string BundledPiano = "piano";
+    public const string BundledPiano = "piano", Vst3 = "vst3";
+
+    /// <summary>A VST3 instrument: its .vst3, the class in it, and its display name; no saved state yet.</summary>
+    public static KeyInstrument Vst3Plugin(string path, string? classId, string name) => new(Vst3, path) { ClassId = classId, Name = name };
+
+    public bool IsVst3 => Kind == Vst3;
+
+    /// <summary>The same plug-in (or both the piano), whatever its saved settings: switching between them reloads nothing.</summary>
+    public bool SamePlugin(KeyInstrument other) =>
+        Kind == other.Kind && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && ClassId == other.ClassId;
+    /// <summary>The VST3 class id inside the .vst3 (a plug-in can hold several); null for its first instrument.</summary>
+    public string? ClassId { get; init; }
+    /// <summary>The plug-in's own name, as its scan reported it.</summary>
+    public string? Name { get; init; }
     /// <summary>Semitones at full pitch bend: the General MIDI default, which the bundled piano uses.</summary>
     public double PitchBendRange => 2;
     public static KeyInstrument Piano { get; } = new(BundledPiano);
-    public string DisplayName => Kind == BundledPiano ? "Bundled piano" : System.IO.Path.GetFileNameWithoutExtension(Path ?? "VST3 instrument");
+    public string DisplayName => Kind == BundledPiano ? "Bundled piano" : Name ?? System.IO.Path.GetFileNameWithoutExtension(Path ?? "VST3 instrument");
 }
 
 public enum ControllerKind { Sustain, Modulation, PitchBend }

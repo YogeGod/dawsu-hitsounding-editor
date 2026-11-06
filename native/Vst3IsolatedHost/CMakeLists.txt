@@ -31,6 +31,7 @@ add_executable(dawsu_vst3_host
 target_compile_features(dawsu_vst3_host PRIVATE cxx_std_17)
 target_compile_definitions(dawsu_vst3_host PRIVATE UNICODE _UNICODE)
 target_link_libraries(dawsu_vst3_host PRIVATE sdk_hosting ole32 crypt32)
+target_compile_options(dawsu_vst3_host PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>) # the sources are UTF-8
 if(MSVC)
     target_link_options(dawsu_vst3_host PRIVATE /ENTRY:wmainCRTStartup)
 endif()

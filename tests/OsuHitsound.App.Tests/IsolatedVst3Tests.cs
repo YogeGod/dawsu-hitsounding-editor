@@ -15,7 +15,7 @@ public class IsolatedVst3Tests
         return exe;
     }
 
-    private static Task<IsolatedVst3> Start(string mode) => IsolatedVst3.StartAsync($"{mode}.vst3", hostPath: FakeHost(), timeout: TimeSpan.FromSeconds(30));
+    private static Task<IsolatedVst3> Start(string mode) => IsolatedVst3.StartAsync(Path.Combine(Path.GetTempPath(), $"{mode}.vst3"), hostPath: FakeHost(), timeout: TimeSpan.FromSeconds(30));
 
     private static float[] Render(ILivePart part, int frames = 441, double start = 0, bool playing = true)
     {
@@ -80,7 +80,19 @@ public class IsolatedVst3Tests
     {
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Start("fail"));
         Assert.Contains("refuses to load", error.Message);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => IsolatedVst3.StartAsync("x.vst3", hostPath: Path.Combine(Path.GetTempPath(), "no-such-host.exe")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => IsolatedVst3.StartAsync(Path.Combine(Path.GetTempPath(), "x.vst3"), hostPath: Path.Combine(Path.GetTempPath(), "no-such-host.exe")));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Program Files\Common Files\VST3\Synth.vst3", true)]
+    [InlineData(@"\\server\share\Synth.vst3", false)] // a project can't make dawsu! run a plug-in from a network share
+    [InlineData("//server/share/Synth.vst3", false)]
+    [InlineData(@"Synth.vst3", false)]
+    [InlineData(@"C:\Temp\evil.dll", false)]
+    public async Task Only_a_local_vst3_is_started(string path, bool loadable)
+    {
+        Assert.Equal(loadable, IsolatedVst3.IsLoadablePath(path));
+        if (!loadable) await Assert.ThrowsAsync<InvalidOperationException>(() => IsolatedVst3.StartAsync(path, hostPath: FakeHost()));
     }
 
     [Fact]

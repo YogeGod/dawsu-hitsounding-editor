@@ -96,6 +96,45 @@ public class KeysoundSessionTests
     }
 
     [Fact]
+    public void Changing_the_instrument_is_one_step_and_keeps_notes_and_controllers()
+    {
+        var (s, track) = New();
+        s.AddNotes(track, [Note(0)]);
+        s.ReplaceTrack(s.State.Track(track)! with { Controllers = [new KeyController(0, ControllerKind.Sustain, 127)] }, "Record");
+        var before = s.State.Track(track)!;
+        var synth = KeyInstrument.Vst3Plugin(@"C:\VST3\Synth.vst3", "0123456789ABCDEF0123456789ABCDEF", "Synth");
+        s.ReplaceInstrument(track, synth, "Change instrument");
+        var after = s.State.Track(track)!;
+        Assert.Equal(synth, after.Instrument);
+        Assert.Equal("Synth", after.Instrument.DisplayName);
+        Assert.Equal(before.Notes, after.Notes);
+        Assert.Equal(before.Controllers, after.Controllers);
+        Assert.Equal("Change instrument", s.UndoLabel);
+        s.ReplaceInstrument(track, synth); // the same instrument: no step
+        Assert.Equal("Change instrument", s.UndoLabel);
+        s.Undo();
+        Assert.Equal(KeyInstrument.Piano, s.State.Track(track)!.Instrument);
+    }
+
+    [Fact]
+    public void Plug_in_settings_captured_on_save_are_no_undo_step_and_keep_the_session_saved()
+    {
+        var synth = KeyTrack.Create("Synth") with { Instrument = KeyInstrument.Vst3Plugin(@"C:\VST3\Synth.vst3", null, "Synth") };
+        var piano = KeyTrack.Create("Piano");
+        var s = new KeysoundSession(new KeysoundState([synth, piano]));
+        s.StoreInstrumentStates(new Dictionary<Guid, string> { [synth.Id] = "AQID", [piano.Id] = "ignored" });
+        Assert.Equal("AQID", s.State.Track(synth.Id)!.Instrument.State);
+        Assert.Null(s.State.Track(piano.Id)!.Instrument.State); // only plug-ins have settings
+        Assert.False(s.IsEdited);
+        Assert.False(s.CanUndo);
+
+        s.AddNotes(piano.Id, [Note(0)]);
+        s.StoreInstrumentStates(new Dictionary<Guid, string> { [synth.Id] = "BAUG" });
+        Assert.True(s.IsEdited); // still edited: the notes aren't saved yet
+        Assert.Equal("Draw note", s.UndoLabel);
+    }
+
+    [Fact]
     public void A_drag_gesture_is_one_step_from_where_it_began()
     {
         var (s, track) = New();
@@ -269,6 +308,20 @@ public class KeysoundStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_vst3_instrument_reopens_with_its_class_name_and_settings()
+    {
+        var project = KeysoundStore.Create(MakeMap(), Path.Combine(root, "Project"), []);
+        var doc = KeysoundStore.Open(project);
+        var id = doc.Session.State.Tracks.Single().Id;
+        var synth = KeyInstrument.Vst3Plugin(@"C:\Missing\Synth.vst3", "0123456789ABCDEF0123456789ABCDEF", "Synth") with { State = "AQIDBA==" };
+        doc.Session.ReplaceInstrument(id, synth);
+        KeysoundStore.Save(doc);
+
+        // A plug-in that isn't installed opens fine: the track keeps it and its settings.
+        Assert.Equal(synth, KeysoundStore.Open(project).Session.State.Track(id)!.Instrument);
+    }
+
+    [Fact]
     public void Damaged_projects_are_refused()
     {
         var project = KeysoundStore.Create(MakeMap(), Path.Combine(root, "Project"), []);
@@ -281,6 +334,11 @@ public class KeysoundStoreTests : IDisposable
         {
             Reference = "a.osu",
             Tracks = [KeyTrack.Create("x") with { Notes = [new KeyNote(Guid.NewGuid(), 0, 0, 60, 100)] }],
+        }));
+        Assert.Throws<FormatException>(() => KeysoundStore.Validate(new KeysoundProjectFile
+        {
+            Reference = "a.osu",
+            Tracks = [KeyTrack.Create("x") with { Instrument = new KeyInstrument(KeyInstrument.Vst3) }], // a plug-in with no path
         }));
     }
 

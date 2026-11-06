@@ -237,7 +237,7 @@ public partial class MainWindow : Window
             e.Handled = true;
         };
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
-        SaveButton.Click += (_, _) => { if (Keys.Document is not null) SaveKeysound(); else _ = Save(); };
+        SaveButton.Click += (_, _) => { if (Keys.Document is not null) _ = SaveKeysound(); else _ = Save(); };
         menuCommands =
         [
             (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (OpenHitsoundFolderItem, "openHitsoundFolder"), (ReviewOutputItem, "reviewOutput"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),

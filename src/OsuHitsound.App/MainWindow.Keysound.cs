@@ -32,7 +32,7 @@ public partial class MainWindow
         if (Keys.Document is not { Session.IsEdited: true } project) return true;
         return await Dialogs.UnsavedClose(this, $"the Keysound project {Path.GetFileName(project.Folder)}") switch
         {
-            CloseChoice.Save => SaveKeysound(),
+            CloseChoice.Save => await SaveKeysound(),
             CloseChoice.Discard => true,
             _ => false,
         };
@@ -202,9 +202,23 @@ public partial class MainWindow
         Title = $"{name} — dawsu! Keysound";
     }
 
-    private bool SaveKeysound()
+    private bool savingKeysound;
+
+    /// <summary>Saves the Keysound project, with each VST3 instrument's current settings.</summary>
+    private async Task<bool> SaveKeysound()
     {
         if (Keys.Document is not { } project) return false;
+        if (savingKeysound)
+        {
+            Keys.SetStatus("Still saving: the instruments are reporting their settings.");
+            return false;
+        }
+
+        savingKeysound = true;
+        IReadOnlyList<string> unanswered;
+        try { unanswered = await Keys.CaptureInstrumentStates(); }
+        finally { savingKeysound = false; }
+        if (!ReferenceEquals(Keys.Document, project)) return false;
         try
         {
             KeysoundStore.Save(project);
@@ -215,7 +229,8 @@ public partial class MainWindow
             return false;
         }
 
-        Keys.SetStatus($"Saved {Path.GetFileName(project.Folder)}.");
+        Keys.SetStatus($"Saved {Path.GetFileName(project.Folder)}." + (unanswered.Count == 0 ? ""
+            : $" {string.Join(", ", unanswered)}: the instrument didn't report its settings, so the ones saved before were kept."));
         UpdateKeysoundTitle();
         return true;
     }
@@ -236,7 +251,7 @@ public partial class MainWindow
     {
         if (Keys.Document is null) return false;
         var command = EditorCommands.Match(e);
-        if (command?.Id == "save") { SaveKeysound(); return true; }
+        if (command?.Id == "save") { _ = SaveKeysound(); return true; }
         if (command?.Id is "help" or "preferences" or "inspector") return false;
         var focused = FocusManager?.GetFocusedElement();
         bool ownKey = focused is TextBox

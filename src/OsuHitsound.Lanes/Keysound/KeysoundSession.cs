@@ -115,6 +115,26 @@ public sealed class KeysoundSession
     public void ReplaceTrack(KeyTrack track, string label) =>
         Change(label, s => s.Track(track.Id) is { } old && old != track ? s.WithTrack(track.Id, _ => track) : s);
 
+    /// <summary>Gives a track another instrument as one step; notes and controllers stay as they are.</summary>
+    public void ReplaceInstrument(Guid id, KeyInstrument instrument, string label = "Replace instrument") =>
+        Change(label, s => s.Track(id) is { } t && t.Instrument != instrument ? s.WithTrack(id, x => x with { Instrument = instrument }) : s);
+
+    /// <summary>
+    /// Stores the instruments' current plug-in states (captured when the project is saved) without an undo step: they
+    /// are the plug-ins' own settings, not an edit. Keeps the session saved if it was.
+    /// </summary>
+    public void StoreInstrumentStates(IReadOnlyDictionary<Guid, string> states)
+    {
+        bool wasSaved = !IsEdited;
+        var next = State;
+        foreach (var (id, state) in states)
+            next = next.WithTrack(id, t => t.Instrument.IsVst3 && t.Instrument.State != state ? t with { Instrument = t.Instrument with { State = state } } : t);
+        if (ReferenceEquals(next, State)) return;
+        State = next;
+        if (wasSaved) saved = next;
+        Changed?.Invoke();
+    }
+
     public void DeleteTrack(Guid id) => Change("Delete track", s => s.Track(id) is { } t ? s with { Tracks = s.Tracks.Remove(t) } : s);
 
     public void RenameTrack(Guid id, string name) =>

@@ -55,7 +55,7 @@ public partial class KeysoundEditor
     // arrived, which already accounts for the output latency (what was heard then).
     private void OnKeyboard(KeyboardEvent e)
     {
-        var p = player;
+        var p = LiveToVst(e) ? null : player;
         switch (e.Kind)
         {
             case KeyboardEventKind.NoteOn: p?.LiveNoteOn(e.Pitch, e.Value); break;

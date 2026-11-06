@@ -333,7 +333,9 @@ std::string ShowEditor()
         RECT rect{0, 0, r.getWidth(), r.getHeight()};
         DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
         AdjustWindowRect(&rect, style, FALSE);
-        std::wstring title(pluginName.begin(), pluginName.end());
+        // The plug-in's name is UTF-8.
+        std::wstring title(MultiByteToWideChar(CP_UTF8, 0, pluginName.data(), (int)pluginName.size(), nullptr, 0), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, pluginName.data(), (int)pluginName.size(), title.data(), (int)title.size());
         title += L" — dawsu!";
         editorWindow = CreateWindowW(L"DawsuVst3Editor", title.c_str(), style, CW_USEDEFAULT, CW_USEDEFAULT,
             rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);

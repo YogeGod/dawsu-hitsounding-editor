@@ -61,10 +61,11 @@ public partial class KeysoundEditor : UserControl
         StartButton.Click += (_, _) => Seek(0);
         PlayButton.Click += (_, _) => TogglePlay();
         Roll.SeekRequested += Seek;
-        Roll.AuditionRequested += (pitch, velocity) => { if (HearToggle.IsChecked == true) player?.Audition(pitch, velocity); };
+        Roll.AuditionRequested += (pitch, velocity) => { if (HearToggle.IsChecked == true) Audition(pitch, velocity); };
         Roll.ViewChanged += UpdateTexts;
         clock.Tick += (_, _) => Tick();
         SetupRecording();
+        SetupInstruments();
     }
 
     /// <summary>The ◀ Close button: the window asks about unsaved edits, then closes the project.</summary>
@@ -83,6 +84,7 @@ public partial class KeysoundEditor : UserControl
         Roll.Attach(doc);
         Roll.Playhead = audio?.Position ?? 0;
         Roll.CentrePitch();
+        SyncInstruments();
         LoadWaveform();
         _ = LoadPiano(doc);
         RefreshMidiInputs();
@@ -99,7 +101,7 @@ public partial class KeysoundEditor : UserControl
         keyboard.Stop();
         Stop();
         waveCancel?.Cancel();
-        audio?.SetLiveParts([]);
+        DisposeInstruments();
         player = null;
         doc.Session.Changed -= OnSessionChanged;
         doc = null;
@@ -122,6 +124,7 @@ public partial class KeysoundEditor : UserControl
             Roll.TrackChanged();
         }
 
+        SyncInstruments();
         RefreshTracks();
         SchedulePlayback();
         UpdateTexts();
@@ -134,8 +137,8 @@ public partial class KeysoundEditor : UserControl
         Stop();
         audio = engine;
         if (doc is null) return;
-        if (player is not null) ApplyParts();
-        else _ = LoadPiano(doc);
+        ApplyParts();
+        if (player is null) _ = LoadPiano(doc);
         RefreshPlayback();
     }
 
@@ -175,20 +178,29 @@ public partial class KeysoundEditor : UserControl
         }, DispatcherPriority.Background);
     }
 
-    /// <summary>What the mixer plays alongside the song: the bundled piano (VST3 tracks join it in their own parts).</summary>
-    private void ApplyParts() => audio?.SetLiveParts(player is null ? [] : [player]);
-
-    /// <summary>The notes playback plays: every audible track (mute and solo), in timeline ms.</summary>
+    /// <summary>The notes playback plays: every audible track (mute and solo), in timeline ms; VST3 tracks to their plug-ins.</summary>
     private void RefreshPlayback()
     {
-        if (player is null || doc is null) return;
+        if (doc is null) return;
         var session = doc.Session;
         var tempo = doc.Tempo;
         var played = new List<PlayedNote>();
         var bends = new List<PlayedBend[]>();
         double last = 0;
-        foreach (var (t, part) in session.State.Tracks.Where(t => session.IsAudible(t.Id)).Select((t, i) => (t, i)))
+        foreach (var t in session.State.Tracks)
         {
+            bool audible = session.IsAudible(t.Id);
+            if (t.Instrument.IsVst3)
+            {
+                if (PartFor(t)?.Vst is not { } vst) continue;
+                double end = 0;
+                vst.SetEvents(audible ? KeysoundMidi.Events(t, tempo, out end) : []);
+                last = Math.Max(last, end);
+                continue;
+            }
+
+            if (!audible) continue;
+            int part = bends.Count;
             // Controllers are kept sorted by tick. The bundled piano can't read pedal events, so the sustain pedal holds
             // its notes until the pedal is released, as the dampers would.
             var sustain = t.Controllers.Where(c => c.Kind == ControllerKind.Sustain).ToList();
@@ -203,8 +215,8 @@ public partial class KeysoundEditor : UserControl
                 .Select(c => new PlayedBend(tempo.TimeAt(c.Tick), c.Value / 8192.0 * t.Instrument.PitchBendRange))]);
         }
 
-        player.SetNotes(played, bends);
-        audio?.SetMinimumLength(played.Count > 0 ? last + 2000 : 0); // notes after the song, or no song at all
+        player?.SetNotes(played, bends);
+        audio?.SetMinimumLength(last > 0 ? last + 2000 : 0); // notes after the song, or no song at all
     }
 
     private void LoadWaveform()
@@ -244,7 +256,7 @@ public partial class KeysoundEditor : UserControl
     {
         // Rebuilt only when something it shows changed: a note drag changes the state on every mouse move.
         var key = doc is null ? "" : string.Join("|", doc.Session.State.Tracks.Select(t =>
-            $"{t.Id}/{t.Name}/{t.Instrument.DisplayName}/{t.Notes.Count}/{t.IncludeInGenerate}/{doc.Session.Muted.Contains(t.Id)}/{doc.Session.Soloed.Contains(t.Id)}")) + "|" + doc?.SelectedTrack;
+            $"{t.Id}/{t.Name}/{t.Instrument.DisplayName}/{InstrumentProblem(t)}/{t.Notes.Count}/{t.IncludeInGenerate}/{doc.Session.Muted.Contains(t.Id)}/{doc.Session.Soloed.Contains(t.Id)}")) + "|" + doc?.SelectedTrack;
         if (key == trackListKey && TrackList.Children.Count > 0) return;
         trackListKey = key;
         TrackList.Children.Clear();
@@ -258,6 +270,7 @@ public partial class KeysoundEditor : UserControl
             var detail = new TextBlock
             {
                 Text = $"{track.Instrument.DisplayName} · {track.Notes.Count} note{(track.Notes.Count == 1 ? "" : "s")}"
+                    + (InstrumentProblem(track) is { } problem ? $" ({problem})" : "")
                     + (track.Percussion ? " · percussion" : "") + (track.IncludeInGenerate ? "" : " · excluded from Generate"),
                 FontSize = 11,
                 Opacity = 0.75,
@@ -294,7 +307,7 @@ public partial class KeysoundEditor : UserControl
         }
 
         var current = doc.SelectedTrack is { } sel ? session.State.Track(sel) : null;
-        InstrumentText.Text = current is null ? "No track. Add one to draw notes." : $"Instrument: {current.Instrument.DisplayName}";
+        UpdateInstrumentControls(current);
         RenameTrackButton.IsEnabled = DeleteTrackButton.IsEnabled = current is not null;
     }
 
@@ -319,6 +332,7 @@ public partial class KeysoundEditor : UserControl
         if (doc is null || doc.SelectedTrack == id) return;
         doc.SelectedTrack = id;
         Roll.TrackChanged();
+        UpdateLiveTarget();
         RefreshTracks();
         Roll.Focus();
     }

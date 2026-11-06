@@ -97,23 +97,11 @@ public partial class MainWindow
         choose.Click += async (_, _) =>
         {
             var panel = drumVstPanel!;
-            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "VST3");
-            var installed = Directory.Exists(root) ? Directory.EnumerateFileSystemEntries(root, "*.vst3", new EnumerationOptions {
-                RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }).Order().ToArray() : [];
-            var choices = installed.Select(p => (Name: Path.GetFileNameWithoutExtension(p), Path: p))
-                .GroupBy(p => p.Name).SelectMany(g => g.Select(p => (Label: g.Count() == 1 ? p.Name : p.Name + " — " + Path.GetRelativePath(root, p.Path), p.Path)))
-                .OrderBy(p => p.Label).ToDictionary(p => p.Label, p => p.Path);
+            var choices = Vst3Picker.Installed();
             string browse = "Browse for another VST3 file…";
             string? selected = await Dialogs.Choose(panel, "Choose drum instrument", "Installed VST3 plug-ins (choose an instrument):", [.. choices.Keys, browse], accept: "Load");
             if (selected is null || drumVstPanel is null) return;
-            string? path = choices.GetValueOrDefault(selected);
-            if (selected == browse)
-            {
-                var files = await panel.StorageProvider.OpenFilePickerAsync(new() { Title = "Choose an installed VST3 instrument", AllowMultiple = false,
-                    SuggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(root),
-                    FileTypeFilter = [new("VST3 instrument") { Patterns = ["*.vst3"] }] });
-                path = files.FirstOrDefault()?.TryGetLocalPath();
-            }
+            string? path = selected == browse ? await Vst3Picker.Browse(panel) : choices.GetValueOrDefault(selected);
             if (path is null || drumVstPanel is null) return;
             choose.IsEnabled = false;
             try { LoadDrumVst(path); }
