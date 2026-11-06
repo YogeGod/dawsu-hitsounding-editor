@@ -34,6 +34,18 @@ public class KeysoundVstTrackTests
         Assert.Equal(2000, last);
     }
 
+    [Fact]
+    public void Only_installed_or_chosen_plug_ins_start_by_themselves()
+    {
+        Assert.True(Vst3Picker.IsTrusted(Path.Combine(Vst3Picker.Root, "Vendor", "Synth.vst3")));
+        Assert.False(Vst3Picker.IsTrusted(Path.Combine(Vst3Picker.Root + "Evil", "Synth.vst3"))); // a look-alike folder
+        Assert.False(Vst3Picker.IsTrusted(Path.Combine(Vst3Picker.Root, "..", "Synth.vst3")));
+        string downloaded = Path.Combine(Path.GetTempPath(), $"dawsu-trust-{Guid.NewGuid():N}", "Synth.vst3");
+        Assert.False(Vst3Picker.IsTrusted(downloaded));
+        Vst3Picker.Trust(downloaded); // chosen in the instrument picker, or approved
+        Assert.True(Vst3Picker.IsTrusted(downloaded.ToUpperInvariant()));
+    }
+
     [Theory]
     [InlineData(@"C:\VST3\Serum2.vst3", false)]
     [InlineData(@"C:\VST3\Vendor\Synth.vst3", false)]

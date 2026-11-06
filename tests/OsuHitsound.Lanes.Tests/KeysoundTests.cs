@@ -416,6 +416,30 @@ public class KeysoundStoreTests : IDisposable
     }
 
     [Fact]
+    public void Generate_copies_only_real_files_inside_the_project()
+    {
+        var doc = KeysoundStore.Open(KeysoundStore.Create(MakeMap(), Path.Combine(root, "Project"), []));
+        string secret = Path.Combine(root, "secret");
+        Directory.CreateDirectory(secret);
+        File.WriteAllText(Path.Combine(secret, "passwords.txt"), "x");
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(doc.Folder, "reference", "linked"), secret);
+            File.CreateSymbolicLink(Path.Combine(doc.Folder, "reference", "linked.txt"), Path.Combine(secret, "passwords.txt"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return; // this Windows account can't create symbolic links (no Developer Mode): nothing to test
+        }
+
+        var plan = KeyGenerate.Plan(doc.Reference, Path.Combine(doc.Folder, "reference", doc.File.Reference), new Dictionary<(int, int), IReadOnlyList<string>>());
+        var output = KeyGenerate.Write(doc, plan, _ => BlankSample.Bytes);
+        Assert.False(Directory.Exists(Path.Combine(output, "linked")));
+        Assert.False(File.Exists(Path.Combine(output, "linked.txt")));
+        Assert.True(File.Exists(Path.Combine(output, "audio.mp3")));
+    }
+
+    [Fact]
     public void Suggested_folders_never_reuse_an_existing_one()
     {
         var first = KeysoundStore.SuggestFolder(root, @"C:\x\A: B [C].osu");

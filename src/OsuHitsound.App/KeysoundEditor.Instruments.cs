@@ -11,7 +11,7 @@ namespace OsuHitsound.App;
 /// </summary>
 public partial class KeysoundEditor
 {
-    private enum PartStatus { Loading, Ready, Missing, Crashed, Failed }
+    private enum PartStatus { Loading, Ready, Missing, Crashed, Failed, Blocked }
 
     /// <summary>A track's loaded plug-in. Kept until the project closes, so Undo of an instrument change or a deleted
     /// track gets the same instance back (with its unsaved tweaks) instead of reloading it.</summary>
@@ -28,6 +28,7 @@ public partial class KeysoundEditor
     }
 
     private readonly List<VstPart> vstParts = [];
+
     // What the MIDI keyboard plays (read on the driver's thread): the selected track's plug-in, or the piano.
     private volatile bool liveToVst;
     private volatile IsolatedVst3? liveVst;
@@ -38,8 +39,12 @@ public partial class KeysoundEditor
         EditorButton.Click += async (_, _) => await OpenEditor();
         FixButton.Click += async (_, _) =>
         {
-            if (SelectedTrackPart() is { Status: PartStatus.Missing }) await LocateInstrument();
-            else ReloadInstrument();
+            switch (SelectedTrackPart()?.Status)
+            {
+                case PartStatus.Missing: await LocateInstrument(); break;
+                case PartStatus.Blocked: await ApproveInstrument(); break;
+                default: ReloadInstrument(); break;
+            }
         };
     }
 
@@ -89,6 +94,13 @@ public partial class KeysoundEditor
         if (!File.Exists(path) && !Directory.Exists(path))
         {
             part.Status = PartStatus.Missing;
+            InstrumentsChanged();
+            return;
+        }
+
+        if (!Vst3Picker.IsTrusted(path))
+        {
+            part.Status = PartStatus.Blocked;
             InstrumentsChanged();
             return;
         }
@@ -239,6 +251,7 @@ public partial class KeysoundEditor
 
         if (chosen is null || !ReferenceEquals(doc, project) || project.Session.State.Track(id) is not { } now) return;
         if (now.Instrument.SamePlugin(chosen)) return; // keeps its settings
+        if (chosen.Path is { } chosenPath) Vst3Picker.Trust(chosenPath);
         project.Session.ReplaceInstrument(id, chosen, "Change instrument");
         SetStatus($"{now.Name} now plays {chosen.DisplayName}. Undo puts back {now.Instrument.DisplayName}.");
     }
@@ -250,6 +263,7 @@ public partial class KeysoundEditor
         var id = track.Id;
         if (await Vst3Picker.Browse(owner, $"Locate {track.Instrument.DisplayName}") is not { } path) return;
         if (await PickClass(owner, path, keep: track.Instrument) is not { } found || !ReferenceEquals(doc, project)) return;
+        Vst3Picker.Trust(path);
         project.Session.ReplaceInstrument(id, found, "Locate instrument");
     }
 
@@ -282,6 +296,18 @@ public partial class KeysoundEditor
         SetStatus("");
         var instrument = KeyInstrument.Vst3Plugin(path, pick.Id, pick.Name);
         return keep is null ? instrument : instrument with { State = keep.State };
+    }
+
+    /// <summary>A plug-in outside the VST3 folder that a project asks for: load it only once the user agrees.</summary>
+    private async Task ApproveInstrument()
+    {
+        if (SelectedKeyTrack() is not { Instrument: { IsVst3: true, Path: { } path } instrument } || TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (!await Dialogs.Confirm(owner, "Load this plug-in?",
+                $"This project asks dawsu! to run {instrument.DisplayName} from {path}, which isn't in your VST3 folder. " +
+                "A plug-in runs with your permissions: load it only if you trust it and where this project came from.", "Load plug-in", "Cancel"))
+            return;
+        Vst3Picker.Trust(path);
+        ReloadInstrument();
     }
 
     private void ReloadInstrument()
@@ -328,6 +354,7 @@ public partial class KeysoundEditor
         PartStatus.Missing => "missing",
         PartStatus.Crashed => "crashed",
         PartStatus.Failed => "failed to load",
+        PartStatus.Blocked => "not loaded",
         _ => null,
     };
 
@@ -340,6 +367,7 @@ public partial class KeysoundEditor
             PartStatus.Missing => $" — not found at {current.Instrument.Path}. Its settings are kept; locate it or choose another instrument.",
             PartStatus.Crashed => " — stopped working. Reload tries again with the settings last saved in the project.",
             PartStatus.Failed => $" — couldn't load: {part.Error}",
+            PartStatus.Blocked => $" — not loaded: {current.Instrument.Path} isn't in your VST3 folder. Load it only if you trust where this project came from.",
             _ => "",
         };
         InstrumentButton.IsEnabled = current is not null;
@@ -349,7 +377,7 @@ public partial class KeysoundEditor
         showingVolume = false;
         EditorButton.IsVisible = current?.Instrument.IsVst3 == true;
         EditorButton.IsEnabled = part?.Vst is not null;
-        FixButton.IsVisible = part?.Status is PartStatus.Missing or PartStatus.Crashed or PartStatus.Failed;
-        FixButton.Content = part?.Status == PartStatus.Missing ? "Locate…" : "Reload instrument";
+        FixButton.IsVisible = part?.Status is PartStatus.Missing or PartStatus.Crashed or PartStatus.Failed or PartStatus.Blocked;
+        FixButton.Content = part?.Status switch { PartStatus.Missing => "Locate…", PartStatus.Blocked => "Load plug-in…", _ => "Reload instrument" };
     }
 }

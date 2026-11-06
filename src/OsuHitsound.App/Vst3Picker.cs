@@ -8,6 +8,20 @@ internal static class Vst3Picker
 {
     public static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), "VST3");
 
+    // Plug-ins the user chose or approved in this session. A project names the plug-ins it runs, and a plug-in runs with
+    // the user's permissions, so one outside the VST3 folder doesn't start until the user says so.
+    private static readonly HashSet<string> trusted = new(StringComparer.OrdinalIgnoreCase);
+
+    public static void Trust(string path) { lock (trusted) trusted.Add(Path.GetFullPath(path)); }
+
+    /// <summary>Installed in the VST3 folder (which needs an installer to write), or chosen or approved by the user here.</summary>
+    public static bool IsTrusted(string path)
+    {
+        string full = Path.GetFullPath(path);
+        string root = Path.GetFullPath(Root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        lock (trusted) return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || trusted.Contains(full);
+    }
+
     /// <summary>The installed .vst3s by label: the file name, with its folder when two share a name.</summary>
     public static IReadOnlyDictionary<string, string> Installed()
     {

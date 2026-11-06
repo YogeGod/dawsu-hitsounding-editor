@@ -188,7 +188,10 @@ public static class KeyGenerate
         Directory.CreateDirectory(staging);
         try
         {
-            foreach (var file in Directory.EnumerateFiles(reference, "*", SearchOption.AllDirectories))
+            // Real files inside the project only: a link or junction in a project from elsewhere could otherwise pull files
+            // from anywhere on this computer into the .osz.
+            var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true };
+            foreach (var file in Directory.EnumerateFiles(reference, "*", options))
             {
                 string relative = Path.GetRelativePath(reference, file);
                 if (relative.EndsWith(".osu", StringComparison.OrdinalIgnoreCase)) continue;
