@@ -8,8 +8,24 @@ public sealed record KeyNote(Guid Id, long Start, long Length, int Pitch, int Ve
     public const int MinPitch = 0, MaxPitch = 127, MinVelocity = 1, MaxVelocity = 127;
     public long End => Start + Length;
 
+    /// <summary>
+    /// The gameplay position Sync assigned this note to, or null when it isn't synced. Moving the note's start clears it
+    /// (<see cref="KeysoundSession"/>); pitch, length and velocity edits keep it.
+    /// </summary>
+    public KeySyncTarget? Target { get; init; }
+
     public bool IsValid => Id != Guid.Empty && Length > 0 && Pitch is >= MinPitch and <= MaxPitch && Velocity is >= MinVelocity and <= MaxVelocity
-        && Start is > -100_000_000 and < 100_000_000 && Length < 100_000_000;
+        && Start is > -100_000_000 and < 100_000_000 && Length < 100_000_000 && Target?.IsValid != false;
+}
+
+/// <summary>
+/// A sync target: a reference hit object (its place in [HitObjects]) and node (0 = head; for sliders the repeats, then
+/// the tail), with the play time and kind it had when Sync chose it, so a changed reference shows as moved or missing.
+/// </summary>
+public sealed record KeySyncTarget(int ObjectIndex, int Node, double Time, HitPosition Position)
+{
+    public bool IsValid => ObjectIndex is >= 0 and < 1_000_000 && Node is >= 0 and < 100_000 && double.IsFinite(Time) && Enum.IsDefined(Position);
+    public bool SamePlace(KeySyncTarget other) => ObjectIndex == other.ObjectIndex && Node == other.Node;
 }
 
 /// <summary>

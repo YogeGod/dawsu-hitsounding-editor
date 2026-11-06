@@ -39,7 +39,7 @@ public sealed class KeysoundSession
 
     public void Change(string label, Func<KeysoundState, KeysoundState> change)
     {
-        var next = change(State);
+        var next = ClearMovedTargets(State, change(State));
         if (ReferenceEquals(next, State)) return;
         if (gestureStart is null)
         {
@@ -49,6 +49,48 @@ public sealed class KeysoundSession
 
         State = next;
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// A synced note whose start moved loses its target (another Sync is needed); one that got a new target in the same
+    /// change (Sync itself) keeps it. Pitch, length and velocity changes keep the target.
+    /// </summary>
+    private static KeysoundState ClearMovedTargets(KeysoundState before, KeysoundState after)
+    {
+        if (ReferenceEquals(before, after)) return after;
+        var result = after;
+        foreach (var track in after.Tracks)
+        {
+            if (before.Track(track.Id) is not { } old || ReferenceEquals(old.Notes, track.Notes) || !track.Notes.Any(n => n.Target is not null)) continue;
+            var previous = old.Notes.Where(n => n.Target is not null).ToDictionary(n => n.Id);
+            bool any = false;
+            var notes = track.Notes.ConvertAll(n =>
+            {
+                if (n.Target is null || !previous.TryGetValue(n.Id, out var was) || was.Start == n.Start || was.Target != n.Target) return n;
+                any = true;
+                return n with { Target = null };
+            });
+            if (any) result = result.WithTrack(track.Id, t => t with { Notes = notes });
+        }
+
+        return result;
+    }
+
+    /// <summary>Applies a Sync preview as one step: each note moves to its target's tick and keeps the target.</summary>
+    public void ApplySync(IReadOnlyCollection<KeySyncMove> moves, string label = "Sync")
+    {
+        if (moves.Count == 0) return;
+        var byTrack = moves.GroupBy(m => m.Track).ToDictionary(g => g.Key, g => g.ToDictionary(m => m.Note));
+        Change(label, s =>
+        {
+            var next = s;
+            foreach (var (track, notes) in byTrack)
+                next = next.WithTrack(track, t => t with
+                {
+                    Notes = t.Notes.ConvertAll(n => notes.TryGetValue(n.Id, out var m) ? n with { Start = m.Start, Target = m.Target } : n),
+                });
+            return next;
+        });
     }
 
     public void BeginGesture(string label)

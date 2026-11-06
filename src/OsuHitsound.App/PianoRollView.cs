@@ -30,6 +30,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private static readonly IPen RowLine = new ImmutablePen(Paint.Brush(Colors.Black, 0.35), 1), OctaveLine = new ImmutablePen(Paint.Brush(Colors.Black, 0.7), 1);
     private static readonly IPen NoteEdge = new ImmutablePen(Paint.Brush(Colors.Black, 0.55), 1);
     private static readonly IBrush RecordFill = Paint.Brush(Color.Parse("#e5484d"), 0.8);
+    // A synced note's start edge; a target that moved or is gone shows in orange (Sync again).
+    private static readonly IBrush SyncedMark = Paint.Brush("#3ddc84"), StaleMark = Paint.Brush("#ff8a5c");
     private static readonly IPen WhiteRing = new ImmutablePen(Brushes.White, 1.5); // selected notes and object heads
     private static readonly IPen BoxPen = new ImmutablePen(Paint.Brush(Colors.White, 0.6), 1, new ImmutableDashStyle([3, 3], 0));
     // osu!'s default combo colours, for references that set none.
@@ -138,7 +140,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     private static bool IsBlack(int pitch) => (pitch % 12) is 1 or 3 or 6 or 8 or 10;
     // Cubase's names: middle C (60) is C3.
-    private static string PitchName(int pitch) => $"{NoteNames[pitch % 12]}{pitch / 12 - 2}";
+    internal static string PitchName(int pitch) => $"{NoteNames[pitch % 12]}{pitch / 12 - 2}";
 
     /// <summary>Velocity colour, as in Cubase's default: blue (soft) through purple to red (loud).</summary>
     private static Color VelocityColor(int velocity)
@@ -292,6 +294,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             var r = NoteRect(n);
             bool selected = selection.Contains(n.Id);
             ctx.DrawRectangle(VelocityFill(n.Velocity), selected ? WhiteRing : NoteEdge, r, 1.5, 1.5);
+            if (n.Target is not null)
+                ctx.FillRectangle(KeySync.Status(n, doc!.TargetIndex) == KeySyncStatus.Synced ? SyncedMark : StaleMark,
+                    new Rect(r.Left, r.Top, Math.Min(3, r.Width), r.Height));
             if (r.Width > 30 && rowHeight >= 10)
                 Paint.DrawText(ctx, PitchName(n.Pitch), new Point(r.Left + 3, r.Top + (rowHeight - 12) / 2), 9, Brushes.White, r.Width - 5);
         }

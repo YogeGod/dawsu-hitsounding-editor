@@ -20,7 +20,7 @@ public static class KeyEditing
         foreach (var n in notes.Where(n => n.Start < tick && tick < n.End))
         {
             changed.Add(n with { Length = tick - n.Start });
-            added.Add(n with { Id = Guid.NewGuid(), Start = tick, Length = n.End - tick });
+            added.Add(n with { Id = Guid.NewGuid(), Start = tick, Length = n.End - tick, Target = null }); // the right part starts elsewhere
         }
 
         return (changed, added);
@@ -62,7 +62,7 @@ public static class KeyEditing
     {
         if (notes.Count == 0) return [];
         long offset = at - notes.Min(n => n.Start);
-        return [.. notes.Select(n => n with { Id = Guid.NewGuid(), Start = n.Start + offset })];
+        return [.. notes.Select(n => n with { Id = Guid.NewGuid(), Start = n.Start + offset, Target = null })]; // copies aren't synced
     }
 
     /// <summary>

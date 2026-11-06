@@ -40,6 +40,10 @@ public sealed class KeysoundDocument
     public required MapSettings Settings { get; init; }
     public required TempoMap Tempo { get; init; }
     public required IReadOnlyList<KeyObject> Objects { get; init; }
+    /// <summary>Every position a note can sync to (circles, slider heads, repeats and tails, spinner ends), by time.</summary>
+    public IReadOnlyList<KeySyncTarget> Targets { get; init; } = [];
+    private IReadOnlyDictionary<(int Object, int Node), KeySyncTarget>? targetIndex;
+    public IReadOnlyDictionary<(int Object, int Node), KeySyncTarget> TargetIndex => targetIndex ??= KeySync.Index(Targets);
     /// <summary>The reference's [Colours] Combo1… as (r, g, b); empty when it sets none.</summary>
     public required IReadOnlyList<(byte R, byte G, byte B)> ComboColours { get; init; }
     /// <summary>The copied song audio, or null when the reference's audio file was missing (Generate will refuse).</summary>
@@ -193,6 +197,7 @@ public static class KeysoundStore
         var ids = project.Tracks.Select(t => t.Id).ToHashSet();
         session.Muted.UnionWith(project.Muted.Where(ids.Contains));
         session.Soloed.UnionWith(project.Soloed.Where(ids.Contains));
+        var (objects, targets) = BuildObjects(file, reference, settings.TimeOffset, warnings);
         return new KeysoundDocument
         {
             ProjectPath = projectPath,
@@ -200,7 +205,8 @@ public static class KeysoundStore
             Reference = file,
             Settings = settings,
             Tempo = TempoMap.FromBeatmap(file, settings.TimeOffset),
-            Objects = BuildObjects(file, reference, settings.TimeOffset, warnings),
+            Objects = objects,
+            Targets = targets,
             ComboColours = ComboColours(file),
             SongPath = song is null ? null : Path.Combine(folder, ReferenceFolder, song),
             Session = session,
@@ -257,15 +263,21 @@ public static class KeysoundStore
     }
 
     /// <summary>The reference's gameplay objects in play time, numbered by combo, with their circles, slider nodes and spinner ends.</summary>
-    private static List<KeyObject> BuildObjects(OsuFile file, MapFolder folder, double offset, ICollection<string> warnings)
+    private static (List<KeyObject> Objects, List<KeySyncTarget> Targets) BuildObjects(OsuFile file, MapFolder folder, double offset, ICollection<string> warnings)
     {
         DecompiledMap map;
         try { map = Decompiler.Decompile(file, folder); }
         catch (Exception ex) when (ex is FormatException or InvalidOperationException or ArgumentException)
         {
             warnings.Add($"Couldn't read the reference's objects: {ex.Message}");
-            return [];
+            return ([], []);
         }
+
+        var index = new Dictionary<HitObject, int>(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < file.HitObjects.Count; i++) index[file.HitObjects[i]] = i;
+        var targets = map.Moments.Where(m => index.ContainsKey(m.Object))
+            .Select(m => new KeySyncTarget(index[m.Object], m.Node, m.Time + offset, m.Position))
+            .OrderBy(t => t.Time).ThenBy(t => t.ObjectIndex).ThenBy(t => t.Node).ToList();
 
         var nodes = map.Moments.GroupBy(m => m.Object, ReferenceEqualityComparer.Instance)
             .ToDictionary(g => g.Key, g => g.Select(m => (m.Time + offset, m.Position)).OrderBy(n => n.Item1).ToList(), ReferenceEqualityComparer.Instance);
@@ -288,7 +300,7 @@ public static class KeysoundStore
         }
 
         objects.Sort((a, b) => a.Start.CompareTo(b.Start));
-        return objects;
+        return (objects, targets);
     }
 
     private static List<(byte R, byte G, byte B)> ComboColours(OsuFile file) =>

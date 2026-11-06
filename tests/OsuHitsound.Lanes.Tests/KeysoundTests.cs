@@ -292,6 +292,19 @@ public class KeysoundStoreTests : IDisposable
         var slider = doc.Objects[2];
         Assert.Equal([HitPosition.SliderHead, HitPosition.SliderTail], slider.Nodes.Select(n => n.Position));
         Assert.Equal((4000.0, 5000.0), (doc.Objects[3].Start, doc.Objects[3].End));
+
+        // Sync targets: every circle, slider node and spinner end, by time, with its place in [HitObjects].
+        Assert.Equal([HitPosition.Circle, HitPosition.Circle, HitPosition.SliderHead, HitPosition.SliderTail, HitPosition.SpinnerEnd],
+            doc.Targets.Select(t => t.Position));
+        Assert.Equal([(0, 0), (1, 0), (2, 0), (2, 1), (3, 0)], doc.Targets.Select(t => (t.ObjectIndex, t.Node)));
+        Assert.Equal(5000, doc.Targets[^1].Time);
+
+        // A synced note keeps its target through Save and Open.
+        var track = doc.Session.State.Tracks.Single();
+        var note = new KeyNote(Guid.NewGuid(), doc.Tempo.RoundTick(1000), 240, 60, 100) { Target = doc.Targets[0] };
+        doc.Session.AddNotes(track.Id, [note]);
+        KeysoundStore.Save(doc);
+        Assert.Equal(doc.Targets[0], KeysoundStore.Open(doc.ProjectPath).Session.State.Track(track.Id)!.Notes.Single().Target);
     }
 
     [Fact]

@@ -58,6 +58,7 @@ public partial class KeysoundEditor : UserControl
         DeleteTrackButton.Click += (_, _) => DeleteTrack();
         CloseButton.Click += (_, _) => CloseRequested?.Invoke();
         ImportMidiButton.Click += async (_, _) => await ImportMidi();
+        SyncButton.Click += async (_, _) => await SyncNotes();
         StartButton.Click += (_, _) => Seek(0);
         PlayButton.Click += (_, _) => TogglePlay();
         Roll.SeekRequested += Seek;
@@ -256,7 +257,7 @@ public partial class KeysoundEditor : UserControl
     {
         // Rebuilt only when something it shows changed: a note drag changes the state on every mouse move.
         var key = doc is null ? "" : string.Join("|", doc.Session.State.Tracks.Select(t =>
-            $"{t.Id}/{t.Name}/{t.Instrument.DisplayName}/{InstrumentProblem(t)}/{t.Notes.Count}/{t.IncludeInGenerate}/{doc.Session.Muted.Contains(t.Id)}/{doc.Session.Soloed.Contains(t.Id)}")) + "|" + doc?.SelectedTrack;
+            $"{t.Id}/{t.Name}/{t.Instrument.DisplayName}/{InstrumentProblem(t)}/{t.Notes.Count}/{SyncCounts(t)}/{t.IncludeInGenerate}/{doc.Session.Muted.Contains(t.Id)}/{doc.Session.Soloed.Contains(t.Id)}")) + "|" + doc?.SelectedTrack;
         if (key == trackListKey && TrackList.Children.Count > 0) return;
         trackListKey = key;
         TrackList.Children.Clear();
@@ -271,6 +272,7 @@ public partial class KeysoundEditor : UserControl
             {
                 Text = $"{track.Instrument.DisplayName} · {track.Notes.Count} note{(track.Notes.Count == 1 ? "" : "s")}"
                     + (InstrumentProblem(track) is { } problem ? $" ({problem})" : "")
+                    + SyncText(track)
                     + (track.Percussion ? " · percussion" : "") + (track.IncludeInGenerate ? "" : " · excluded from Generate"),
                 FontSize = 11,
                 Opacity = 0.75,
@@ -309,6 +311,27 @@ public partial class KeysoundEditor : UserControl
         var current = doc.SelectedTrack is { } sel ? session.State.Track(sel) : null;
         UpdateInstrumentControls(current);
         RenameTrackButton.IsEnabled = DeleteTrackButton.IsEnabled = current is not null;
+    }
+
+    // (synced, needing re-sync) notes on a track.
+    private (int Synced, int Stale) SyncCounts(KeyTrack track)
+    {
+        int synced = 0, stale = 0;
+        foreach (var n in track.Notes)
+            switch (KeySync.Status(n, doc!.TargetIndex))
+            {
+                case KeySyncStatus.Synced: synced++; break;
+                case KeySyncStatus.Moved or KeySyncStatus.Missing: stale++; break;
+            }
+
+        return (synced, stale);
+    }
+
+    private string SyncText(KeyTrack track)
+    {
+        if (track.Notes.Count == 0) return "";
+        var (synced, stale) = SyncCounts(track);
+        return $" · {synced} synced" + (stale > 0 ? $" · {stale} need re-sync" : "");
     }
 
     private ToggleButton Toggle(string text, bool on, string tip, Action<bool> changed)
@@ -372,6 +395,27 @@ public partial class KeysoundEditor : UserControl
         Roll.CentrePitch();
         int notes = tracks.Sum(t => t.Notes.Count);
         SetStatus($"Imported {tracks.Count} track{(tracks.Count == 1 ? "" : "s")} with {notes} notes from {Path.GetFileName(path)}. Undo removes them together.");
+    }
+
+    /// <summary>Sync…: preview moving notes onto gameplay positions, then apply as one undo step.</summary>
+    private async Task SyncNotes()
+    {
+        if (doc is not { } project || TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (project.Targets.Count == 0)
+        {
+            SetStatus("The reference has no gameplay objects to sync to.");
+            return;
+        }
+
+        if (await Dialogs.Sync(owner, project, Roll.CopySelection()) is not { } moves || !ReferenceEquals(doc, project)) return;
+        if (moves.Count == 0)
+        {
+            SetStatus("No notes were synced.");
+            return;
+        }
+
+        project.Session.ApplySync(moves);
+        SetStatus(moves.Count == 1 ? "Synced 1 note. Undo puts it back where it was." : $"Synced {moves.Count} notes. Undo puts them back where they were.");
     }
 
     private void AddTrack()
