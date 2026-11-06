@@ -82,6 +82,7 @@ public partial class KeysoundEditor : UserControl
         clock.Tick += (_, _) => Tick();
         SetupRecording();
         SetupInstruments();
+        SetupTransport();
     }
 
     /// <summary>The ◀ Close button: the window asks about unsaved edits, then closes the project.</summary>
@@ -105,6 +106,10 @@ public partial class KeysoundEditor : UserControl
         _ = LoadPiano(doc);
         RefreshMidiInputs();
         status = doc.Warnings.Count > 0 ? string.Join(" ", doc.Warnings) : $"Opened {doc.Name}. Save project (Ctrl+S) keeps your tracks and notes.";
+        locatorLeft = locatorRight = null;
+        LoopButton.IsChecked = false;
+        ShowLocators();
+        ApplyTransport();
         RefreshTracks();
         UpdateTexts();
         Roll.Focus();
@@ -118,6 +123,7 @@ public partial class KeysoundEditor : UserControl
         Stop();
         waveCancel?.Cancel();
         DisposeInstruments();
+        if (audio is not null) (audio.Loop, audio.SongMuted) = (null, false); // the engine is shared with Hitsound mode
         player = null;
         doc.Session.Changed -= OnSessionChanged;
         doc = null;
@@ -154,6 +160,7 @@ public partial class KeysoundEditor : UserControl
         audio = engine;
         if (doc is null) return;
         ApplyParts();
+        ApplyTransport();
         if (player is null) _ = LoadPiano(doc);
         RefreshPlayback();
     }
@@ -205,7 +212,7 @@ public partial class KeysoundEditor : UserControl
         double last = 0;
         foreach (var t in session.State.Tracks)
         {
-            bool audible = session.IsAudible(t.Id);
+            bool audible = session.IsAudible(t.Id) && !songSoloed;
             if (t.Instrument.IsVst3)
             {
                 if (PartFor(t)?.Vst is not { } vst) continue;
@@ -360,6 +367,7 @@ public partial class KeysoundEditor : UserControl
     private void Flag(HashSet<Guid> set, Guid id, bool on)
     {
         if (on) set.Add(id); else set.Remove(id);
+        UpdateSongMute();
         RefreshTracks();
         SchedulePlayback();
         Changed?.Invoke();
@@ -476,6 +484,8 @@ public partial class KeysoundEditor : UserControl
         if (audio.IsPlaying) { Stop(); return; }
         if (!audio.HasSong) SetStatus("The song audio is missing from this project.");
         audio.Seek(Roll.Playhead);
+        playStartedAt = Roll.Playhead;
+        UpdateLoop();
         audio.Play();
         PlayGlyph.Glyph = "Pause";
         clock.Start();
@@ -483,7 +493,14 @@ public partial class KeysoundEditor : UserControl
 
     private void Stop()
     {
-        if (audio?.IsPlaying == true) audio.Pause();
+        bool wasPlaying = audio?.IsPlaying == true;
+        if (wasPlaying) audio!.Pause();
+        if (wasPlaying && ReturnOnStopButton.IsChecked == true)
+        {
+            audio!.Seek(playStartedAt);
+            Roll.Playhead = playStartedAt;
+            Roll.InvalidateVisual();
+        }
         clock.Stop();
         PlayGlyph.Glyph = "Play";
     }
@@ -502,7 +519,9 @@ public partial class KeysoundEditor : UserControl
         ShowRecording(now);
         // Follow playback a page at a time.
         var axis = Roll.Axis;
-        if (now > axis.Left + axis.VisibleDuration * 0.92 || now < axis.Left) axis.Left = now - axis.VisibleDuration * 0.08;
+        // Page at the right edge (or when the playhead is off screen to the left), as Hitsound mode does.
+        if (FollowPlaybackButton.IsChecked == true && (now > axis.Left + axis.VisibleDuration * 0.98 || now < axis.Left))
+            axis.Left = now - axis.VisibleDuration * 0.02;
         Roll.InvalidateVisual();
         UpdateTransport();
     }

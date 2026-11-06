@@ -22,6 +22,8 @@ public sealed record KeysoundProjectFile
     public Guid? SelectedTrack { get; init; }
     public List<Guid> Muted { get; init; } = [];
     public List<Guid> Soloed { get; init; } = [];
+    /// <summary>The song's listening offset for this project in ms (as Hitsound mode keeps one per map); not part of the map.</summary>
+    public double SongOffset { get; init; }
 }
 
 /// <summary>
@@ -51,6 +53,8 @@ public sealed class KeysoundDocument
     public required KeysoundSession Session { get; init; }
     public List<string> Warnings { get; init; } = [];
     public Guid? SelectedTrack { get; set; }
+    /// <summary>The project's song offset in ms (saved with the project).</summary>
+    public double SongOffset { get; set; }
 
     public string Name => Path.GetFileNameWithoutExtension(File.Reference);
 }
@@ -212,6 +216,7 @@ public static class KeysoundStore
             Session = session,
             Warnings = warnings,
             SelectedTrack = project.SelectedTrack is { } sel && ids.Contains(sel) ? sel : project.Tracks.FirstOrDefault()?.Id,
+            SongOffset = double.IsFinite(project.SongOffset) ? Math.Clamp(project.SongOffset, -10000, 10000) : 0,
         };
     }
 
@@ -226,6 +231,7 @@ public static class KeysoundStore
             SelectedTrack = document.SelectedTrack,
             Muted = [.. session.Muted],
             Soloed = [.. session.Soloed],
+            SongOffset = document.SongOffset,
         });
         session.MarkSaved(state);
     }

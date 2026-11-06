@@ -21,6 +21,8 @@ public partial class MainWindow
         hsSaveButton = (SaveButton.Content, ToolTip.GetTip(SaveButton));
         Keys.CloseRequested += async () => { if (await MayLeaveKeysound()) await CloseKeysound(); };
         SetupKeysoundMenu();
+        // One global volume for both modes: Keysound's slider drives Hitsound mode's (which saves it in the preferences).
+        Keys.GlobalVolumeChanged += value => GlobalVolumeSlider.Value = value;
         Keys.Changed += UpdateKeysoundTitle;
         Start.KeysoundNewRequested += () => _ = NewKeysound();
         Start.KeysoundOpenRequested += () => _ = PickKeysound();
@@ -153,6 +155,8 @@ public partial class MainWindow
 
         if (audio is not null && prepared is not null) audio.Apply(prepared);
         else prepared?.Dispose();
+        Keys.GlobalSongOffset = prefs.GlobalSongOffset;
+        Keys.ShowGlobalVolume(GlobalVolumeSlider.Value);
         Keys.Open(project, audio);
         Keys.IsVisible = true;
         HideStartScreen();

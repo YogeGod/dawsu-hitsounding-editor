@@ -162,6 +162,7 @@ public partial class MainWindow
             audio?.Load(new DecompiledMap(keysound.Settings, [], [], [], []),
                 MapFolder.FromDirectory(Path.Combine(keysound.Folder, OsuHitsound.Lanes.Keysound.KeysoundStore.ReferenceFolder)), skin.Value);
             if (audio is not null) audio.Speed = speed;
+            Keys.GlobalSongOffset = prefs.GlobalSongOffset;
             Keys.UseAudio(audio);
         }
         else if (audio is not null && model is not null && doc is { } document && session is not null && folder is not null)

@@ -281,6 +281,10 @@ public class KeysoundStoreTests : IDisposable
         Assert.Equal(note, again.Session.State.Track(track.Id)!.Notes.Single());
         Assert.Contains(track.Id, again.Session.Muted);
         Assert.Equal(second.Id, again.SelectedTrack);
+        Assert.Equal(0, again.SongOffset);
+        again.SongOffset = -12.5; // the listening offset, as Hitsound mode keeps one per map
+        KeysoundStore.Save(again);
+        Assert.Equal(-12.5, KeysoundStore.Open(project).SongOffset);
         Assert.NotNull(again.SongPath);
         Assert.Empty(again.Warnings);
     }

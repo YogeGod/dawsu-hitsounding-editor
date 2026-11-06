@@ -109,6 +109,7 @@ public partial class KeysoundEditor
 
         Stop();
         recorder = new KeyRecorder(tempo, start);
+        UpdateLoop(); // a take is one pass: no cycling while recording
         recordTrack = trackId;
         audio.Seek(preroll);
         audio.Play();
@@ -124,6 +125,7 @@ public partial class KeysoundEditor
         if (recorder is not { } r || doc is null) return;
         double stop = audio?.Position ?? Roll.Playhead;
         recorder = null;
+        UpdateLoop();
         RecordButton.IsChecked = false;
         player?.SetClicks(null);
         Stop();

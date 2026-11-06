@@ -70,6 +70,15 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     /// <summary>Clicks on the ruler or strip move the playhead.</summary>
     public event Action<double>? SeekRequested;
+    /// <summary>Ctrl+click (left) or Alt+click (right) in the ruler, as in Hitsound mode: set that locator here.</summary>
+    public event Action<bool, double>? LocatorRequested;
+
+    public double? LocatorLeft { get; set; }
+    public double? LocatorRight { get; set; }
+    /// <summary>Cycle is on: the range between the locators is drawn as the active cycle.</summary>
+    public bool Cycle { get; set; }
+    /// <summary>The song's listening offset (ms): the waveform moves with it, as the song does.</summary>
+    public double SongOffset { get; set; }
     /// <summary>Selection, tool or view changes the editor shows (not edits: those come from the session).</summary>
     public event Action? ViewChanged;
 
@@ -327,6 +336,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             }
         }
 
+        DrawLocators(ctx, width);
         ctx.DrawLine(Paint.DividerPen, new Point(KeyboardWidth, RulerHeight - 0.5), new Point(width, RulerHeight - 0.5));
     }
 
@@ -373,17 +383,38 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     }
 
     // The waveform only changes on scroll, zoom or resize: playback redraws reuse the geometry.
+    private static readonly IBrush CycleFill = Paint.Brush(Color.Parse("#2d7ff9"), 0.35), RangeFill = Paint.Brush(Colors.White, 0.08);
+    private static readonly IPen LocatorPen = new ImmutablePen(Paint.Brush("#2d7ff9"), 1.5);
+
+    // The L/R locators in the ruler: their range shaded (blue while Cycle is on) and a line at each.
+    private void DrawLocators(DrawingContext ctx, double width)
+    {
+        using var clip = ctx.PushClip(new Rect(KeyboardWidth, 0, width - KeyboardWidth, RulerHeight));
+        if (LocatorLeft is { } l && LocatorRight is { } r)
+        {
+            double x0 = XOfTime(Math.Min(l, r)), x1 = XOfTime(Math.Max(l, r));
+            ctx.FillRectangle(Cycle ? CycleFill : RangeFill, new Rect(x0, 0, Math.Max(1, x1 - x0), RulerHeight));
+        }
+
+        foreach (var t in new[] { LocatorLeft, LocatorRight })
+            if (t is { } at)
+            {
+                double x = Math.Round(XOfTime(at)) + 0.5;
+                ctx.DrawLine(LocatorPen, new Point(x, 0), new Point(x, RulerHeight));
+            }
+    }
+
     private StreamGeometry? WaveGeometry(Rect area, double mid)
     {
         if (Wave is not { } wave) return null;
-        var key = (Axis.Left, Axis.Zoom, area.Width, wave);
+        var key = (Axis.Left - SongOffset, Axis.Zoom, area.Width, wave);
         if (waveGeometry is not null && waveKey == key) return waveGeometry;
         double msPerPx = 1 / Axis.Zoom, half = area.Height / 2 - 2;
         var geometry = new StreamGeometry();
         using (var g = geometry.Open())
             for (double x = area.Left; x < area.Right; x++)
             {
-                double t = TimeOfX(x);
+                double t = TimeOfX(x) - SongOffset; // a later song (positive offset) draws later
                 float peak = wave.Max(t, t + msPerPx);
                 if (peak <= 0.002f) continue;
                 double a = Math.Max(0.5, peak * half);
@@ -457,7 +488,16 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         if (p.Y < RulerHeight + StripHeight && p.X >= KeyboardWidth)
         {
-            SeekRequested?.Invoke(Math.Max(0, TimeOfX(p.X)));
+            double at = Math.Max(0, TimeOfX(p.X));
+            if (mods.HasFlag(KeyModifiers.Control) || mods.HasFlag(KeyModifiers.Alt))
+            {
+                if (SnapOn) at = Math.Max(0, doc.Tempo.Snap(at, 1, SnapDivisions));
+                LocatorRequested?.Invoke(mods.HasFlag(KeyModifiers.Control), at);
+                e.Handled = true;
+                return;
+            }
+
+            SeekRequested?.Invoke(at);
             e.Handled = true;
             return;
         }

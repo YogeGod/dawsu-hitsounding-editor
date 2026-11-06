@@ -46,7 +46,8 @@
 
     <!-- Info bar: the selected notes, as Hitsound mode's selection bar shows the selected hits. -->
     <Border Grid.Row="1" Grid.ColumnSpan="3" Classes="info" BorderThickness="0,0,0,1">
-      <StackPanel Orientation="Horizontal" Margin="12,0">
+      <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0">
+      <StackPanel Orientation="Horizontal">
         <StackPanel Classes="field" MinWidth="130">
           <TextBlock Text="SELECTION" Classes="fieldLabel" />
           <TextBlock Name="InfoSelection" Text="No notes" Classes="fieldValue" />
@@ -79,12 +80,30 @@
           <TextBlock Name="InfoObject" Text="—" Classes="fieldValue" TextTrimming="CharacterEllipsis" />
         </StackPanel>
       </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="SONG" Classes="fieldLabel" VerticalAlignment="Center" />
+          <Slider Name="SongVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" Focusable="True" VerticalAlignment="Center" ToolTip.Tip="Song volume (the tracks unchanged)" />
+          <ToggleButton Name="SongMuteButton" Content="Mute" ToolTip.Tip="Mute the song. Soloing a track also silences it." />
+          <TextBlock Text="Offset" Classes="toolLabel" />
+          <TextBox Name="SongOffsetBox" Width="60" Text="0" VerticalAlignment="Center" ToolTip.Tip="Song offset in ms for this project: positive plays the song later. Enter applies. Preferences → Song offset for all maps is added too." />
+          <TextBlock Text="ms" Classes="fieldLabel" VerticalAlignment="Center" />
+        </StackPanel>
+      </Grid>
     </Border>
 
     <!-- Tracks: the inspector side of the key editor. -->
     <Border Grid.Row="2" Background="{DynamicResource PaneTitle}" Padding="10,8">
       <DockPanel>
         <TextBlock DockPanel.Dock="Top" Classes="sectionLabel" Text="TRACKS" Margin="0,0,0,6" />
+        <Border DockPanel.Dock="Top" Padding="8,5" CornerRadius="4" Background="{DynamicResource ButtonBg}" Margin="0,0,0,4">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+              <ToggleButton Name="SongRowMute" Content="M" Width="24" Height="22" MinHeight="22" Padding="0" FontSize="11" HorizontalContentAlignment="Center" ToolTip.Tip="Mute the song" />
+              <ToggleButton Name="SongRowSolo" Content="S" Width="24" Height="22" MinHeight="22" Padding="0" FontSize="11" HorizontalContentAlignment="Center" ToolTip.Tip="Solo the song: hear it without the tracks" />
+            </StackPanel>
+            <TextBlock Text="Song audio" VerticalAlignment="Center" />
+          </DockPanel>
+        </Border>
         <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <Button Name="AddTrackButton" Content="+ Track" ToolTip.Tip="Add an instrument track with the bundled piano" />
@@ -111,10 +130,20 @@
     <Border Grid.Row="2" Grid.Column="1" Background="#1c1c1e" />
     <app:PianoRollView Grid.Row="2" Grid.Column="2" Name="Roll" />
 
-    <!-- Transport, as in Hitsound mode: buttons, then time, bar.beat.tick, tempo and signature · snap. -->
+    <!-- Transport, as in Hitsound mode: locators, buttons, Cycle and playback options; the clock; speed; global volume. -->
     <Border Grid.Row="3" Grid.ColumnSpan="3" Classes="transportBar" BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="Auto,Auto,*" Margin="12,0">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+            <StackPanel Orientation="Horizontal" Spacing="3">
+              <Button Name="GoLeftButton" Content="L ◀" FontSize="11" Padding="5,0" Height="28" MinHeight="28" Focusable="True" ToolTip.Tip="Go to the left locator (Ctrl+click the ruler sets it)" />
+              <TextBox Name="LeftLocatorBox" Width="74" Height="28" MinHeight="28" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="L · ms" ToolTip.Tip="Left locator in ms: type a time and press Enter" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="3">
+              <Button Name="GoRightButton" Content="R ◀" FontSize="11" Padding="5,0" Height="28" MinHeight="28" Focusable="True" ToolTip.Tip="Go to the right locator (Alt+click the ruler sets it)" />
+              <TextBox Name="RightLocatorBox" Width="74" Height="28" MinHeight="28" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="R · ms" ToolTip.Tip="Right locator in ms: type a time and press Enter" />
+            </StackPanel>
+          </StackPanel>
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
             <Path Data="M 0,0 L 2,0 L 2,14 L 0,14 Z M 13,0 L 3,7 L 13,14 Z" Fill="{DynamicResource ButtonText}" Width="12" Height="13" Stretch="Uniform" />
           </Button>
@@ -123,6 +152,16 @@
           <ToggleButton Name="RecordButton" Classes="transport" ToolTip.Tip="Record (Numpad *): from the playhead into the selected track, from your MIDI keyboard. Notes starting in the recorded range are replaced; Space or Record stops." AutomationProperties.Name="Record">
             <Ellipse Width="12" Height="12" Fill="#e5484d" />
           </ToggleButton>
+          <ToggleButton Name="LoopButton" Classes="transport wide" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R." AutomationProperties.Name="Loop">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <app:SkinIcon Glyph="Cycle" />
+              <TextBlock Text="Cycle" VerticalAlignment="Center" />
+            </StackPanel>
+          </ToggleButton>
+          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
+            <ToggleButton Name="ReturnOnStopButton" Content="Return on stop" Height="28" MinHeight="28" Padding="6,0" FontSize="11" ToolTip.Tip="When stopping playback, return to where playback started" />
+            <ToggleButton Name="FollowPlaybackButton" Content="Follow playback" IsChecked="True" Height="28" MinHeight="28" Padding="6,0" FontSize="11" ToolTip.Tip="Scroll the editing view to follow the playhead during playback" />
+          </StackPanel>
           <StackPanel Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
             <ToggleButton Name="CountInToggle" Content="Count-in" IsChecked="True" Height="28" MinHeight="28" Padding="6,0" FontSize="11" ToolTip.Tip="One bar of clicks before recording starts (shorter at the very start of the song)" />
             <ToggleButton Name="MetronomeToggle" Content="Click" IsChecked="True" Height="28" MinHeight="28" Padding="6,0" FontSize="11" ToolTip.Tip="Metronome while recording: the bar's first beat is higher" />
@@ -136,6 +175,14 @@
             <StackPanel Grid.Column="3"><TextBlock Name="MeterText" Classes="lcd" Text="4/4 /4" /><TextBlock Classes="caption" Text="SIGNATURE · SNAP" /></StackPanel>
           </Grid>
         </Border>
+        <StackPanel Grid.Column="2" Name="SpeedPanel" Orientation="Horizontal" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center"
+                    ToolTip.Tip="Playback speed: the pitch stays the same" />
+        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
+                    ToolTip.Tip="Global volume: the song, tracks and previews together (20–100 %), shared with Hitsound mode">
+          <TextBlock Text="Global volume" Classes="toolLabel" />
+          <Slider Name="GlobalVolumeSlider" Width="88" Minimum="20" Maximum="100" Value="20" Focusable="True" VerticalAlignment="Center" />
+          <TextBlock Name="GlobalVolumeText" Text="20%" Classes="fieldValue" Width="36" VerticalAlignment="Center" />
+        </StackPanel>
       </Grid>
     </Border>
 
