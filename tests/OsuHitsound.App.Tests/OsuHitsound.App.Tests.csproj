@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OsuHitsound.App\OsuHitsound.App.csproj" />
+    <!-- Built first so the isolation tests can run its exe; not referenced as an assembly. -->
+    <ProjectReference Include="..\..\tools\FakeVstHost\FakeVstHost.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

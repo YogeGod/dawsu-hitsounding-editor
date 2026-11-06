@@ -9,6 +9,12 @@ namespace OsuHitsound.Audio;
 /// </summary>
 public interface ILivePart
 {
+    /// <summary>
+    /// Starts rendering a block that <see cref="Render"/> will collect; parts in other processes use it so several of
+    /// them work at once. The mixer calls it for every part before rendering any.
+    /// </summary>
+    void Begin(int frames, double start, double msPerFrame, bool playing) { }
+
     /// <summary>Adds one block into <paramref name="stereo"/>. While stopped, <paramref name="playing"/> is false: only tails and auditions sound.</summary>
     void Render(Span<float> stereo, int frames, double start, double msPerFrame, bool playing);
 

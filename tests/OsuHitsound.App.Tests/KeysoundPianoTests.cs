@@ -8,14 +8,7 @@ public class KeysoundPianoTests
     private const int Rate = PlaybackMixer.Rate;
     private const double MsPerFrame = 1000.0 / Rate;
 
-    private static string RepoFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !dir.EnumerateFiles("*.slnx").Any()) dir = dir.Parent;
-        return Path.Combine([dir!.FullName, .. parts]);
-    }
-
-    private static string PianoSfz => RepoFile("src", "OsuHitsound.Audio", "Instruments", "UprightPianoKW", "UprightPianoKW.sfz");
+    private static string PianoSfz => TestPaths.RepoFile("src", "OsuHitsound.Audio", "Instruments", "UprightPianoKW", "UprightPianoKW.sfz");
 
     // A stereo ramp: frame f holds f / frames on both channels, so the output shows which frame was read.
     private static float[] Ramp(int frames) => [.. Enumerable.Range(0, frames).SelectMany(f => new[] { f / (float)frames, f / (float)frames })];
@@ -233,7 +226,7 @@ public class KeysoundPianoTests
         var player = new KeysoundPlayer(Instrument(region, [.. Enumerable.Repeat(0.5f, 400_000)]));
         player.SetNotes([new PlayedNote(0, 5000, 60, 127)]);
         var mixer = new PlaybackMixer { Length = 10_000 };
-        mixer.SetLivePart(player);
+        mixer.SetLiveParts([player]);
         mixer.Play();
         var block = new float[882];
         mixer.Read(block);

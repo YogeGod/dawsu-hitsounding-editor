@@ -99,7 +99,7 @@ public partial class KeysoundEditor : UserControl
         keyboard.Stop();
         Stop();
         waveCancel?.Cancel();
-        audio?.SetLivePart(null);
+        audio?.SetLiveParts([]);
         player = null;
         doc.Session.Changed -= OnSessionChanged;
         doc = null;
@@ -134,7 +134,7 @@ public partial class KeysoundEditor : UserControl
         Stop();
         audio = engine;
         if (doc is null) return;
-        if (player is not null) audio?.SetLivePart(player);
+        if (player is not null) ApplyParts();
         else _ = LoadPiano(doc);
         RefreshPlayback();
     }
@@ -157,7 +157,7 @@ public partial class KeysoundEditor : UserControl
 
         if (!ReferenceEquals(doc, opened)) return; // closed or replaced meanwhile
         player = new KeysoundPlayer(instrument);
-        audio.SetLivePart(player);
+        ApplyParts();
         RefreshPlayback();
     }
 
@@ -174,6 +174,9 @@ public partial class KeysoundEditor : UserControl
             RefreshPlayback();
         }, DispatcherPriority.Background);
     }
+
+    /// <summary>What the mixer plays alongside the song: the bundled piano (VST3 tracks join it in their own parts).</summary>
+    private void ApplyParts() => audio?.SetLiveParts(player is null ? [] : [player]);
 
     /// <summary>The notes playback plays: every audible track (mute and solo), in timeline ms.</summary>
     private void RefreshPlayback()

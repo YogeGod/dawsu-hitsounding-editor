@@ -59,12 +59,12 @@ public sealed class PlaybackMixer : ISampleProvider
 
     public string? DrumInstrumentError { get { lock (gate) return drums?.Error; } }
 
-    private ILivePart? live;
+    private ILivePart[] live = [];
 
-    /// <summary>A live instrument part (Keysound mode's piano), rendered with the song; null removes it.</summary>
-    public void SetLivePart(ILivePart? part)
+    /// <summary>The live instrument parts (Keysound mode's piano and VST3 tracks), rendered with the song; empty for none.</summary>
+    public void SetLiveParts(IReadOnlyList<ILivePart> parts)
     {
-        lock (gate) live = part;
+        lock (gate) live = [.. parts];
     }
 
     // The clock: the timeline at the end of the last block, when that block was rendered, and the last time reported.
@@ -278,7 +278,7 @@ public sealed class PlaybackMixer : ISampleProvider
     private void ResetInstruments()
     {
         drums?.Reset();
-        live?.ReleaseAll();
+        foreach (var part in live) part.ReleaseAll();
     }
 
     // Must hold the gate: keep the clock where it is when the speed changes, so the playhead doesn't jump.
@@ -328,7 +328,8 @@ public sealed class PlaybackMixer : ISampleProvider
                 drums?.Begin();
                 MixVoices(block, n); // previews and natural VST tails while stopped
                 drums?.Render(block);
-                live?.Render(block, n, timeline, 0, playing: false);
+                foreach (var part in live) part.Begin(n, timeline, 0, playing: false);
+                foreach (var part in live) part.Render(block, n, timeline, 0, playing: false);
                 done += n;
             }
 
@@ -380,7 +381,8 @@ public sealed class PlaybackMixer : ISampleProvider
         MixVoices(block, n);
         MixLoops(block, n, start, msPerFrame);
         drums?.Render(block);
-        live?.Render(block, n, start, msPerFrame, playing: true);
+        foreach (var part in live) part.Begin(n, start, msPerFrame, playing: true);
+        foreach (var part in live) part.Render(block, n, start, msPerFrame, playing: true);
         timeline = end;
     }
 

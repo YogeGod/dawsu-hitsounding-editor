@@ -309,8 +309,8 @@ public sealed class AudioEngine : IDisposable
 
     public string? DrumInstrumentError => mixer.DrumInstrumentError;
 
-    /// <summary>Keysound mode's live piano, mixed with the song (null removes it).</summary>
-    public void SetLivePart(ILivePart? part) => mixer.SetLivePart(part);
+    /// <summary>Keysound mode's live instrument parts, mixed with the song (empty removes them).</summary>
+    public void SetLiveParts(IReadOnlyList<ILivePart> parts) => mixer.SetLiveParts(parts);
 
     /// <summary>Auditions a resolved map lane, loading an unused custom index on demand.</summary>
     public void Preview(Lane lane, MapFolder folder)
