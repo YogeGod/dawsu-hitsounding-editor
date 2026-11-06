@@ -142,6 +142,15 @@ public static class KeyWav
         return wav;
     }
 
+    /// <summary>The samples of a WAV written by <see cref="Encode16"/>, as interleaved stereo floats.</summary>
+    public static float[] Decode16(byte[] wav)
+    {
+        if (wav.Length < 44) return [];
+        var samples = new float[(wav.Length - 44) / 2];
+        for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(wav, 44 + i * 2) / 32767f;
+        return samples;
+    }
+
     /// <summary>Several renders played together (a chord osu! can't layer natively), each with its own gain.</summary>
     public static float[] Mix(IReadOnlyList<(float[] Stereo, float Gain)> parts)
     {

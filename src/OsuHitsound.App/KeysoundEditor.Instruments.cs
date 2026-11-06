@@ -343,6 +343,10 @@ public partial class KeysoundEditor
             _ => "",
         };
         InstrumentButton.IsEnabled = current is not null;
+        showingVolume = true;
+        VolumeBox.IsEnabled = current is not null;
+        VolumeBox.Value = (decimal)(current?.VolumeDb ?? 0);
+        showingVolume = false;
         EditorButton.IsVisible = current?.Instrument.IsVst3 == true;
         EditorButton.IsEnabled = part?.Vst is not null;
         FixButton.IsVisible = part?.Status is PartStatus.Missing or PartStatus.Crashed or PartStatus.Failed;

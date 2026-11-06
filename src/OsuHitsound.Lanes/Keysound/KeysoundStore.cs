@@ -257,8 +257,9 @@ public static class KeysoundStore
                 throw new FormatException("A track in the project is invalid.");
             foreach (var n in t.Notes)
                 if (n is null || !n.IsValid || !noteIds.Add(n.Id)) throw new FormatException($"A note on track \"{t.Name}\" is invalid.");
-            if (t.Controllers is null || t.Controllers.Count > MaxNotes || t.Controllers.Any(c => c is null || !c.IsValid))
-                throw new FormatException($"A controller on track \"{t.Name}\" is invalid.");
+            if (t.Controllers is null || t.Controllers.Count > MaxNotes || t.Controllers.Any(c => c is null || !c.IsValid)
+                || !(t.VolumeDb >= KeyTrack.MinVolumeDb && t.VolumeDb <= KeyTrack.MaxVolumeDb))
+                throw new FormatException($"A controller or the volume of track \"{t.Name}\" is invalid.");
         }
     }
 

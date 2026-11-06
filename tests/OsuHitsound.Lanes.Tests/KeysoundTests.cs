@@ -356,6 +356,66 @@ public class KeysoundStoreTests : IDisposable
     }
 
     [Fact]
+    public void Generate_replaces_every_hitsound_with_keysounds_or_silence_in_a_standalone_copy()
+    {
+        var project = KeysoundStore.Create(MakeMap(extraEvents: "Sample,1000,0,\"other.wav\",80"), Path.Combine(root, "Project"), []);
+        var doc = KeysoundStore.Open(project);
+        var targets = doc.Targets; // circle 1000, circle 1500, slider head 2000, slider tail, spinner end 5000
+        var sounds = new Dictionary<(int, int), IReadOnlyList<string>>
+        {
+            [(0, 0)] = ["a"],                       // one note
+            [(1, 0)] = ["b", "a"],                  // a chord: native, one index
+            [(2, 0)] = ["a", "b", "c", "d", "e"],   // more than four: one mix
+            [(2, 1)] = ["a"],                       // same single sound as the first circle: same index
+        };
+        var plan = KeyGenerate.Plan(doc.Reference, Path.Combine(doc.Folder, "reference", doc.File.Reference), sounds);
+        Assert.Empty(plan.Conflicts.Select(c => $"{c.Time}: {c.Reason}"));
+        Assert.Equal("Artist - Song (Me) [Keysounds].osu", plan.FileName);
+
+        var files = plan.Files.ToDictionary(f => f.Name, f => f.Sounds);
+        Assert.Equal(["a"], files["normal-hitnormal2.wav"]);
+        Assert.Equal(["a"], files["normal-hitnormal3.wav"]);
+        Assert.Equal(["b"], files["normal-hitwhistle3.wav"]);
+        Assert.Equal(["a", "b", "c", "d", "e"], files["normal-hitnormal4.wav"]);
+        Assert.Empty(files["normal-hitnormal5.wav"]); // the spinner end: silence
+        Assert.Empty(files["soft-slidertick4.wav"]); // the slider's body is silenced too
+        Assert.DoesNotContain(files.Keys, n => n.Contains("hitnormal6"));
+
+        // Decompiled, every position plays exactly the planned files.
+        var moments = Decompiler.Decompile(plan.Diff, new MapFolder(files.Keys)).Moments;
+        Assert.Equal(5, moments.Count);
+        string Playing(int i) => string.Join(" ", moments[i].Hits.Select(h => h.Lane.Name).Order());
+        Assert.Equal("normal-hitnormal2.wav", Playing(0));
+        Assert.Equal("normal-hitnormal3.wav normal-hitwhistle3.wav", Playing(1));
+        Assert.Equal("normal-hitnormal4.wav", Playing(2));
+        Assert.Equal("normal-hitnormal2.wav", Playing(3));
+        Assert.Equal("normal-hitnormal5.wav", Playing(4));
+
+        var text = Encoding.UTF8.GetString(plan.Diff.ToBytes());
+        Assert.Contains("Version:Keysounds", text);
+        Assert.DoesNotContain("other.wav", text); // storyboard sounds removed
+        Assert.Contains("\"BG.jpg\"", text);       // visuals kept
+
+        // Written all or nothing into output/, with the song and visuals, the .osb without Sample lines, and no other .osu.
+        var output = KeyGenerate.Write(doc, plan, f => f.Sounds.Count == 0 ? BlankSample.Bytes : Encoding.UTF8.GetBytes(string.Join("+", f.Sounds)));
+        Assert.True(File.Exists(Path.Combine(output, "audio.mp3")));
+        Assert.True(File.Exists(Path.Combine(output, "sb", "star.png")));
+        Assert.Single(Directory.GetFiles(output, "*.osu"));
+        Assert.DoesNotContain("Sample,", File.ReadAllText(Directory.GetFiles(output, "*.osb").Single()));
+        Assert.Equal("a+b+c+d+e", File.ReadAllText(Path.Combine(output, "normal-hitnormal4.wav")));
+
+        // A failing write keeps the previous output.
+        Assert.ThrowsAny<Exception>(() => KeyGenerate.Write(doc, plan, _ => throw new IOException("render failed")));
+        Assert.Equal("a+b+c+d+e", File.ReadAllText(Path.Combine(output, "normal-hitnormal4.wav")));
+        Assert.Empty(Directory.GetDirectories(doc.Folder).Where(d => Path.GetFileName(d).StartsWith("output.", StringComparison.Ordinal)));
+
+        var osz = Path.Combine(root, "out.osz");
+        KeyGenerate.ExportOsz(output, osz);
+        using var zip = System.IO.Compression.ZipFile.OpenRead(osz);
+        Assert.Contains(zip.Entries, e => e.FullName == plan.FileName);
+    }
+
+    [Fact]
     public void Suggested_folders_never_reuse_an_existing_one()
     {
         var first = KeysoundStore.SuggestFolder(root, @"C:\x\A: B [C].osu");

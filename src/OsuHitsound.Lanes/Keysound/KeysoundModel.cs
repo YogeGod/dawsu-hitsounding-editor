@@ -106,6 +106,9 @@ public sealed record KeyTrack(Guid Id, string Name, KeyInstrument Instrument, Im
     public ImmutableList<KeyController> Controllers { get; init; } = [];
     /// <summary>Imported from a MIDI percussion channel (10): it needs a drum instrument, and plays on the piano until then.</summary>
     public bool Percussion { get; init; }
+    /// <summary>The track's level in Generate's WAVs, in dB (osu! has one volume per object, so the balance is baked in).</summary>
+    public double VolumeDb { get; init; }
+    public const double MinVolumeDb = -60, MaxVolumeDb = 12;
 
     public static KeyTrack Create(string name) => new(Guid.NewGuid(), name, KeyInstrument.Piano, []);
 }

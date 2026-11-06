@@ -182,6 +182,12 @@ public sealed class KeysoundSession
     public void RenameTrack(Guid id, string name) =>
         Change("Rename track", s => s.Track(id)?.Name == name ? s : s.WithTrack(id, t => t with { Name = name }));
 
+    public void SetVolume(Guid id, double db)
+    {
+        db = Math.Round(Math.Clamp(db, KeyTrack.MinVolumeDb, KeyTrack.MaxVolumeDb), 1);
+        Change("Track volume", s => s.Track(id)?.VolumeDb == db ? s : s.WithTrack(id, t => t with { VolumeDb = db }));
+    }
+
     public void SetIncludeInGenerate(Guid id, bool include) =>
         Change(include ? "Include in Generate" : "Exclude from Generate",
             s => s.Track(id)?.IncludeInGenerate == include ? s : s.WithTrack(id, t => t with { IncludeInGenerate = include }));

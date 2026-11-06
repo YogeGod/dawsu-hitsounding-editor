@@ -30,6 +30,7 @@ public partial class KeysoundEditor : UserControl
     // Copied notes, shared between projects in a session (not the system clipboard).
     private static IReadOnlyList<KeyNote> clipboard = [];
     private string trackListKey = "";
+    private bool showingVolume; // the volume box shows the selected track's value, which isn't an edit
     private static readonly Cursor Hand = new(StandardCursorType.Hand);
 
     public KeysoundEditor()
@@ -59,6 +60,12 @@ public partial class KeysoundEditor : UserControl
         CloseButton.Click += (_, _) => CloseRequested?.Invoke();
         ImportMidiButton.Click += async (_, _) => await ImportMidi();
         SyncButton.Click += async (_, _) => await SyncNotes();
+        GenerateButton.Click += async (_, _) => await Generate();
+        VolumeBox.ValueChanged += (_, _) =>
+        {
+            if (showingVolume || doc?.SelectedTrack is not { } id || VolumeBox.Value is not { } db) return;
+            doc.Session.SetVolume(id, (double)db);
+        };
         StartButton.Click += (_, _) => Seek(0);
         PlayButton.Click += (_, _) => TogglePlay();
         Roll.SeekRequested += Seek;
@@ -257,7 +264,7 @@ public partial class KeysoundEditor : UserControl
     {
         // Rebuilt only when something it shows changed: a note drag changes the state on every mouse move.
         var key = doc is null ? "" : string.Join("|", doc.Session.State.Tracks.Select(t =>
-            $"{t.Id}/{t.Name}/{t.Instrument.DisplayName}/{InstrumentProblem(t)}/{t.Notes.Count}/{SyncCounts(t)}/{t.IncludeInGenerate}/{doc.Session.Muted.Contains(t.Id)}/{doc.Session.Soloed.Contains(t.Id)}")) + "|" + doc?.SelectedTrack;
+            $"{t.Id}/{t.Name}/{t.Instrument.DisplayName}/{InstrumentProblem(t)}/{t.Notes.Count}/{SyncCounts(t)}/{t.VolumeDb}/{t.IncludeInGenerate}/{doc.Session.Muted.Contains(t.Id)}/{doc.Session.Soloed.Contains(t.Id)}")) + "|" + doc?.SelectedTrack;
         if (key == trackListKey && TrackList.Children.Count > 0) return;
         trackListKey = key;
         TrackList.Children.Clear();
