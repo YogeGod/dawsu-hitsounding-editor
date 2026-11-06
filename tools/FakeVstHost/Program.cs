@@ -5,6 +5,8 @@
 //   slow        takes 300 ms per block
 //   fail        refuses to load (ERROR)
 //   SHOW/GETSTATE/SETSTATE work for tone: the state is whatever was last set ("AQAAAAAAAAAA" at first).
+//   RENDER (with --offline) writes 0.25 from the first note on to its note-off, then a 1000-frame tail at 0.01; a note
+//   longer than the limit is cut (truncated). Each note's events must be in its own command, as dawsu! sends them.
 using System.IO.MemoryMappedFiles;
 using OsuHitsound.Audio;
 
@@ -20,6 +22,25 @@ using var parent = System.Diagnostics.Process.GetProcessById(int.Parse(args[2]))
 Console.WriteLine($"READY\tFake {mode}\t{IsolatedVst3.Protocol}");
 
 string state = "AQAAAAAAAAAA";
+bool offline = args.Contains("--offline");
+
+string Render(string command)
+{
+    if (!offline) return "ERROR\tThis host plays live.";
+    var f = command.Split('\t');
+    long max = long.Parse(f[2]);
+    var events = f[5].Split(';', StringSplitOptions.RemoveEmptyEntries).Select(e => e.Split(':').Select(long.Parse).ToArray()).ToList();
+    long on = events.Where(e => (e[1] & 0xF0) == 0x90 && e[3] > 0).Select(e => e[0]).DefaultIfEmpty(0).First();
+    long off = events.Where(e => (e[1] & 0xF0) == 0x80).Select(e => e[0]).DefaultIfEmpty(on).First();
+    long frames = Math.Min(max, off + 1000);
+    var samples = new float[frames * 2];
+    for (long i = on; i < frames; i++) samples[i * 2] = samples[i * 2 + 1] = i < off ? 0.25f : 0.01f;
+    var bytes = new byte[samples.Length * 4];
+    Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+    File.WriteAllBytes(f[1], bytes);
+    return $"RENDERED\t{frames}\t{(frames == max ? 1 : 0)}\t0.25";
+}
+
 var commands = new Thread(() =>
 {
     while (Console.ReadLine() is { } line)
@@ -33,6 +54,7 @@ var commands = new Thread(() =>
             "SHOW" or "HIDE" => "OK",
             "GETSTATE" => "STATE\t" + state,
             _ when command.StartsWith("SETSTATE\t") => "OK",
+            _ when command.StartsWith("RENDER\t") => Render(command),
             _ => "ERROR\tUnknown command.",
         };
         if (command.StartsWith("SETSTATE\t")) state = command[9..];

@@ -27,9 +27,12 @@
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 
+#define NOMINMAX
 #include <windows.h>
 #include <wincrypt.h>
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
@@ -63,7 +66,7 @@ static_assert(offsetof(Shm, events) == 40 && offsetof(Shm, left) == 40 + MaxEven
 
 // Replies go to the real stdout handle only. The process's stdout is pointed at NUL so a plug-in that prints (some do)
 // can't corrupt the protocol.
-constexpr int Protocol = 1;
+constexpr int Protocol = 2; // 2: --offline and RENDER
 constexpr size_t MaxStateBytes = 64u * 1024 * 1024;
 std::mutex outLock;
 HANDLE protocolOut = INVALID_HANDLE_VALUE;
@@ -205,6 +208,8 @@ int Scan(const std::string& path)
     return 0;
 }
 
+bool offline = false; // --offline: a render host for Generate (no deadline; plug-ins may load samples synchronously)
+
 bool Load(const std::string& path, const std::string& uid, std::string& error)
 {
     module = VST3::Hosting::Module::create(path, error);
@@ -240,7 +245,7 @@ bool Load(const std::string& path, const std::string& uid, std::string& error)
     for (int32 i = 0; i < inputs; i++) component->activateBus(kAudio, kInput, i, false);
     if (component->getBusCount(kEvent, kInput) > 0) component->activateBus(kEvent, kInput, 0, true);
 
-    ProcessSetup setup{kRealtime, kSample32, MaxFrames, 44100.0};
+    ProcessSetup setup{offline ? kOffline : kRealtime, kSample32, MaxFrames, 44100.0};
     if (processor->setupProcessing(setup) != kResultOk) { error = "The plug-in refused 44.1 kHz processing."; return false; }
     if (component->setActive(true) != kResultOk) { error = "The plug-in couldn't be activated."; return false; }
     processor->setProcessing(true);
@@ -357,13 +362,204 @@ std::string ShowEditor()
 constexpr UINT WM_COMMAND_LINE = WM_APP + 1;
 struct Pending { std::string id, line, reply; };
 
+std::string Render(const std::string& line);
+
 std::string Run(const std::string& line)
 {
     if (line == "SHOW") return ShowEditor();
     if (line == "HIDE") { if (editorWindow) ShowWindow(editorWindow, SW_HIDE); return "OK"; }
     if (line == "GETSTATE") return GetState();
     if (line.rfind("SETSTATE\t", 0) == 0) return SetState(line, 9);
+    if (line.rfind("RENDER\t", 0) == 0) return offline ? Render(line) : "ERROR\tThis host plays live; start one with --offline to render.";
     return "ERROR\tUnknown command.";
+}
+
+// ---- Processing one block: MIDI-style events in, stereo out (live playback and offline rendering) ----
+struct Block
+{
+    HostProcessData data;
+    EventList events{MaxEvents};
+    ParameterChanges params{64};
+    ProcessContext context{};
+    std::map<int, ParamID> mapped; // (channel << 8 | controller) -> parameter, or kNoParamId
+
+    Block()
+    {
+        data.prepare(*component, MaxFrames, kSample32);
+        context.sampleRate = 44100;
+        context.tempo = 120;
+        context.state = ProcessContext::kPlaying | ProcessContext::kTempoValid;
+    }
+
+    ParamID Map(int channel, int cc)
+    {
+        int key = channel << 8 | cc;
+        auto it = mapped.find(key);
+        if (it != mapped.end()) return it->second;
+        ParamID id = kNoParamId;
+        if (midiMapping) midiMapping->getMidiControllerAssignment(0, (int16)channel, (CtrlNumber)cc, id);
+        return mapped[key] = id;
+    }
+
+    void Change(ParamID id, int offset, ParamValue value)
+    {
+        if (id == kNoParamId) return;
+        int32 index = 0;
+        if (auto* queue = params.addParameterData(id, index)) queue->addPoint(offset, value, index);
+    }
+
+    // Starts a block: no events yet, plus the edits made in the plug-in's window.
+    void Begin()
+    {
+        events.clear();
+        params.clearQueue();
+        std::lock_guard<std::mutex> g(handler.lock);
+        for (auto& [id, value] : handler.pending) Change(id, 0, value);
+        handler.pending.clear();
+    }
+
+    void Add(int offset, uint8_t status, uint8_t data1, uint8_t data2)
+    {
+        int kind = status & 0xF0, channel = status & 0x0F;
+        Event ev{};
+        ev.busIndex = 0;
+        ev.sampleOffset = offset;
+        if (kind == 0x90 && data2 > 0)
+        {
+            ev.type = Event::kNoteOnEvent;
+            ev.noteOn.channel = (int16)channel;
+            ev.noteOn.pitch = (int16)data1;
+            ev.noteOn.velocity = data2 / 127.f;
+            ev.noteOn.noteId = -1;
+            events.addEvent(ev);
+        }
+        else if (kind == 0x80 || kind == 0x90)
+        {
+            ev.type = Event::kNoteOffEvent;
+            ev.noteOff.channel = (int16)channel;
+            ev.noteOff.pitch = (int16)data1;
+            ev.noteOff.noteId = -1;
+            events.addEvent(ev);
+        }
+        else if (kind == 0xB0) Change(Map(channel, data1), offset, data2 / 127.0);
+        else if (kind == 0xE0) Change(Map(channel, kPitchBend), offset, (data2 << 7 | data1) / 16383.0);
+    }
+
+    // Renders the block into left/right. False when the plug-in failed (the output is then silence).
+    bool Process(int frames, float* left, float* right)
+    {
+        std::lock_guard<std::mutex> g(processLock);
+        data.numSamples = frames;
+        data.inputEvents = &events;
+        data.inputParameterChanges = &params;
+        data.processContext = &context;
+        bool ok = processor->process(data) == kResultOk && data.numOutputs > 0 && data.outputs[0].numChannels > 0;
+        if (ok)
+        {
+            float* l = data.outputs[0].channelBuffers32[0];
+            float* r = data.outputs[0].numChannels > 1 ? data.outputs[0].channelBuffers32[1] : l;
+            memcpy(left, l, frames * sizeof(float));
+            memcpy(right, r, frames * sizeof(float));
+        }
+        else
+        {
+            memset(left, 0, frames * sizeof(float));
+            memset(right, 0, frames * sizeof(float));
+        }
+        context.projectTimeSamples += frames;
+        return ok;
+    }
+};
+
+// ---- Offline rendering of one note (Generate) ----
+// RENDER \t <out file> \t <max frames> \t <quiet frames> \t <threshold> \t <frame>:<status>:<d1>:<d2>;...
+// Silences the plug-in first (note-offs on every key, then render until quiet), then renders the events from frame 0
+// until the output stays below the threshold for <quiet frames> after the last event, or <max frames>. Writes the
+// stereo float32 frames (interleaved, little-endian) to the file, cut where the sound fell quiet.
+// Reply: RENDERED \t <frames> \t <1 when it hit max frames> \t <peak>.
+std::string Render(const std::string& line)
+{
+    std::vector<std::string> f;
+    for (size_t at = 0;;)
+    {
+        size_t tab = line.find('\t', at);
+        f.push_back(line.substr(at, tab == std::string::npos ? std::string::npos : tab - at));
+        if (tab == std::string::npos) break;
+        at = tab + 1;
+    }
+    if (f.size() != 6 || f[0] != "RENDER") return "ERROR\tusage: RENDER <file> <max> <quiet> <threshold> <events>";
+    long long maxFrames = _atoi64(f[2].c_str()), quietFrames = _atoi64(f[3].c_str());
+    double threshold = atof(f[4].c_str());
+    if (maxFrames < 1 || maxFrames > 44100LL * 600 || quietFrames < 1 || !(threshold > 0)) return "ERROR\tBad render limits.";
+
+    struct Ev { long long frame; uint8_t s, d1, d2; };
+    std::vector<Ev> evs;
+    for (size_t at = 0; at < f[5].size();)
+    {
+        size_t end = f[5].find(';', at);
+        if (end == std::string::npos) end = f[5].size();
+        long long frame; unsigned st, d1, d2;
+        if (sscanf_s(f[5].substr(at, end - at).c_str(), "%lld:%u:%u:%u", &frame, &st, &d1, &d2) == 4 && frame >= 0 && st < 256 && d1 < 128 && d2 < 128)
+            evs.push_back({frame, (uint8_t)st, (uint8_t)d1, (uint8_t)d2});
+        at = end + 1;
+    }
+    std::stable_sort(evs.begin(), evs.end(), [](const Ev& a, const Ev& b) { return a.frame < b.frame; });
+    long long lastEvent = evs.empty() ? 0 : evs.back().frame;
+
+    constexpr int Chunk = 512;
+    static Block block; // one per host: the render host renders nothing else
+    std::vector<float> l(Chunk), r(Chunk);
+    auto Peak = [&](int n) { float p = 0; for (int i = 0; i < n; i++) p = std::max(p, std::max(std::fabs(l[i]), std::fabs(r[i]))); return p; };
+
+    // Silence what the previous note left.
+    block.Begin();
+    for (int pitch = 0; pitch < 128; pitch++) block.Add(0, 0x80, (uint8_t)pitch, 0);
+    for (long long done = 0, quiet = 0; done < 44100LL * 5 && quiet < quietFrames; done += Chunk)
+    {
+        block.Process(Chunk, l.data(), r.data());
+        quiet = Peak(Chunk) < threshold ? quiet + Chunk : 0;
+        block.Begin();
+    }
+
+    std::vector<float> out;
+    size_t next = 0;
+    long long lastLoud = -1, quiet = 0, frame = 0;
+    float peak = 0;
+    bool truncated = true;
+    while (frame < maxFrames)
+    {
+        int n = (int)std::min<long long>(Chunk, maxFrames - frame);
+        block.Begin();
+        while (next < evs.size() && evs[next].frame < frame + n)
+        {
+            block.Add((int)(evs[next].frame - frame), evs[next].s, evs[next].d1, evs[next].d2);
+            next++;
+        }
+        if (!block.Process(n, l.data(), r.data())) return "ERROR\tThe plug-in failed while rendering.";
+        for (int i = 0; i < n; i++)
+        {
+            out.push_back(l[i]);
+            out.push_back(r[i]);
+            float a = std::max(std::fabs(l[i]), std::fabs(r[i]));
+            peak = std::max(peak, a);
+            if (a >= threshold) lastLoud = frame + i;
+        }
+        frame += n;
+        quiet = frame - 1 - std::max(lastLoud, lastEvent);
+        if (frame > lastEvent && quiet >= quietFrames) { truncated = false; break; }
+    }
+
+    long long keep = truncated ? frame : std::max(lastLoud, lastEvent) + 1;
+    FILE* file = nullptr;
+    std::wstring path(MultiByteToWideChar(CP_UTF8, 0, f[1].data(), (int)f[1].size(), nullptr, 0), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, f[1].data(), (int)f[1].size(), path.data(), (int)path.size());
+    if (_wfopen_s(&file, path.c_str(), L"wb") != 0 || !file) return "ERROR\tThe render file couldn't be written.";
+    size_t wrote = fwrite(out.data(), sizeof(float), (size_t)keep * 2, file);
+    fclose(file);
+    if (wrote != (size_t)keep * 2) return "ERROR\tThe render file couldn't be written.";
+    char reply[96];
+    snprintf(reply, sizeof reply, "RENDERED\t%lld\t%d\t%.6f", keep, truncated ? 1 : 0, peak);
+    return reply;
 }
 
 // ---- Audio: one block per request ----
@@ -372,29 +568,7 @@ std::atomic<bool> quitting{false};
 void AudioThread(Shm* shm, HANDLE req, HANDLE done, HANDLE parent)
 {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
-    HostProcessData data;
-    data.prepare(*component, MaxFrames, kSample32);
-    EventList events(MaxEvents);
-    ParameterChanges params(64);
-    ProcessContext context{};
-    context.sampleRate = 44100;
-    context.tempo = 120;
-    context.state = ProcessContext::kPlaying | ProcessContext::kTempoValid;
-    std::map<int, ParamID> mapped; // (channel << 8 | controller) -> parameter, or kNoParamId
-    auto Map = [&](int channel, int cc) -> ParamID {
-        int key = channel << 8 | cc;
-        auto it = mapped.find(key);
-        if (it != mapped.end()) return it->second;
-        ParamID id = kNoParamId;
-        if (midiMapping) midiMapping->getMidiControllerAssignment(0, (int16)channel, (CtrlNumber)cc, id);
-        return mapped[key] = id;
-    };
-    auto Change = [&](ParamID id, int offset, ParamValue value) {
-        if (id == kNoParamId) return;
-        int32 index = 0;
-        if (auto* queue = params.addParameterData(id, index)) queue->addPoint(offset, value, index);
-    };
-
+    Block block;
     HANDLE waits[2] = {req, parent};
     while (!quitting)
     {
@@ -404,62 +578,16 @@ void AudioThread(Shm* shm, HANDLE req, HANDLE done, HANDLE parent)
 
         int frames = shm->frames < 1 ? 0 : shm->frames > MaxFrames ? MaxFrames : shm->frames;
         int count = shm->eventCount < 0 ? 0 : shm->eventCount > MaxEvents ? MaxEvents : shm->eventCount;
-        events.clear();
-        params.clearQueue();
-        {
-            std::lock_guard<std::mutex> g(handler.lock);
-            for (auto& [id, value] : handler.pending) Change(id, 0, value);
-            handler.pending.clear();
-        }
-
+        block.Begin();
         for (int i = 0; i < count; i++)
         {
             auto& e = shm->events[i];
             int offset = e.offset < 0 ? 0 : e.offset >= frames ? (frames > 0 ? frames - 1 : 0) : e.offset;
-            int kind = e.status & 0xF0, channel = e.status & 0x0F;
-            Event ev{};
-            ev.busIndex = 0;
-            ev.sampleOffset = offset;
-            if (kind == 0x90 && e.data2 > 0)
-            {
-                ev.type = Event::kNoteOnEvent;
-                ev.noteOn.channel = (int16)channel;
-                ev.noteOn.pitch = (int16)e.data1;
-                ev.noteOn.velocity = e.data2 / 127.f;
-                ev.noteOn.noteId = -1;
-                events.addEvent(ev);
-            }
-            else if (kind == 0x80 || kind == 0x90)
-            {
-                ev.type = Event::kNoteOffEvent;
-                ev.noteOff.channel = (int16)channel;
-                ev.noteOff.pitch = (int16)e.data1;
-                ev.noteOff.noteId = -1;
-                events.addEvent(ev);
-            }
-            else if (kind == 0xB0) Change(Map(channel, e.data1), offset, e.data2 / 127.0);
-            else if (kind == 0xE0) Change(Map(channel, kPitchBend), offset, (e.data2 << 7 | e.data1) / 16383.0);
+            block.Add(offset, e.status, e.data1, e.data2);
         }
 
         int status = 1;
-        if (frames > 0)
-        {
-            std::lock_guard<std::mutex> g(processLock);
-            data.numSamples = frames;
-            data.inputEvents = &events;
-            data.inputParameterChanges = &params;
-            data.processContext = &context;
-            if (processor->process(data) == kResultOk && data.numOutputs > 0 && data.outputs[0].numChannels > 0)
-            {
-                float* l = data.outputs[0].channelBuffers32[0];
-                float* r = data.outputs[0].numChannels > 1 ? data.outputs[0].channelBuffers32[1] : l;
-                memcpy(shm->left, l, frames * sizeof(float));
-                memcpy(shm->right, r, frames * sizeof(float));
-                status = 0;
-            }
-            context.projectTimeSamples += frames;
-        }
-
+        if (frames > 0 && block.Process(frames, shm->left, shm->right)) status = 0;
         shm->status = status;
         MemoryBarrier();
         shm->doneSeq = shm->requestSeq;
@@ -479,7 +607,11 @@ int wmain(int argc, wchar_t** argv)
     };
     IsolateStdout();
     if (argc == 3 && Arg(1) == "--scan") return Scan(Arg(2));
-    if (argc < 5 || Arg(1) != "--host") { Reply("ERROR\tusage: --scan <plugin.vst3> | --host <name> <parentPid> <plugin.vst3> [<uid>]"); return 1; }
+    if (argc < 5 || Arg(1) != "--host") { Reply("ERROR\tusage: --scan <plugin.vst3> | --host <name> <parentPid> <plugin.vst3> [<uid>] [--offline]"); return 1; }
+    std::string uid;
+    for (int i = 5; i < argc; i++)
+        if (Arg(i) == "--offline") offline = true;
+        else uid = Arg(i);
 
     std::wstring name = argv[2];
     DWORD parentPid = (DWORD)_wtoi(argv[3]);
@@ -503,7 +635,7 @@ int wmain(int argc, wchar_t** argv)
     RegisterClassW(&wc);
 
     std::string error;
-    if (!Load(Arg(4), argc > 5 ? Arg(5) : "", error)) { Reply("ERROR\t" + Clean(error)); return 2; }
+    if (!Load(Arg(4), uid, error)) { Reply("ERROR\t" + Clean(error)); return 2; }
     Reply("READY\t" + Clean(pluginName) + "\t" + std::to_string(Protocol));
 
     std::thread audio(AudioThread, shm, req, done, parent);

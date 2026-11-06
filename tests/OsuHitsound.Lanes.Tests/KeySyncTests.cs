@@ -100,6 +100,24 @@ public class KeySyncTests
     }
 
     [Fact]
+    public void A_render_job_carries_the_controllers_in_force_and_the_pedal_hold()
+    {
+        var track = KeyTrack.Create("Piano") with
+        {
+            Controllers = [new KeyController(0, ControllerKind.Sustain, 127), new KeyController(480, ControllerKind.Modulation, 40), new KeyController(1920, ControllerKind.Sustain, 0)],
+        };
+        var note = new KeyNote(Guid.NewGuid(), 960, 480, 60, 90); // 500 to 750 ms; the pedal lets go at 1000 ms
+        var job = KeyRender.Job(track, note, Tempo);
+        Assert.Equal((250.0, 500.0), (job.Length, job.Held));
+        Assert.Equal(
+        [
+            new KeyRenderController(0, ControllerKind.Sustain, 127), new KeyRenderController(0, ControllerKind.Modulation, 40),
+            new KeyRenderController(0, ControllerKind.PitchBend, 0), new KeyRenderController(500, ControllerKind.Sustain, 0),
+        ], job.Controllers);
+        Assert.Equal(job.Key, KeyRender.Job(track, note with { Id = Guid.NewGuid(), Start = note.Start }, Tempo).Key);
+    }
+
+    [Fact]
     public void Split_parts_and_pasted_copies_are_not_synced()
     {
         var note = At(1000) with { Target = CircleA, Length = 960 };

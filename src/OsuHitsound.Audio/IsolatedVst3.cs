@@ -18,7 +18,7 @@ public readonly record struct TimedMidi(double Time, byte Status, byte Data1, by
 public sealed class IsolatedVst3 : ILivePart, IDisposable
 {
     /// <summary>The protocol the host must speak (its READY line says which).</summary>
-    public const int Protocol = 1;
+    public const int Protocol = 2; // 2: --offline and RENDER
     /// <summary>The largest saved state accepted, as for the in-process host.</summary>
     public const int MaxStateBytes = Vst3Instrument.MaxStateBytes;
     /// <summary>How much of a block's own duration the audio thread waits for the host before playing silence.</summary>
@@ -42,6 +42,8 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     private volatile bool exited;
 
     public string Name { get; private set; } = "";
+    /// <summary>A render host for Generate (<see cref="RenderAsync"/>): the plug-in runs in offline mode, with no deadline.</summary>
+    public bool Offline { get; }
     public string PluginPath { get; }
     /// <summary>Blocks the host didn't render in time (silence instead).</summary>
     public int LateBlocks { get; private set; }
@@ -60,7 +62,7 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     /// <summary>The host program next to dawsu!.</summary>
     public static string DefaultHostPath => Path.Combine(AppContext.BaseDirectory, "dawsu_vst3_host.exe");
 
-    private IsolatedVst3(string pluginPath, string hostPath, string? classId)
+    private IsolatedVst3(string pluginPath, string hostPath, string? classId, bool offline)
     {
         PluginPath = pluginPath;
         string name = $"dawsu-vst-{Environment.ProcessId}-{Guid.NewGuid():N}";
@@ -83,6 +85,8 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
         };
         foreach (var arg in new[] { "--host", name, Environment.ProcessId.ToString(), pluginPath }) start.ArgumentList.Add(arg);
         if (classId is not null) start.ArgumentList.Add(classId);
+        if (offline) start.ArgumentList.Add("--offline");
+        Offline = offline;
         process = new Process { StartInfo = start, EnableRaisingEvents = true };
         process.Exited += (_, _) =>
         {
@@ -97,12 +101,12 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     /// Starts a host for the instrument and waits until it is loaded (READY), then restores <paramref name="state"/>.
     /// Throws <see cref="InvalidOperationException"/> with the host's message when it can't load.
     /// </summary>
-    public static async Task<IsolatedVst3> StartAsync(string pluginPath, string? classId = null, string? state = null, string? hostPath = null, TimeSpan? timeout = null)
+    public static async Task<IsolatedVst3> StartAsync(string pluginPath, string? classId = null, string? state = null, string? hostPath = null, TimeSpan? timeout = null, bool offline = false)
     {
         hostPath ??= DefaultHostPath;
         if (!IsLoadablePath(pluginPath)) throw new InvalidOperationException("Only a .vst3 on this computer can be loaded.");
         if (!File.Exists(hostPath)) throw new InvalidOperationException("The VST3 host (dawsu_vst3_host.exe) isn't installed next to dawsu!.");
-        var vst = new IsolatedVst3(pluginPath, hostPath, classId);
+        var vst = new IsolatedVst3(pluginPath, hostPath, classId, offline);
         try
         {
             vst.process.Start();
@@ -169,6 +173,32 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
         }
         catch (TimeoutException) { throw new InvalidOperationException("The instrument didn't answer."); }
         finally { pending.TryRemove(id, out _); } // a late answer to this request is dropped, never given to another
+    }
+
+    /// <summary>
+    /// Renders one note on an offline host (<see cref="Offline"/>): silences what came before, plays the events (frames
+    /// from the start) and keeps rendering until the sound stays below the threshold, or up to the limit.
+    /// </summary>
+    public async Task<RenderedAudio> RenderAsync(IEnumerable<(long Frame, byte Status, byte Data1, byte Data2)> events, RenderLimits limits, long lastEventFrame, TimeSpan? timeout = null)
+    {
+        if (!Offline) throw new InvalidOperationException("This instrument plays live; Generate renders on its own host.");
+        string file = Path.Combine(Path.GetTempPath(), $"dawsu-render-{Guid.NewGuid():N}.f32");
+        string list = string.Join(";", events.Select(e => $"{e.Frame}:{e.Status}:{e.Data1}:{e.Data2}"));
+        long max = lastEventFrame + limits.MaxTailFrames;
+        try
+        {
+            string reply = await CommandAsync(FormattableString.Invariant(
+                $"RENDER\t{file}\t{max}\t{limits.QuietFrames}\t{limits.Threshold:R}\t{list}"), timeout ?? TimeSpan.FromMinutes(5));
+            var fields = Tagged(reply, "RENDERED")?.Split('\t') ?? throw new InvalidOperationException("The instrument didn't render the note.");
+            var bytes = await File.ReadAllBytesAsync(file);
+            var stereo = new float[bytes.Length / 4];
+            Buffer.BlockCopy(bytes, 0, stereo, 0, stereo.Length * 4);
+            return new RenderedAudio(stereo, fields.Length > 1 && fields[1] == "1");
+        }
+        finally
+        {
+            try { File.Delete(file); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
     }
 
     /// <summary>Opens the plug-in's own editor window (owned by its host process).</summary>
