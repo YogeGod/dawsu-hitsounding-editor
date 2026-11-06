@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     public MainWindow(string? path, bool startAudio = true, bool showInspector = false, bool usePreferences = true)
     {
         InitializeComponent();
+        SetupDrumVst();
         SetupHsMode();
 
         (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
@@ -88,6 +89,7 @@ public partial class MainWindow : Window
         Lanes.LaneListPreviewRequested += lane =>
         {
             if (audio is null) return;
+            if (drumVst is not null && drumVstEnabled && drumVstReady) { audio.Preview(lane); return; }
             if (doc is null) { audio.Preview(lane); return; }
             double time = audio.IsPlaying ? audio.Position : Lanes.Playhead;
             var preview = doc.LanePreviewAt(lane, time);
@@ -273,6 +275,8 @@ public partial class MainWindow : Window
             frameTimer.Stop();
             UiTheme.Current.Changed -= OnThemeChanged;
             inspector?.Close();
+            UnloadDrumVst();
+            drumVstPanel?.Close();
             audio?.Dispose();
         };
 
@@ -588,7 +592,7 @@ public partial class MainWindow : Window
     /// <summary>Runs a command from <see cref="EditorCommands"/>, from a key press or a menu item.</summary>
     private void Run(string id)
     {
-        if (savingHs) return;
+        if (savingHs || renderingDrums) return;
         switch (id)
         {
             case "open": _ = PickMap(); break;
@@ -701,6 +705,7 @@ public partial class MainWindow : Window
     {
         if (model is null || session is null || audio is null) return;
         audio.SetCues(PlaybackCues(model));
+        RefreshDrumVstRouting();
     }
 
     internal static IEnumerable<Cue> PlaybackCues(ArrangeModel model) =>

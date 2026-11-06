@@ -14,6 +14,46 @@ public sealed class DrumMapTests : IDisposable
     public void Dispose() => Directory.Delete(root, true);
 
     [Fact]
+    public void Every_starter_row_has_a_GM_note_with_articulation_fallbacks()
+    {
+        var maps = DrumMapDefaults.Create();
+        Assert.All(maps.Presets.SelectMany(p => p.Rows), row => Assert.InRange(row.MidiNote!.Value, 35, 81));
+        var rows = maps.Presets[0].Rows.ToDictionary(r => r.Name, r => r.MidiNote);
+        Assert.Equal(36, rows["Kick"]); Assert.Equal(38, rows["Snare"]);
+        Assert.Equal(rows["Snare"], rows["Ghost Notes"]);
+        Assert.Equal(42, rows["Closed Tip"]); Assert.Equal(46, rows["Hi-Hat Open 3"]);
+        Assert.Equal(49, rows["Right Crash"]); Assert.Equal(53, rows["Ride Bell"]);
+        Assert.Null(new DrumMapEntry(Guid.NewGuid(), "Custom percussion", null, null).MidiNote);
+    }
+
+    [Fact]
+    public void MIDI_assignments_round_trip_and_legacy_defaults_can_be_cleared()
+    {
+        var preset = Preset(); var original = preset.Rows[0];
+        string path = Path.Combine(root, "midi.dawsudrum");
+        preset = preset with { Rows = [original with { MidiNote = 60, Name = "Renamed kick" }, original with { Id = Guid.NewGuid(), MidiNote = null }] };
+        DrumMapStore.Export(path, preset);
+        var restored = DrumMapStore.Import(path);
+        Assert.Equal(60, restored.Rows[0].MidiNote); Assert.Null(restored.Rows[1].MidiNote);
+        string mapset = Path.Combine(root, "midi-mapset");
+        DrumMapStore.Save(root, mapset, new([preset], preset.Id, false), "missing");
+        Assert.Equal(60, DrumMapStore.Load(root, mapset).Maps.Presets[0].Rows[0].MidiNote);
+        var legacy = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(Preset()))!;
+        Assert.True(legacy["Rows"]![0]!.AsObject().Remove("MidiNote"));
+        File.WriteAllText(path, legacy.ToJsonString());
+        Assert.Equal(36, DrumMapStore.Import(path).Rows[0].MidiNote);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(128)]
+    public void Invalid_MIDI_notes_are_rejected(int note)
+    {
+        var preset = Preset();
+        Assert.Throws<FormatException>(() => (preset with { Rows = [preset.Rows[0] with { MidiNote = note }] }).Validate());
+    }
+
+    [Fact]
     public void User_starter_kits_preserve_exact_names_order_and_unassigned_samples()
     {
         var maps = DrumMapDefaults.Create(); maps.Validate();

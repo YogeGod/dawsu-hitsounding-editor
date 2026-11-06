@@ -43,6 +43,21 @@ public sealed class PlaybackMixer : ISampleProvider
     private double timeline, cueFrom, speed = 1, songOffset, length;
     private float songVolume = 1, masterVolume = 1;
     private bool songMuted;
+    private DrumInstrumentPlayback? drums;
+
+    /// <summary>Also waits for the in-flight callback, so the old instrument can be safely disposed.</summary>
+    public void SetDrumInstrument(IDrumInstrument? instrument, IReadOnlyDictionary<Lane, int>? notes = null)
+    {
+        lock (gate)
+        {
+            if (drums is null && instrument is null) return;
+            drums = instrument is null ? null : new DrumInstrumentPlayback(instrument,
+                (notes ?? new Dictionary<Lane, int>()).Where(p => p.Value is >= 0 and <= 127).ToDictionary());
+            voices.Clear();
+        }
+    }
+
+    public string? DrumInstrumentError { get { lock (gate) return drums?.Error; } }
 
     // The clock: the timeline at the end of the last block, when that block was rendered, and the last time reported.
     private double rendered;
@@ -112,7 +127,7 @@ public sealed class PlaybackMixer : ISampleProvider
 
     public void SetCues(HitScheduler cues)
     {
-        lock (gate) scheduler = cues;
+        lock (gate) { scheduler = cues; drums?.Reset(); }
     }
 
     public double Speed
@@ -197,6 +212,7 @@ public sealed class PlaybackMixer : ISampleProvider
     {
         lock (gate)
         {
+            drums?.Reset();
             if (!playing) return;
             double at = Position;
             playing = false;
@@ -208,6 +224,7 @@ public sealed class PlaybackMixer : ISampleProvider
     {
         lock (gate)
         {
+            drums?.Reset();
             timeline = Math.Clamp(time, 0, Math.Max(length, 0));
             if (playing) StartAt(timeline);
         }
@@ -217,7 +234,14 @@ public sealed class PlaybackMixer : ISampleProvider
     public void Preview(Lane lane, float volume)
     {
         lock (gate)
+        {
+            if (drums?.Routes(lane) == true)
+            {
+                if (IsAudible(lane)) drums.Preview(lane, volume);
+                return;
+            }
             if (sounds.TryGetValue(lane, out var data)) AddVoice(new Voice(data, 0, volume));
+        }
     }
 
     /// <summary>Export auditions replace the previous audition so comparing inputs never stacks old sounds.</summary>
@@ -226,6 +250,7 @@ public sealed class PlaybackMixer : ISampleProvider
         lock (gate)
         {
             voices.Clear();
+            drums?.Reset();
             if (stereo is not null) AddVoice(new Voice(stereo, 0, 1));
         }
     }
@@ -233,6 +258,7 @@ public sealed class PlaybackMixer : ISampleProvider
     // Must hold the gate. Playback (re)starts at a time: the song is placed on the next block, a cue right at the time plays.
     private void StartAt(double time)
     {
+        drums?.Reset();
         timeline = rendered = startedAt = time;
         renderedAt = startedTicks = Now();
         reported = double.NegativeInfinity;
@@ -271,7 +297,7 @@ public sealed class PlaybackMixer : ISampleProvider
                 }
 
                 // The block ends early at the loop's end or the song's end; the rest follows from there.
-                int n = frames - done;
+                int n = drums is null ? frames - done : Math.Min(frames - done, DrumInstrumentPlayback.BlockSize);
                 double stop = length;
                 if (Loop is { } l && timeline < l.End) stop = Math.Min(stop, l.End);
                 n = (int)Math.Clamp(Math.Ceiling((stop - timeline) / (MsPerFrame * speed)), 1, n);
@@ -280,7 +306,15 @@ public sealed class PlaybackMixer : ISampleProvider
                 done += n;
             }
 
-            if (done < frames) MixVoices(buffer.Slice(done * 2), frames - done); // previews while stopped
+            while (done < frames)
+            {
+                int n = Math.Min(frames - done, DrumInstrumentPlayback.BlockSize);
+                var block = buffer.Slice(done * 2, n * 2);
+                drums?.Begin();
+                MixVoices(block, n); // previews and natural VST tails while stopped
+                drums?.Render(block);
+                done += n;
+            }
 
             for (int i = 0; i < buffer.Length; i++) buffer[i] = Math.Clamp(buffer[i] * masterVolume, -1f, 1f);
             rendered = timeline;
@@ -293,11 +327,18 @@ public sealed class PlaybackMixer : ISampleProvider
     private void RenderPlaying(Span<float> block, int n)
     {
         double msPerFrame = MsPerFrame * speed, start = timeline, end = start + n * msPerFrame;
+        drums?.Begin();
 
-        foreach (var cue in scheduler.Between(cueFrom, end))
-            if (sounds.TryGetValue(cue.Lane, out var data) && IsAudible(cue.Lane))
-                AddVoice(new Voice(data, -(int)Math.Round((cue.Time - start) / msPerFrame), cue.Volume));
-        cueFrom = end;
+        double cueTo = drums is null ? end : Math.BitDecrement(end);
+        foreach (var cue in scheduler.Between(cueFrom, cueTo))
+        {
+            if (!IsAudible(cue.Lane)) continue;
+            int offset = (int)Math.Round((cue.Time - start) / msPerFrame);
+            if (drums?.Routes(cue.Lane) == true) drums.Trigger(cue.Lane, cue.Volume, Math.Clamp(offset, 0, n - 1));
+            else if (sounds.TryGetValue(cue.Lane, out var data))
+                AddVoice(new Voice(data, -offset, cue.Volume));
+        }
+        cueFrom = cueTo;
 
         if (song is not null)
         {
@@ -322,6 +363,7 @@ public sealed class PlaybackMixer : ISampleProvider
 
         MixVoices(block, n);
         MixLoops(block, n, start, msPerFrame);
+        drums?.Render(block);
         timeline = end;
     }
 

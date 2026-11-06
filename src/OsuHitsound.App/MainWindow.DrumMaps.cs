@@ -58,6 +58,7 @@ public partial class MainWindow
             {
                 if (!ReferenceEquals(model, attached)) return;
                 RefreshDrumMapToggle(); Lanes.ScrollY = Lanes.ScrollY; SyncScrollBars(); ScheduleProjectSave();
+                RefreshDrumVstRouting();
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)

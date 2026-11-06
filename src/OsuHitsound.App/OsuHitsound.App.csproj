@@ -24,6 +24,14 @@
     <ProjectReference Include="..\OsuHitsound.Audio\OsuHitsound.Audio.csproj" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <Vst3NativeDirectory Condition="'$(Vst3HostDll)' != ''">$([System.IO.Path]::GetDirectoryName('$(Vst3HostDll)'))</Vst3NativeDirectory>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(Vst3NativeDirectory)' != ''">
+    <None Include="$(Vst3HostDll)" Link="dawsu_vst3.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(Vst3NativeDirectory)/dawsu_vst3_scan.exe" Link="dawsu_vst3_scan.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="OsuHitsound.App.Tests" />
     <InternalsVisibleTo Include="Snapshot" />

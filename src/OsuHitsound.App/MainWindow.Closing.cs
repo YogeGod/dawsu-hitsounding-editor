@@ -11,7 +11,7 @@ public partial class MainWindow
 
     private async void OnEditorClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (savingHs || generating || !Loading.IsCompleted) { e.Cancel = true; return; }
+        if (renderingDrums || savingHs || generating || !Loading.IsCompleted) { e.Cancel = true; return; }
         if (closeConfirmed || session is not { IsEdited: true }) return;
         e.Cancel = true;
         if (closePromptOpen) return;

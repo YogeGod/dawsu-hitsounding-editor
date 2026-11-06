@@ -388,14 +388,14 @@ internal sealed partial class ArrangeModel
     private readonly Dictionary<string, Lane> familyParents = [];
     private readonly HashSet<string> familiesWithChildren = [];
     private readonly Dictionary<Lane, IReadOnlyList<LaneRow>> collapsedChildren = [];
-    public IReadOnlyList<LaneRow> CollapsedChildren(Lane parent) => DrumMapMode ? [] : collapsedChildren.GetValueOrDefault(parent) ?? [];
+    public IReadOnlyList<LaneRow> CollapsedChildren(Lane parent) => DrumMapMode && RenderFamily(parent) is null ? [] : collapsedChildren.GetValueOrDefault(parent) ?? [];
     internal static string? FamilyOf(Lane lane) => lane.Sample is { } s ? $"{s.Set}:{s.Sound}" : null;
     public IReadOnlyCollection<string> CollapsedFamilies => collapsedFamilies;
     public bool IsFamilyCollapsed(Lane lane) => FamilyKey(lane) is { } key && collapsedFamilies.Contains(key);
-    public bool IsFamilyParent(Lane lane) => !DrumMapMode && FamilyKey(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
+    public bool IsFamilyParent(Lane lane) => (!DrumMapMode || RenderFamily(lane) is not null) && FamilyKey(lane) is { } key && familiesWithChildren.Contains(key) && familyParents.GetValueOrDefault(key) == lane;
     public void ToggleFamily(Lane lane)
     {
-        if (DrumMapMode || FamilyKey(lane) is not { } key) return;
+        if (FamilyKey(lane) is not { } key) return;
         Relayout(() => { if (!collapsedFamilies.Remove(key)) collapsedFamilies.Add(key); });
     }
 
@@ -414,7 +414,8 @@ internal sealed partial class ArrangeModel
     public bool IsAudible(Lane lane)
     {
         lock (muted)
-            return !muted.Contains(lane) && (soloed.Count == 0 ? !SongSoloed : soloed.Contains(lane));
+            return !muted.Contains(lane) && (RenderParent(lane) is not { } parent || !muted.Contains(parent))
+                && (soloed.Count == 0 ? !SongSoloed : soloed.Contains(lane) || RenderParent(lane) is { } p && soloed.Contains(p));
     }
 
     /// <summary>The Song audio row's S: the song plays with only the soloed lanes, or none.</summary>
@@ -573,7 +574,7 @@ internal sealed partial class ArrangeModel
     public string Filter { get; private set; } = "";
 
     /// <summary>The name shown for a lane: its display name if renamed, else its file or skin name.</summary>
-    public string NameOf(Lane lane) => names.TryGetValue(lane, out var n) ? n : SlotOf(lane).Name;
+    public string NameOf(Lane lane) => names.TryGetValue(lane, out var n) ? n : DrumRenders.TryGetValue(ProjectStore.KeyOf(lane), out var rendered) ? $"Velocity {rendered.Velocity} · WAV" : SlotOf(lane).Name;
 
     private bool MatchesFilter(Lane lane) =>
         Filter.Length == 0 || NameOf(lane).Contains(Filter, StringComparison.OrdinalIgnoreCase) || lane.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase);
@@ -677,6 +678,7 @@ internal sealed partial class ArrangeModel
         Relayout(() =>
         {
             RestoreSlots(project.LaneSlots);
+            RestoreDrumRenders(project.DrumRenders);
             foreach (var (key, name) in project.LaneNames)
                 if (ProjectStore.LaneOf(key) is { } lane) names[lane] = name;
             foreach (var lane in project.HiddenLanes.Select(ProjectStore.LaneOf).OfType<Lane>()) hidden.Add(lane);
