@@ -115,6 +115,19 @@ internal static class EditorCommands
         new("zoomOut", "View and lanes", "Zoom out", [K(Key.G)]),
         new("filter", "View and lanes", "Filter lanes by name", [K(Key.F, Ctrl)]),
 
+        // Keysound mode's key editor: the commands above work there too (same keys, same meaning); these are its own.
+        new("ks.toolSplit", "Keysound key editor", "Split tool: click a note to split it", [K(Key.D7)]),
+        new("ks.toolGlue", "Keysound key editor", "Glue tool: click a note to join it with the next of its pitch", [K(Key.D8)]),
+        new("ks.record", "Keysound key editor", "Record from the MIDI keyboard into the selected track", [K(Key.Multiply)]),
+        new("ks.transposeUp", "Keysound key editor", "Transpose the selected notes up a semitone", [K(Key.Up)]),
+        new("ks.transposeDown", "Keysound key editor", "Transpose the selected notes down a semitone", [K(Key.Down)]),
+        new("ks.octaveUp", "Keysound key editor", "Transpose the selected notes up an octave", [K(Key.Up, Shift)]),
+        new("ks.octaveDown", "Keysound key editor", "Transpose the selected notes down an octave", [K(Key.Down, Shift)]),
+        new("ks.selectPrevious", "Keysound key editor", "Select the previous note", [K(Key.Left, Ctrl | Shift)]),
+        new("ks.selectNext", "Keysound key editor", "Select the next note", [K(Key.Right, Ctrl | Shift)]),
+        new("ks.sync", "Keysound key editor", "Sync notes to gameplay objects", []),
+        new("ks.generate", "Keysound key editor", "Generate keysounds", []),
+
         new("addBookmark", "Bookmarks", "Add a bookmark at the playhead", [K(Key.B, Ctrl)]),
         new("removeBookmark", "Bookmarks", "Remove the bookmark at the playhead", [K(Key.B, Ctrl | Shift)]),
         new("previousBookmark", "Bookmarks", "Previous bookmark", [K(Key.OemOpenBrackets)]),

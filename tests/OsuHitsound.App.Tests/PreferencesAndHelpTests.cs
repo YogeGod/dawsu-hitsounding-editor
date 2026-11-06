@@ -89,7 +89,7 @@ public class PreferencesAndHelpTests : IDisposable
         var keys = EditorCommands.Defaults.SelectMany(c => c.Keys).Select(k => k.ToString()).ToList();
         Assert.Equal(keys.Count, keys.Distinct().Count());
         // These menu commands have no built-in key; users can assign one in Preferences.
-        string[] menuOnly = ["toolRange", "editRange", "scaleByVolume", "quantizeDialog", "importOsz", "openHitsoundFolder", "reviewOutput"];
+        string[] menuOnly = ["toolRange", "editRange", "scaleByVolume", "quantizeDialog", "importOsz", "openHitsoundFolder", "reviewOutput", "ks.sync", "ks.generate"];
         Assert.All(EditorCommands.Defaults.Where(c => !menuOnly.Contains(c.Id)), c => Assert.NotEmpty(c.Keys));
     }
 

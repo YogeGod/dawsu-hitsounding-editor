@@ -84,6 +84,7 @@ public partial class KeysoundEditor : UserControl
         SetupInstruments();
         SetupTransport();
         SetupInspector();
+        RefreshShortcutTips();
     }
 
     /// <summary>The ◀ Close button: the window asks about unsaved edits, then closes the project.</summary>
@@ -608,45 +609,4 @@ public partial class KeysoundEditor : UserControl
         ToolTip.SetTip(RedoButton, doc.Session.RedoLabel is { } r ? $"Redo {r} (Ctrl+Y)" : "Redo (Ctrl+Y)");
     }
 
-    /// <summary>Keys while the key editor shows. Returns false for keys the window should handle (saving, help…).</summary>
-    public bool HandleKey(KeyEventArgs e)
-    {
-        if (doc is null) return false;
-        var mods = e.KeyModifiers;
-        bool ctrl = mods.HasFlag(KeyModifiers.Control), shift = mods.HasFlag(KeyModifiers.Shift);
-        switch (e.Key)
-        {
-            case Key.Z when ctrl && shift:
-            case Key.Y when ctrl: doc.Session.Redo(); return true;
-            case Key.Z when ctrl: doc.Session.Undo(); return true;
-            case Key.A when ctrl && shift: Roll.Deselect(); return true;
-            case Key.A when ctrl: Roll.SelectAll(); return true;
-            case Key.Escape: if (!Roll.CancelDrag()) Roll.Deselect(); return true;
-            case Key.Delete or Key.Back when mods == KeyModifiers.None: Roll.DeleteSelection(); return true;
-            case Key.Up when !ctrl: Roll.Transpose(shift ? 12 : 1); return true;
-            case Key.Down when !ctrl: Roll.Transpose(shift ? -12 : -1); return true;
-            case Key.Left when ctrl: Roll.Nudge(-1); return true; // Cubase's Nudge Left/Right: one grid step
-            case Key.Right when ctrl: Roll.Nudge(1); return true;
-            case Key.Left: Roll.SelectNeighbour(-1, extend: shift); return true; // previous / next note; Shift adds it
-            case Key.Right: Roll.SelectNeighbour(1, extend: shift); return true;
-            case Key.D when ctrl && !shift: Roll.Duplicate(); return true;
-            case Key.C when ctrl && !shift: clipboard = Roll.CopySelection(); return true;
-            case Key.X when ctrl && !shift: clipboard = Roll.CopySelection(); Roll.DeleteSelection(); return true;
-            case Key.V when ctrl && !shift: Roll.Paste(clipboard, Roll.Playhead); return true;
-            case Key.Q when mods == KeyModifiers.None: Roll.QuantizeSelection(); return true;
-            case Key.Space when mods == KeyModifiers.None: TogglePlay(); return true;
-            case Key.Multiply when mods == KeyModifiers.None: ToggleRecord(); return true; // Cubase's Record
-            case Key.Home when mods == KeyModifiers.None: Seek(0); return true;
-            // Cubase's tool numbers.
-            case Key.D1 or Key.NumPad1 when mods == KeyModifiers.None: SetTool(KeyTool.Select); return true;
-            case Key.D3 or Key.NumPad3 when mods == KeyModifiers.None: SetTool(KeyTool.Split); return true;
-            case Key.D4 or Key.NumPad4 when mods == KeyModifiers.None: SetTool(KeyTool.Glue); return true;
-            case Key.D5 or Key.NumPad5 when mods == KeyModifiers.None: SetTool(KeyTool.Erase); return true;
-            case Key.D8 or Key.NumPad8 when mods == KeyModifiers.None: SetTool(KeyTool.Draw); return true;
-            case Key.J when mods == KeyModifiers.None: SnapToggle.IsChecked = SnapToggle.IsChecked != true; return true;
-            case Key.H when mods == KeyModifiers.None: Roll.ZoomTime(1.25); return true;
-            case Key.G when mods == KeyModifiers.None: Roll.ZoomTime(0.8); return true;
-            default: return false;
-        }
-    }
 }
