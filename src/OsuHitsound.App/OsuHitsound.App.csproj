@@ -7,8 +7,9 @@
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>OsuHitsoundEditor</AssemblyName>
-    <Version>2.0.1</Version>
+    <Version>2.1.0</Version>
     <Product>dawsu! hitsound studio</Product>
+    <ApplicationIcon>Assets\dawsu.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
   </PropertyGroup>
@@ -18,6 +19,7 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,6 +38,12 @@
   <ItemGroup Condition="'$(Vst3IsolatedHostExe)' != ''">
     <None Include="$(Vst3IsolatedHostExe)" Link="dawsu_vst3_host.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- Published builds start from dawsu!.exe. The launcher has the app's DLL name built in, so only the file is
+       renamed; the assembly, its resources and the settings folder keep their names. -->
+  <Target Name="NameTheExe" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+    <Move SourceFiles="$(PublishDir)$(AssemblyName).exe" DestinationFiles="$(PublishDir)dawsu!.exe" Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
+  </Target>
 
   <ItemGroup>
     <InternalsVisibleTo Include="OsuHitsound.App.Tests" />

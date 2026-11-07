@@ -67,6 +67,10 @@ internal static class EditorCommands
 
         new("play", "Playback and cycle", "Play / stop", [K(Key.Space)]),
         new("start", "Playback and cycle", "Go to the start", [K(Key.Home)]),
+        new("seekBack", "Playback and cycle", "Playhead to the previous grid line (osu! keys: Left, wheel up)", []),
+        new("seekForward", "Playback and cycle", "Playhead to the next grid line (osu! keys: Right, wheel down)", []),
+        new("seekBackFar", "Playback and cycle", "Playhead back four grid lines (osu! keys: Shift+Left, Shift+wheel up)", []),
+        new("seekForwardFar", "Playback and cycle", "Playhead forward four grid lines (osu! keys: Shift+Right, Shift+wheel down)", []),
         new("first", "Playback and cycle", "To the first object or placed hit (twice: to the start of the song)", [K(Key.Z)]),
         new("last", "Playback and cycle", "To the last object or placed hit (twice: to the end of the song)", [K(Key.V)]),
         new("stop", "Playback and cycle", "Stop (again: to the start)", [K(Key.NumPad0)]),
@@ -136,7 +140,8 @@ internal static class EditorCommands
         // Keysound mode's key editor: the commands above work there too (same keys, same meaning); these are its own.
         new("ks.toolSplit", "Keysound key editor", "Split tool: click a note to split it", [K(Key.D7)]),
         new("ks.toolGlue", "Keysound key editor", "Glue tool: click a note to join it with the next of its pitch", [K(Key.D8)]),
-        new("ks.record", "Keysound key editor", "Record from the MIDI keyboard into the selected track", [K(Key.Multiply)]),
+        new("ks.record", "Keysound key editor", "Record from the MIDI keyboard or musical typing into the selected track", [K(Key.Multiply)]),
+        new("ks.typing", "Keysound key editor", "Musical typing: play the selected track from the computer keyboard (other shortcuts are off meanwhile)", [K(Key.K, Alt)]),
         new("ks.sync", "Keysound key editor", "Sync notes to gameplay objects", []),
         new("ks.generate", "Keysound key editor", "Generate keysounds", []),
 

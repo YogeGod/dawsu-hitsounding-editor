@@ -1128,28 +1128,33 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         var p = e.GetPosition(this);
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        var (action, steps) = WheelMode.For(WheelMode.Osu, e.KeyModifiers, e.Delta.X, e.Delta.Y, overHeaders: p.X < GridLeft);
+        switch (action)
         {
-            // Vertical zoom (Ctrl+Shift+wheel), keeping the point under the mouse in place: the same row, the same
-            // fraction into it (group rows don't grow with the lanes, so a plain ratio would drift).
-            double old = RowHeight;
-            RowHeight = Math.Round(RowHeight * (e.Delta.Y > 0 ? 1.15 : 1 / 1.15));
-            ScrollY = ScrollKeepingPoint(Model?.Rows ?? [], old, RowHeight, scrollY, p.Y - HeaderHeight);
+            case WheelAction.ZoomRows:
+            {
+                // Vertical zoom, keeping the point under the mouse in place: the same row, the same fraction into it
+                // (group rows don't grow with the lanes, so a plain ratio would drift).
+                double old = RowHeight;
+                RowHeight = Math.Round(RowHeight * (e.Delta.Y > 0 ? 1.15 : 1 / 1.15));
+                ScrollY = ScrollKeepingPoint(Model?.Rows ?? [], old, RowHeight, scrollY, p.Y - HeaderHeight);
+                break;
+            }
+            case WheelAction.ZoomTime: Axis.ZoomAt(e.Delta.Y > 0 ? 1.25 : 0.8, Math.Max(0, p.X - GridLeft)); break;
+            case WheelAction.Divisor: DivisorWheel?.Invoke(e.Delta.Y > 0 ? 1 : -1); break; // finer up, coarser down
+            case WheelAction.Pan: Axis.Left -= (e.Delta.Y + e.Delta.X) * 120 / Axis.Zoom; break;
+            case WheelAction.Step: PlayheadStepRequested?.Invoke(steps); break;
+            default: ScrollY -= e.Delta.Y * RowHeight * 3; break;
         }
-        else if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) // Ctrl+wheel and Ctrl+Alt+wheel: zoom in time
-            Axis.ZoomAt(e.Delta.Y > 0 ? 1.25 : 0.8, Math.Max(0, p.X - GridLeft));
-        else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
-            DivisorWheel?.Invoke(e.Delta.Y > 0 ? 1 : -1); // finer up, coarser down
-        else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.Delta.X != 0)
-            Axis.Left -= (e.Delta.Y + e.Delta.X) * 120 / Axis.Zoom;
-        else
-            ScrollY -= e.Delta.Y * RowHeight * 3;
         InvalidateVisual();
         e.Handled = true;
     }
 
     /// <summary>Alt+wheel: +1 for a finer snap, -1 for a coarser one (the window owns the divisor list).</summary>
     public event Action<int>? DivisorWheel;
+
+    /// <summary>The osu! editor's wheel: move the playhead by this many snap steps (later = +).</summary>
+    public event Action<int>? PlayheadStepRequested;
 
     public double ScrollY
     {

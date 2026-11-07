@@ -152,6 +152,7 @@ public partial class MainWindow : Window
         };
         Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(SnapOptions,
             NextWheelSnap(Lanes.Spacing, step, TripletSnapToggle.IsChecked == true));
+        Lanes.PlayheadStepRequested += SeekGridSteps;
         // V6.39 header and toolbar buttons.
         PreferencesButton.Click += (_, _) => Run("preferences");
         HelpButton.Click += (_, _) => Run("help");
@@ -278,11 +279,16 @@ public partial class MainWindow : Window
         SetupInspector();
         SetupCompactLayout();
         SetupTutorial();
+        SetupUpdates();
         SetupStartScreen(show: path is null);
         SetupKeysound();
         SetupOutput();
         SetupSoundSets();
-        Deactivated += (_, _) => UpdateToolCursors(KeyModifiers.None);
+        Deactivated += (_, _) =>
+        {
+            UpdateToolCursors(KeyModifiers.None);
+            Keys.ReleaseTypedNotes(); // their key releases now go to another app
+        };
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
 
@@ -433,7 +439,7 @@ public partial class MainWindow : Window
             FileTitle.Text = $"{Path.GetFileName(full)} — Hitsounds";
             ToolTip.SetTip(FileTitle, full);
             Inspector.Browser.SetRoots(Path.GetDirectoryName(full), prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : Path.GetDirectoryName(full)));
-            Title = $"{Path.GetFileNameWithoutExtension(full)} — osu! Hitsound Editor";
+            Title = $"{Path.GetFileNameWithoutExtension(full)} — dawsu! Hitsound";
             flash = $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty.";
             UpdateLoop();
             SyncScrollBars();
@@ -591,6 +597,12 @@ public partial class MainWindow : Window
     // key handling (OnKeyDown) runs as before.
     private void OnPlayKeyDown(object? sender, KeyEventArgs e)
     {
+        // Musical typing takes the keyboard first (except in text boxes): only Space and Esc keep a meaning, as in DAWs.
+        if (!Start.IsVisible && Keys.Document is not null && Keys.TypingOn && FocusManager?.GetFocusedElement() is not TextBox)
+        {
+            if (Keys.TypingKeyDown(e)) e.Handled = true;
+            return;
+        }
         if (Start.IsVisible || EditorCommands.Match(e) is not { } command) return;
         // In a flyout the key comes from its pop-up, whose focus the window doesn't track: the event's source is it.
         object? focused = e.Source as Control ?? FocusManager?.GetFocusedElement();
@@ -608,6 +620,12 @@ public partial class MainWindow : Window
     // The key's release would click a focused button: it belongs to the press above.
     private void OnPlayKeyUp(object? sender, KeyEventArgs e)
     {
+        if (Keys.Document is not null && Keys.TypingOn && FocusManager?.GetFocusedElement() is not TextBox && Keys.TypingKeyUp(e))
+        {
+            if (shortcutKeyHeld == e.Key) shortcutKeyHeld = null; // e.g. the K of the Alt+K that turned typing on
+            e.Handled = true;
+            return;
+        }
         if (shortcutKeyHeld != e.Key) return;
         shortcutKeyHeld = null;
         e.Handled = true;
@@ -659,6 +677,8 @@ public partial class MainWindow : Window
         switch (id)
         {
             case "open": _ = PickMap(); break;
+            case "startScreen": _ = GoToStartScreen(); break;
+            case "updates": _ = CheckForUpdates(quiet: false); break;
             case "importOsz": _ = ImportOsz(); break;
             case "openFolder": OpenMapFolder(); break;
             case "openHitsoundFolder": OpenHitsoundFolder(); break;
@@ -681,6 +701,10 @@ public partial class MainWindow : Window
             case "locatorsToSelection": LocatorsToSelection(); break;
             case "playLocatorRange": PlayLocatorRange(); break;
             case "jumpLeft": if (Lanes.LocatorLeft is { } l) Seek(l); break;
+            case "seekBack": SeekGridSteps(-1); break;
+            case "seekForward": SeekGridSteps(1); break;
+            case "seekBackFar": SeekGridSteps(-4); break;
+            case "seekForwardFar": SeekGridSteps(4); break;
             case "jumpRight": if (Lanes.LocatorRight is { } r) Seek(r); break;
             case "setLeft": Lanes.SetLocators(Lanes.Playhead, Lanes.LocatorRight ?? Lanes.Playhead); break;
             case "setRight": Lanes.SetLocators(Lanes.LocatorLeft ?? Lanes.Playhead, Lanes.Playhead); break;
@@ -1181,7 +1205,7 @@ public partial class MainWindow : Window
         Overview.Attach(model, Lanes.Axis, Lanes.Axis.End);
         RefreshHsMode();
         UpdateCues();
-        Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor";
+        Title = $"{(session.IsEdited ? "• " : "")}{Path.GetFileNameWithoutExtension(mapPath)} — dawsu! Hitsound";
         closeConfirmed = false;
         flash = null;
         UpdateStatus();
@@ -1444,6 +1468,9 @@ public partial class MainWindow : Window
         else audio.Seek(0);
         ShowPlaying(false);
     }
+
+    /// <summary>The playhead by whole grid lines at the snap's spacing (the osu! editor's arrows and wheel).</summary>
+    private void SeekGridSteps(int steps) => Seek(WheelMode.StepGrid(audio?.Position ?? Lanes.Playhead, steps, Lanes.Edits.GridStep));
 
     private void Seek(double time)
     {

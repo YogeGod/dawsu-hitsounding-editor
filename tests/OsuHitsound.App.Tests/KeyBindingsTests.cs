@@ -106,7 +106,11 @@ public class KeyBindingsTests : IDisposable
     {
         var map = Keymap.Build(KeyPreset.Osu, null, NoOverrides);
         Assert.Equal("2", Keys(map, "toolDraw"));
-        Assert.Equal("Space, X", Keys(map, "play"));
+        Assert.Equal("Space, X, C", Keys(map, "play"));
+        // As in osu!'s editor: the arrows move the playhead by grid lines (Shift: four), so they don't select hits here.
+        Assert.Equal(("Left", "Right", "Shift+Left", "Shift+Right"), (Keys(map, "seekBack"), Keys(map, "seekForward"), Keys(map, "seekBackFar"), Keys(map, "seekForwardFar")));
+        Assert.Equal(("", ""), (Keys(map, "selectPrevious"), Keys(map, "selectNext")));
+        Assert.Equal(("Z", "V"), (Keys(map, "first"), Keys(map, "last")));
         Assert.Equal("", Keys(map, "toolRange"));       // osu! uses 2 for placing circles, so Range has no key here
         Assert.Equal(("Q", "Ctrl+R", "Ctrl+N"), (Keys(map, "quantize"), Keys(map, "repeat"), Keys(map, "newDiff")));
         Assert.Equal("Ctrl+Z", Keys(map, "undo"));

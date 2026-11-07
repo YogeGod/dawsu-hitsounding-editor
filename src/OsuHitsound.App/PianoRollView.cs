@@ -67,6 +67,21 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     /// <summary>Clicks on the ruler or strip move the playhead.</summary>
     public event Action<double>? SeekRequested;
+
+    /// <summary>Alt+wheel (osu! keys: Ctrl+wheel): a finer (+1) or coarser (-1) snap.</summary>
+    public event Action<int>? DivisorWheel;
+
+    /// <summary>The osu! editor's wheel: move the playhead by this many snap steps (later = +).</summary>
+    public event Action<int>? PlayheadStepRequested;
+
+    /// <summary>The next grid line from <paramref name="time"/> in <paramref name="direction"/>, at the snap's spacing.</summary>
+    public double GridStep(double time, int direction)
+    {
+        if (doc is null) return time;
+        double step = doc.Tempo.SegmentAtTime(time).BeatLength / SnapDivisions;
+        double target = doc.Tempo.Snap(time + direction * step * 0.51, 1, SnapDivisions);
+        return Math.Max(0, Math.Abs(target - time) < 0.5 ? time + direction * step : target);
+    }
     /// <summary>Ctrl+click (left) or Alt+click (right) in the ruler, as in Hitsound mode: set that locator here.</summary>
     public event Action<bool, double>? LocatorRequested;
     /// <summary>The upper half of the ruler, as in Cubase: a drawn, moved or resized cycle range (left, right; true for a new one).</summary>
@@ -660,6 +675,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 break;
             }
 
+            case KeyTool.Select when hit is not null && e.ClickCount == 2 && mods == KeyModifiers.None:
+                // As in the Hitsound editor: double-clicking a note selects it, moves the playhead there and plays it.
+                SelectOnly([hit.Id]);
+                SeekRequested?.Invoke(doc!.Tempo.TimeAt(hit.Start));
+                AuditionRequested?.Invoke(hit.Pitch, hit.Velocity);
+                break;
+
             case KeyTool.Select when hit is not null && e.ClickCount == 2 && mods.HasFlag(KeyModifiers.Shift):
                 // Cubase: Shift+double-click selects this note and every later one of its pitch.
                 selection.UnionWith(KeyEditing.FollowingOfPitch(track.Notes, hit).Select(n => n.Id));
@@ -958,15 +980,16 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         if (doc is null) return;
         var p = e.GetPosition(this);
         double delta = e.Delta.Y != 0 ? e.Delta.Y : e.Delta.X;
-        var mods = e.KeyModifiers;
-        if (mods.HasFlag(KeyModifiers.Control) && mods.HasFlag(KeyModifiers.Shift))
-            ZoomRows(delta > 0 ? 1.15 : 1 / 1.15, p.Y);
-        else if (mods.HasFlag(KeyModifiers.Control))
-            Axis.ZoomAt(delta > 0 ? 1.25 : 0.8, Math.Max(0, p.X - KeyboardWidth));
-        else if (mods.HasFlag(KeyModifiers.Shift) || e.Delta.X != 0)
-            Axis.Left -= delta * 120 / Axis.Zoom;
-        else
-            ScrollPitch(delta * 3);
+        var (action, steps) = WheelMode.For(WheelMode.Osu, e.KeyModifiers, e.Delta.X, e.Delta.Y, overHeaders: p.X < KeyboardWidth);
+        switch (action)
+        {
+            case WheelAction.ZoomRows: ZoomRows(delta > 0 ? 1.15 : 1 / 1.15, p.Y); break;
+            case WheelAction.ZoomTime: Axis.ZoomAt(delta > 0 ? 1.25 : 0.8, Math.Max(0, p.X - KeyboardWidth)); break;
+            case WheelAction.Divisor: DivisorWheel?.Invoke(delta > 0 ? 1 : -1); break; // finer up, coarser down
+            case WheelAction.Pan: Axis.Left -= delta * 120 / Axis.Zoom; break;
+            case WheelAction.Step: PlayheadStepRequested?.Invoke(steps); break;
+            default: ScrollPitch(delta * 3); break;
+        }
         e.Handled = true;
     }
 

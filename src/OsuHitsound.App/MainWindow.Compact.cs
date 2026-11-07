@@ -48,12 +48,9 @@ public partial class MainWindow
             UpdateThemeToggle();
             SavePrefs();
         };
-        SelectionDisclosure.Click += (_, _) =>
-        {
-            prefs = prefs with { SelectionBarCollapsed = !SelectionBarCollapsed };
-            ShowSelectionDetails();
-            SavePrefs();
-        };
+        SelectionDisclosure.Click += (_, _) => SetSelectionCollapsed(!SelectionBarCollapsed);
+        Keys.SelectionCollapsed = SelectionBarCollapsed;
+        Keys.SelectionCollapseRequested += SetSelectionCollapsed;
         ShowSelectionDetails();
         Lanes.LaneListResizing += AlignToLaneList;
         Lanes.LaneListResized += () =>
@@ -77,6 +74,15 @@ public partial class MainWindow
             var tip = ToolTip.GetTip(button)?.ToString();
             ToolTip.SetTip(button, string.IsNullOrEmpty(tip) ? name : name + "\n" + tip);
         }
+    }
+
+    // One choice for both editors' selection bars.
+    private void SetSelectionCollapsed(bool collapsed)
+    {
+        prefs = prefs with { SelectionBarCollapsed = collapsed };
+        ShowSelectionDetails();
+        Keys.SelectionCollapsed = collapsed;
+        SavePrefs();
     }
 
     private void UpdateThemeToggle()

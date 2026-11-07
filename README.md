@@ -17,26 +17,29 @@ A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you 
 
 **Keysound mode** (start screen → Keysounding)
 - A project made from a reference beatmap, with instrument tracks in a piano roll (DAW-style editing).
-- Draw notes, import MIDI, or play and record from a MIDI keyboard.
+- Draw notes, import MIDI, or play and record from a MIDI keyboard, or from your computer keyboard with **musical typing** (Alt+K).
 - Each track plays the bundled piano or a VST3 instrument. Every plug-in runs in its own process, so a crash only silences its track.
 - **Sync…** moves notes onto the map's circles, slider ends and spinner ends.
 - **Generate…** renders every synced note to its own WAV and writes a playable `[Keysounds]` copy of the map. You can then export it as a `.osz`.
 
 ## Getting started
 
-1. Download the latest release from [Releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases), extract the whole ZIP, and run `OsuHitsoundEditor.exe`.
-2. Set your osu! Songs folder in **Preferences**.
-3. Open a map. The first launch offers a short **Quick start** (it's also under **File → Quick start**).
-4. Press **F1** for every shortcut and mouse action.
+1. Download `dawsu-win-Setup.exe` from the latest [release](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) and run it. It installs dawsu! for your Windows user (no administrator rights needed) and adds it to the Start menu. Running a newer installer updates an existing install in place, keeping your settings; **File → Check for updates…** does the same from inside the app.
+2. The first launch asks how you want to control the editors: **DAW-like keys** or **osu! editor controls**. You can switch later in **Preferences → Keys**.
+3. Set your osu! Songs folder in **Preferences**, then open a map. A short **Quick start** follows (it's also under **File → Quick start**).
+4. Press **F1** for every shortcut and mouse action. The house button next to the dawsu! name goes back to the start screen.
 
-| Key | Action |
-|---|---|
-| 1–6 | Select, Grab, Draw, Erase, Mute and Ramp tools |
-| Space | Play / stop |
-| J | Snap on / off |
-| Ctrl+S | Save |
-| Ctrl+Z / Ctrl+Y | Undo / redo |
-| Ctrl+wheel | Zoom in time |
+| | DAW-like keys | osu! editor controls |
+|---|---|---|
+| Mouse wheel | Scroll the lanes | Playhead one grid line (Shift: four) |
+| Ctrl+wheel | Zoom in time | Change the snap |
+| Alt+wheel | Change the snap | Zoom in time |
+| Left / Right | Previous / next hit | Playhead one grid line (Shift: four) |
+| Space | Play / stop | Play / stop (also X, C) |
+| Z / V | First / last object | First / last object |
+| 1, 2, 3, 4 | Select, Grab, Draw, Erase | Select, Draw, (none), Erase (Grab has no key) |
+
+Both styles share J (snap), Ctrl+S (save), Ctrl+Z / Ctrl+Y (undo / redo) and Alt+K (musical typing in Keysound mode).
 
 ## Building from source
 
@@ -66,5 +69,6 @@ VST3 instruments in Keysound mode need `dawsu_vst3_host.exe` next to the app. Bu
 - Audio decoding by [BASS](https://www.un4seen.com) (free for non-commercial use); output through [NAudio](https://github.com/naudio/NAudio) (MIT).
 - Waveform colours follow [osu-framework](https://github.com/ppy/osu-framework)'s Waveform (MIT).
 - The bundled piano is the FreePats Upright Piano KW (CC0). VST3 hosting uses the Steinberg VST 3 SDK (MIT).
+- Installing and updating by [Velopack](https://github.com/velopack/velopack) (MIT).
 
 Full licence texts are in [THIRD-PARTY-NOTICES.txt](src/OsuHitsound.App/THIRD-PARTY-NOTICES.txt).

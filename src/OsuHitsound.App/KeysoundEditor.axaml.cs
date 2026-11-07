@@ -40,6 +40,9 @@ public partial class KeysoundEditor : UserControl
         SnapBox.ItemsSource = Snaps.Select(s => s.Label).ToList();
         SnapBox.SelectedIndex = 3;
         SnapBox.SelectionChanged += (_, _) => { Roll.SnapDivisions = Snaps[Math.Max(0, SnapBox.SelectedIndex)].Divisions; Roll.InvalidateVisual(); };
+        // The wheel's snap changes and playhead steps, as in the Hitsound editor.
+        Roll.DivisorWheel += step => SnapBox.SelectedIndex = Math.Clamp(SnapBox.SelectedIndex + step, 0, Snaps.Length - 1);
+        Roll.PlayheadStepRequested += SeekGridSteps;
         SnapToggle.IsCheckedChanged += (_, _) => Roll.SnapOn = SnapToggle.IsChecked == true;
         GhostToggle.IsCheckedChanged += (_, _) => { Roll.ShowGhosts = GhostToggle.IsChecked == true; Roll.InvalidateVisual(); };
         MarkerToggle.IsCheckedChanged += (_, _) => { Roll.ShowMarkers = MarkerToggle.IsChecked == true; Roll.InvalidateVisual(); };
@@ -83,7 +86,6 @@ public partial class KeysoundEditor : UserControl
             e.Handled = true;
         };
         DismissButton.Click += (_, _) => SetStatus("");
-        ProjectFolderButton.Click += (_, _) => OpenProjectFolder();
         VolumeBox.ValueChanged += (_, _) =>
         {
             if (showingVolume || doc?.SelectedTrack is not { } id || VolumeBox.Value is not { } db) return;
@@ -96,6 +98,8 @@ public partial class KeysoundEditor : UserControl
         Roll.ViewChanged += UpdateTexts;
         clock.Tick += (_, _) => Tick();
         SetupRecording();
+        SetupTyping();
+        SelectionDisclosure.Click += (_, _) => SelectionCollapseRequested?.Invoke(!SelectionCollapsed);
         SetupInstruments();
         SetupTransport();
         SetupInspector();
@@ -487,6 +491,29 @@ public partial class KeysoundEditor : UserControl
 
     // Transport.
 
+    /// <summary>The playhead by whole grid lines at the snap's spacing (the osu! editor's arrows and wheel).</summary>
+    private void SeekGridSteps(int steps) => Seek(WheelMode.StepGrid(audio?.Position ?? Roll.Playhead, steps, Roll.GridStep));
+
+    /// <summary>
+    /// The selection bar's details folded away (the arrow at its left). The window owns the choice, shared with the
+    /// Hitsound editor's bar: the arrow asks for a change, and the window sets this.
+    /// </summary>
+    public bool SelectionCollapsed
+    {
+        get => !InfoBarLeft.IsVisible;
+        set
+        {
+            InfoBarLeft.IsVisible = !value;
+            SelectionDisclosureIcon.Glyph = value ? "ChevronDown" : "ChevronUp";
+            string label = value ? "Expand selection details" : "Collapse selection details";
+            ToolTip.SetTip(SelectionDisclosure, label);
+            Avalonia.Automation.AutomationProperties.SetName(SelectionDisclosure, label);
+        }
+    }
+
+    /// <summary>The selection bar's arrow was clicked: collapse (true) or expand both editors' bars.</summary>
+    public event Action<bool>? SelectionCollapseRequested;
+
     private void Seek(double time)
     {
         if (IsRecording) return; // a take records one stretch of the timeline
@@ -555,7 +582,7 @@ public partial class KeysoundEditor : UserControl
         BarText.Text = $"{bar}.{beat}.{tick}";
         var segment = doc.Tempo.SegmentAtTime(t);
         BpmText.Text = $"{60000 / segment.BeatLength:0.##}";
-        MeterText.Text = $"{segment.Meter}/4 /{Roll.SnapDivisions}";
+        MeterText.Text = $"{segment.Meter}/4";
     }
 
     /// <summary>Fit: the whole song (or the notes past its end) in view.</summary>
@@ -636,8 +663,6 @@ public partial class KeysoundEditor : UserControl
         UpdateSelectionInfo();
         StatusText.Text = status;
         MessageRow.IsVisible = status.Length > 0;
-        ProjectPathText.Text = doc.ProjectPath;
-        ToolTip.SetTip(ProjectPathText, doc.ProjectPath);
         UndoButton.IsEnabled = doc.Session.CanUndo;
         RedoButton.IsEnabled = doc.Session.CanRedo;
         ToolTip.SetTip(UndoButton, doc.Session.UndoLabel is { } u ? $"Undo {u} (Ctrl+Z)" : "Undo (Ctrl+Z)");

@@ -25,6 +25,10 @@ public partial class KeysoundEditor
             case "stop": if (audio?.IsPlaying == true || IsRecording) TogglePlay(); else Seek(0); return true;
             case "cycle": LoopButton.IsChecked = LoopButton.IsChecked != true; ToggleCycle(); return true;
             case "jumpLeft": if (locatorLeft is { } l) Seek(l); return true;
+            case "seekBack": SeekGridSteps(-1); return true;
+            case "seekForward": SeekGridSteps(1); return true;
+            case "seekBackFar": SeekGridSteps(-4); return true;
+            case "seekForwardFar": SeekGridSteps(4); return true;
             case "jumpRight": if (locatorRight is { } r) Seek(r); return true;
             case "setLeft": SetLocator(true, Roll.Playhead); return true;
             case "setRight": SetLocator(false, Roll.Playhead); return true;
@@ -58,6 +62,7 @@ public partial class KeysoundEditor
             case "nudgeRight": Roll.Nudge(1); return true;
 
             case "ks.record": ToggleRecord(); return true;
+            case "ks.typing": ToggleTyping(); return true;
             // The arrow keys as in Cubase's Key Editor: Up/Down transpose (Shift: an octave), Left/Right select.
             case "navUp": Roll.Transpose(1); return true;
             case "navDown": Roll.Transpose(-1); return true;

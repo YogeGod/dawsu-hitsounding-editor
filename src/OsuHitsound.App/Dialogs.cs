@@ -483,7 +483,7 @@ internal static partial class Dialogs
         Func<StackPanel, string, string?, string, string?, TextBox> pathRow)
     {
         var edited = prefs;
-        var presets = new[] { (Preset: KeyPreset.Cubase, Name: "Cubase (your Key Commands file)"), (Preset: KeyPreset.Osu, Name: "osu! editor (built-in keys with osu!'s tool and play keys)") };
+        var presets = new[] { (Preset: KeyPreset.Cubase, Name: "DAW-like (with your Cubase Key Commands file, if any)"), (Preset: KeyPreset.Osu, Name: "osu! editor (wheel and arrows move the playhead; Z X C V; 1 and 2)") };
         page.Children.Add(new TextBlock { Text = "Key preset", FontWeight = FontWeight.SemiBold });
         var preset = new ComboBox { ItemsSource = presets.Select(p => p.Name).ToList(), Width = 380 };
         preset.SelectedIndex = Array.FindIndex(presets, p => p.Preset == prefs.KeyPreset);

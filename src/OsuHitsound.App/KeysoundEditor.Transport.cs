@@ -45,8 +45,13 @@ public partial class KeysoundEditor
 
         foreach (double speed in Speeds)
         {
-            var button = new ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = true, Padding = new Avalonia.Thickness(6, 4), FontSize = 12 };
-            button.Classes.Add("viewToggle");
+            // The same speed buttons as the Hitsound editor's transport.
+            var button = new ToggleButton
+            {
+                Content = $"{speed * 100:0}%", IsChecked = speed == 1, Width = 40, Height = 28, MinHeight = 28,
+                Padding = new Avalonia.Thickness(2, 0), FontSize = 11,
+            };
+            Avalonia.Controls.ToolTip.SetTip(button, $"Playback speed {speed * 100:0}%, pitch preserved");
             button.Click += (_, _) => SetSpeed(speed);
             speedButtons.Add((button, speed));
             SpeedPanel.Children.Add(button);
@@ -60,7 +65,11 @@ public partial class KeysoundEditor
             GlobalVolumeChanged?.Invoke(e.NewValue);
         };
 
-        SongVolumeSlider.ValueChanged += (_, e) => { if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100); };
+        SongVolumeSlider.ValueChanged += (_, e) =>
+        {
+            if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100);
+            SongVolumeText.Text = $"{Math.Round(e.NewValue)}%";
+        };
         SongMuteButton.IsCheckedChanged += (_, _) => { SongRowMute.IsChecked = SongMuteButton.IsChecked; UpdateSongMute(); };
         SongRowMute.IsCheckedChanged += (_, _) => SongMuteButton.IsChecked = SongRowMute.IsChecked;
         SongRowSolo.IsCheckedChanged += (_, _) =>

@@ -187,11 +187,19 @@ internal static partial class CubaseKeyFile
 /// </summary>
 internal static class Keymap
 {
-    /// <summary>osu!stable editor keys that differ from the built-in ones; everything else keeps its built-in keys.</summary>
+    /// <summary>
+    /// osu!stable editor keys that differ from the built-in ones (checked in osu!'s editor): X and C play and pause, the
+    /// arrows move the playhead by grid lines (Shift: four), 2 is the placing tool. Z and V (first and last object), Space
+    /// and 1 are the built-in keys already. Everything else keeps its built-in keys. The wheel follows <see cref="WheelMode"/>.
+    /// </summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> OsuKeys = new Dictionary<string, IReadOnlyList<KeyGesture>>
     {
-        ["play"] = [new(Key.Space), new(Key.X)],
+        ["play"] = [new(Key.Space), new(Key.X), new(Key.C)],
         ["toolDraw"] = [new(Key.D2)],
+        ["seekBack"] = [new(Key.Left)],
+        ["seekForward"] = [new(Key.Right)],
+        ["seekBackFar"] = [new(Key.Left, KeyModifiers.Shift)],
+        ["seekForwardFar"] = [new(Key.Right, KeyModifiers.Shift)],
     };
 
     /// <param name="cubase">The Cubase file's keys; null when the preset is osu! or the file couldn't be read.</param>

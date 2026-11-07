@@ -131,14 +131,21 @@ internal sealed class HitEditor
         else
         {
             double step = StepAt(anchor.Time);
-            offset = toGrid ? (Spacing.IsLong ? model.AdjacentLongSnap(anchor.Time, direction, Spacing)
-                    : model.Snap(anchor.Time + direction * step * 0.51, Spacing)) - anchor.Time
+            offset = toGrid ? GridStep(anchor.Time, direction) - anchor.Time
                 : SnapMode == SnapMode.GridRelative ? SnapOffset(anchor.Time, direction * step) // whole grid lines, offset kept
                 : direction * step;
-            if (toGrid && Math.Abs(offset) < 1e-6) offset = direction * step;
         }
 
         Move(offset, h => h.Lane, "Nudge");
+    }
+
+    /// <summary>The previous (direction −1) or next (+1) grid line from <paramref name="time"/>, at the snap's spacing.</summary>
+    public double GridStep(double time, int direction)
+    {
+        if (model is null) return time;
+        double step = StepAt(time);
+        double target = Spacing.IsLong ? model.AdjacentLongSnap(time, direction, Spacing) : model.Snap(time + direction * step * 0.51, Spacing);
+        return Math.Max(0, Math.Abs(target - time) < 1e-6 ? time + direction * step : target);
     }
 
     /// <summary>The info bar's Start: the selection moves so its first hit lands at this time (the others keep their spacing).</summary>

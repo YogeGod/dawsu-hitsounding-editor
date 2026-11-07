@@ -16,8 +16,36 @@ public partial class MainWindow
             prefs = prefs with { TutorialSeen = true };
             SavePrefs();
         };
-        // The first launch only: once the window is laid out, so every spotlight lands where its control is.
-        if (usePreferences && !prefs.TutorialSeen) Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(StartQuickStart, Avalonia.Threading.DispatcherPriority.Background);
+        // Someone who used the app before this question existed keeps the keys they have.
+        if (usePreferences && prefs.TutorialSeen && !prefs.KeyStyleAsked) { prefs = prefs with { KeyStyleAsked = true }; SavePrefs(); }
+        // The first launch only: once the window is laid out, so every spotlight lands where its control is. The key
+        // style comes first, so the tour shows the keys that will be used.
+        if (usePreferences && !prefs.TutorialSeen)
+            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            {
+                await AskKeyStyle();
+                StartQuickStart();
+            }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Asks a new user how they want to control the editors: DAW-like keys (the built-in ones, or a DAW key-command
+    /// file) or osu!'s editor controls. Preferences → Keys changes it later.
+    /// </summary>
+    private async Task AskKeyStyle()
+    {
+        if (prefs.KeyStyleAsked) return;
+        bool osu = await Dialogs.Confirm(this, "How do you want to control the editor?",
+            "osu! editor controls: the mouse wheel and the arrow keys move the playhead along the grid (Shift: four steps), "
+            + "Ctrl+wheel changes the snap, Alt+wheel zooms, Z and V jump to the first and last object, X and C play and pause, "
+            + "1 and 2 select and place.\n\n"
+            + "DAW-like keys: the wheel scrolls the lanes, Ctrl+wheel zooms, Alt+wheel changes the snap, the arrow keys move "
+            + "between hits and notes, and Space plays. A DAW's key-command file can also be used.\n\n"
+            + "You can switch at any time in Preferences → Keys.",
+            ok: "osu! editor controls", cancel: "DAW-like keys");
+        prefs = prefs with { KeyStyleAsked = true, KeyPreset = osu ? KeyPreset.Osu : KeyPreset.Cubase };
+        SavePrefs();
+        ApplyKeys();
     }
 
     private void StartTutorial() => Tutorial.Start(TutorialSteps());

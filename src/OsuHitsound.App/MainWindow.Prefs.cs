@@ -106,6 +106,7 @@ public partial class MainWindow
         {
             var (keys, problem) = Keymap.For(prefs);
             EditorCommands.Use(keys);
+            WheelMode.Osu = prefs.KeyPreset == KeyPreset.Osu;
             Keys.RefreshShortcutTips();
             // No Cubase file and none chosen is normal (no Cubase installed): the built-in keys are used quietly.
             if (problem is not (null or Keymap.NoCubaseFile))

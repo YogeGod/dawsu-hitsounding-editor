@@ -17,6 +17,40 @@ public partial class MainWindow
         Start.QuickStartRequested += StartQuickStart;
         Start.HelpRequested += () => Run("help");
         Activated += (_, _) => { if (Start.IsVisible) RefreshStartScreen(); }; // e.g. after Preferences changed the Songs folder
+        HomeButton.Click += async (_, _) => await GoToStartScreen();
+        StartScreenItem.Click += async (_, _) => await GoToStartScreen();
+    }
+
+    /// <summary>
+    /// Back to the start screen from either editor: asks to save first, as closing does, then shows it. The map stays
+    /// open behind it until another one is opened; a Keysound project is closed.
+    /// </summary>
+    private async Task GoToStartScreen()
+    {
+        if (!usePreferences || Start.IsVisible) return;
+        if (Keys.Document is not null)
+        {
+            if (!await MayLeaveKeysound()) return;
+            hsMapBeforeKeysound = null;
+            CloseKeysoundView();
+        }
+        else if (session is { IsEdited: true } && doc is { } document)
+        {
+            // The same choice as closing the window: save, or reload the map as saved so nothing unsaved stays behind.
+            var choice = await Dialogs.UnsavedClose(this, Path.GetFileName(mapPath) ?? "this difficulty");
+            if (choice == CloseChoice.Cancel || !ReferenceEquals(doc, document)) return;
+            if (choice == CloseChoice.Save && !await Save()) return;
+            if (choice == CloseChoice.Discard)
+            {
+                var reload = OpenAsync(document.Path, restoreUnanchored: false);
+                Loading = reload;
+                if (!await reload) return;
+                SaveProject(); // the discarded loose hits leave the autosaved editor project too
+            }
+        }
+        audio?.Pause();
+        Start.IsVisible = true;
+        RefreshStartScreen();
     }
 
     private void RefreshStartScreen()

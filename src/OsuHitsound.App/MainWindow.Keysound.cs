@@ -186,7 +186,7 @@ public partial class MainWindow
         Keys.IsVisible = false;
         ShowKeysoundChrome(false);
         FileTitle.Text = mapPath is not null ? $"{Path.GetFileName(mapPath)} — Hitsounds" : "No map open";
-        Title = mapPath is not null ? $"{Path.GetFileNameWithoutExtension(mapPath)} — osu! Hitsound Editor" : "osu! Hitsound Editor";
+        Title = mapPath is not null ? $"{Path.GetFileNameWithoutExtension(mapPath)} — dawsu! Hitsound" : "dawsu! Hitsound";
     }
 
     /// <summary>The title bar in Keysound mode: Save project instead of Save .osu, no hitsound-only commands.</summary>

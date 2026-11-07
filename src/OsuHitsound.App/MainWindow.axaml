@@ -2,7 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:OsuHitsound.App"
         x:Class="OsuHitsound.App.MainWindow"
-        Title="osu! Hitsound Editor"
+        Title="dawsu! Hitsound"
+        Icon="/Assets/dawsu.ico"
         Width="1600" Height="900" MinWidth="900" MinHeight="500"
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaChromeHints="NoChrome" ExtendClientAreaTitleBarHeightHint="-1"
         RequestedThemeVariant="Dark">
@@ -18,12 +19,15 @@
         <TextBlock Text="dawsu!" Classes="appTitle" FontSize="16" />
         <TextBlock Name="AppTitle" Grid.Column="1" Text="" Classes="appTitle" Margin="0,0,16,0" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Name="HomeButton" Classes="icon flat" AutomationProperties.Name="Start screen"
+                  ToolTip.Tip="Back to the start screen (asks to save first)"><app:AppIcon Glyph="House" /></Button>
           <Button Name="OpenButton" Classes="flat" Content="Open…" ToolTip.Tip="Open a map (Ctrl+O)" />
           <Button Name="SaveButton" Classes="primary" Content="Save .osu" ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
           <ToggleButton Name="HsModeButton" Classes="wide" Content="HS mode" IsEnabled="False"
                         ToolTip.Tip="Open an empty difficulty or one named HS / hitsounds to create circles as you place sounds." />
           <Menu Name="HeaderMenu" VerticalAlignment="Center" Margin="4,0,0,0">
             <MenuItem Header="File">
+              <MenuItem Name="StartScreenItem" Header="Start screen" />
               <MenuItem Name="OpenItem" Header="Open…" />
               <MenuItem Name="ImportOszItem" Header="Import .osz…" />
               <MenuItem Name="OpenFolderItem" Header="Open map folder" />
@@ -50,6 +54,7 @@
               <Separator />
               <MenuItem Name="QuickStartItem" Header="Quick start" />
               <MenuItem Name="TutorialItem" Header="Full interface tour" />
+              <MenuItem Name="CheckUpdatesItem" Header="Check for updates…" />
             </MenuItem>
             <MenuItem Header="Edit">
               <MenuItem Name="UndoItem" Header="Undo" />
@@ -114,6 +119,7 @@
           <!-- Keysound mode's menus: the same places as Hitsound mode's, with the key editor's commands. -->
           <Menu Name="KeysoundMenu" VerticalAlignment="Center" Margin="4,0,0,0" IsVisible="False">
             <MenuItem Header="File" Name="KsFileMenu">
+              <MenuItem Header="Start screen" Tag="startScreen" />
               <MenuItem Header="Open…" Tag="open" />
               <MenuItem Header="Save project" Tag="save" InputGesture="Ctrl+S" />
               <MenuItem Header="Close project" Tag="ks:close" />
@@ -155,6 +161,7 @@
               <MenuItem Name="KsObjectLinesItem" Header="Object lines" Tag="ks:objectLines" ToggleType="CheckBox" />
               <Separator />
               <MenuItem Header="Shortcuts and help" Tag="help" InputGesture="F1" />
+              <MenuItem Header="Check for updates…" Tag="updates" />
             </MenuItem>
           </Menu>
         </StackPanel>
