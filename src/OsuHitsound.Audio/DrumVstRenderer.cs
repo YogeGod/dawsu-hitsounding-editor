@@ -25,6 +25,10 @@ public static class DrumVstRenderer
     public static Task Render(Vst3Instrument instrument, DrumRenderKey key, string output, CancellationToken cancellation) =>
         RenderCore(instrument.Process, () => instrument.Pump(1), key, output, cancellation);
 
+    /// <summary>The same one-shot render from a SoundFont kit: no plug-in window to keep alive, so it runs unpaced.</summary>
+    public static Task Render(SoundFontDrumKit kit, DrumRenderKey key, string output, CancellationToken cancellation) =>
+        RenderCore(kit.Process, () => { }, key, output, cancellation, pace: false);
+
     internal static async Task RenderCore(Action<float[], int, MidiEvent[]> process, Action pump, DrumRenderKey key, string output, CancellationToken cancellation, bool pace = true)
     {
         key.Validate();

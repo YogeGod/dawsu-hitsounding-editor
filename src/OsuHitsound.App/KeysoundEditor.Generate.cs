@@ -33,7 +33,7 @@ public partial class KeysoundEditor
         }
 
         // A required instrument that isn't playing stops Generate before anything renders.
-        foreach (var t in tracks.Where(t => t.Synced.Count > 0 && t.Track.Instrument.IsVst3))
+        foreach (var t in tracks.Where(t => t.Synced.Count > 0 && t.Track.Instrument.IsMidiInstrument))
             if (PartFor(t.Track) is not { Status: PartStatus.Ready })
             {
                 SelectTrack(t.Track.Id);
@@ -158,6 +158,12 @@ public partial class KeysoundEditor
     /// <summary>A renderer for a track: the bundled piano, or the track's plug-in on its own offline host with its current settings.</summary>
     private async Task<IKeyNoteRenderer> RendererFor(KeyTrack track)
     {
+        if (track.Instrument.IsSoundFont)
+        {
+            var sf2 = track.Instrument;
+            return await Task.Run(() => new SoundFontNoteRenderer(sf2));
+        }
+
         if (!track.Instrument.IsVst3)
             return new PianoNoteRenderer(await (piano ??= Task.Run(() => SfzInstrument.Load(SfzInstrument.BundledPianoPath))));
         // The live plug-in's settings now (tweaks not saved yet included), else the saved ones.

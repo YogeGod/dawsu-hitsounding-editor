@@ -8,6 +8,8 @@ namespace OsuHitsound.App;
 /// <summary>
 /// VST3 instruments on tracks: each runs in its own host process (<see cref="IsolatedVst3"/>), so a plug-in that
 /// crashes only silences its track. A track's plug-in settings are kept in the project and captured on Save.
+/// SoundFont (.sf2) tracks take the same path through a <see cref="SoundFontPart"/> in this process: a preset of a
+/// file left where it is, found again with Locate… when it moves.
 /// </summary>
 public partial class KeysoundEditor
 {
@@ -20,6 +22,10 @@ public partial class KeysoundEditor
         public Guid Track { get; } = track;
         public KeyInstrument Instrument { get; } = instrument;
         public IsolatedVst3? Vst { get; set; }
+        public SoundFontPart? SoundFont { get; set; }
+
+        /// <summary>What plays the track's MIDI: its plug-in or its SoundFont preset, once loaded.</summary>
+        public IMidiPart? Midi => (IMidiPart?)Vst ?? SoundFont;
         public PartStatus Status { get; set; } = PartStatus.Loading;
         public string? Error { get; set; }
 
@@ -31,10 +37,20 @@ public partial class KeysoundEditor
 
     // What the MIDI keyboard plays (read on the driver's thread): the selected track's plug-in, or the piano.
     private volatile bool liveToVst;
-    private volatile IsolatedVst3? liveVst;
+    private volatile IMidiPart? liveVst;
+
+    private bool showingEffects; // the box shows the track's setting, which isn't an edit
 
     private void SetupInstruments()
     {
+        // A SoundFont's reverb and chorus, per track: off gives dry keysounds. Undoable like other instrument changes.
+        EffectsBox.IsCheckedChanged += (_, _) =>
+        {
+            if (showingEffects || SelectedKeyTrack() is not { Instrument.IsSoundFont: true } track || doc is not { } project) return;
+            bool on = EffectsBox.IsChecked == true;
+            if (track.Instrument.Effects != on)
+                project.Session.ReplaceInstrument(track.Id, track.Instrument with { Effects = on }, on ? "Reverb and chorus on" : "Reverb and chorus off");
+        };
         InstrumentButton.Click += async (_, _) => await ChooseInstrument();
         EditorButton.Click += async (_, _) => await OpenEditor();
         FixButton.Click += async (_, _) =>
@@ -48,7 +64,7 @@ public partial class KeysoundEditor
         };
     }
 
-    private VstPart? PartFor(KeyTrack track) => track.Instrument.IsVst3 ? vstParts.FirstOrDefault(p => p.Track == track.Id && p.Matches(track.Instrument)) : null;
+    private VstPart? PartFor(KeyTrack track) => track.Instrument.IsMidiInstrument ? vstParts.FirstOrDefault(p => p.Track == track.Id && p.Matches(track.Instrument)) : null;
 
     private KeyTrack? SelectedKeyTrack() => doc?.SelectedTrack is { } id ? doc.Session.State.Track(id) : null;
 
@@ -69,7 +85,7 @@ public partial class KeysoundEditor
         syncedSelection = doc.SelectedTrack;
         foreach (var track in doc.Session.State.Tracks)
         {
-            if (!track.Instrument.IsVst3 || PartFor(track) is not null) continue;
+            if (!track.Instrument.IsMidiInstrument || PartFor(track) is not null) continue;
             var part = new VstPart(track.Id, track.Instrument);
             vstParts.Add(part);
             _ = StartPart(part);
@@ -81,6 +97,12 @@ public partial class KeysoundEditor
 
     private async Task StartPart(VstPart part)
     {
+        if (part.Instrument.IsSoundFont)
+        {
+            await StartSoundFont(part);
+            return;
+        }
+
         var opened = doc;
         string path = part.Instrument.Path ?? "";
         if (!IsolatedVst3.IsLoadablePath(path))
@@ -130,9 +152,54 @@ public partial class KeysoundEditor
         InstrumentsChanged();
     }
 
+    /// <summary>A SoundFont preset: the file is read off the UI thread (once per file), then its synthesizer plays.</summary>
+    private async Task StartSoundFont(VstPart part)
+    {
+        var opened = doc;
+        var instrument = part.Instrument;
+        // Checked before the file is touched: a project from elsewhere can't make dawsu! reach a network share.
+        if (!SoundFonts.IsLoadablePath(instrument.Path))
+        {
+            part.Status = PartStatus.Failed;
+            part.Error = "only a .sf2 file on this computer is loaded; choose the SoundFont again";
+            InstrumentsChanged();
+            return;
+        }
+
+        if (!File.Exists(instrument.Path))
+        {
+            part.Status = PartStatus.Missing;
+            InstrumentsChanged();
+            return;
+        }
+
+        try
+        {
+            var synth = await Task.Run(() => SoundFontSynth.Create(instrument));
+            if (!ReferenceEquals(doc, opened) || !vstParts.Contains(part)) return;
+            part.SoundFont = new SoundFontPart(synth);
+            part.Status = PartStatus.Ready;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OutOfMemoryException)
+        {
+            if (!ReferenceEquals(doc, opened)) return;
+            part.Status = PartStatus.Failed;
+            part.Error = ex.Message;
+            SetStatus($"{instrument.DisplayName} couldn't load: {ex.Message}");
+        }
+
+        InstrumentsChanged();
+    }
+
     /// <summary>Takes a part's plug-in out of the mixer, then closes its host off the UI thread.</summary>
     private void Release(VstPart part)
     {
+        if (part.SoundFont is not null)
+        {
+            part.SoundFont = null;
+            ApplyParts();
+        }
+
         if (part.Vst is not { } vst) return;
         part.Vst = null;
         ApplyParts(); // the mixer lets go of it before it is disposed
@@ -180,7 +247,7 @@ public partial class KeysoundEditor
         var parts = new List<ILivePart>();
         if (player is not null) parts.Add(player);
         if (doc is not null)
-            parts.AddRange(doc.Session.State.Tracks.Select(PartFor).Select(p => p?.Vst).OfType<IsolatedVst3>());
+            parts.AddRange(doc.Session.State.Tracks.Select(PartFor).Select(p => p?.Midi).OfType<ILivePart>());
         if (applied.Engine == audio && applied.Parts.SequenceEqual(parts)) return; // every edit lands here
         applied = (audio, [.. parts]);
         audio.SetLiveParts(parts);
@@ -189,10 +256,10 @@ public partial class KeysoundEditor
     private void UpdateLiveTarget()
     {
         var track = SelectedKeyTrack();
-        var next = track is null ? null : PartFor(track)?.Vst;
+        var next = track is null ? null : PartFor(track)?.Midi;
         if (liveVst is { } previous && previous != next) previous.Live(KeysoundMidi.ControlChange, KeysoundMidi.AllNotesOff, 0); // no key stays stuck
         liveVst = next;
-        liveToVst = track?.Instrument.IsVst3 == true; // a plug-in still loading or missing stays silent, not the piano
+        liveToVst = track?.Instrument.IsMidiInstrument == true; // an instrument still loading or missing stays silent, not the piano
     }
 
     /// <summary>A note-name tap in the key editor: the selected track's instrument plays it briefly.</summary>
@@ -233,15 +300,21 @@ public partial class KeysoundEditor
     {
         if (SelectedKeyTrack() is not { } track || TopLevel.GetTopLevel(this) is not Window owner || doc is not { } project) return;
         var id = track.Id;
-        const string piano = "Bundled piano", browse = "Browse for another VST3 file…";
+        const string piano = "Bundled piano", browse = "Browse for another VST3 file…", soundFont = "SoundFont (.sf2)…";
         var installed = await Task.Run(Vst3Picker.Installed);
-        string? current = track.Instrument.IsVst3 ? installed.FirstOrDefault(p => string.Equals(p.Value, track.Instrument.Path, StringComparison.OrdinalIgnoreCase)).Key : piano;
+        string? current = track.Instrument.IsVst3 ? installed.FirstOrDefault(p => string.Equals(p.Value, track.Instrument.Path, StringComparison.OrdinalIgnoreCase)).Key
+            : track.Instrument.IsSoundFont ? soundFont : piano;
         var selected = await Dialogs.Choose(owner, "Track instrument", $"Instrument for {track.Name} (its notes stay as they are):",
-            [piano, .. installed.Keys, browse], current, accept: "Use");
+            [piano, soundFont, .. installed.Keys, browse], current, accept: "Use");
         if (selected is null || !ReferenceEquals(doc, project)) return;
 
         KeyInstrument? chosen;
         if (selected == piano) chosen = KeyInstrument.Piano;
+        else if (selected == soundFont)
+        {
+            if (await SoundFontPicker.Browse(owner) is not { } file) return;
+            chosen = await SoundFontPicker.ChoosePreset(owner, file, track.Instrument.IsSoundFont ? track.Instrument : null, SetStatus);
+        }
         else
         {
             string? path = selected == browse ? await Vst3Picker.Browse(owner) : installed.GetValueOrDefault(selected);
@@ -259,8 +332,16 @@ public partial class KeysoundEditor
     /// <summary>A missing plug-in: point at where it is now. Its saved settings are kept.</summary>
     private async Task LocateInstrument()
     {
-        if (SelectedKeyTrack() is not { Instrument.IsVst3: true } track || TopLevel.GetTopLevel(this) is not Window owner || doc is not { } project) return;
+        if (SelectedKeyTrack() is not { Instrument.IsMidiInstrument: true } track || TopLevel.GetTopLevel(this) is not Window owner || doc is not { } project) return;
         var id = track.Id;
+        if (track.Instrument.IsSoundFont)
+        {
+            // The same preset in the file's new place; nothing else changes.
+            if (await SoundFontPicker.Browse(owner, $"Locate {Path.GetFileName(track.Instrument.Path)}") is not { } moved || !ReferenceEquals(doc, project)) return;
+            project.Session.ReplaceInstrument(id, track.Instrument with { Path = moved }, "Locate instrument");
+            return;
+        }
+
         if (await Vst3Picker.Browse(owner, $"Locate {track.Instrument.DisplayName}") is not { } path) return;
         if (await PickClass(owner, path, keep: track.Instrument) is not { } found || !ReferenceEquals(doc, project)) return;
         Vst3Picker.Trust(path);
@@ -322,6 +403,16 @@ public partial class KeysoundEditor
 
     private async Task OpenEditor()
     {
+        // A SoundFont has no window of its own: its button picks another preset of the same file.
+        if (SelectedKeyTrack() is { Instrument.IsSoundFont: true } sf2Track && TopLevel.GetTopLevel(this) is Window owner && doc is { } project)
+        {
+            var id = sf2Track.Id;
+            if (await SoundFontPicker.ChoosePreset(owner, sf2Track.Instrument.Path!, sf2Track.Instrument, SetStatus) is { } preset
+                && ReferenceEquals(doc, project) && !preset.SamePlugin(sf2Track.Instrument))
+                project.Session.ReplaceInstrument(id, preset, "Change preset");
+            return;
+        }
+
         if (SelectedTrackPart() is not { Vst: { } vst } part) return;
         try { await vst.ShowEditorAsync(); }
         catch (InvalidOperationException ex) { SetStatus($"{part.Instrument.DisplayName}'s window couldn't open: {ex.Message}"); }
@@ -375,8 +466,13 @@ public partial class KeysoundEditor
         VolumeBox.IsEnabled = current is not null;
         VolumeBox.Value = (decimal)(current?.VolumeDb ?? 0);
         showingVolume = false;
-        EditorButton.IsVisible = current?.Instrument.IsVst3 == true;
-        EditorButton.IsEnabled = part?.Vst is not null;
+        EditorButton.IsVisible = current?.Instrument.IsMidiInstrument == true;
+        EditorButton.Content = current?.Instrument.IsSoundFont == true ? "Preset…" : "Open editor";
+        EditorButton.IsEnabled = current?.Instrument.IsSoundFont == true || part?.Vst is not null;
+        showingEffects = true;
+        EffectsBox.IsVisible = current?.Instrument.IsSoundFont == true;
+        EffectsBox.IsChecked = current?.Instrument.Effects != false;
+        showingEffects = false;
         FixButton.IsVisible = part?.Status is PartStatus.Missing or PartStatus.Crashed or PartStatus.Failed or PartStatus.Blocked;
         FixButton.Content = part?.Status switch { PartStatus.Missing => "Locate…", PartStatus.Blocked => "Load plug-in…", _ => "Reload instrument" };
     }

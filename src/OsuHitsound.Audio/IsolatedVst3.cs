@@ -9,13 +9,23 @@ namespace OsuHitsound.Audio;
 /// <summary>A MIDI event for a VST3 instrument at a timeline time (status byte with channel, two data bytes).</summary>
 public readonly record struct TimedMidi(double Time, byte Status, byte Data1, byte Data2);
 
+/// <summary>A Keysound part played by MIDI: a VST3 instrument, or a SoundFont preset.</summary>
+public interface IMidiPart : ILivePart
+{
+    /// <summary>The track's notes and controllers in timeline ms, replacing the previous ones. Any thread.</summary>
+    void SetEvents(IEnumerable<TimedMidi> events);
+
+    /// <summary>A live MIDI message (a keyboard): played at the start of the next block. Any thread.</summary>
+    void Live(byte status, byte data1, byte data2);
+}
+
 /// <summary>
 /// A VST3 instrument running in its own dawsu_vst3_host process (native/Vst3IsolatedHost), so a crash takes down only
 /// this instrument. Audio goes through shared memory one block at a time: if the host is late the block is silent; if
 /// it exits the instrument is <see cref="IsCrashed"/> and silent until it is started again. Commands (editor window,
 /// state) go through the host's stdin/stdout, each reply tagged with its request's number.
 /// </summary>
-public sealed class IsolatedVst3 : ILivePart, IDisposable
+public sealed class IsolatedVst3 : IMidiPart, IDisposable
 {
     /// <summary>The protocol the host must speak (its READY line says which).</summary>
     public const int Protocol = 2; // 2: --offline and RENDER
@@ -218,12 +228,15 @@ public sealed class IsolatedVst3 : ILivePart, IDisposable
     // ---- Playback ----
 
     /// <summary>What playback sends (timeline ms, sorted by time). Any thread.</summary>
-    public void SetEvents(IEnumerable<TimedMidi> events)
+    public void SetEvents(IEnumerable<TimedMidi> events) => Volatile.Write(ref scheduled, SortForPlayback(events));
+
+    /// <summary>Events by time, note-offs before note-ons at a shared time (a repeated note retriggers).</summary>
+    internal static TimedMidi[] SortForPlayback(IEnumerable<TimedMidi> events)
     {
         var sorted = events.ToArray();
-        static int OnLast(TimedMidi e) => (e.Status & 0xF0) == 0x90 && e.Data2 > 0 ? 1 : 0; // note offs first at a shared time
+        static int OnLast(TimedMidi e) => (e.Status & 0xF0) == 0x90 && e.Data2 > 0 ? 1 : 0;
         Array.Sort(sorted, (a, b) => a.Time != b.Time ? a.Time.CompareTo(b.Time) : OnLast(a).CompareTo(OnLast(b)));
-        Volatile.Write(ref scheduled, sorted);
+        return sorted;
     }
 
     /// <summary>A live MIDI message (a keyboard): sent at the start of the next block. Any thread.</summary>

@@ -13,12 +13,12 @@ A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you 
 - Set volumes per object in the controller, with ramps.
 - **Save .osu** writes the hitsounds into the difficulty (a backup is kept outside the mapset). It uses osu!'s native sound combinations where it can and mixes samples only where it must.
 - **Generate…** makes a separate hitsound difficulty, and **Map → Copy hitsounds…** copies it into the other difficulties, like Mapping Tools' Hitsound Copier.
-- Drum maps, reusable sound sets, and a drum VST for playback and WAV export.
+- Drum maps, reusable sound sets, and a drum instrument (a VST3 or a SoundFont kit) for playback and WAV export.
 
 **Keysound mode** (start screen → Keysounding)
 - A project made from a reference beatmap, with instrument tracks in a piano roll (DAW-style editing).
 - Draw notes, import MIDI, or play and record from a MIDI keyboard, or from your computer keyboard with **musical typing** (Alt+K).
-- Each track plays the bundled piano or a VST3 instrument. Every plug-in runs in its own process, so a crash only silences its track.
+- Each track plays the bundled piano, a VST3 instrument or a SoundFont (.sf2) preset, with the SoundFont's reverb and chorus on or off. Every plug-in runs in its own process, so a crash only silences its track.
 - **Sync…** moves notes onto the map's circles, slider ends and spinner ends.
 - **Generate…** renders every synced note to its own WAV and writes a playable `[Keysounds]` copy of the map. You can then export it as a `.osz`.
 
@@ -70,5 +70,6 @@ VST3 instruments in Keysound mode need `dawsu_vst3_host.exe` next to the app. Bu
 - Waveform colours follow [osu-framework](https://github.com/ppy/osu-framework)'s Waveform (MIT).
 - The bundled piano is the FreePats Upright Piano KW (CC0). VST3 hosting uses the Steinberg VST 3 SDK (MIT).
 - Installing and updating by [Velopack](https://github.com/velopack/velopack) (MIT).
+- SoundFont playback by [MeltySynth](https://github.com/sinshu/meltysynth) (MIT).
 
 Full licence texts are in [THIRD-PARTY-NOTICES.txt](src/OsuHitsound.App/THIRD-PARTY-NOTICES.txt).

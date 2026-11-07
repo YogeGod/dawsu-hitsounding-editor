@@ -92,7 +92,7 @@ public partial class MainWindow : Window
         Lanes.LaneListPreviewRequested += lane =>
         {
             if (audio is null) return;
-            if (drumVst is not null && drumVstEnabled && drumVstReady) { audio.Preview(lane); return; }
+            if (drumVstEnabled && (drumKit is not null || drumVst is not null && drumVstReady)) { audio.Preview(lane); return; }
             if (doc is null) { audio.Preview(lane); return; }
             double time = audio.IsPlaying ? audio.Position : Lanes.Playhead;
             var preview = doc.LanePreviewAt(lane, time);

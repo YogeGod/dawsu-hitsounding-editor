@@ -276,7 +276,8 @@ public static class KeysoundStore
         {
             if (t is null || t.Id == Guid.Empty || !trackIds.Add(t.Id) || string.IsNullOrWhiteSpace(t.Name) || t.Name.Length > 256
                 || t.Instrument is not { Kind.Length: > 0 and <= 64 } i || i.Path?.Length > 4096 || i.State?.Length > 96 * 1024 * 1024
-                || i.ClassId is { } classId && (classId.Length != 32 || !classId.All(char.IsAsciiHexDigit)) || i.Name?.Length > 256 || i.IsVst3 && string.IsNullOrWhiteSpace(i.Path) || t.Notes is null)
+                || i.ClassId is { } classId && (classId.Length != 32 || !classId.All(char.IsAsciiHexDigit)) || i.Name?.Length > 256 || i.IsVst3 && string.IsNullOrWhiteSpace(i.Path)
+                || i.IsSoundFont && (string.IsNullOrWhiteSpace(i.Path) || i.Bank is < 0 or > 128 || i.Program is < 0 or > 127) || t.Notes is null)
                 throw new FormatException("A track in the project is invalid.");
             foreach (var n in t.Notes)
                 if (n is null || !n.IsValid || !noteIds.Add(n.Id)) throw new FormatException($"A note on track \"{t.Name}\" is invalid.");

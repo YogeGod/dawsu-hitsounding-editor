@@ -27,21 +27,18 @@ public interface IKeyNoteRenderer : IDisposable
     Task<RenderedAudio> RenderAsync(KeyRenderJob job, RenderLimits limits, CancellationToken cancel = default);
 }
 
-/// <summary>The bundled piano, one fresh player per note (no state carries over).</summary>
-public sealed class PianoNoteRenderer(SfzInstrument instrument) : IKeyNoteRenderer
+/// <summary>
+/// The render loop every note renderer shares: blocks until the key and pedal let go (<paramref name="releaseFrame"/>)
+/// and the output then stays quiet (see <see cref="RenderLimits"/>), trimmed after the last loud frame.
+/// </summary>
+internal static class KeyTailRender
 {
     private const int Block = 512;
 
-    public Task<RenderedAudio> RenderAsync(KeyRenderJob job, RenderLimits limits, CancellationToken cancel = default) => Task.Run(() =>
+    /// <param name="render">Adds one block into the (cleared) buffer: (buffer, frames, first frame).</param>
+    /// <param name="pending">More events still to play (e.g. a late pedal change): the tail can't end before them.</param>
+    public static RenderedAudio Run(long releaseFrame, RenderLimits limits, CancellationToken cancel, Action<float[], int, long> render, Func<bool>? pending = null)
     {
-        var player = new KeysoundPlayer(instrument);
-        // The piano can't read pedal events: the pedal holds the key until it lets go, as in playback.
-        var bends = job.Controllers.Where(c => c.Kind == ControllerKind.PitchBend)
-            .Select(c => new PlayedBend(c.Time, c.Value / 8192.0 * instrument.PitchBendRange)).ToArray();
-        player.SetNotes([new PlayedNote(0, Math.Max(job.Held, 1), job.Pitch, job.Velocity, 0)], [bends]);
-
-        double msPerFrame = 1000.0 / PlaybackMixer.Rate;
-        long releaseFrame = (long)Math.Ceiling(job.Held / msPerFrame);
         long max = releaseFrame + limits.MaxTailFrames;
         var output = new List<float>();
         var block = new float[Block * 2];
@@ -53,7 +50,7 @@ public sealed class PianoNoteRenderer(SfzInstrument instrument) : IKeyNoteRender
             cancel.ThrowIfCancellationRequested();
             int n = (int)Math.Min(Block, max - frame);
             Array.Clear(block);
-            player.Render(block, n, frame * msPerFrame, msPerFrame, playing: true);
+            render(block, n, frame);
             for (int i = 0; i < n; i++)
             {
                 output.Add(block[i * 2]);
@@ -62,7 +59,7 @@ public sealed class PianoNoteRenderer(SfzInstrument instrument) : IKeyNoteRender
             }
 
             frame += n;
-            if (frame > releaseFrame && frame - 1 - Math.Max(lastLoud, releaseFrame) >= limits.QuietFrames)
+            if (frame > releaseFrame && pending?.Invoke() != true && frame - 1 - Math.Max(lastLoud, releaseFrame) >= limits.QuietFrames)
             {
                 truncated = false;
                 break;
@@ -70,7 +67,25 @@ public sealed class PianoNoteRenderer(SfzInstrument instrument) : IKeyNoteRender
         }
 
         long keep = truncated ? frame : Math.Max(lastLoud, releaseFrame) + 1;
-        return new RenderedAudio([.. output.Take((int)(keep * 2))], truncated);
+        return new RenderedAudio(output.GetRange(0, (int)Math.Min(output.Count, keep * 2)).ToArray(), truncated);
+    }
+}
+
+/// <summary>The bundled piano, one fresh player per note (no state carries over).</summary>
+public sealed class PianoNoteRenderer(SfzInstrument instrument) : IKeyNoteRenderer
+{
+    public Task<RenderedAudio> RenderAsync(KeyRenderJob job, RenderLimits limits, CancellationToken cancel = default) => Task.Run(() =>
+    {
+        var player = new KeysoundPlayer(instrument);
+        // The piano can't read pedal events: the pedal holds the key until it lets go, as in playback.
+        var bends = job.Controllers.Where(c => c.Kind == ControllerKind.PitchBend)
+            .Select(c => new PlayedBend(c.Time, c.Value / 8192.0 * instrument.PitchBendRange)).ToArray();
+        player.SetNotes([new PlayedNote(0, Math.Max(job.Held, 1), job.Pitch, job.Velocity, 0)], [bends]);
+
+        double msPerFrame = 1000.0 / PlaybackMixer.Rate;
+        long releaseFrame = (long)Math.Ceiling(job.Held / msPerFrame);
+        return KeyTailRender.Run(releaseFrame, limits, cancel,
+            (block, n, frame) => player.Render(block, n, frame * msPerFrame, msPerFrame, playing: true));
     }, cancel);
 
     public void Dispose() { }

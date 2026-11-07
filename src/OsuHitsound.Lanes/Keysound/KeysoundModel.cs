@@ -34,16 +34,35 @@ public sealed record KeySyncTarget(int ObjectIndex, int Node, double Time, HitPo
 /// </summary>
 public sealed record KeyInstrument(string Kind, string? Path = null, string? State = null)
 {
-    public const string BundledPiano = "piano", Vst3 = "vst3";
+    public const string BundledPiano = "piano", Vst3 = "vst3", SoundFont = "sf2";
 
     /// <summary>A VST3 instrument: its .vst3, the class in it, and its display name; no saved state yet.</summary>
     public static KeyInstrument Vst3Plugin(string path, string? classId, string name) => new(Vst3, path) { ClassId = classId, Name = name };
 
     public bool IsVst3 => Kind == Vst3;
 
+    /// <summary>A SoundFont preset: the .sf2 file, its bank (128 = a percussion kit) and program, and the preset's name.</summary>
+    public static KeyInstrument SoundFontPreset(string path, int bank, int program, string name, bool effects = true) =>
+        new(SoundFont, path) { Bank = bank, Program = program, Name = name, Effects = effects };
+
+    public bool IsSoundFont => Kind == SoundFont;
+
+    /// <summary>A SoundFont preset's bank (0–128).</summary>
+    public int Bank { get; init; }
+
+    /// <summary>A SoundFont preset's program (0–127).</summary>
+    public int Program { get; init; }
+
+    /// <summary>A SoundFont's own reverb and chorus (on unless switched off for dry keysounds).</summary>
+    public bool Effects { get; init; } = true;
+
+    /// <summary>Played by MIDI outside this process's piano: a VST3 plug-in or a SoundFont.</summary>
+    public bool IsMidiInstrument => IsVst3 || IsSoundFont;
+
     /// <summary>The same plug-in (or both the piano), whatever its saved settings: switching between them reloads nothing.</summary>
     public bool SamePlugin(KeyInstrument other) =>
-        Kind == other.Kind && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && ClassId == other.ClassId;
+        Kind == other.Kind && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && ClassId == other.ClassId
+        && Bank == other.Bank && Program == other.Program && Effects == other.Effects;
     /// <summary>The VST3 class id inside the .vst3 (a plug-in can hold several); null for its first instrument.</summary>
     public string? ClassId { get; init; }
     /// <summary>The plug-in's own name, as its scan reported it.</summary>
@@ -51,7 +70,9 @@ public sealed record KeyInstrument(string Kind, string? Path = null, string? Sta
     /// <summary>Semitones at full pitch bend: the General MIDI default, which the bundled piano uses.</summary>
     public double PitchBendRange => 2;
     public static KeyInstrument Piano { get; } = new(BundledPiano);
-    public string DisplayName => Kind == BundledPiano ? "Bundled piano" : Name ?? System.IO.Path.GetFileNameWithoutExtension(Path ?? "VST3 instrument");
+    public string DisplayName => Kind == BundledPiano ? "Bundled piano"
+        : IsSoundFont ? $"{Name ?? "SoundFont"} ({System.IO.Path.GetFileName(Path)})"
+        : Name ?? System.IO.Path.GetFileNameWithoutExtension(Path ?? "VST3 instrument");
 }
 
 public enum ControllerKind { Sustain, Modulation, PitchBend }

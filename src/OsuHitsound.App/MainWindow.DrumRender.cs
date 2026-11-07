@@ -12,7 +12,8 @@ public partial class MainWindow
 {
     private async Task RenderDrumVst()
     {
-        if (renderingDrums || drumVst is null || drumVstPath is null || model is null || session is null || mapPath is null || generating || savingHs) return;
+        bool fromKit = drumKitPreset is not null;
+        if (renderingDrums || !fromKit && (drumVst is null || drumVstPath is null) || model is null || session is null || mapPath is null || generating || savingHs) return;
         var targetModel = model; var targetSession = session; var state = session.State; var path = mapPath;
         var plan = DrumRenderPlan.Create(state, DrumVstNotes(model), model.DrumRenders);
         if (plan.Hits.Count == 0) { flash = "No mapped drum hits to render."; UpdateStatus(); return; }
@@ -27,12 +28,15 @@ public partial class MainWindow
         try
         {
             audio?.Pause(); audio?.SetDrumInstrument(null);
-            var captured = drumVst.SaveState();
-            string pluginPath = drumVstPath;
+            // A SoundFont kit's "settings" are its preset and effects; a VST3's are its saved state.
+            var kit = drumKitPreset;
+            var captured = kit is not null ? Encoding.UTF8.GetBytes($"sf2:{kit.Bank}:{kit.Program}:{kit.Effects}") : drumVst!.SaveState();
+            string pluginPath = kit?.Path ?? drumVstPath!;
             Root.IsEnabled = false;
             if (drumVstPanel is not null) drumVstPanel.IsEnabled = false;
             var cache = new DrumRenderCache(DrumRenderCache.DefaultRoot(), path);
-            string fingerprint = await Task.Run(() => DrumRenderFingerprint(pluginPath, captured));
+            // A kit's file can be hundreds of MB: it's known by its path, size and date rather than hashed on every render.
+            string fingerprint = kit is not null ? SoundFontKitFingerprint(kit) : await Task.Run(() => DrumRenderFingerprint(pluginPath, captured));
             string directory = Path.GetDirectoryName(path)!;
             var reused = plan.Keys.Select(k => (Key: k, Asset: cache.Find(fingerprint, k, directory)))
                 .Where(p => p.Asset is not null).ToDictionary(p => p.Key, p => p.Asset!);
@@ -53,7 +57,19 @@ public partial class MainWindow
             _ = progress.ShowDialog(this);
             Directory.CreateDirectory(staging);
             var renderedFiles = new Dictionary<DrumRenderKey, string>();
-            if (reused.Count < plan.Keys.Count)
+            if (reused.Count < plan.Keys.Count && kit is not null)
+            {
+                // A fresh synthesizer, so live playing can't leave a tail in the first render.
+                var renderer = new SoundFontDrumKit(await Task.Run(() => SoundFontSynth.Create(kit)));
+                foreach (var key in plan.Keys.Where(k => !reused.ContainsKey(k)))
+                {
+                    label.Text = $"Rendering {renderedFiles.Count + 1} / {plan.Keys.Count - reused.Count}\nMIDI note {key.Note} · velocity {key.Velocity}";
+                    string output = Path.Combine(staging, $"{key.Note}-{key.Velocity}.wav");
+                    await Task.Run(() => DrumVstRenderer.Render(renderer, key, output, cancellation.Token));
+                    renderedFiles[key] = output;
+                }
+            }
+            else if (reused.Count < plan.Keys.Count)
             {
                 using var renderer = new Vst3Instrument(pluginPath);
                 renderer.RestoreState(captured);
@@ -109,6 +125,13 @@ public partial class MainWindow
             renderingDrums = false;
             RefreshDrumVstRouting(); refreshDrumVstControls?.Invoke(); UpdateStatus();
         }
+    }
+
+    private static string SoundFontKitFingerprint(OsuHitsound.Lanes.Keysound.KeyInstrument kit)
+    {
+        var file = new FileInfo(kit.Path!);
+        string key = $"dawsu-drum-render-v1-44100-512-noteoff100ms\nsf2\n{file.FullName}\n{file.Length}\n{file.LastWriteTimeUtc.Ticks}\n{kit.Bank}:{kit.Program}:{kit.Effects}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
     }
 
     private static string DrumRenderFingerprint(string plugin, byte[] state)

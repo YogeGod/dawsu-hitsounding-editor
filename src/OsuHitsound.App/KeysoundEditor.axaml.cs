@@ -235,9 +235,9 @@ public partial class KeysoundEditor : UserControl
         foreach (var t in session.State.Tracks)
         {
             bool audible = session.IsAudible(t.Id) && !songSoloed;
-            if (t.Instrument.IsVst3)
+            if (t.Instrument.IsMidiInstrument)
             {
-                if (PartFor(t)?.Vst is not { } vst) continue;
+                if (PartFor(t)?.Midi is not { } vst) continue;
                 double end = 0;
                 vst.SetEvents(audible ? KeysoundMidi.Events(t, tempo, out end) : []);
                 last = Math.Max(last, end);

@@ -132,6 +132,8 @@
           <Button Name="EditorButton" Content="Open editor" Margin="0,0,6,4" ToolTip.Tip="Show the VST3 instrument's own window" />
           <Button Name="FixButton" Margin="0,0,6,4" IsVisible="False" />
         </WrapPanel>
+        <CheckBox Name="EffectsBox" Content="Reverb and chorus" IsVisible="False"
+                  ToolTip.Tip="The SoundFont's own reverb and chorus. Off gives dry keysounds (no reverb tail in the generated WAVs)." />
         <StackPanel Orientation="Horizontal" Spacing="6">
           <TextBlock Text="Volume (dB)" VerticalAlignment="Center" />
           <NumericUpDown Name="VolumeBox" Minimum="-60" Maximum="12" Increment="1" FormatString="0.#" Width="110"
