@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using OsuHitsound.App;
@@ -49,7 +50,7 @@ s.Undo(); w.Close(); Pump();
 
 w = Open(); s = w.ArrangeArea.Model!.Session; hit = s.State.Hits.First(); path = MapPath(w);
 s.SetVolume([hit.Anchor!.Value], 42); File.AppendAllText(path, "\n// external change\n"); bytes = File.ReadAllBytes(path);
-w.Close(); Pump(); Choose(Prompt(w), "Save"); Wait(() => w.FindControl<TextBlock>("WorkflowMessage")!.Text?.Contains("Save stopped") == true);
+w.Close(); Pump(); Choose(Prompt(w), "Save"); Wait(() => ToolTip.GetTip(w.FindControl<Button>("WorkflowStatusButton")!)?.ToString()?.Contains("Save stopped") == true);
 Check(w.IsVisible && s.IsEdited, "failed Save keeps dirty editor open");
 Check(File.ReadAllBytes(path).SequenceEqual(bytes), "failed Save preserves external file");
 File.Delete(path); w.Close(); Pump(); Choose(Prompt(w), "Discard"); Check(!w.IsVisible, "Discard works even after external map removal");
@@ -103,13 +104,16 @@ ClickLane(laneRows[0]); ClickLane(laneRows[2], RawInputModifiers.Shift);
 foreach (var size in new[] { (900, 500), (1366, 768), (1600, 900) })
 {
     w.Width = size.Item1; w.Height = size.Item2; Pump();
-    var next = w.FindControl<Button>("NextProblemButton")!;
-    Check(next.IsEffectivelyVisible && next.Bounds.Width > 40, $"Next problem visible at {size}");
-    var footer = w.FindControl<Control>("WorkflowFooter")!;
-    Check(footer.TranslatePoint(default, w)!.Value.Y + footer.Bounds.Height <= w.Bounds.Height + 1, $"footer fits at {size}");
-    Check(w.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "VOLUME AT TIMES · %" && t.IsEffectivelyVisible), $"shared volume scope visible at {size}");
-    foreach (string id in new[] { "GridOptionsButton", "ViewOptionsButton", "SongOptionsButton", "PlaybackOptionsButton" })
-        Check(w.FindControl<Button>(id)!.IsEffectivelyVisible, $"{id} remains available at {size}");
+    var status = w.FindControl<Button>("WorkflowStatusButton")!;
+    Check(status.IsEffectivelyVisible, $"operation feedback available at {size}");
+    status.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+    var details = w.OwnedWindows.Single(d => d.Title == "Operation details");
+    Check(Buttons(details).Any(b => Equals(b.Content, "Next problem")), $"Next problem available in details at {size}");
+    details.Close(); Pump();
+    Check(w.FindControl<Control>("WorkflowFooter") is null, $"persistent banner removed at {size}");
+    Check(w.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Volume · %" && t.IsEffectivelyVisible), $"shared volume scope visible at {size}");
+    foreach (string id in new[] { "SnapModeBox", "TripletSnapToggle", "ToolbarEnd", "SongControls", "PlaybackDetailsPanel" })
+        Check(w.FindControl<Control>(id)!.IsEffectivelyVisible, $"{id} directly available at {size}");
     w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, $"safety-{size.Item1}x{size.Item2}.png"));
 }
 w.Close(); Pump(); Choose(Prompt(w), "Discard");
@@ -150,21 +154,24 @@ var inspector = w.GetLogicalDescendants().OfType<InspectorPanel>().Single();
 Check(!inspector.Order.Contains("selection") && !inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree browser stays outside the inspector");
 Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
 var browserHost = w.FindControl<Border>("BrowserHost")!;
-Check(Grid.GetColumn(browserHost) == 0 && browserHost.Bounds.Height > 400, "browser fills left sidebar");
+Check(Grid.GetColumn(browserHost) == 4 && browserHost.Bounds.Height > 400, "browser fills right sidebar");
 var stateBeforePan = s.State; int historyBeforePan = s.StepCount;
-area.Axis.Left = 1000; area.ScrollY = 100; Pump();
+w.Height = 720; Pump();
+area.Axis.Zoom = 1; area.Axis.Left = 1000; area.ScrollY = 100; Pump();
 Press(w, Key.D2); Check(area.Tool == Tool.Grab, "2 activates Grab");
 var panPoint = area.TranslatePoint(new Point(ArrangeView.GridLeft + 170, area.HeaderHeight + 75), w)!.Value;
 double initialLeft = area.Axis.Left, initialScroll = area.ScrollY;
 w.MouseDown(panPoint, MouseButton.Left); w.MouseMove(panPoint + new Vector(60, 25)); w.MouseUp(panPoint + new Vector(60, 25), MouseButton.Left); Pump();
 Check(area.Axis.Left < initialLeft && area.ScrollY < initialScroll, "Grab pans time and lanes");
 Check(ReferenceEquals(stateBeforePan, s.State) && s.StepCount == historyBeforePan, "Grab creates no edits or undo step");
+w.Height = 900; Pump();
 Press(w, Key.D6); Check(area.Tool == Tool.Ramp && w.FindControl<Control>("BottomPanel")!.IsEffectivelyVisible, "6 opens controller and activates Ramp");
 Press(w, Key.D1);
 var at1500 = s.State.Hits.Where(h => h.Time == 1500).ToList();
 var targetHit = at1500[0]; var untouchedHit = at1500[1];
 scopedModel.SelectLane(targetHit.Lane); area.Edits.Select(at1500);
 w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex = 1;
+w.FindControl<ComboBox>("VolumeModeBox")!.SelectedIndex = 1; // Set all; the editor defaults to Relative.
 w.FindControl<TextBox>("VolumeValueBox")!.Text = "25"; Call(w, "ApplyVolumeValue"); Pump();
 Check(s.VolumeOf(targetHit) == 25 && s.VolumeOf(untouchedHit) == 100, "numeric Selected lanes leaves simultaneous other layer unchanged");
 var volumeControl = w.FindControl<VolumeLane>("Volume")!;

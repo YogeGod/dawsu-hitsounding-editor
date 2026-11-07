@@ -86,4 +86,37 @@ public class UiThemeTests
         Assert.Equal(30, theme.Number("row.height"));
         Assert.Equal("#112233", theme.Get("title.bg"));
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Explicit_original_palette_colours_survive_both_modes_and_reload(bool dark)
+    {
+        var theme = new UiTheme();
+        theme.SetDarkMode(dark);
+        _ = theme.Color("title.bg"); // populate the cache before editing
+        theme.Set("title.bg", "#555555");
+
+        Assert.Equal(Avalonia.Media.Color.Parse("#555555"), theme.Color("title.bg"));
+        var loaded = UiTheme.FromJson(theme.ToJson());
+        loaded.SetDarkMode(true);
+        Assert.Equal("#555555", loaded.Get("title.bg"));
+        loaded.SetDarkMode(false);
+        Assert.Equal("#555555", loaded.Get("title.bg"));
+    }
+
+    [Fact]
+    public void Reset_removes_the_override_and_restores_the_active_palette_and_cache()
+    {
+        var theme = UiTheme.FromJson("{\"title.bg\":\"#555555\"}");
+        theme.SetDarkMode(true);
+        Assert.Equal(Avalonia.Media.Color.Parse("#555555"), theme.Color("title.bg"));
+
+        theme.Reset("title.bg");
+
+        Assert.Equal(Avalonia.Media.Color.Parse("#1b1b1e"), theme.Color("title.bg"));
+        Assert.DoesNotContain("title.bg", theme.ToJson());
+        theme.SetDarkMode(false);
+        Assert.Equal("#555555", theme.Get("title.bg"));
+    }
 }

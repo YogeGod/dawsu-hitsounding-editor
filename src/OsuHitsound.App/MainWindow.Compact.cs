@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 
 namespace OsuHitsound.App;
@@ -6,47 +7,97 @@ namespace OsuHitsound.App;
 public partial class MainWindow
 {
     private bool narrowLayout, wideInspectorOpen, compactInspectorOpen;
-    private bool shortLayout, tallControllerOpen, shortControllerOpen;
+    private bool SelectionBarCollapsed => prefs.SelectionBarCollapsed;
 
     private void SetupCompactLayout()
     {
-        Add(GridOptionsButton, SnapModeBox, TripletSnapToggle);
-        Add(ViewOptionsButton, ViewExtras);
-        Add(SongOptionsButton, SongControls);
-        Add(PlaybackOptionsButton, LocatorPanel, PlaybackOptionsPanel, SpeedPanel);
-        // Both summaries already appear in the selection bar, timeline and output footer.
-        StatusLeft.IsVisible = StatusRight.IsVisible = false;
-
-        void Add(Button button, params Control[] controls)
+        // Keep the real controls in the layout, preserving their bindings and handlers.
+        Icon(OpenButton, "FolderOpen", "Open a map (Ctrl+O)");
+        Icon(SaveButton, "Save", "Save .osu (Ctrl+S)");
+        Icon(HsModeButton, "CirclePlus", "HS mode: create circles when placing sounds");
+        Icon(SnapToggle, "Magnet", "Snap to the beat grid (J)");
+        Icon(AuditionPlacementButton, "Headphones", "Audition newly drawn hits");
+        Icon(InspectorToggle, "PanelLeft", "Show inspector");
+        Icon(LaneDetailsToggle, "Info", "Show sample indexes");
+        Icon(UsedLanesToggle, "ListFilter", "Show only lanes with hits");
+        Icon(ObjectLinesToggle, "Columns3", "Show gameplay-object lines");
+        Icon(VolumeToggle, "SlidersHorizontal", "Show volume controller");
+        Icon(FitButton, "Scan", "Fit the whole map");
+        Icon(VolumeApplyButton, "Check", "Apply selection volume");
+        Icon(SongMuteButton, "VolumeX", "Mute the song");
+        SongMuteButton.Width = 22;
+        Icon(ReturnOnStopButton, "Undo2", "Return to playback start when stopping");
+        Icon(FollowPlaybackButton, "LocateFixed", "Follow the playhead during playback");
+        Icon(LoopButton, "Repeat2", "Cycle between the L and R locators (L)");
+        Icon(TripletSnapToggle, "Triplet", "Triplet snap cycling");
+        foreach (var (control, name) in new (Control, string)[]
         {
-            var popup = new StackPanel { Spacing = 12, Margin = new Thickness(4) };
-            // A flyout routes keys inside its own pop-up, past the window's handler: Space must still play or stop
-            // here instead of toggling Mute or moving a slider.
-            popup.AddHandler(KeyDownEvent, OnPlayKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            popup.AddHandler(KeyUpEvent, OnPlayKeyUp, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            button.Flyout = new Flyout
-            {
-                Content = new ScrollViewer { Content = popup, MaxHeight = 360, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled },
-                Placement = PlacementMode.BottomEdgeAlignedRight,
-            };
-            // Move the existing controls once: values, event handlers and keyboard access stay intact.
-            foreach (var control in controls)
-            {
-                ((Panel)control.Parent!).Children.Remove(control);
-                control.Margin = default;
-                string? heading = control == LocatorPanel ? "Loop locators · ms"
-                    : control == PlaybackOptionsPanel ? "Playback behavior"
-                    : control == SpeedPanel ? "Speed · pitch preserved" : null;
-                if (heading is not null) popup.Children.Add(new TextBlock { Text = heading, FontSize = 11, Foreground = Paint.Brush(UiTheme.Current.Color("lcd.caption")) });
-                popup.Children.Add(control);
-            }
-            button.IsVisible = true;
+            (SnapModeBox, "Grid mode"), (SnapBox, "Beat division"), (ZoomSlider, "Timeline zoom"),
+            (GlobalVolumeSlider, "Global volume"), (SongVolumeSlider, "Song volume"),
+            (SongOffsetBox, "Song offset in milliseconds"), (LeftLocatorBox, "Left loop locator in milliseconds"),
+            (RightLocatorBox, "Right loop locator in milliseconds"),
+        }) AutomationProperties.SetName(control, name);
+
+        ThemeToggle.IsChecked = prefs.DarkMode;
+        UiTheme.Current.SetDarkMode(prefs.DarkMode);
+        UpdateThemeToggle();
+        ThemeToggle.IsCheckedChanged += (_, _) =>
+        {
+            prefs = prefs with { DarkMode = ThemeToggle.IsChecked == true };
+            UiTheme.Current.SetDarkMode(prefs.DarkMode);
+            UpdateThemeToggle();
+            SavePrefs();
+        };
+        SelectionDisclosure.Click += (_, _) =>
+        {
+            prefs = prefs with { SelectionBarCollapsed = !SelectionBarCollapsed };
+            ShowSelectionDetails();
+            SavePrefs();
+        };
+        ShowSelectionDetails();
+        Lanes.LaneListResized += () =>
+        {
+            prefs = prefs with { LaneListWidth = UiTheme.Current.Number("list.width"), LaneNamesCollapsed = ArrangeView.NamesCollapsed };
+            SavePrefs();
+        };
+        ControlBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();
+        EditBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();
+        StatusBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();
+
+        static void Icon(Button button, string glyph, string name)
+        {
+            button.Content = new AppIcon { Glyph = glyph };
+            button.Classes.Add("icon");
+            button.Classes.Remove("wide");
+            button.Width = 30;
+            button.Padding = default;
+            AutomationProperties.SetName(button, name);
+            var tip = ToolTip.GetTip(button)?.ToString();
+            ToolTip.SetTip(button, string.IsNullOrEmpty(tip) ? name : name + "\n" + tip);
         }
+    }
+
+    private void UpdateThemeToggle()
+    {
+        ThemeIcon.Glyph = prefs.DarkMode ? "Moon" : "Sun";
+        var name = prefs.DarkMode ? "Dark mode · switch to Not-as-dark" : "Not-as-dark mode · switch to Dark";
+        ToolTip.SetTip(ThemeToggle, name);
+        AutomationProperties.SetName(ThemeToggle, name);
+    }
+
+    private void ShowSelectionDetails()
+    {
+        InfoBarLeft.IsVisible = !SelectionBarCollapsed;
+        SelectionDisclosureIcon.Glyph = SelectionBarCollapsed ? "ChevronDown" : "ChevronUp";
+        var label = SelectionBarCollapsed ? "Expand selection details" : "Collapse selection details";
+        ToolTip.SetTip(SelectionDisclosure, label);
+        AutomationProperties.SetName(SelectionDisclosure, label);
+        UpdateChromeHeights();
     }
 
     private void UpdateCompactLayout(double width)
     {
-        bool browserNarrow = !prefs.ClassicBrowser && width < 1400;
+        bool browserNarrow = !prefs.ClassicBrowser && width < 1200;
         if (browserNarrow != compactBrowser)
         {
             if (browserNarrow) wideBrowserOpen = BrowserPanelItem.IsChecked;
@@ -62,28 +113,52 @@ public partial class MainWindow
             narrowLayout = narrow;
             InspectorToggle.IsChecked = narrow ? compactInspectorOpen : wideInspectorOpen;
         }
-        double height = Bounds.Height > 0 ? Bounds.Height : Height;
-        bool shortWindow = height < 650;
-        if (shortWindow != shortLayout)
-        {
-            if (shortWindow) tallControllerOpen = VolumeToggle.IsChecked == true;
-            else shortControllerOpen = VolumeToggle.IsChecked == true;
-            shortLayout = shortWindow;
-            VolumeToggle.IsChecked = shortWindow ? shortControllerOpen : tallControllerOpen;
-        }
         AppTitle.IsVisible = width >= 1100;
-        ViewExtras.Orientation = Avalonia.Layout.Orientation.Vertical;
         FileTitle.IsVisible = width >= 1250;
         TitleBarContent.MinWidth = ControlBarContent.MinWidth = EditBarContent.MinWidth = StatusBarContent.MinWidth = 0;
-        TitleBarScroller.HorizontalScrollBarVisibility = ControlBarScroller.HorizontalScrollBarVisibility =
-            EditBarScroller.HorizontalScrollBarVisibility = StatusBarScroller.HorizontalScrollBarVisibility =
-                Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        TitleBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+        ControlBarScroller.HorizontalScrollBarVisibility = EditBarScroller.HorizontalScrollBarVisibility =
+            Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         SelectionField.MinWidth = narrow ? 100 : 130;
         StartField.MinWidth = narrow ? 140 : 150;
         ObjectField.MinWidth = narrow ? 150 : 200;
         StartField.Width = narrow ? 140 : double.NaN;
         ObjectField.Width = narrow ? 150 : double.NaN;
-        Lcd.Margin = new Thickness(width < 1550 ? 8 : 16, 0, 0, 0);
-        Lcd.Padding = new Thickness(width < 1550 ? 8 : 12, 2);
+        Lcd.Margin = default;
+        Lcd.Padding = new Thickness(12, 2);
+        MixControls.Width = width < 1000 ? 268 : 308;
+        TransportLeft.Spacing = width < 1000 ? 2 : 4;
+        TransportButtons.Spacing = width < 1000 ? 2 : 4;
+        PlaybackOptionsPanel.Spacing = width < 1000 ? 2 : 4;
+        if (LcdColumns.ColumnDefinitions[0].Width.Value != (width < 1000 ? 84 : 96))
+            LcdColumns.ColumnDefinitions = new ColumnDefinitions(width < 1000 ? "84,66,44,46" : "96,80,48,70");
+        SongControls.ColumnDefinitions[4].Width = new GridLength(width < 1000 ? 0 : 32);
+        // Six direct speed choices stay in the transport. Compact widths use two rows inside its existing height.
+        bool compactSpeed = width < 1400;
+        SpeedPanel.ItemWidth = width < 1000 ? 30 : compactSpeed ? 38 : 42;
+        SpeedPanel.ItemHeight = compactSpeed ? 24 : 28;
+        SpeedPanel.Width = SpeedPanel.ItemWidth * (compactSpeed ? 3 : 6);
+        SpeedPanel.Height = compactSpeed ? 48 : 28;
+        foreach (var button in SpeedPanel.Children.OfType<Button>())
+        {
+            button.Width = SpeedPanel.ItemWidth - 2;
+            button.Height = button.MinHeight = compactSpeed ? 22 : 28;
+            button.FontSize = width < 1000 ? 9 : 11;
+        }
+        // Compact windows use a second toolbar row; playback behavior never leaves the bottom bar.
+        bool twoRows = width < 1400;
+        ControlBarContent.RowDefinitions[1].Height = new GridLength(twoRows ? 44 : 0);
+        Grid.SetColumn(PlaybackDetailsPanel, twoRows ? 0 : 1);
+        Grid.SetRow(PlaybackDetailsPanel, twoRows ? 1 : 0);
+        PlaybackDetailsPanel.Margin = new Thickness(twoRows ? 0 : 12, 0, 0, 0);
+        Panel zoomParent = twoRows ? ControlBarContent : ToolbarEnd;
+        if (ZoomPanel.Parent != zoomParent)
+        {
+            if (ZoomPanel.Parent is Panel previous) previous.Children.Remove(ZoomPanel);
+            zoomParent.Children.Add(ZoomPanel);
+        }
+        Grid.SetColumn(ZoomPanel, 2);
+        Grid.SetRow(ZoomPanel, 1);
+        ZoomPanel.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
     }
 }

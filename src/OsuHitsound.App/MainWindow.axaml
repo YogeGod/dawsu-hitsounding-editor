@@ -10,13 +10,13 @@
   <DockPanel Name="WindowRoot">
   <app:WindowTitleBar Name="WindowBar" DockPanel.Dock="Top" />
 
-  <Grid Name="Root" RowDefinitions="44,46,46,20,*,160,56,Auto" ColumnDefinitions="280,4,250,4,*">
+  <Grid Name="Root" RowDefinitions="44,Auto,Auto,20,*,160,Auto,Auto" ColumnDefinitions="208,4,*,4,224">
     <!-- 1. Header (V6.39: logo, title, file buttons, menus; map name and settings on the right) -->
     <Border Grid.Row="0" Grid.ColumnSpan="5" Name="TitleBar" Classes="header" BorderThickness="0,0,0,1">
       <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
       <Grid Name="TitleBarContent" MinWidth="1080" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
-        <Border Classes="logo" VerticalAlignment="Center"><TextBlock Text="hs" /></Border>
-        <TextBlock Name="AppTitle" Grid.Column="1" Text="osu! hitsound editor" Classes="appTitle" Margin="8,0,16,0" />
+        <TextBlock Text="dawsu!" Classes="appTitle" FontSize="16" />
+        <TextBlock Name="AppTitle" Grid.Column="1" Text="" Classes="appTitle" Margin="0,0,16,0" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Name="OpenButton" Classes="flat" Content="Open…" ToolTip.Tip="Open a map (Ctrl+O)" />
           <Button Name="SaveButton" Classes="primary" Content="Save .osu" ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset." />
@@ -160,6 +160,10 @@
         </StackPanel>
         <TextBlock Grid.Column="3" Name="FileTitle" Text="No map open" Classes="projectName" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" Margin="16,0" />
         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Name="WorkflowStatusButton" Classes="flat icon" IsVisible="False" AutomationProperties.Name="Operation details">
+            <app:AppIcon Name="WorkflowStatusIcon" Glyph="Info" />
+          </Button>
+          <ToggleButton Name="ThemeToggle" Classes="flat icon" AutomationProperties.Name="Dark mode" ToolTip.Tip="Dark / Not-as-dark mode"><app:AppIcon Name="ThemeIcon" Glyph="Moon" /></ToggleButton>
           <Button Name="PreferencesButton" Classes="flat icon" AutomationProperties.Name="Preferences" ToolTip.Tip="Preferences: Songs folder, audio output and keys (Ctrl+,)"><app:AppIcon Glyph="Settings" /></Button>
           <Button Name="HelpButton" Classes="flat icon" AutomationProperties.Name="Shortcuts and help" ToolTip.Tip="Every shortcut and mouse action, with search (F1)"><app:AppIcon Glyph="CircleHelp" /></Button>
         </StackPanel>
@@ -170,12 +174,13 @@
     <!-- 2. Toolbar (V6.39: undo/redo, tool icons, Snap + mode + divisor; view, colour, zoom and fit on the right) -->
     <Border Grid.Row="1" Grid.ColumnSpan="5" Name="ControlBar" Classes="toolbar" BorderThickness="0,0,0,1">
       <ScrollViewer Name="ControlBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-      <Grid Name="ControlBarContent" MinWidth="1360" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
+      <Grid Name="ControlBarContent" ColumnDefinitions="Auto,*,Auto" RowDefinitions="32,0" Margin="12,6">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
         <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Name="UndoButton" Classes="icon" ToolTip.Tip="Undo (Ctrl+Z)" AutomationProperties.Name="Undo"><app:AppIcon Glyph="Undo2" /></Button>
           <Button Name="RedoButton" Classes="icon" ToolTip.Tip="Redo (Ctrl+Y)" AutomationProperties.Name="Redo"><app:AppIcon Glyph="Redo2" /></Button>
         </StackPanel>
-        <Border Grid.Column="1" Classes="tools" Margin="12,0" VerticalAlignment="Center">
+        <Border Classes="tools" Margin="12,0" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal">
             <ToggleButton Name="SelectTool" Classes="tool" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." AutomationProperties.Name="Select"><app:AppIcon Glyph="MousePointer2" /></ToggleButton>
             <ToggleButton Name="GrabTool" Classes="tool" ToolTip.Tip="Grab (2). Drag the canvas to pan time and lanes. Space plays or stops." AutomationProperties.Name="Grab"><app:AppIcon Glyph="Hand" /></ToggleButton>
@@ -185,31 +190,41 @@
 
           </StackPanel>
         </Border>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,12,0">
           <ToggleButton Name="SnapToggle" Classes="viewToggle" Content="Snap" IsChecked="True" ToolTip.Tip="Snapping on / off (J)" />
-          <ComboBox Name="SnapModeBox" Width="120" Focusable="True" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
-          <ComboBox Name="SnapBox" Width="70" Focusable="True" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." />
+          <ComboBox Name="SnapModeBox" Width="102" Focusable="True" ToolTip.Tip="Grid: dragged hits land on grid lines. Grid relative: they move by whole grid steps and keep their offset from the grid." />
+          <ComboBox Name="SnapBox" Width="64" Focusable="True" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." />
           <ToggleButton Name="TripletSnapToggle" Content="Triplets" ToolTip.Tip="Alt+wheel: on cycles 3/1, 1/1, 1/3, 1/6, 1/12; off cycles 4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16. The drop-down offers every spacing; Shift+number still selects 1/n." />
-          <ToggleButton Name="AuditionPlacementButton" Classes="viewToggle" Content="Audition" Margin="6,0,0,0"
+          <ToggleButton Name="AuditionPlacementButton" Classes="viewToggle" Content="Audition"
                         ToolTip.Tip="Play a sample whenever you draw a new note, including while painting. Saved for all projects." />
-          <Button Name="GridOptionsButton" Content="Grid…" IsVisible="False" ToolTip.Tip="Grid mode and triplet cycling" />
         </StackPanel>
-        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <ToggleButton Name="InspectorToggle" Classes="viewToggle" Content="Inspector" IsChecked="True" ToolTip.Tip="Show Active lane, Bookmarks and optional panels on the left" />
-          <StackPanel Name="ViewExtras" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-          <ToggleButton Name="LaneDetailsToggle" Classes="viewToggle" Content="Info" IsChecked="False" ToolTip.Tip="Show each lane's file index after its name" />
-          <ToggleButton Name="UsedLanesToggle" Classes="viewToggle" Content="Used lanes" IsChecked="False" ToolTip.Tip="Show only the lanes that have hits on them (switch off and on again to refresh the list after adding hits)" />
-          <ToggleButton Name="ObjectLinesToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines down the lanes at every circle, slider head, repeat and tail, and spinner end, whatever the snap" />
-          <ToggleButton Name="VolumeToggle" Classes="viewToggle" Content="Controller" IsChecked="True" ToolTip.Tip="Show the volume controller at the bottom" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Name="PlaybackDetailsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="12,0,0,0">
+          <StackPanel Name="LocatorPanel" Orientation="Horizontal" Spacing="4">
+            <Grid ColumnDefinitions="24,64" Height="28">
+              <Button Name="GoLeftButton" Content="L" Classes="flat" Width="24" Height="28" MinHeight="28" Padding="0" FontSize="10" AutomationProperties.Name="Go to left locator" ToolTip.Tip="Go to left locator. Ctrl+click the ruler sets it." />
+              <TextBox Grid.Column="1" Name="LeftLocatorBox" Width="64" Height="28" MinHeight="28" FontSize="11" Padding="3,0" Watermark="ms" ToolTip.Tip="Left locator in ms: type a time and press Enter" />
+            </Grid>
+            <Grid ColumnDefinitions="24,64" Height="28">
+              <Button Name="GoRightButton" Content="R" Classes="flat" Width="24" Height="28" MinHeight="28" Padding="0" FontSize="10" AutomationProperties.Name="Go to right locator" ToolTip.Tip="Go to right locator. Alt+click the ruler sets it." />
+              <TextBox Grid.Column="1" Name="RightLocatorBox" Width="64" Height="28" MinHeight="28" FontSize="11" Padding="3,0" Watermark="ms" ToolTip.Tip="Right locator in ms: type a time and press Enter" />
+            </Grid>
           </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Text="Zoom" Classes="toolLabel" Margin="6,0,0,0" />
-          <Slider Name="ZoomSlider" Width="100" Minimum="0" Maximum="1" Value="0.5" Focusable="True" VerticalAlignment="Center" />
-          <Button Name="FitButton" Content="Fit" ToolTip.Tip="Zoom out to the whole map" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Name="ToolbarEnd" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <ToggleButton Name="InspectorToggle" Classes="viewToggle" Content="Inspector" IsChecked="True" ToolTip.Tip="Show Active lane, Bookmarks and optional panels on the left" />
+            <ToggleButton Name="LaneDetailsToggle" Classes="viewToggle" Content="Info" IsChecked="False" ToolTip.Tip="Show each lane's file index after its name" />
+            <ToggleButton Name="UsedLanesToggle" Classes="viewToggle" Content="Used lanes" IsChecked="False" ToolTip.Tip="Show only the lanes that have hits on them (switch off and on again to refresh the list after adding hits)" />
+            <ToggleButton Name="ObjectLinesToggle" Classes="viewToggle" Content="Object lines" IsChecked="True" ToolTip.Tip="Vertical lines down the lanes at every circle, slider head, repeat and tail, and spinner end, whatever the snap" />
+            <ToggleButton Name="VolumeToggle" Classes="viewToggle" Content="Controller" IsChecked="True" ToolTip.Tip="Show the volume controller at the bottom" />
           </StackPanel>
+          <StackPanel Name="ZoomPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <app:AppIcon Glyph="Search" Size="14" />
+            <Slider Name="ZoomSlider" Width="88" Minimum="0" Maximum="1" Value="0.5" Focusable="True" VerticalAlignment="Center" />
+            <Button Name="FitButton" Content="Fit" ToolTip.Tip="Zoom out to the whole map" />
+            <ToggleButton Name="BrowserToggle" Classes="flat icon" IsChecked="{Binding #BrowserPanelItem.IsChecked, Mode=TwoWay}" ToolTip.Tip="Show sample browser" AutomationProperties.Name="Sample browser"><app:AppIcon Glyph="PanelRight" /></ToggleButton>
           </StackPanel>
-          <Button Name="ViewOptionsButton" Content="View…" IsVisible="False" ToolTip.Tip="Controller, lane information, colour and zoom" />
         </StackPanel>
       </Grid>
       </ScrollViewer>
@@ -218,60 +233,53 @@
     <!-- 3. Selection info bar (V6.39: SELECTION · START · VOLUME · VALUE EDIT · GAMEPLAY OBJECT); song controls on the right -->
     <Border Grid.Row="2" Grid.ColumnSpan="5" Name="EditBar" Classes="info" BorderThickness="0,0,0,1">
       <ScrollViewer Name="EditBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-      <Grid Name="EditBarContent" MinWidth="1140" ColumnDefinitions="Auto,*,Auto" Margin="12,0">
-        <StackPanel Name="InfoBarLeft" Orientation="Horizontal">
-        <StackPanel Name="SelectionField" Classes="field" MinWidth="130">
-          <TextBlock Text="SELECTION" Classes="fieldLabel" />
+      <Grid Name="EditBarContent" ColumnDefinitions="Auto,*" Margin="8,2">
+        <Button Name="SelectionDisclosure" Classes="icon flat" VerticalAlignment="Top" Margin="0,4,8,0"
+                AutomationProperties.Name="Collapse selection details" ToolTip.Tip="Collapse selection details">
+          <app:AppIcon Name="SelectionDisclosureIcon" Glyph="ChevronUp" />
+        </Button>
+        <WrapPanel Grid.Column="1" Name="InfoBarLeft" Orientation="Horizontal">
+        <StackPanel Name="SelectionField" Classes="field" MinWidth="100" Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="SELECTION" Classes="fieldLabel" IsVisible="False" />
           <TextBlock Name="InfoSelection" Text="No events" Classes="fieldValue" />
         </StackPanel>
-        <StackPanel Name="StartField" Classes="field" MinWidth="150">
-          <TextBlock Text="START · ms" Classes="fieldLabel" />
+        <StackPanel Name="StartField" Classes="field" MinWidth="150" Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Start · ms" Classes="fieldLabel" />
           <StackPanel Orientation="Horizontal" Spacing="6">
             <TextBox Name="StartBox" Width="72" Watermark="—" ToolTip.Tip="Where the selection starts, in ms. Type a time and press Enter to move it there (several: all move together); Esc puts it back." />
-            <TextBlock Name="InfoStart" Text="" Classes="fieldValue" VerticalAlignment="Center" />
+            <TextBlock Name="InfoStart" IsVisible="False" Text="" Classes="fieldValue" VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
-        <StackPanel Classes="field">
-          <TextBlock Text="VOLUME AT TIMES · %" Classes="fieldLabel" ToolTip.Tip="Edits volumes at selected times using the chosen volume scope." />
+        <StackPanel Classes="field" Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Volume · %" Classes="fieldLabel" ToolTip.Tip="Edits volumes at selected times using the chosen volume scope." />
           <StackPanel Orientation="Horizontal" Spacing="4">
             <TextBox Name="VolumeValueBox" Width="60" Watermark="0-100" ToolTip.Tip="Volume at the selected times, using All lanes or Selected lanes. Enter or Apply commits the value." />
             <Button Name="VolumeApplyButton" Content="Apply" Focusable="True" ToolTip.Tip="Apply to the chosen volume scope at the selected times." />
           </StackPanel>
         </StackPanel>
-        <StackPanel Classes="field">
-          <TextBlock Text="VALUE EDIT" Classes="fieldLabel" />
-          <ComboBox Name="VolumeModeBox" Width="100" Focusable="True" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
+        <StackPanel Classes="field" Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="VALUE EDIT" Classes="fieldLabel" IsVisible="False" />
+          <ComboBox Name="VolumeModeBox" Width="96" Focusable="True" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
         </StackPanel>
-        <StackPanel Classes="field"><TextBlock Text="VOLUME SCOPE" Classes="fieldLabel" /><ComboBox Name="VolumeScopeBox" Width="130" ToolTip.Tip="All lanes changes every sound at the affected times. Selected lanes changes only the selected lanes." /></StackPanel>
+        <StackPanel Classes="field" Orientation="Horizontal" Spacing="8"><TextBlock Text="VOLUME SCOPE" Classes="fieldLabel" IsVisible="False" /><ComboBox Name="VolumeScopeBox" Width="110" ToolTip.Tip="All lanes changes every sound at the affected times. Selected lanes changes only the selected lanes." /></StackPanel>
         <StackPanel Name="ObjectField" Classes="field" MinWidth="200">
-          <TextBlock Text="GAMEPLAY OBJECT" Classes="fieldLabel" />
+          <TextBlock Text="GAMEPLAY OBJECT" Classes="fieldLabel" IsVisible="False" />
           <TextBlock Name="InfoObject" Text="—" Classes="fieldValue" TextTrimming="CharacterEllipsis" />
         </StackPanel>
-        </StackPanel>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button Name="SongOptionsButton" Content="Song…" IsVisible="False" ToolTip.Tip="Song volume, mute and playback offset" />
-        <StackPanel Name="SongControls" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <TextBlock Text="SONG" Classes="fieldLabel" VerticalAlignment="Center" />
-          <Slider Name="SongVolumeSlider" Width="96" Minimum="0" Maximum="100" Value="100" Focusable="True" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
-          <ToggleButton Name="SongMuteButton" Content="Mute" ToolTip.Tip="Mute the song. Soloing a lane also silences it." />
-          <TextBlock Text="Offset" Classes="toolLabel" />
-          <TextBox Name="SongOffsetBox" Width="60" Text="0" VerticalAlignment="Center" ToolTip.Tip="Song offset in ms: positive plays the song later. Enter applies. Not saved into the map." />
-          <TextBlock Text="ms" Classes="fieldLabel" VerticalAlignment="Center" />
-        </StackPanel>
-        </StackPanel>
+        </WrapPanel>
       </Grid>
       </ScrollViewer>
     </Border>
 
     <!-- 4. Overview strip -->
-    <app:OverviewStrip Grid.Row="3" Grid.Column="4" Name="Overview" />
+    <app:OverviewStrip Grid.Row="3" Grid.Column="2" Name="Overview" />
 
     <!-- Inspector (left): Selection, Bookmarks, Recent edits; the splitter resizes it -->
-    <app:InspectorPanel Grid.Row="3" Grid.RowSpan="3" Grid.Column="2" Name="Inspector" Background="{DynamicResource VolumeSide}" />
-    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="3" Name="InspectorSplitter" ResizeDirection="Columns" Background="{DynamicResource Divider}" />
+    <app:InspectorPanel Grid.Row="3" Grid.RowSpan="3" Grid.Column="0" Name="Inspector" Background="{DynamicResource VolumeSide}" />
+    <GridSplitter Grid.Row="3" Grid.RowSpan="3" Grid.Column="1" Name="InspectorSplitter" ResizeDirection="Columns" Background="{DynamicResource Divider}" />
 
     <!-- 5. Arrange area -->
-    <Grid Grid.Row="4" Grid.Column="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+    <Grid Grid.Row="4" Grid.Column="2" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <app:ArrangeView Name="Lanes" />
       <TextBox Name="LaneFilterBox" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9,22,0,0" MinHeight="20" Height="20" Padding="6,0" FontSize="9" CornerRadius="5" VerticalContentAlignment="Center" Watermark="Filter samples…" />
       <ToggleButton Name="DrumMapToggle" Width="22" Height="28" MinHeight="28" Padding="3" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True"
@@ -284,7 +292,7 @@
     </Grid>
 
     <!-- Bottom panel (V6.39 controller): Controller tabs · ramp shape · hint; bars on the right -->
-    <Border Grid.Row="5" Grid.Column="4" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
+    <Border Grid.Row="5" Grid.Column="2" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Background="{DynamicResource PaneTitle}">
         <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0,12,0">
@@ -328,99 +336,60 @@
       </DockPanel>
     </Border>
 
-    <GridSplitter Name="BrowserSplitter" Grid.Row="3" Grid.RowSpan="3" Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource ChromeBorder}" />
-    <Border Name="BrowserHost" Grid.Row="3" Grid.RowSpan="3" Grid.Column="0" Padding="10,8" Background="{DynamicResource PaneTitle}" />
-    <!-- 7. Transport (V6.39: at the bottom) · time, position, tempo and signature · status -->
+    <GridSplitter Name="BrowserSplitter" Grid.Row="3" Grid.RowSpan="3" Grid.Column="3" ResizeDirection="Columns" Background="{DynamicResource ChromeBorder}" />
+    <Border Name="BrowserHost" Grid.Row="3" Grid.RowSpan="3" Grid.Column="4" Padding="8" Background="{DynamicResource PaneTitle}" />
+    <!-- Transport: primary actions left, position centered, master/song mix right. -->
     <Border Grid.Row="6" Grid.ColumnSpan="5" Name="StatusBar" Classes="transportBar" BorderThickness="0,1,0,0">
-      <ScrollViewer Name="StatusBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-      <Grid Name="StatusBarContent" MinWidth="1520" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="12,0">
+      <Grid Name="StatusBarContent" ColumnDefinitions="*,Auto,*" Margin="12,0">
+        <StackPanel Name="TransportLeft" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
         <StackPanel Name="TransportButtons" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <!-- V6.39's locator boxes: L◀ / R◀ go to a locator; the boxes show and set it in ms (Enter). -->
-          <StackPanel Name="LocatorPanel" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
-            <StackPanel Orientation="Horizontal" Spacing="3">
-              <Button Name="GoLeftButton" Content="L ◀" FontSize="11" Padding="5,0" Height="28" MinHeight="28" Focusable="True" ToolTip.Tip="Go to the left locator (Ctrl+click the ruler sets it)" />
-              <TextBox Name="LeftLocatorBox" Width="74" Height="28" MinHeight="28" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="L · ms" ToolTip.Tip="Left locator in ms: type a time and press Enter" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="3">
-              <Button Name="GoRightButton" Content="R ◀" FontSize="11" Padding="5,0" Height="28" MinHeight="28" Focusable="True" ToolTip.Tip="Go to the right locator (Alt+click the ruler sets it)" />
-              <TextBox Name="RightLocatorBox" Width="74" Height="28" MinHeight="28" FontSize="11" Padding="5,0" VerticalContentAlignment="Center" Watermark="R · ms" ToolTip.Tip="Right locator in ms: type a time and press Enter" />
-            </StackPanel>
-          </StackPanel>
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
             <app:AppIcon Glyph="SkipBack" />
           </Button>
           <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:AppIcon Glyph="Square" /></Button>
-          <Button Name="PlayButton" Classes="transport" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:AppIcon Name="PlayGlyph" Glyph="Play" /></Button>
+          <Button Name="PlayButton" Classes="transport" Width="42" Height="36" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:AppIcon Name="PlayGlyph" Glyph="Play" Size="16" /></Button>
           <ToggleButton Name="LoopButton" Classes="transport wide" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R, drag in the upper ruler draws a range." AutomationProperties.Name="Loop">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <app:AppIcon Glyph="Repeat2" />
               <TextBlock Text="Cycle" VerticalAlignment="Center" />
             </StackPanel>
           </ToggleButton>
-          <StackPanel Name="PlaybackOptionsPanel" Spacing="2" VerticalAlignment="Center" Margin="6,0,0,0">
-            <ToggleButton Name="ReturnOnStopButton" Content="Return on stop" Height="28" MinHeight="28" Padding="6,0" FontSize="11"
-                          IsChecked="{Binding #ReturnOnStopItem.IsChecked, Mode=TwoWay}"
-                          ToolTip.Tip="When stopping playback, return to where playback started" />
-            <ToggleButton Name="FollowPlaybackButton" Content="Follow playback" Height="28" MinHeight="28" Padding="6,0" FontSize="11"
-                          IsChecked="{Binding #FollowItem.IsChecked, Mode=TwoWay}"
-                          ToolTip.Tip="Scroll the editing view to follow the playhead during playback" />
-          </StackPanel>
-          <Button Name="PlaybackOptionsButton" Content="Playback…" IsVisible="False" ToolTip.Tip="Locators, playback speed, return and follow options" />
         </StackPanel>
-        <Border Grid.Column="1" Name="Lcd" Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Margin="16,0,0,0" Height="44" VerticalAlignment="Center">
-          <Grid ColumnDefinitions="102,88,54,84" VerticalAlignment="Center">
+        <Border Width="1" Height="20" Background="{DynamicResource ChromeBorder}" />
+        <StackPanel Name="PlaybackOptionsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <ToggleButton Name="ReturnOnStopButton" Classes="flat" IsChecked="{Binding #ReturnOnStopItem.IsChecked, Mode=TwoWay}" ToolTip.Tip="When stopping playback, return to where playback started" />
+          <ToggleButton Name="FollowPlaybackButton" Classes="flat" IsChecked="{Binding #FollowItem.IsChecked, Mode=TwoWay}" ToolTip.Tip="Scroll the editing view to follow the playhead during playback" />
+          <WrapPanel Name="SpeedPanel" Width="252" Height="28" ItemWidth="42" ItemHeight="28" VerticalAlignment="Center" AutomationProperties.Name="Playback speed" ToolTip.Tip="Playback speed: pitch stays the same" />
+        </StackPanel>
+        </StackPanel>
+        <Border Grid.Column="1" Name="Lcd" Grid.Row="0" HorizontalAlignment="Center" Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Height="44" VerticalAlignment="Center">
+          <Grid Name="LcdColumns" ColumnDefinitions="96,80,48,70" VerticalAlignment="Center">
             <StackPanel Grid.Column="0"><TextBlock Name="LcdTime" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>
             <StackPanel Grid.Column="1"><TextBlock Name="LcdBar" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="BAR · BEAT · TICK" /></StackPanel>
             <StackPanel Grid.Column="2"><TextBlock Name="LcdBpm" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="TEMPO" /></StackPanel>
-            <StackPanel Grid.Column="3"><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="SIGNATURE · SNAP" /></StackPanel>
+            <StackPanel Grid.Column="3"><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="METER" /></StackPanel>
           </Grid>
         </Border>
-        <!-- Playback speed, as buttons (also Playback → Speed); the pitch stays the same -->
-        <StackPanel Grid.Column="2" Name="SpeedPanel" Orientation="Horizontal" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center"
-                    ToolTip.Tip="Playback speed: the pitch stays the same (also Playback → Speed)" />
-        <TextBlock Grid.Column="3" Name="StatusLeft" MaxWidth="144" ToolTip.Tip="{Binding #StatusLeft.Text}" VerticalAlignment="Center" FontSize="12" Margin="16,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource LcdCaption}" />
-        <TextBlock Grid.Column="4" Name="StatusRight" MaxWidth="160" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding #StatusRight.Text}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource LcdCaption}" />
-        <StackPanel Grid.Column="5" Name="GlobalVolumePanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0"
-                    ToolTip.Tip="Global volume: the song, hitsounds and previews together (20–100 %)">
-          <TextBlock Text="Global volume" Classes="toolLabel" />
-          <Slider Name="GlobalVolumeSlider" Width="88" Minimum="20" Maximum="100" Value="20" Focusable="True" VerticalAlignment="Center" />
-          <TextBlock Name="GlobalVolumeText" Text="20%" Classes="fieldValue" Width="36" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="2" Name="MixControls" Width="308" Spacing="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+          <Grid Name="GlobalVolumePanel" ColumnDefinitions="44,100,30,*" ColumnSpacing="6" Height="22" ToolTip.Tip="Global volume: song, hitsounds and previews (20–100 %)">
+            <TextBlock Text="Global" Classes="fieldLabel" VerticalAlignment="Center" />
+            <Slider Grid.Column="1" Name="GlobalVolumeSlider" Height="22" MinHeight="0" Width="100" Minimum="20" Maximum="100" Value="20" Focusable="True" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Name="GlobalVolumeText" Text="20%" FontSize="10" VerticalAlignment="Center" />
+          </Grid>
+          <Grid Name="SongControls" ColumnDefinitions="44,100,30,22,32,*" ColumnSpacing="6" Height="22">
+            <TextBlock Text="Song" Classes="fieldLabel" VerticalAlignment="Center" />
+            <Slider Grid.Column="1" Name="SongVolumeSlider" Height="22" MinHeight="0" Width="100" Minimum="0" Maximum="100" Value="100" Focusable="True" VerticalAlignment="Center" ToolTip.Tip="Song volume (hitsounds unchanged)" />
+            <TextBlock Grid.Column="2" Name="SongVolumeText" Text="100%" FontSize="10" VerticalAlignment="Center" />
+            <ToggleButton Grid.Column="3" Name="SongMuteButton" Width="22" Height="22" MinHeight="22" Content="Mute" ToolTip.Tip="Mute the song. Soloing a lane also silences it." />
+            <TextBlock Grid.Column="4" Text="Offset" FontSize="9" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+            <TextBox Grid.Column="5" Name="SongOffsetBox" Height="22" MinHeight="22" Padding="1,0" FontSize="10" Text="0" VerticalAlignment="Center" ToolTip.Tip="Song offset in ms: positive plays later. Enter applies. Not saved into the map." />
+          </Grid>
         </StackPanel>
+        <TextBlock Name="StatusLeft" IsVisible="False" />
+        <TextBlock Name="StatusRight" IsVisible="False" />
       </Grid>
-      </ScrollViewer>
     </Border>
 
-    <Border Name="WorkflowFooter" Grid.Row="7" Grid.ColumnSpan="5" Classes="footer" BorderThickness="0,1,0,0">
-      <StackPanel Margin="12,6" Spacing="4">
-        <Grid Name="WorkingCopyRow" ColumnDefinitions="Auto,*,Auto,Auto">
-          <TextBlock Name="WorkingCopyLabel" Text="Editing:" Foreground="{DynamicResource ButtonText}" VerticalAlignment="Center" Margin="0,0,8,0" />
-          <TextBlock Grid.Column="1" Name="WorkingCopyPath" Foreground="{DynamicResource LcdCaption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-          <ToggleButton Grid.Column="2" Name="WorkflowHelpToggle" Content="Output guide" Margin="8,0,0,0" />
-          <Button Grid.Column="3" Name="WorkingFolderButton" Content="Open map folder" Margin="8,0,0,0" />
-        </Grid>
-        <Grid Name="WorkflowMessageRow" ColumnDefinitions="*,Auto" IsVisible="False">
-          <ScrollViewer Name="WorkflowMessageScroll" MaxHeight="88" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="4">
-              <TextBlock Name="WorkflowMessage" TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" />
-              <TextBlock Name="WorkflowWarning" TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" />
-            </StackPanel>
-          </ScrollViewer>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Top">
-            <Button Name="WorkflowDetailsButton" Content="Details…" />
-            <Button Name="NextProblemButton" Content="Next problem" IsVisible="False" ToolTip.Tip="Select and reveal the next conflict or hit without a gameplay object. Wraps to the first problem." />
-            <Button Name="WorkflowPreferencesButton" Content="Preferences…" />
-            <Button Name="DismissWorkflowButton" Content="Dismiss" />
-          </StackPanel>
-        </Grid>
-          <StackPanel Name="WorkflowHelpPanel" Spacing="4" IsVisible="False">
-            <TextBlock Text="Save .osu updates the difficulty shown above. Generate creates a separate [Hitsounds] difficulty. Copy hitsounds applies a source difficulty's sounds to chosen difficulties." TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Name="WorkflowBackupsButton" Content="Open backups" />
-              <Button Name="QuickStartButton" Content="Quick start" />
-            </StackPanel>
-          </StackPanel>
-      </StackPanel>
-    </Border>
     <!-- The start screen: under the title bar, over the empty editor, until a map opens -->
     <app:KeysoundEditor Name="Keys" Grid.Row="1" Grid.RowSpan="7" Grid.ColumnSpan="5" ZIndex="40" IsVisible="False" />
     <app:StartScreen Name="Start" Grid.Row="1" Grid.RowSpan="7" Grid.ColumnSpan="5" ZIndex="50" IsVisible="False" />

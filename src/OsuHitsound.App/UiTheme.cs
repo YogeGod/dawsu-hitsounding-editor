@@ -36,11 +36,11 @@ internal sealed class UiTheme
             N("window.height", "Height", 36, 28, 60), N("window.fontSize", "Font size", 13, 8, 22), C("window.close", "Close under the pointer", "#c42b1c")]),
         new("titlebar", "Bars", "Menu bar", [
             C("title.bg", "Background", "#555555"), C("title.text", "Text", "#c1c7cc"),
-            N("title.height", "Height", 44, 16, 60), N("title.fontSize", "Font size", 12, 8, 24)]),
+            N("title.height", "Height", 40, 16, 60), N("title.fontSize", "Font size", 12, 8, 24)]),
         new("controlbar", "Bars", "Toolbar", [
-            C("control.bg", "Background", "#494949"), N("control.height", "Height", 46, 40, 90)]),
+            C("control.bg", "Background", "#494949"), N("control.height", "Height", 44, 40, 90)]),
         new("editbar", "Bars", "Info bar", [
-            C("edit.bg", "Background", "#2b2b2b"), N("edit.height", "Height", 46, 40, 110)]),
+            C("edit.bg", "Background", "#2b2b2b"), N("edit.height", "Height", 40, 40, 110)]),
         new("statusbar", "Bars", "Transport bar", [
             C("status.bg", "Background", "#383838"), C("status.text", "Text", "#bdbdbd"),
             N("status.height", "Height", 56, 18, 80), N("status.fontSize", "Font size", 12, 8, 22)]),
@@ -59,7 +59,7 @@ internal sealed class UiTheme
         new("button", "Controls", "Buttons", [
             C("button.bg", "Background", "#4d4d4d"), C("button.border", "Border", "#414649"),
             C("button.active", "Primary and switched on", "#287ac3"), C("button.activeBorder", "Primary border", "#7358df"),
-            N("button.fontSize", "Font size", 12, 9, 22), N("button.height", "Height", 30, 20, 44), N("button.radius", "Corner radius", 2, 0, 12)]),
+            N("button.fontSize", "Font size", 12, 9, 22), N("button.height", "Height", 30, 20, 44), N("button.radius", "Corner radius", 4, 0, 12)]),
         new("tools", "Controls", "Tool buttons", [
             C("tool.active", "Selected tool", "#bfc5c8"), C("tool.activeIcon", "Selected tool icon", "#252525")]),
         new("fields", "Controls", "Text boxes", [C("field.bg", "Background", "#2b2b2b")]),
@@ -84,7 +84,7 @@ internal sealed class UiTheme
             C("wave.base", "Loudness", "#8fb7e8"), C("wave.low", "Low: kicks, bass", "#4f8dff"), C("wave.mid", "Mid: snares, vocals", "#c27bff"),
             C("wave.high", "High: hi-hats, cymbals", "#ffd166"), N("wave.opacity", "Opacity", 0.85, 0, 1)]),
         new("lanelist", "Grid", "Lane list", [
-            N("list.width", "Width", 296, 160, 600), C("lane.text", "Name text", "#edf0f1"), C("lane.dim", "Index text", "#bdbdbd"),
+            N("list.width", "Width", 224, 160, 600), C("lane.text", "Name text", "#edf0f1"), C("lane.dim", "Index text", "#bdbdbd"),
             N("lane.fontSize", "Font size", 12, 8, 22), C("lane.missing", "Missing / no sound", "#ff9a92")]),
         new("lanerow", "Grid", "Lane rows", [
             N("row.height", "Height", 31, 16, 64), C("lane.headA", "List colour (odd)", "#515151"), C("lane.headB", "List colour (even)", "#4a4a4a"),
@@ -124,19 +124,57 @@ internal sealed class UiTheme
     /// <summary>Raised after any value changes, so the window and drawn parts refresh.</summary>
     public event Action? Changed;
 
-    public string Get(string key) => values.TryGetValue(key, out var v) ? v : ByKey[key].Default;
+    // Switching the palette never rewrites user theme customizations, layout or map state.
+    private static readonly IReadOnlyDictionary<string, string> DarkPalette = new Dictionary<string, string>
+    {
+        ["window.bg"] = "#1b1b1e", ["window.text"] = "#9999a2",
+        ["title.bg"] = "#1b1b1e", ["title.text"] = "#9999a2", ["control.bg"] = "#27272b",
+        ["edit.bg"] = "#1b1b1e", ["status.bg"] = "#1b1b1e", ["status.text"] = "#9999a2",
+        ["footer.bg"] = "#1b1b1e", ["chrome.border"] = "#333338", ["line.divider"] = "#333338",
+        ["panel.bg"] = "#1b1b1e", ["panel.raised"] = "#27272b", ["button.text"] = "#f4f4f6",
+        ["text.secondary"] = "#9999a2", ["text.dim"] = "#9999a2", ["button.bg"] = "#27272b",
+        ["button.border"] = "#333338", ["button.active"] = "#0787f8", ["button.activeBorder"] = "#0787f8",
+        ["tool.active"] = "#202e34", ["tool.activeIcon"] = "#72b9ff", ["field.bg"] = "#111113",
+        ["slider.track"] = "#414147", ["slider.thumb"] = "#f4f4f6", ["play.bg"] = "#08ad18",
+        ["lcd.bg"] = "#111113", ["lcd.text"] = "#f4f4f6", ["lcd.caption"] = "#9999a2",
+        ["arrange.bg"] = "#111113", ["header.bg"] = "#27272b", ["ruler.bar"] = "#f4f4f6",
+        ["ruler.beat"] = "#9999a2", ["lane.text"] = "#f4f4f6", ["lane.dim"] = "#9999a2",
+        ["lane.headA"] = "#1b1b1e", ["lane.headB"] = "#111113", ["group.head"] = "#27272b",
+        ["toggle.bg"] = "#27272b", ["line.beat"] = "#333338", ["line.bar"] = "#414147",
+        ["line.snap"] = "#242427", ["divider"] = "#333338", ["overview.bg"] = "#1b1b1e",
+        ["volume.bg"] = "#111113", ["volume.side"] = "#1b1b1e", ["roll.white"] = "#1b1b1e", ["roll.black"] = "#111113",
+    };
+
+    public bool DarkMode { get; private set; }
+
+    public void SetDarkMode(bool dark)
+    {
+        if (DarkMode == dark) return;
+        DarkMode = dark;
+        cache.Clear();
+        Changed?.Invoke();
+    }
+
+    public string Get(string key) => values.TryGetValue(key, out var v) ? v
+        : DarkMode && DarkPalette.TryGetValue(key, out var dark) ? dark : ByKey[key].Default;
 
     public void Set(string key, string value)
     {
         var setting = ByKey[key];
         if (!IsValid(setting, value)) throw new FormatException($"\"{value}\" is not a valid {setting.Kind.ToString().ToLowerInvariant()} for {setting.Label}.");
-        if (value == setting.Default) values.Remove(key);
+        if (value == setting.Default && !DarkPalette.ContainsKey(key)) values.Remove(key);
         else values[key] = value;
         cache.Clear();
         Changed?.Invoke();
     }
 
-    public void Reset(string key) => Set(key, ByKey[key].Default);
+    public void Reset(string key)
+    {
+        _ = ByKey[key];
+        values.Remove(key);
+        cache.Clear();
+        Changed?.Invoke();
+    }
 
     public Color Color(string key) => Cached(key, () => Avalonia.Media.Color.Parse(Get(key)));
 
@@ -171,7 +209,7 @@ internal sealed class UiTheme
         foreach (var (key, element) in map)
             if (ByKey.TryGetValue(key, out var setting) && element.ValueKind is JsonValueKind.String or JsonValueKind.Number
                 && (element.ValueKind == JsonValueKind.String ? element.GetString()! : element.GetRawText()) is var value
-                && IsValid(setting, value) && value != setting.Default)
+                && IsValid(setting, value) && (value != setting.Default || DarkPalette.ContainsKey(key)))
                 theme.values[key] = value;
         return theme;
     }

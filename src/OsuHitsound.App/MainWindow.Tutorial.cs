@@ -10,7 +10,6 @@ public partial class MainWindow
     {
         TutorialItem.Click += (_, _) => StartTutorial();
         QuickStartItem.Click += (_, _) => StartQuickStart();
-        QuickStartButton.Click += (_, _) => StartQuickStart();
         Tutorial.Finished += () =>
         {
             if (prefs.TutorialSeen) return;
@@ -36,8 +35,8 @@ public partial class MainWindow
         new("Assign a sample", "In the inspector's Active lane card, choose a sample or Browse sample…. This changes the active lane and its hits, not every selected lane. Use the preview button to hear the sample; Undo restores the previous assignment.", () => On(Inspector)),
         new("Place a hit", "Choose Draw (3), then click in that lane on the timeline. Snap keeps the hit on the beat grid. Select (1) moves hits; Ctrl+Z undoes your last edit.", () => On(DrawTool)),
         new("Listen", "Press Space to play, or use Play below. Audition previews newly drawn hits. Lane M/S and song volume affect listening only; they do not remove saved sounds.", () => On(PlayButton)),
-        new("Choose your output", "Save .osu updates the open difficulty. Generate creates a separate [Hitsounds] difficulty, including circles for loose hits. Copy hitsounds applies a source difficulty to chosen difficulties. Check the destination and results below.", () => On(SaveButton)),
-        new("Keep working", "The editing path and latest operation result stay below the editor. Open map folder shows your files. File → Full interface tour explains the remaining controls; F1 lists shortcuts. Finish closes this guide.", () => On(WorkflowFooter)),
+        new("Choose your output", "Save .osu updates the open difficulty. Generate creates a separate [Hitsounds] difficulty, including circles for loose hits. Copy hitsounds applies a source difficulty to chosen difficulties. Use the operation-details icon beside the map title to review results.", () => On(SaveButton)),
+        new("Keep working", "The map title shows which difficulty is open. Hover it for its path. The operation-details icon beside it shows results and warnings; File → Open map folder shows your files. File → Full interface tour explains the remaining controls; F1 lists shortcuts. Finish closes this guide.", () => On(FileTitle)),
     ];
 
     internal void ShowTutorialStepForSnapshot(int step)
@@ -75,7 +74,7 @@ public partial class MainWindow
             () => null),
         new("Open a map", "Opens a .osu from your Songs folder (Ctrl+O), or drag a .osu or .osz onto the window. Each sample file in the mapset becomes a lane you can draw in. The File menu also has Recent maps, Import .osz… and Open map folder (Ctrl+Shift+O): sample files you put in that folder show up as lanes.",
             () => On(OpenButton)),
-        new("Save .osu", "Writes your hitsounds into the open difficulty (Ctrl+S), whose path is shown below the editor. Only changed lines are rewritten; a backup is kept outside the mapset. Generate creates a separate hitsound difficulty; Copy applies sounds to chosen difficulties.",
+        new("Save .osu", "Writes your hitsounds into the open difficulty (Ctrl+S). Hover the map title for its path. Only changed lines are rewritten; a backup is kept outside the mapset. Generate creates a separate hitsound difficulty; Copy applies sounds to chosen difficulties.",
             () => On(SaveButton)),
         new("Generate", "Makes a separate hitsound difficulty from your hits, adding circles where a sound has no object. Map → Copy hitsounds… then copies it into the other difficulties, like Mapping Tools' Hitsound Copier.",
             () => On(HeaderMenu)),
@@ -99,15 +98,15 @@ public partial class MainWindow
         new("Ramp tool (6)", "Drag in the volume controller at the bottom to draw a smooth volume ramp.", () => On(RampTool)),
         new("Snap", "Turns snapping on or off (J). When on, hits land on the beat grid.", () => On(SnapToggle)),
         new("Snap mode and beat division", "Grid puts dragged hits on grid lines; Grid relative moves them by whole steps and keeps their offset. Choose 1/4, 1/8… or 2/1, 3/1, 4/1 for every 2, 3, 4 beats from each red timing point. Shift+1–9 still selects 1/n.",
-            () => Around(GridOptionsButton, SnapBox)),
-        new("View toggles", "Inspector shows or hides the left panel. View… contains lane file indexes (Info), the volume controller, colour and zoom.",
-            () => Around(InspectorToggle, ViewOptionsButton)),
-        new("Colour", "Open View… to colour notes by lane, or by volume: quiet notes dark, loud notes bright, so odd volumes stand out.", () => On(ViewOptionsButton)),
-        new("Zoom and Fit", "Open View… to zoom in and out of time (also Ctrl+wheel). Fit shows the whole map.", () => On(ViewOptionsButton)),
-        new("Selection bar", "What is selected: how many hits, where they start, and which circle or slider end they play on. Type a volume and press Apply to change the selected circles (Relative adds to each, Set all gives them that value).",
+            () => Around(SnapModeBox, SnapBox)),
+        new("View toggles", "The toolbar icons show or hide the inspector, sample indexes, unused lanes, gameplay-object lines and the volume controller. Hover an icon for its name.",
+            () => Around(InspectorToggle, ToolbarEnd)),
+        new("Colour", "Hits and volume bars show volume from blue through purple to red, so differences stand out.", () => On(BottomPanel)),
+        new("Zoom and Fit", "Use the toolbar to zoom in and out of time (also Ctrl+wheel). Fit shows the whole map.", () => On(ToolbarEnd)),
+        new("Selection bar", "What is selected: how many hits, where they start, and which circle or slider end they play on. Type a volume and press the checkmark to apply it (Relative adds to each, Set all gives them that value). The up arrow collapses these details; the down arrow expands them.",
             () => On(InfoBarLeft)),
         new("Song", "The song's own volume, mute, and an offset in ms if it sounds early or late. None of this is saved into the map.",
-            () => On(SongOptionsButton)),
+            () => On(SongControls)),
         new("Inspector", "Active lane and Bookmarks stay on the left. Optional bookmark labels appear in the list and on flag hover. View shows History or Sound sets when you need them. Preferences chooses the Classic browser inside the inspector or the Folder tree sidebar. Selecting a file previews; the assignment button or a lane drop replaces its sample.",
             () => On(Inspector)),
         new("Sample lanes", "Every sample you can use in a reorderable lane list: hitnormal, whistle, finish and clap, each with the default sound first and the map's own files under it. Type in the filter to find one. Above it, + adds a lane for a sample file already in the mapset, − deletes the highlighted lane (the one you touched last), and ‹ hides or shows the names.",
@@ -123,7 +122,7 @@ public partial class MainWindow
         new("Transport", "The L and R markers: L ◀ / R ◀ jump to them, and typing a time (ms) in their boxes moves them. Then go to the start, stop, play (Space) and Cycle between L and R (L). Ctrl+click the ruler sets L, Alt+click sets R.",
             () => On(TransportButtons)),
         new("Position", "Where the playhead is: time, bar.beat.tick, tempo, and the time signature with the snap divisor.", () => On(Lcd)),
-        new("Playback speed", "Open Playback… for locators, return/follow options and speed from 25 % to 150 % without changing pitch (also Playback → Speed).", () => On(PlaybackOptionsButton)),
+        new("Playback speed", "Separate bottom-bar buttons set speed from 25 % to 150 % without changing pitch. Return-on-stop and follow-playhead stay beside them. L/R locators are directly visible in the toolbar.", () => On(PlaybackOptionsPanel)),
         new("Global volume", "Turns the song, hitsounds and previews up or down together. It never goes below 20 %.", () => On(GlobalVolumePanel)),
         new("That's everything", "Open a map and start drawing. File → Full interface tour shows this tour again whenever you like.", () => null),
     ];

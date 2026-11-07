@@ -192,7 +192,8 @@ public partial class MainWindow
     /// <summary>The title bar in Keysound mode: Save project instead of Save .osu, no hitsound-only commands.</summary>
     private void ShowKeysoundChrome(bool on)
     {
-        SaveButton.Content = on ? "Save project" : hsSaveButton.Content;
+        SaveButton.Content = on ? new AppIcon { Glyph = "Save" } : hsSaveButton.Content;
+        Avalonia.Automation.AutomationProperties.SetName(SaveButton, on ? "Save project" : "Save .osu");
         ToolTip.SetTip(SaveButton, on
             ? "Save the Keysound project (Ctrl+S): tracks, notes and instrument settings. The reference beatmap is never changed."
             : hsSaveButton.Tip);

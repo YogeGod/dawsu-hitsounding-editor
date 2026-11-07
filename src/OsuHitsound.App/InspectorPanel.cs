@@ -59,8 +59,8 @@ internal sealed class InspectorPanel : CardPanel
     private Lane? selectedLane;
     private readonly TextBlock sampleFile = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.9 };
     private readonly ComboBox channelSample = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MaxDropDownHeight = 280, Foreground = Brushes.Gainsboro };
-    private readonly Button replaceSample = new() { Content = "Browse samples…" };
-    private readonly Button previewSample = new() { Content = "Preview" };
+    private readonly Button replaceSample = ActionIcon("FolderOpen", "Browse samples");
+    private readonly Button previewSample = ActionIcon("Play", "Preview active sample");
     public FileBrowserPanel Browser { get; } = new();
     private readonly Border browserSlot = new();
     public SoundSetPanel SoundSets { get; } = new();
@@ -89,6 +89,15 @@ internal sealed class InspectorPanel : CardPanel
     public event Action<double>? RemoveBookmarkRequested;
     public event Action<int>? GoToStepRequested;
 
+    private static Button ActionIcon(string glyph, string label)
+    {
+        var button = new Button { Content = new AppIcon { Glyph = glyph } };
+        button.Classes.Add("icon");
+        ToolTip.SetTip(button, label);
+        Avalonia.Automation.AutomationProperties.SetName(button, label);
+        return button;
+    }
+
     public InspectorPanel() : base("Inspector")
     {
 
@@ -107,9 +116,9 @@ internal sealed class InspectorPanel : CardPanel
 
         AddCard("soundSets", "Sound sets", SoundSets);
 
-        var add = new Button { Content = "+ At playhead" };
+        var add = ActionIcon("CirclePlus", "Add bookmark at playhead");
         add.Click += (_, _) => AddBookmarkRequested?.Invoke();
-        var remove = new Button { Content = "Remove" };
+        var remove = ActionIcon("Minus", "Remove selected bookmark");
         remove.Click += (_, _) => { if (bookmarkList.SelectedIndex is >= 0 and var i && i < bookmarkTimes.Count) RemoveBookmarkRequested?.Invoke(bookmarkTimes[i]); };
         bookmarkList.SelectionChanged += (_, _) => { if (!filling && bookmarkList.SelectedIndex is >= 0 and var i && i < bookmarkTimes.Count) SeekRequested?.Invoke(bookmarkTimes[i]); };
         var rename = new Button { Content = "Label", IsVisible = false };

@@ -1,0 +1,1 @@
+Icons from the approved editable dawsu! Studio Figma design, file V1tqxWK7WDteq6jhAumEX0. SVGs are the original downloaded assets. PNGs are transparent 2x renders of their natural 16px size. AppIcon uses their alpha mask with the native control foreground so both palettes and interaction states remain consistent. Other app icons keep the existing Lucide geometry.

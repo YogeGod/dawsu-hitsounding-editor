@@ -63,11 +63,11 @@ internal sealed record Preferences
 
     public bool BrowserOpen { get; init; } = true;
     public bool ClassicBrowser { get; init; }
-    public double BrowserWidth { get; init; } = 280;
+    public double BrowserWidth { get; init; } = 224;
     public bool HistoryOpen { get; init; }
     public bool SoundSetsOpen { get; init; }
 
-    public double InspectorWidth { get; init; } = 250;
+    public double InspectorWidth { get; init; } = 208;
 
     public List<string> InspectorCards { get; init; } = [];
 
@@ -91,6 +91,9 @@ internal sealed record Preferences
 
     /// <summary>The lane list's ‹: names hidden, only the icons and buttons shown.</summary>
     public bool LaneNamesCollapsed { get; init; }
+    public double? LaneListWidth { get; init; }
+    public bool SelectionBarCollapsed { get; init; }
+    public bool DarkMode { get; init; } = true;
 
     public double? WindowX { get; init; }
 

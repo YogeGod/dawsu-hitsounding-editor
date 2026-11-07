@@ -106,6 +106,7 @@ internal sealed class ArrangeView : Control
         CycleLeft,
         CycleRight,
         ResizeWave,
+        ResizeList,
         Layout,
         Pan,
     }
@@ -116,6 +117,7 @@ internal sealed class ArrangeView : Control
     private List<EditHit> dragHits = [];
     private LaneRow? paintRow;
     private double waveHeightAtStart;
+    public event Action? LaneListResized;
     private double panLeft, panScroll;
     private (double Left, double Right) cycleAtStart; // the locators when a move or resize of the cycle range began
     public event Action<Lane, string>? SampleDropped;
@@ -1333,6 +1335,22 @@ internal sealed class ArrangeView : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         Focus();
+        var resizePoint = e.GetCurrentPoint(this);
+        if (resizePoint.Properties.IsLeftButtonPressed && Math.Abs(resizePoint.Position.X - GridLeft) <= 4)
+        {
+            if (e.ClickCount == 2)
+            {
+                Theme_.Reset("list.width");
+                LaneListResized?.Invoke();
+            }
+            else
+            {
+                drag = Drag.ResizeList;
+                e.Pointer.Capture(this);
+            }
+            e.Handled = true;
+            return;
+        }
         if (Model is not { } model || Session is not { } session) return;
         var point = e.GetCurrentPoint(this);
         var p = point.Position;
@@ -1626,6 +1644,11 @@ internal sealed class ArrangeView : Control
     /// <summary>Shows the cursor for the tool at the pointer; the window calls it when Alt goes down or up.</summary>
     public void UpdateCursor(KeyModifiers modifiers)
     {
+        if (drag == Drag.ResizeList || drag == Drag.None && pointer is { } divider && Math.Abs(divider.X - GridLeft) <= 4)
+        {
+            Cursor = new Cursor(StandardCursorType.SizeWestEast);
+            return;
+        }
         bool overGrid = pointer is { } p && p.X >= GridLeft && p.Y >= HeaderHeight;
         // The strip's bottom edge: drag to make the waveform and objects taller or shorter.
         if (pointer is { } edge && edge.X >= GridLeft && Math.Abs(edge.Y - HeaderHeight) <= 4 && drag is Drag.None or Drag.ResizeWave)
@@ -1665,6 +1688,18 @@ internal sealed class ArrangeView : Control
     {
         var previousHover = HoveredLane;
         pointer = e.GetPosition(this);
+        if (drag == Drag.ResizeList)
+        {
+            NamesCollapsed = false;
+            double maximum = Math.Clamp(Bounds.Width - NumberWidth - 160, 160, 600);
+            double width = Math.Clamp(pointer.Value.X - NumberWidth, 160, maximum);
+            Theme_.Set("list.width", width.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            InvalidateMeasure();
+            InvalidateVisual();
+            UpdateCursor(e.KeyModifiers);
+            e.Handled = true;
+            return;
+        }
         string? warningTip = null;
         if (pointer is { } hover && hover.X >= GridLeft && hover.Y >= HeaderHeight - 12 && hover.Y < HeaderHeight)
         {
@@ -1776,6 +1811,14 @@ internal sealed class ArrangeView : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        if (drag == Drag.ResizeList)
+        {
+            drag = Drag.None;
+            e.Pointer.Capture(null);
+            LaneListResized?.Invoke();
+            e.Handled = true;
+            return;
+        }
         if (drag == Drag.None) return;
         if (drag == Drag.Layout && Model is { } layout)
         {
@@ -1817,12 +1860,14 @@ internal sealed class ArrangeView : Control
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
+        bool resizedList = drag == Drag.ResizeList;
         bool finishedSetStroke = drag == Drag.Paint;
-        if (drag != Drag.Pan) Session?.EndGesture();
+        if (drag is not Drag.Pan and not Drag.ResizeList) Session?.EndGesture();
         drag = Drag.None;
         draggedRow = dropRow = null;
         laneDropY = null;
         if (finishedSetStroke) SoundSetStrokeFinished?.Invoke();
+        if (resizedList) LaneListResized?.Invoke();
         InvalidateVisual();
         base.OnPointerCaptureLost(e);
     }

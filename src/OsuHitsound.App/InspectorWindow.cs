@@ -206,7 +206,11 @@ internal sealed class InspectorWindow : Window
                 break;
         }
 
-        reset.Click += (_, _) => box.Text = setting.Default;
+        reset.Click += (_, _) =>
+        {
+            theme.Reset(setting.Key);
+            ShowPart(list.SelectedItem as UiPart);
+        };
         return panel;
     }
 

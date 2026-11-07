@@ -74,6 +74,8 @@ public partial class MainWindow : Window
         SetupWorkflowFeedback();
         if (usePreferences && prefs.SongsFolder is null) prefs = prefs with { SongsFolder = Preferences.FindSongsFolder() };
         ArrangeView.NamesCollapsed = prefs.LaneNamesCollapsed;
+        if (prefs.LaneListWidth is { } listWidth && double.IsFinite(listWidth))
+            UiTheme.Current.Set("list.width", Math.Clamp(listWidth, 160, 600).ToString(System.Globalization.CultureInfo.InvariantCulture));
         skin = NewSkin();
         if (startAudio) StartAudio();
         ApplyWindowPlacement();
@@ -172,7 +174,7 @@ public partial class MainWindow : Window
         RampTool.Click += (_, _) => SetTool(Tool.Ramp);
 
         // Playback options.
-        // Speed: the Playback menu and the transport bar's buttons, kept showing the same choice.
+        // Separate visible speed buttons and Playback menu choices share the same action.
         var speedButtons = new List<(Avalonia.Controls.Primitives.ToggleButton Button, double Speed)>();
         var speedItems = new[] { (Speed25Item, 0.25), (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) };
         void SetSpeed(double speed)
@@ -182,17 +184,25 @@ public partial class MainWindow : Window
             foreach (var (button, s) in speedButtons) button.IsChecked = s == speed;
             UpdateStatus();
         }
-
         foreach (var (item, speed) in speedItems)
         {
             item.Click += (_, _) => SetSpeed(speed);
-            var button = new Avalonia.Controls.Primitives.ToggleButton { Content = $"{speed * 100:0}%", IsChecked = speed == 1, Focusable = true, Padding = new Avalonia.Thickness(6, 4), FontSize = 12 };
-            button.Classes.Add("viewToggle");
+            var button = new Avalonia.Controls.Primitives.ToggleButton
+            {
+                Name = $"Speed{speed * 100:0}Button", Content = $"{speed * 100:0}%", IsChecked = speed == 1,
+                Width = 40, Height = 28, MinHeight = 28, Padding = new Avalonia.Thickness(2, 0), FontSize = 11,
+            };
+            ToolTip.SetTip(button, $"Playback speed {speed * 100:0}%, pitch preserved");
+            Avalonia.Automation.AutomationProperties.SetName(button, $"Playback speed {speed * 100:0} percent");
             button.Click += (_, _) => SetSpeed(speed);
             speedButtons.Add((button, speed));
             SpeedPanel.Children.Add(button);
         }
-        SongVolumeSlider.ValueChanged += (_, e) => { if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100); };
+        SongVolumeSlider.ValueChanged += (_, e) =>
+        {
+            if (audio is not null) audio.SongVolume = (float)(e.NewValue / 100);
+            SongVolumeText.Text = $"{Math.Round(e.NewValue)}%";
+        };
         // Global volume: 20–100 % (the slider can't go lower), applied to everything that plays.
         GlobalVolumeSlider.Value = Math.Clamp(prefs.GlobalVolume, GlobalVolumeSlider.Minimum, GlobalVolumeSlider.Maximum);
         GlobalVolumeText.Text = $"{Math.Round(GlobalVolumeSlider.Value)}%";
@@ -963,9 +973,9 @@ public partial class MainWindow : Window
         inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
         void Show(bool open)
         {
-            if (!open && Root.ColumnDefinitions[2].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[2].ActualWidth;
-            Root.ColumnDefinitions[2].Width = new GridLength(open ? inspectorWidth : 0);
-            Root.ColumnDefinitions[3].Width = new GridLength(open ? 4 : 0);
+            if (!open && Root.ColumnDefinitions[0].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[0].ActualWidth;
+            Root.ColumnDefinitions[0].Width = new GridLength(open ? inspectorWidth : 0);
+            Root.ColumnDefinitions[1].Width = new GridLength(open ? 4 : 0);
             Inspector.IsVisible = InspectorSplitter.IsVisible = open;
         }
 
@@ -1014,7 +1024,7 @@ public partial class MainWindow : Window
     private double inspectorWidth = 250;
 
     /// <summary>The width to save: the panel's when shown, else the one it had.</summary>
-    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[2].ActualWidth > 0 ? Root.ColumnDefinitions[2].ActualWidth : inspectorWidth;
+    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[0].ActualWidth > 0 ? Root.ColumnDefinitions[0].ActualWidth : inspectorWidth;
 
     private void RefreshInspector()
     {
@@ -1339,16 +1349,9 @@ public partial class MainWindow : Window
         FileTitle.FontSize = t.Number("title.fontSize");
         StatusLeft.Foreground = StatusRight.Foreground = B("status.text");
         StatusLeft.FontSize = StatusRight.FontSize = t.Number("status.fontSize");
-        PlaybackOptionsPanel.Orientation = t.Number("status.height") >= 44 ? Avalonia.Layout.Orientation.Vertical : Avalonia.Layout.Orientation.Horizontal;
-
-        OpenButton.Content = t.Get("label.open");
-        SaveButton.Content = t.Get("label.save");
-        LaneDetailsToggle.Content = t.Get("label.laneDetails");
-        VolumeToggle.Content = t.Get("label.volume");
-
         var rows = Root.RowDefinitions;
         rows[0].Height = new GridLength(t.Number("title.height"));
-        // These rows contain fixed-height controls; their theme minimums (UiTheme) keep inspector edits from clipping them.
+        // Toolbar and selection details wrap; the transport keeps its original themed height.
         UpdateChromeHeights();
         rows[3].Height = new GridLength(t.Number("overview.height"));
         bool showVolume = VolumeToggle.IsChecked == true;
@@ -1376,16 +1379,19 @@ public partial class MainWindow : Window
         ControlBarContent.Width = Math.Max(ControlBarContent.MinWidth, width - 24);
         EditBarContent.Width = Math.Max(EditBarContent.MinWidth, width - 24);
         StatusBarContent.Width = Math.Max(StatusBarContent.MinWidth, width - 24);
-        Root.RowDefinitions[1].Height = new GridLength(t.Number("control.height"));
-        Root.RowDefinitions[2].Height = new GridLength(t.Number("edit.height"));
+        ControlBarContent.MinHeight = t.Number("control.height") - 8;
+        EditBarContent.MinHeight = SelectionBarCollapsed ? 28 : t.Number("edit.height") - 4;
+        StatusBarContent.Height = t.Number("status.height") - 1;
+        Root.RowDefinitions[1].Height = GridLength.Auto;
+        Root.RowDefinitions[2].Height = GridLength.Auto;
         Root.RowDefinitions[6].Height = new GridLength(t.Number("status.height"));
     }
 
     private void UpdateVolumePanelHeight()
     {
         var rows = Root.RowDefinitions;
-        double chrome = rows[0].Height.Value + rows[1].Height.Value + rows[2].Height.Value
-                        + rows[3].Height.Value + rows[6].Height.Value + WorkflowFooter.Bounds.Height;
+        double chrome = rows[0].Height.Value + ControlBar.Bounds.Height + EditBar.Bounds.Height
+                        + rows[3].Height.Value + StatusBar.Bounds.Height;
         // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
         double height = Root.Bounds.Height > 0 ? Root.Bounds.Height : Bounds.Height - WindowBar.Bounds.Height;
         double available = Math.Max(0, height - chrome - Lanes.HeaderHeight - 80);
@@ -1514,21 +1520,19 @@ public partial class MainWindow : Window
         double t = Lanes.Playhead;
 
         LcdTime.Text = FormatTime(t);
-        var spacing = SnapOptions[Math.Max(0, SnapBox.SelectedIndex)];
-        string snapLabel = spacing.IsLong ? spacing.ToString() : $"/{spacing.Divisions}";
         if (model?.RedLineAt(t) is { } red)
         {
             var (bar, beat, tick) = model.BarBeatTick(t);
             LcdBar.Text = $"{bar}.{beat}.{tick}";
             LcdBpm.Text = (60000 / red.BeatLength).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
             var (n, d) = model.SignatureAt(t);
-            LcdMeter.Text = $"{n}/{d} {snapLabel}";
+            LcdMeter.Text = $"{n}/{d}";
         }
         else
         {
             LcdBar.Text = "1.1.1";
             LcdBpm.Text = "—";
-            LcdMeter.Text = $"4/4 {snapLabel}";
+            LcdMeter.Text = "4/4";
         }
     }
 

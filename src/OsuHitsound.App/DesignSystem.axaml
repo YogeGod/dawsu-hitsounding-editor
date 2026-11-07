@@ -84,11 +84,32 @@
   </Style>
 
   <!-- Square icon buttons -->
-  <Style Selector="Button.icon">
+  <Style Selector="Button.icon, ToggleButton.icon">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- Studio chrome: quiet icon surfaces, shared by both palettes. -->
+  <Style Selector="Button.icon, ToggleButton.icon, Button.transport, ToggleButton.tool">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+  </Style>
+  <Style Selector="ToggleButton.icon:checked /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PanelActive}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonActive}" />
+  </Style>
+  <Style Selector="Border.toolbar ComboBox">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="Border.info TextBlock.fieldLabel">
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <!-- Tools: a joined row of square buttons; the selected tool is light with a dark icon -->
@@ -98,7 +119,7 @@
     <Setter Property="Padding" Value="0" />
   </Style>
   <Style Selector="Border.tools > StackPanel">
-    <Setter Property="Spacing" Value="1" />
+    <Setter Property="Spacing" Value="4" />
   </Style>
   <Style Selector="ToggleButton.tool">
     <Setter Property="Width" Value="30" />
@@ -121,7 +142,7 @@
 
   <!-- Transport: joined square buttons; Play turns green while playing, Cycle gold when on, Record red -->
   <Style Selector="Button.transport, ToggleButton.transport">
-    <Setter Property="Width" Value="38" />
+    <Setter Property="Width" Value="32" />
     <Setter Property="Height" Value="32" />
     <Setter Property="MinHeight" Value="32" />
     <Setter Property="Padding" Value="0" />
@@ -205,7 +226,7 @@
   </Style>
   <Style Selector="Menu > MenuItem">
     <Setter Property="Foreground" Value="{DynamicResource HeaderText}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="11" />
   </Style>
 
   <!-- Tabs: dim text, the chosen one bright and underlined -->

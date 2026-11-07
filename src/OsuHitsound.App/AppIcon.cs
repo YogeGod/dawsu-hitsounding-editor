@@ -4,11 +4,13 @@ using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 
 namespace OsuHitsound.App;
 
 /// <summary>
-/// A Lucide icon from Icons.axaml ("Icon" + <see cref="Glyph"/>), drawn as a 24×24 outline scaled to <see cref="Size"/>
+/// A Studio icon asset, or a Lucide outline from Icons.axaml ("Icon" + <see cref="Glyph"/>), scaled to <see cref="Size"/>
 /// in the inherited text colour, so a button's foreground (normal, selected, disabled) colours its icon.
 /// </summary>
 public sealed class AppIcon : Control
@@ -20,6 +22,26 @@ public sealed class AppIcon : Control
     public string Glyph { get => GetValue(GlyphProperty); set => SetValue(GlyphProperty, value); }
     public double Size { get => GetValue(SizeProperty); set => SetValue(SizeProperty, value); }
     public IBrush? Foreground { get => GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
+
+    private static readonly Dictionary<string, IBrush?> StudioMasks = [];
+    private IBrush? studioMask;
+    private bool checkedStudioAsset;
+
+    private static IBrush? StudioMask(string glyph)
+    {
+        if (StudioMasks.TryGetValue(glyph, out var cached)) return cached;
+        var uri = new Uri($"avares://OsuHitsoundEditor/Assets/StudioIcons/{glyph}.png");
+        IBrush? mask = null;
+        if (AssetLoader.Exists(uri))
+        {
+            using var stream = AssetLoader.Open(uri);
+            mask = new ImageBrush(new Bitmap(stream)) { Stretch = Stretch.Fill };
+        }
+        StudioMasks[glyph] = mask;
+        return mask;
+    }
+
+    internal static bool HasStudioAsset(string glyph) => StudioMask(glyph) is not null;
 
     private Geometry? geometry; // looked up once per glyph
     private IPen? pen;          // rebuilt when the colour changes
@@ -47,7 +69,7 @@ public sealed class AppIcon : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == GlyphProperty) geometry = null;
+        if (change.Property == GlyphProperty) { geometry = null; studioMask = null; checkedStudioAsset = false; }
         else if (change.Property == ForegroundProperty) pen = null;
     }
 
@@ -56,6 +78,13 @@ public sealed class AppIcon : Control
     public override void Render(DrawingContext context)
     {
         if (Foreground is not { } brush) return;
+        if (!checkedStudioAsset) { studioMask = StudioMask(Glyph); checkedStudioAsset = true; }
+        if (studioMask is not null)
+        {
+            var bounds = new Rect(0, 0, Size, Size);
+            using (context.PushOpacityMask(studioMask, bounds)) context.FillRectangle(brush, bounds);
+            return;
+        }
         geometry ??= this.TryFindResource("Icon" + Glyph, out var found) ? found as Geometry : null;
         if (geometry is null) return;
         // Lucide's 2-unit stroke with round ends, scaled with the shape as in the SVGs.
