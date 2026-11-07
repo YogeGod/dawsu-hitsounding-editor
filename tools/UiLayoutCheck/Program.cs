@@ -107,6 +107,12 @@ var edge = lanes.TranslatePoint(new Point(oldWidth, lanes.HeaderHeight + 30), w)
 w.MouseMove(edge); w.MouseDown(edge, MouseButton.Left); w.MouseMove(edge + new Vector(80, 0)); w.MouseUp(edge + new Vector(80, 0), MouseButton.Left); Pump();
 Check(Math.Abs(ArrangeView.GridLeft - oldWidth - 80) < 1, "Dragging the boundary resizes the lane column");
 Check(Find<ScrollBar>("HScroll").Margin.Left == ArrangeView.GridLeft && Find<ScrollViewer>("VolumeControlScroller").Width == ArrangeView.GridLeft, "Timeline scrollbar and volume controller follow lane width");
+Check(UiTheme.Current.Get("list.width") == UiTheme.Parts.SelectMany(part => part.Settings).Single(s => s.Key == "list.width").Default, "Dragging the lane column leaves the theme's default width alone");
+// A press just inside the grid is a grid click, not a resize.
+var resized = ArrangeView.GridLeft;
+var inGrid = lanes.TranslatePoint(new Point(resized + 3, lanes.HeaderHeight + 30), w)!.Value;
+w.MouseMove(inGrid); w.MouseDown(inGrid, MouseButton.Left); w.MouseMove(inGrid + new Vector(60, 0)); w.MouseUp(inGrid + new Vector(60, 0), MouseButton.Left); Pump();
+Check(Math.Abs(ArrangeView.GridLeft - resized) < 0.5, "A press 3 px into the grid doesn't resize the lane column");
 Save("editor-lanes-resized.png");
 Click("FollowPlaybackButton");
 Check(Find<MenuItem>("FollowItem").IsChecked == (Find<ToggleButton>("FollowPlaybackButton").IsChecked == true), "Follow button and menu remain bound");

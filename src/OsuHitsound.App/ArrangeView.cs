@@ -48,7 +48,15 @@ internal sealed class ArrangeView : Control
 
     /// <summary>The column of drag handles (⠿) left of the lane names; the lane list's own width is themable.</summary>
     public const double NumberWidth = 24;
-    public static double ListWidth => NamesCollapsed ? Math.Min(CollapsedListWidth, Theme_.Number("list.width")) : Theme_.Number("list.width");
+    public static double ListWidth => NamesCollapsed ? Math.Min(CollapsedListWidth, ShownListWidth) : ShownListWidth;
+
+    /// <summary>
+    /// The lane list's width as the user dragged it (kept in the preferences, not the theme); null uses the theme's
+    /// width, which stays the default for everyone.
+    /// </summary>
+    public static double? UserListWidth { get; set; }
+
+    private static double ShownListWidth => UserListWidth ?? Theme_.Number("list.width");
 
     /// <summary>The lane list's ‹: only the sound icons and buttons are shown, the names hidden.</summary>
     public static bool NamesCollapsed { get; set; }
@@ -117,7 +125,11 @@ internal sealed class ArrangeView : Control
     private List<EditHit> dragHits = [];
     private LaneRow? paintRow;
     private double waveHeightAtStart;
-    public event Action? LaneListResized;
+    /// <summary>While the lane list is dragged wider or narrower (the views aligned to it follow) and when it's done.</summary>
+    public event Action? LaneListResizing, LaneListResized;
+
+    // The lane list's right edge: 4 px on the list side, under the header (where the list's own buttons sit).
+    private bool OnListEdge(Point p) => p.Y >= HeaderHeight && p.X >= GridLeft - 4 && p.X <= GridLeft;
     private double panLeft, panScroll;
     private (double Left, double Right) cycleAtStart; // the locators when a move or resize of the cycle range began
     public event Action<Lane, string>? SampleDropped;
@@ -1336,11 +1348,12 @@ internal sealed class ArrangeView : Control
     {
         Focus();
         var resizePoint = e.GetCurrentPoint(this);
-        if (resizePoint.Properties.IsLeftButtonPressed && Math.Abs(resizePoint.Position.X - GridLeft) <= 4)
+        if (resizePoint.Properties.IsLeftButtonPressed && OnListEdge(resizePoint.Position))
         {
             if (e.ClickCount == 2)
             {
-                Theme_.Reset("list.width");
+                UserListWidth = null; // back to the theme's width
+                InvalidateVisual();
                 LaneListResized?.Invoke();
             }
             else
@@ -1644,7 +1657,7 @@ internal sealed class ArrangeView : Control
     /// <summary>Shows the cursor for the tool at the pointer; the window calls it when Alt goes down or up.</summary>
     public void UpdateCursor(KeyModifiers modifiers)
     {
-        if (drag == Drag.ResizeList || drag == Drag.None && pointer is { } divider && Math.Abs(divider.X - GridLeft) <= 4)
+        if (drag == Drag.ResizeList || drag == Drag.None && pointer is { } divider && OnListEdge(divider))
         {
             Cursor = new Cursor(StandardCursorType.SizeWestEast);
             return;
@@ -1693,9 +1706,9 @@ internal sealed class ArrangeView : Control
             NamesCollapsed = false;
             double maximum = Math.Clamp(Bounds.Width - NumberWidth - 160, 160, 600);
             double width = Math.Clamp(pointer.Value.X - NumberWidth, 160, maximum);
-            Theme_.Set("list.width", width.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            InvalidateMeasure();
+            UserListWidth = width; // only this view and the controls aligned to it redraw, not the whole theme
             InvalidateVisual();
+            LaneListResizing?.Invoke();
             UpdateCursor(e.KeyModifiers);
             e.Handled = true;
             return;

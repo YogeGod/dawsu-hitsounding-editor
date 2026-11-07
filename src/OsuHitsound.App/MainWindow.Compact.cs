@@ -55,9 +55,11 @@ public partial class MainWindow
             SavePrefs();
         };
         ShowSelectionDetails();
+        Lanes.LaneListResizing += AlignToLaneList;
         Lanes.LaneListResized += () =>
         {
-            prefs = prefs with { LaneListWidth = UiTheme.Current.Number("list.width"), LaneNamesCollapsed = ArrangeView.NamesCollapsed };
+            AlignToLaneList();
+            prefs = prefs with { LaneListWidth = ArrangeView.UserListWidth, LaneNamesCollapsed = ArrangeView.NamesCollapsed };
             SavePrefs();
         };
         ControlBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();

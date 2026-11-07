@@ -74,8 +74,7 @@ public partial class MainWindow : Window
         SetupWorkflowFeedback();
         if (usePreferences && prefs.SongsFolder is null) prefs = prefs with { SongsFolder = Preferences.FindSongsFolder() };
         ArrangeView.NamesCollapsed = prefs.LaneNamesCollapsed;
-        if (prefs.LaneListWidth is { } listWidth && double.IsFinite(listWidth))
-            UiTheme.Current.Set("list.width", Math.Clamp(listWidth, 160, 600).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        ArrangeView.UserListWidth = prefs.LaneListWidth is { } listWidth && double.IsFinite(listWidth) ? Math.Clamp(listWidth, 160, 600) : null;
         skin = NewSkin();
         if (startAudio) StartAudio();
         ApplyWindowPlacement();
@@ -1338,6 +1337,16 @@ public partial class MainWindow : Window
             WindowRoot.Margin = WindowState == WindowState.Maximized ? OffScreenMargin : default;
     }
 
+    /// <summary>The controls lined up with the lane list's right edge: the scrollbar, filter, drum toggle and volume panel.</summary>
+    private void AlignToLaneList()
+    {
+        HScroll.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
+        LaneFilterBox.Width = ArrangeView.GridLeft - 16;
+        DrumMapToggle.Margin = new Avalonia.Thickness(ArrangeView.GridLeft - 96, 0, 0, 0);
+        VolumeControlScroller.Width = ArrangeView.GridLeft;
+        Volume.InvalidateVisual();
+    }
+
     /// <summary>Applies the theme to the window's bars and controls and redraws the drawn parts.</summary>
     private void ApplyTheme()
     {
@@ -1357,10 +1366,7 @@ public partial class MainWindow : Window
         bool showVolume = VolumeToggle.IsChecked == true;
         BottomPanel.IsVisible = showVolume;
 
-        HScroll.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
-        LaneFilterBox.Width = ArrangeView.GridLeft - 16;
-        DrumMapToggle.Margin = new Avalonia.Thickness(ArrangeView.GridLeft - 96, 0, 0, 0);
-        VolumeControlScroller.Width = ArrangeView.GridLeft;
+        AlignToLaneList();
         UpdateVolumePanelHeight();
 
         Lanes.ScrollY = Lanes.ScrollY;
