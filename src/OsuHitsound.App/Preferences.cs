@@ -49,7 +49,7 @@ internal sealed record Preferences
     /// <summary>Preset name → command id → the user's keys for it (see <see cref="Keymap.Format"/>), kept apart per preset.</summary>
     public Dictionary<string, Dictionary<string, List<string>>> KeyOverrides { get; init; } = [];
 
-    /// <summary>How dragging snaps (Grid or Grid relative).</summary>
+    /// <summary>How editing snaps: Grid, Grid relative, or Objects.</summary>
     public SnapMode SnapMode { get; init; } = SnapMode.Grid;
 
     /// <summary>The strength Q quantizes with, in %.</summary>
@@ -57,7 +57,7 @@ internal sealed record Preferences
 
     /// <summary>View → Colour by Volume instead of by lane.</summary>
 
-    /// <summary>Audition each newly drawn note, including notes painted while dragging.</summary>
+    /// <summary>Audition drawn notes and notes moved between lanes.</summary>
     public bool AuditionOnPlacement { get; init; } = true;
 
     /// <summary>The inspector on the left: shown, its width, its cards top to bottom and the folded ones.</summary>

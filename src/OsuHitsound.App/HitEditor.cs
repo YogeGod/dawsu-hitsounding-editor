@@ -10,11 +10,12 @@ internal enum VolumeScope
     All,
 }
 
-/// <summary>How dragging snaps: to grid lines, or by whole grid steps keeping each hit's offset from its line.</summary>
+/// <summary>Snap to grid lines, relative grid steps, or gameplay object moments.</summary>
 internal enum SnapMode
 {
     Grid,
     GridRelative,
+    Objects,
 }
 
 /// <summary>A time range (start before end, the end excluded) over some lanes, marked with the Range tool.</summary>
@@ -41,6 +42,7 @@ internal sealed class HitEditor
 
     /// <summary>Raised when the selection changes through a command.</summary>
     public event Action? Changed;
+    public event Action<IReadOnlyList<EditHit>>? LaneMovePreviewRequested;
 
     /// <summary>The open map; changing it empties the selection (the clipboard is kept, to paste into another map).</summary>
     public ArrangeModel? Model
@@ -65,7 +67,18 @@ internal sealed class HitEditor
 
     private EditSession? Session => model?.Session;
 
-    public double SnapTime(double time) => SnapOn && model is { } m ? m.Snap(time, Spacing) : time;
+    public double SnapTime(double time)
+    {
+        if (!SnapOn || model is not { } m) return time;
+        if (SnapMode != SnapMode.Objects) return m.Snap(time, Spacing);
+        var moments = m.Session.Moments;
+        if (moments.Count == 0) return time;
+        int next = Sorted.LowerBound(moments, time, x => x.Moment.Time);
+        if (next == 0) return moments[0].Moment.Time;
+        if (next == moments.Count) return moments[^1].Moment.Time;
+        double before = moments[next - 1].Moment.Time, after = moments[next].Moment.Time;
+        return time - before <= after - time ? before : after;
+    }
 
     /// <summary>
     /// The snapped offset for dragging a hit at <paramref name="time"/> by <paramref name="raw"/> ms: to a grid line, or with
@@ -128,6 +141,7 @@ internal sealed class HitEditor
         var anchor = Selected.MinBy(h => h.Time)!;
         double offset;
         if (fine) offset = direction;
+        else if (SnapOn && SnapMode == SnapMode.Objects) offset = GridStep(anchor.Time, direction) - anchor.Time;
         else
         {
             double step = StepAt(anchor.Time);
@@ -143,6 +157,14 @@ internal sealed class HitEditor
     public double GridStep(double time, int direction)
     {
         if (model is null) return time;
+        if (SnapMode == SnapMode.Objects)
+        {
+            var moments = model.Session.Moments;
+            int next = Sorted.LowerBound(moments, time, x => x.Moment.Time);
+            if (direction < 0) return next > 0 ? moments[next - 1].Moment.Time : time;
+            while (next < moments.Count && moments[next].Moment.Time <= time) next++;
+            return next < moments.Count ? moments[next].Moment.Time : time;
+        }
         double step = StepAt(time);
         double target = Spacing.IsLong ? model.AdjacentLongSnap(time, direction, Spacing) : model.Snap(time + direction * step * 0.51, Spacing);
         return Math.Max(0, Math.Abs(target - time) < 1e-6 ? time + direction * step : target);
@@ -201,7 +223,12 @@ internal sealed class HitEditor
     /// <summary>Moves the selection to the adjacent visible lane.</summary>
     public void ShiftLanes(int direction)
     {
-        if (model is { } m) Move(0, h => ShiftLane(m, h.Lane, direction), "Move to lane");
+        if (model is not { } m) return;
+        var destinations = Selected.Where(h => ShiftLane(m, h.Lane, direction) != h.Lane)
+            .Select(h => ShiftLane(m, h.Lane, direction)).ToHashSet();
+        Move(0, h => ShiftLane(m, h.Lane, direction), "Move to lane");
+        var moved = Selected.Where(h => destinations.Contains(h.Lane)).DistinctBy(h => h.Lane).ToList();
+        if (moved.Count > 0) LaneMovePreviewRequested?.Invoke(moved);
     }
 
     public void Copy()

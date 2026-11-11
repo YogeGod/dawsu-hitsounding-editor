@@ -504,6 +504,7 @@ public partial class KeysoundEditor : UserControl
         set
         {
             InfoBarLeft.IsVisible = !value;
+            SelectionBarLayout.Apply(SelectionBarContent, SelectionDisclosure, value, 36);
             SelectionDisclosureIcon.Glyph = value ? "ChevronDown" : "ChevronUp";
             string label = value ? "Expand selection details" : "Collapse selection details";
             ToolTip.SetTip(SelectionDisclosure, label);

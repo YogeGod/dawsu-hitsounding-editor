@@ -8,11 +8,12 @@ namespace OsuHitsound.App.Tests;
 public class HitEditorTests
 {
     // 120 BPM (500 ms beats), so a 1/4 snap step is 125 ms. Circles at 1000 (clap) and 1500.
-    private static HitEditor Editor(string timing = "0,500,4,2,0,100,1,0")
+    private static HitEditor Editor(string timing = "0,500,4,2,0,100,1,0", string? objects = null)
     {
         var text = "osu file format v14\r\n\r\n[General]\r\nAudioFilename: song.mp3\r\nSampleSet: Soft\r\n\r\n" +
                    "[Difficulty]\r\nSliderMultiplier:1.4\r\nSliderTickRate:1\r\n\r\n" +
-                   $"[TimingPoints]\r\n{timing.Replace("\n", "\r\n")}\r\n\r\n[HitObjects]\r\n256,192,1000,1,8,0:0:0:0:\r\n256,192,1500,1,0,0:0:0:0:\r\n";
+                   $"[TimingPoints]\r\n{timing.Replace("\n", "\r\n")}\r\n\r\n[HitObjects]\r\n" +
+                   (objects ?? "256,192,1000,1,8,0:0:0:0:\r\n256,192,1500,1,0,0:0:0:0:\r\n");
         var file = OsuFile.Parse(Encoding.UTF8.GetBytes(text));
         var map = Decompiler.Decompile(file, new MapFolder([]));
         var session = new EditSession(file, new MapFolder([]), map);
@@ -22,6 +23,76 @@ public class HitEditorTests
     private static EditSession Session(HitEditor e) => e.Model!.Session;
 
     private static EditHit Clap(HitEditor e) => Session(e).State.Hits.Single(h => h.Lane.Name == "soft-hitclap");
+
+    [Theory]
+    [InlineData(0, 1000)]
+    [InlineData(1200, 1000)]
+    [InlineData(1250, 1000)]
+    [InlineData(1300, 1500)]
+    [InlineData(9000, 1500)]
+    public void Objects_snap_to_nearest_gameplay_moment(double time, double expected)
+    {
+        var e = Editor();
+        e.SnapMode = SnapMode.Objects;
+        Assert.Equal(expected, e.SnapTime(time));
+        Assert.Equal(expected - 1000, e.SnapOffset(1000, time - 1000));
+        e.SnapOn = false;
+        Assert.Equal(time, e.SnapTime(time));
+        Assert.Equal(time - 1000, e.SnapOffset(1000, time - 1000));
+    }
+
+    [Fact]
+    public void Objects_snap_includes_off_grid_slider_nodes_and_spinner_end()
+    {
+        var e = Editor(objects: "256,192,1103,2,0,L|396:192,2,140\r\n256,192,2300,8,0,2707,0:0:0:0:\r\n");
+        e.SnapMode = SnapMode.Objects;
+        Assert.Equal(1103, e.SnapTime(1110));
+        Assert.Equal(1603, e.SnapTime(1610));
+        Assert.Equal(2103, e.SnapTime(2110));
+        Assert.Equal(2707, e.SnapTime(2710));
+    }
+
+    [Fact]
+    public void Objects_snap_with_no_objects_keeps_the_requested_time()
+    {
+        var e = Editor(objects: "");
+        e.SnapMode = SnapMode.Objects;
+        Assert.Equal(1234, e.SnapTime(1234));
+    }
+
+    [Fact]
+    public void Objects_nudge_steps_between_objects_and_stops_at_the_ends()
+    {
+        var e = Editor();
+        e.SnapMode = SnapMode.Objects;
+        e.Select([Clap(e)]);
+        e.Nudge(1, false, false);
+        Assert.Equal(1500, Assert.Single(e.Selected).Time);
+        e.Nudge(1, false, false);
+        Assert.Equal(1500, Assert.Single(e.Selected).Time);
+        e.Nudge(-1, false, false);
+        Assert.Equal(1000, Assert.Single(e.Selected).Time);
+        e.Nudge(-1, false, false);
+        Assert.Equal(1000, Assert.Single(e.Selected).Time);
+    }
+
+    [Fact]
+    public void Lane_moves_request_the_destination_sample_and_clamped_moves_are_silent()
+    {
+        var e = Editor();
+        var previews = new List<EditHit>();
+        e.LaneMovePreviewRequested += hits => previews.AddRange(hits);
+        e.Select([Clap(e)]);
+        e.ShiftLanes(1);
+        Assert.Equal(Assert.Single(e.Selected), Assert.Single(previews));
+        e.ShiftLanes(-1);
+        Assert.Equal(2, previews.Count);
+        Assert.Equal(Clap(e).Lane, previews[^1].Lane);
+        var lastLane = e.Model!.Rows.OfType<LaneRow>().Last().Lane;
+        e.Select([Session(e).HitAt(lastLane, 1000)]);
+        e.ShiftLanes(1);
+        Assert.Equal(2, previews.Count);
+    }
 
     [Fact]
     public void Paste_lands_snapped_keeps_offsets_and_selects_what_was_pasted()

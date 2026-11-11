@@ -143,11 +143,11 @@ public partial class MainWindow : Window
         };
         Lanes.Edits.SnapMode = prefs.SnapMode;
         Lanes.Edits.QuantizeStrength = prefs.QuantizeStrength;
-        SnapModeBox.ItemsSource = new[] { "Grid", "Grid relative" };
+        SnapModeBox.ItemsSource = new[] { "Grid", "Grid relative", "Objects" };
         SnapModeBox.SelectedIndex = (int)prefs.SnapMode;
         SnapModeBox.SelectionChanged += (_, _) =>
         {
-            Lanes.Edits.SnapMode = SnapModeBox.SelectedIndex == 1 ? SnapMode.GridRelative : SnapMode.Grid;
+            Lanes.Edits.SnapMode = SnapModeBox.SelectedIndex is >= 0 and <= 2 ? (SnapMode)SnapModeBox.SelectedIndex : SnapMode.Grid;
             UpdateStatus();
         };
         Lanes.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(SnapOptions,
@@ -1421,7 +1421,7 @@ public partial class MainWindow : Window
         EditBarContent.Width = Math.Max(EditBarContent.MinWidth, width - 24);
         StatusBarContent.Width = Math.Max(StatusBarContent.MinWidth, width - 24);
         ControlBarContent.MinHeight = t.Number("control.height") - 8;
-        EditBarContent.MinHeight = SelectionBarCollapsed ? 28 : t.Number("edit.height") - 4;
+        SelectionBarLayout.Apply(EditBarContent, SelectionDisclosure, SelectionBarCollapsed, t.Number("edit.height") - 4);
         StatusBarContent.Height = t.Number("status.height") - 1;
         Root.RowDefinitions[1].Height = GridLength.Auto;
         Root.RowDefinitions[2].Height = GridLength.Auto;
@@ -1615,7 +1615,8 @@ public partial class MainWindow : Window
 
         Volume.SelectedMoments = Lanes.SelectedMoments;
         Volume.InvalidateVisual();
-        string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap {Lanes.Spacing}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}" : ", snap off")}";
+        string snap = Lanes.Edits.SnapMode == SnapMode.Objects ? "objects" : $"{Lanes.Spacing}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}";
+        string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap {snap}" : ", snap off")}";
         string selection = Lanes.Selection.Count switch
         {
             0 => "",

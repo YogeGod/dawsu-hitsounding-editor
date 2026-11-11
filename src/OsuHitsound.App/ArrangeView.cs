@@ -169,6 +169,7 @@ internal sealed class ArrangeView : Control
         AddHandler(DragDrop.DragOverEvent, SampleDragOver);
         AddHandler(DragDrop.DropEvent, SampleDrop);
         Focusable = true;
+        Edits.LaneMovePreviewRequested += PreviewLaneMove;
         Edits.Changed += () =>
         {
             SelectionChanged?.Invoke();
@@ -285,6 +286,12 @@ internal sealed class ArrangeView : Control
 
     public bool AuditionOnPlacement { get; set; } = true;
     public event Action<EditHit>? PlacementPreviewRequested;
+    internal void PreviewLaneMove(IReadOnlyList<EditHit> hits)
+    {
+        if (AuditionOnPlacement) HitsPreviewRequested?.Invoke(hits);
+    }
+
+    private Lane? dragPreviewLane;
     public event Action? LaneLayoutChanged;
 
     internal void PlaceHit(Lane lane, double time)
@@ -1667,6 +1674,7 @@ internal sealed class ArrangeView : Control
                 {
                     drag = Drag.Move;
                     dragAnchor = under;
+                    dragPreviewLane = under.Lane;
                     dragHits = [.. selection];
                     session.BeginGesture("Move");
                 }
@@ -1809,9 +1817,16 @@ internal sealed class ArrangeView : Control
                 // The grabbed hit snaps; the others keep their offsets to it. Rows move by whole visible lanes.
                 double offset = Edits.SnapOffset(dragAnchor.Time, Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft));
                 int rowShift = RowIndexAt(p.Y) - RowIndexAt(dragStart.Y);
+                Lane Destination(EditHit h) => model.DrumMapMode ? model.ShiftDrumLane(h.Lane, rowShift, h.Lane == dragAnchor.Lane ? RowIndexAt(dragStart.Y) : null) : HitEditor.ShiftLane(model, h.Lane, rowShift);
                 session.ResetToGestureStart();
                 selection.Clear();
-                selection.UnionWith(session.Move(dragHits, offset, h => model.DrumMapMode ? model.ShiftDrumLane(h.Lane, rowShift, h.Lane == dragAnchor.Lane ? RowIndexAt(dragStart.Y) : null) : HitEditor.ShiftLane(model, h.Lane, rowShift)));
+                selection.UnionWith(session.Move(dragHits, offset, Destination));
+                var destination = Destination(dragAnchor);
+                if (destination != dragPreviewLane)
+                {
+                    dragPreviewLane = destination;
+                    PreviewLaneMove(selection.DistinctBy(h => h.Lane).ToList());
+                }
                 break;
             }
 

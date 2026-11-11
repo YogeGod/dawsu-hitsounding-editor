@@ -10,6 +10,14 @@ public class PreferencesAndHelpTests : IDisposable
     public void Dispose() => Directory.Delete(dir, recursive: true);
 
     [Fact]
+    public void Objects_snap_mode_is_remembered()
+    {
+        var path = Path.Combine(dir, "objects-snap.json");
+        new Preferences { SnapMode = SnapMode.Objects }.Save(path);
+        Assert.Equal(SnapMode.Objects, Preferences.Load(path).SnapMode);
+    }
+
+    [Fact]
     public void Preferences_round_trip()
     {
         var path = Path.Combine(dir, "sub", "preferences.json");

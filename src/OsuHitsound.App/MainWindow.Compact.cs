@@ -15,8 +15,8 @@ public partial class MainWindow
         Icon(OpenButton, "FolderOpen", "Open a map (Ctrl+O)");
         Icon(SaveButton, "Save", "Save .osu (Ctrl+S)");
         Icon(HsModeButton, "CirclePlus", "HS mode: create circles when placing sounds");
-        Icon(SnapToggle, "Magnet", "Snap to the beat grid (J)");
-        Icon(AuditionPlacementButton, "Headphones", "Audition newly drawn hits");
+        Icon(SnapToggle, "Magnet", "Snap to grid or objects (J)");
+        Icon(AuditionPlacementButton, "Headphones", "Audition drawn hits and lane moves");
         Icon(InspectorToggle, "PanelLeft", "Show inspector");
         Icon(LaneDetailsToggle, "Info", "Show sample indexes");
         Icon(UsedLanesToggle, "ListFilter", "Show only lanes with hits");
@@ -32,7 +32,7 @@ public partial class MainWindow
         Icon(TripletSnapToggle, "Triplet", "Triplet snap cycling");
         foreach (var (control, name) in new (Control, string)[]
         {
-            (SnapModeBox, "Grid mode"), (SnapBox, "Beat division"), (ZoomSlider, "Timeline zoom"),
+            (SnapModeBox, "Snap mode"), (SnapBox, "Beat division"), (ZoomSlider, "Timeline zoom"),
             (GlobalVolumeSlider, "Global volume"), (SongVolumeSlider, "Song volume"),
             (SongOffsetBox, "Song offset in milliseconds"), (LeftLocatorBox, "Left loop locator in milliseconds"),
             (RightLocatorBox, "Right loop locator in milliseconds"),

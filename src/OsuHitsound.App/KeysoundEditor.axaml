@@ -66,7 +66,7 @@
 
     <!-- Selection bar: the selected notes, laid out as the Hitsound editor's selection bar. -->
     <Border Grid.Row="1" Grid.ColumnSpan="3" Classes="info" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,*" Margin="8,2" MinHeight="36">
+      <Grid Name="SelectionBarContent" ColumnDefinitions="Auto,*" Margin="8,2" MinHeight="36">
         <Button Name="SelectionDisclosure" Classes="icon flat" VerticalAlignment="Top" Margin="0,4,8,0"
                 AutomationProperties.Name="Collapse selection details" ToolTip.Tip="Collapse selection details">
           <app:AppIcon Name="SelectionDisclosureIcon" Glyph="ChevronUp" />
