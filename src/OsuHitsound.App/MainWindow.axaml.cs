@@ -104,7 +104,7 @@ public partial class MainWindow : Window
             prefs = prefs with { AuditionOnPlacement = Lanes.AuditionOnPlacement };
             SavePrefs();
         };
-        Lanes.PlacementPreviewRequested += hit => audio?.Preview(hit.Lane, (session?.VolumeOf(hit) ?? 100) / 100f);
+        Lanes.PlacementPreviewRequested += hit => audio?.Preview(hit.Lane, AuditionGain(hit, session?.VolumeOf(hit) ?? 100));
         Lanes.LaneListPreviewRequested += lane =>
         {
             if (audio is null) return;
@@ -125,7 +125,7 @@ public partial class MainWindow : Window
         Lanes.SeekRequested += Seek;
         Lanes.HitsPreviewRequested += hits =>
         {
-            foreach (var hit in hits) audio?.Preview(hit.Lane, (session?.VolumeOf(hit) ?? 100) / 100f);
+            foreach (var hit in hits) audio?.Preview(hit.Lane, AuditionGain(hit, session?.VolumeOf(hit) ?? 100));
         };
         Lanes.SelectionChanged += UpdateStatus;
         Lanes.SizeChanged += (_, _) => SyncScrollBars();
@@ -826,10 +826,14 @@ public partial class MainWindow : Window
         RefreshDrumVstRouting();
     }
 
+    /// <summary>How loud a hit is when heard: map hits use osu!stable's 8% floor, and a sound-set layer keeps its exact gain.</summary>
+    internal static float AuditionGain(EditHit hit, int volume) => hit.SetPlacement == Guid.Empty
+        ? HitScheduler.HitCue(hit.Time, hit.Lane, volume).Volume
+        : Math.Clamp(volume, 0, 100) / 100f;
+
     internal static IEnumerable<Cue> PlaybackCues(ArrangeModel model) =>
-        model.Session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h => h.SetPlacement == Guid.Empty
-            ? HitScheduler.HitCue(h.Time, h.Lane, model.Session.VolumeOf(h))
-            : new Cue(h.Time, h.Lane, Math.Clamp(model.Session.VolumeOf(h), 0, 100) / 100f))
+        model.Session.State.Hits.Where(h => !model.IsPreviewMuted(h)).Select(h =>
+            new Cue(h.Time, h.Lane, AuditionGain(h, model.Session.VolumeOf(h))))
         .Concat(HitScheduler.PassiveCues(model.Session.Map));
 
     /// <summary>Sets the locators from their boxes; a box that isn't a number goes back to the locator as it was.</summary>

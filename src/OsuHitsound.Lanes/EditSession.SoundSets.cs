@@ -78,7 +78,7 @@ public sealed partial class EditSession
     {
         var placement = state.SoundPlacements.FirstOrDefault(p => p.Id == placementId);
         if (placement is null) return state;
-        var moved = state.Hits.Where(h => h.SetPlacement == placementId).ToDictionary(h => h, h => HitAt(h.Lane, placement.Time) with
+        var moved = state.Hits.Where(h => h.SetPlacement == placementId).ToDictionary(h => h, h => HitAt(h.Lane, placement.Time, h.Anchor) with
         { Voice = h.Voice, SetPlacement = h.SetPlacement, SetMember = h.SetMember });
         return RenderSoundSets(state with { Hits = state.Hits.Select(h => moved.GetValueOrDefault(h, h)).ToImmutableList(),
             LayerVolumes = state.LayerVolumes.ToImmutableDictionary(v => moved.GetValueOrDefault(v.Key, v.Key), v => v.Value),
@@ -99,7 +99,7 @@ public sealed partial class EditSession
         IReadOnlyList<EditHit> placed = [];
         Change("Paste sound sets", state =>
         {
-            var next = PlaceLayers(state, source.Select(p => (HitAt(p.Hit.Lane, p.Hit.Time + offset) with
+            var next = PlaceLayers(state, source.Select(p => (HitAt(p.Hit.Lane, p.Hit.Time + offset, p.Hit.Anchor) with
                 { Voice = p.Hit.Voice, SetPlacement = copies.GetValueOrDefault(p.Hit.SetPlacement)?.Id ?? Guid.Empty, SetMember = copies.ContainsKey(p.Hit.SetPlacement) ? p.Hit.SetMember : Guid.Empty },
                 Volume: copies.ContainsKey(p.Hit.SetPlacement) || state.HsMode ? (int?)p.Volume : null)), [], out placed);
             return RenderSoundSets(next with { SoundPlacements = next.SoundPlacements.AddRange(copies.Values) });
@@ -134,7 +134,7 @@ public sealed partial class EditSession
                     local = local with { Volume = (int)Math.Round(level * 100.0 / Math.Max(1, placement.Gain)) };
                     overrides = overrides.SetItem(member.Id, local); hits.Remove(present); layers.Remove(present);
                 }
-                var hit = HitAt(local.Lane ?? member.Lane, before?.Time ?? placement.Time) with { SetPlacement = placement.Id, SetMember = member.Id, Voice = before?.Voice ?? 0 };
+                var hit = HitAt(local.Lane ?? member.Lane, before?.Time ?? placement.Time, before?.Anchor) with { SetPlacement = placement.Id, SetMember = member.Id, Voice = before?.Voice ?? 0 };
                 hits.Add(hit); layers[hit] = Math.Clamp((int)Math.Round((local.Volume ?? member.Volume) * placement.Gain / 100.0), 0, 100);
             }
             placements[i] = placement with { Overrides = overrides };

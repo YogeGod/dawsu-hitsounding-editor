@@ -15,11 +15,14 @@ public partial class MainWindow
     // The map as opened or last reloaded, after its project was restored: what unsaved edits are measured against.
     // (The session's own first state comes before the project's hits and HS mode are restored, so it can't serve.)
     private EditState? liveBaseline;
+    // Bytes the user chose to keep editing over. A later write of the same bytes must not ask again.
+    private byte[]? declinedMapBytes;
 
     /// <summary>Called when a map has opened: watches its file and remembers the state edits are measured against.</summary>
     private void WatchMapFile(string path)
     {
         liveBaseline = session?.State;
+        declinedMapBytes = null;
         StopWatchingMap();
         try
         {
@@ -66,13 +69,14 @@ public partial class MainWindow
         byte[] now;
         try { now = await File.ReadAllBytesAsync(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { ScheduleMapCheck(); return; } // still being written
-        if (now.Length == 0 || now.AsSpan().SequenceEqual(document.Opened) || !ReferenceEquals(doc, document)) return;
+        if (SkipMapReload(now, document.Opened, declinedMapBytes) || !ReferenceEquals(doc, document)) return;
 
         var diff = editing.IsEdited && liveBaseline is { } baseline ? LiveReloadMerge.Between(editing, baseline) : null;
         if (diff is { OtherEdits: true } && !await Dialogs.Confirm(this, "Map changed in osu!",
                 $"{Path.GetFileName(path)} was saved by another program. Your unsaved hits and volumes are kept when it reloads, " +
                 "but your unsaved slide, sound-set, bookmark or HS-mode edits would be lost. Reload now?", "Reload now", "Keep editing"))
         {
+            declinedMapBytes = now;
             flash = $"{Path.GetFileName(path)} changed in osu!. Save or undo your edits here, or reopen it to see osu!'s version.";
             UpdateStatus();
             return;
@@ -102,6 +106,10 @@ public partial class MainWindow
         SyncScrollBars();
         return true;
     }
+
+    /// <summary>An empty write, the bytes already open, or a save the user chose to keep editing over.</summary>
+    internal static bool SkipMapReload(ReadOnlySpan<byte> now, ReadOnlySpan<byte> opened, byte[]? declined) =>
+        now.IsEmpty || now.SequenceEqual(opened) || (declined is { Length: > 0 } kept && now.SequenceEqual(kept));
 
     private void StopWatchingMap()
     {

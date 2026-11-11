@@ -62,7 +62,23 @@ internal sealed class HitEditor
 
     public bool ProtectHitnormals { get; set; }
 
-    private bool CanDelete(EditHit hit) => !ProtectHitnormals || hit.Lane.Sample is not { Sound: "hitnormal" };
+    /// <summary>False for a hitnormal while <see cref="ProtectHitnormals"/> is on.</summary>
+    public bool CanDelete(EditHit hit) => !ProtectHitnormals || hit.Lane.Sample is not { Sound: "hitnormal" };
+
+    /// <summary>
+    /// Removes every hit on <paramref name="lane"/> that <see cref="CanDelete"/> allows.
+    /// False when a protected hitnormal is still on the lane, so the lane stays visible.
+    /// </summary>
+    public bool DeleteLane(Lane lane)
+    {
+        if (Session is not { } session) return false;
+        var onLane = session.State.Hits.Where(h => h.Lane == lane).ToList();
+        var removed = onLane.Where(CanDelete).ToList();
+        if (removed.Count == 0) return onLane.Count == 0;
+        session.Remove(removed, "Delete lane");
+        if (Selected.Overlaps(removed)) Select(Selected.Except(removed));
+        return removed.Count == onLane.Count;
+    }
 
     public SnapMode SnapMode { get; set; } = SnapMode.Grid;
 

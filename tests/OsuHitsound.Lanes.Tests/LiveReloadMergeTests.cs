@@ -99,4 +99,53 @@ public class LiveReloadMergeTests
         Assert.True(diff.IsEmpty);
         Assert.True(diff.OtherEdits); // a bookmark isn't carried: the caller asks before reloading
     }
+
+    [Fact]
+    public void A_deletion_follows_an_object_osu_moved_by_under_2_ms()
+    {
+        var old = Load("256,192,1000,1,8,0:0:0:0:");
+        var baseline = old.State;
+        old.Remove(old.State.Hits.Where(h => h.Lane == Clap).ToList());
+        var reloaded = Load("256,192,1001.5,1,8,0:0:0:0:");
+        LiveReloadMerge.Apply(reloaded, LiveReloadMerge.Between(old, baseline));
+        Assert.DoesNotContain(reloaded.State.Hits, h => h.Lane == Clap);
+        Assert.Contains(reloaded.State.Hits, h => h.Lane == Normal);
+    }
+
+    [Fact]
+    public void A_layer_volume_follows_an_object_osu_moved_by_under_2_ms()
+    {
+        var old = Load("256,192,1000,1,8,0:0:0:0:");
+        var baseline = old.State;
+        var clap = old.State.Hits.Single(h => h.Lane == Clap);
+        old.SetLayerVolumes(new Dictionary<EditHit, int> { [clap] = 40 });
+        var reloaded = Load("256,192,1001.5,1,8,0:0:0:0:");
+        LiveReloadMerge.Apply(reloaded, LiveReloadMerge.Between(old, baseline));
+        Assert.Equal(40, reloaded.VolumeOf(reloaded.State.Hits.Single(h => h.Lane == Clap)));
+    }
+
+    [Fact]
+    public void The_nearer_of_two_close_hits_is_the_one_removed()
+    {
+        var old = Load("256,192,1000,1,8,0:0:0:0:\n256,192,1000.8,1,8,0:0:0:0:");
+        var baseline = old.State;
+        var later = old.State.Hits.Single(h => h.Lane == Clap && h.Time == 1000.8);
+        old.Remove([later]);
+        var reloaded = Load("256,192,1000,1,8,0:0:0:0:\n256,192,1000.8,1,8,0:0:0:0:");
+        LiveReloadMerge.Apply(reloaded, LiveReloadMerge.Between(old, baseline));
+        Assert.Contains(reloaded.State.Hits, h => h.Lane == Clap && h.Time == 1000);
+        Assert.DoesNotContain(reloaded.State.Hits, h => h.Lane == Clap && Math.Abs(h.Time - 1000.8) < 0.01);
+    }
+
+    [Fact]
+    public void A_volume_edit_stays_on_the_same_one_of_two_stacked_objects()
+    {
+        var old = Load("256,192,1000,1,0,0:0:0:0:\n256,192,1000,1,0,0:0:0:0:");
+        var baseline = old.State;
+        old.SetVolume([old.Moments[0].Key], 40);
+        var reloaded = Load("256,192,1000,1,0,0:0:0:0:\n256,192,1000,1,0,0:0:0:0:");
+        LiveReloadMerge.Apply(reloaded, LiveReloadMerge.Between(old, baseline));
+        Assert.Equal(40, reloaded.State.Volumes[reloaded.Moments[0].Key]);
+        Assert.Equal(100, reloaded.State.Volumes[reloaded.Moments[1].Key]);
+    }
 }

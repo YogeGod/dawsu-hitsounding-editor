@@ -18,7 +18,7 @@ public static class LiveReloadMerge
     public sealed record Diff(
         IReadOnlyList<HitKey> Removed,
         IReadOnlyList<HitKey> Added,
-        IReadOnlyList<(double Time, int Volume)> MomentVolumes,
+        IReadOnlyList<(double Time, int Ordinal, int Volume)> MomentVolumes,
         IReadOnlyList<(HitKey Hit, int Volume)> LayerVolumes,
         bool OtherEdits)
     {
@@ -32,9 +32,16 @@ public static class LiveReloadMerge
         var before = baseline.Hits.Select(HitKey.Of).ToHashSet();
         var now = current.Hits.Select(HitKey.Of).ToHashSet();
         var moments = session.MomentByKey;
+        var ordinal = new Dictionary<MomentKey, int>();
+        foreach (var group in session.Moments.GroupBy(m => m.Moment.Time))
+        {
+            int index = 0;
+            foreach (var moment in group) ordinal[moment.Key] = index++;
+        }
         var volumes = current.Volumes
             .Where(kv => (!baseline.Volumes.TryGetValue(kv.Key, out int old) || old != kv.Value) && moments.ContainsKey(kv.Key))
-            .Select(kv => (moments[kv.Key].Time, kv.Value)).OrderBy(v => v.Time).ToList();
+            .Select(kv => (Time: moments[kv.Key].Time, Ordinal: ordinal.GetValueOrDefault(kv.Key), Volume: kv.Value))
+            .OrderBy(v => v.Time).ThenBy(v => v.Ordinal).ToList();
         var layers = current.LayerVolumes
             .Where(kv => !baseline.LayerVolumes.TryGetValue(kv.Key, out int old) || old != kv.Value)
             .Select(kv => (HitKey.Of(kv.Key), kv.Value)).ToList();
@@ -59,12 +66,22 @@ public static class LiveReloadMerge
     public static Result Apply(EditSession session, Diff diff)
     {
         if (diff.IsEmpty) return new(0, 0);
-        const double Near = 1;
-        // The session's hits by lane and voice, so each edit looks through its own lane's few hits, not every hit.
+        // Nearest hit in the lane within the same 2 ms window editing uses.
         Func<HitKey, EditHit?> Finder()
         {
             var byLane = session.State.Hits.ToLookup(h => (h.Lane, h.Voice));
-            return key => byLane[(key.Lane, key.Voice)].FirstOrDefault(h => Math.Abs(h.Time - key.Time) < Near);
+            return key =>
+            {
+                EditHit? best = null;
+                double bestDistance = double.MaxValue;
+                foreach (var hit in byLane[(key.Lane, key.Voice)])
+                {
+                    double distance = Math.Abs(hit.Time - key.Time);
+                    if (distance <= EditSession.AnchorTolerance && distance < bestDistance)
+                        (best, bestDistance) = (hit, distance);
+                }
+                return best;
+            };
         }
         session.BeginGesture("Keep unsaved edits");
         try
@@ -73,8 +90,8 @@ public static class LiveReloadMerge
             var added = diff.Added.Select(k => session.HitAt(k.Lane, k.Time) with { Voice = k.Voice }).ToList();
             session.Add(added);
             var volumes = new Dictionary<MomentKey, int>();
-            foreach (var (time, volume) in diff.MomentVolumes)
-                if (session.MomentAt(time) is { } key) volumes[key] = volume;
+            foreach (var (time, ordinalAtTime, volume) in diff.MomentVolumes)
+                if (MomentFor(session, time, ordinalAtTime) is { } key) volumes[key] = volume;
             if (volumes.Count > 0) session.SetVolumes(volumes);
             var find = Finder(); // after the additions, which may be the hits whose layers changed
             var layers = diff.LayerVolumes.Select(l => (Hit: find(l.Hit), l.Volume)).Where(l => l.Hit is not null).ToDictionary(l => l.Hit!, l => l.Volume);
@@ -83,5 +100,19 @@ public static class LiveReloadMerge
                 added.Count(h => h.Anchor is null));
         }
         finally { session.EndGesture(); }
+    }
+
+    /// <summary>The moment a stored volume belongs to: its place among objects at that time, or the nearest if osu! moved it.</summary>
+    private static MomentKey? MomentFor(EditSession session, double time, int ordinal)
+    {
+        var within = session.Moments.Where(m => Math.Abs(m.Moment.Time - time) <= EditSession.AnchorTolerance).ToList();
+        if (within.Count == 0) return null;
+        var exact = within.Where(m => m.Moment.Time == time).ToList();
+        if (exact.Count == 0)
+        {
+            double nearest = within.Min(m => Math.Abs(m.Moment.Time - time));
+            exact = within.Where(m => Math.Abs(m.Moment.Time - time) - nearest <= 1e-6).ToList();
+        }
+        return exact[Math.Clamp(ordinal, 0, exact.Count - 1)].Key;
     }
 }

@@ -43,6 +43,21 @@ public class HitEditorTests
     }
 
     [Fact]
+    public void Protected_lane_delete_keeps_hitnormals_and_an_addition_lane_still_goes()
+    {
+        var e = Editor();
+        var normal = Session(e).State.Hits.First(h => h.Lane.Sample is { Sound: "hitnormal" });
+        e.ProtectHitnormals = true;
+        Assert.False(e.DeleteLane(normal.Lane));
+        Assert.Contains(normal, Session(e).State.Hits);
+        Assert.True(e.DeleteLane(Clap(e).Lane));
+        Assert.DoesNotContain(Session(e).State.Hits, h => h.Lane.Name == "soft-hitclap");
+        e.ProtectHitnormals = false;
+        Assert.True(e.DeleteLane(normal.Lane));
+        Assert.DoesNotContain(Session(e).State.Hits, h => h.Lane == normal.Lane);
+    }
+
+    [Fact]
     public void Protected_erase_is_a_noop_until_the_setting_is_disabled()
     {
         var e = Editor();

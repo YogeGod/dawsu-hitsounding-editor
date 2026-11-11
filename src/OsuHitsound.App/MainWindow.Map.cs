@@ -132,11 +132,18 @@ public partial class MainWindow
         }.Open(Lanes);
     }
 
+    private const string ProtectedLaneMessage = "Hitnormals are protected. Turn off Edit → Protect hitnormals from deletion to remove this lane.";
+
     /// <summary>Deletes a lane: its hits go (Undo brings them and the lane back); the sample file stays in the mapset.</summary>
     private void DeleteLane(Lane lane)
     {
         if (model is null || session is null) return;
-        session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList(), "Delete lane");
+        if (!Lanes.Edits.DeleteLane(lane))
+        {
+            flash = ProtectedLaneMessage;
+            UpdateStatus();
+            return;
+        }
         model.HideLane(lane);
         ScheduleProjectSave();
     }
@@ -152,9 +159,15 @@ public partial class MainWindow
             return;
         }
 
-        int hits = session.State.Hits.Count(h => h.Lane == lane);
-        if (hits > 0 && !await Dialogs.Confirm(this, "Delete lane",
-                $"Delete {model.NameOf(lane)} and its {hits} hit{(hits == 1 ? "" : "s")}? Undo brings them back; the sample file stays in the mapset.", "Delete"))
+        var onLane = session.State.Hits.Where(h => h.Lane == lane).ToList();
+        if (onLane.Count > 0 && onLane.All(h => !Lanes.Edits.CanDelete(h)))
+        {
+            flash = ProtectedLaneMessage;
+            UpdateStatus();
+            return;
+        }
+        if (onLane.Count > 0 && !await Dialogs.Confirm(this, "Delete lane",
+                $"Delete {model.NameOf(lane)} and its {onLane.Count} hit{(onLane.Count == 1 ? "" : "s")}? Undo brings them back; the sample file stays in the mapset.", "Delete"))
             return;
         DeleteLane(lane);
     }

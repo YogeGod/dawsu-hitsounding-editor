@@ -36,6 +36,25 @@ public class EditSessionTests
     }
 
     [Fact]
+    public void A_short_move_stays_on_its_own_object_when_another_is_stacked_there()
+    {
+        var (s, _, _) = Load("256,192,1000,1,0,0:0:0:0:\n256,192,1000,1,0,0:0:0:0:");
+        var normals = s.State.Hits.Where(h => h.Lane.Name == "soft-hitnormal").ToList();
+        Assert.Equal(2, normals.Count);
+        var first = normals[0];
+
+        var nudged = Assert.Single(s.Move([first], 1, h => h.Lane));
+        Assert.Equal(first, nudged);
+        Assert.Equal(2, s.State.Hits.Count(h => h.Lane.Name == "soft-hitnormal"));
+
+        var whistle = Skin("soft-hitwhistle");
+        var shifted = Assert.Single(s.Move([first], 0, _ => whistle));
+        Assert.Equal(first.Anchor, shifted.Anchor);
+        Assert.Equal(whistle, shifted.Lane);
+        Assert.Contains(s.State.Hits, h => h.Anchor == normals[1].Anchor && h.Lane.Name == "soft-hitnormal");
+    }
+
+    [Fact]
     public void A_hit_near_a_moment_plays_on_it_and_one_elsewhere_has_no_object()
     {
         var (s, _, _) = Load("256,192,1000,1,0,0:0:0:0:");

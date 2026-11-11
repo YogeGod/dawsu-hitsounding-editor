@@ -31,6 +31,8 @@ public class PlaybackRegressionTests
         var cues = MainWindow.PlaybackCues(model).ToList();
         Assert.Equal(expected, Assert.Single(cues, c => c.Lane == lane).Volume);
         Assert.Equal(0.08f, Assert.Single(cues, c => c.Lane.Source == LaneSource.Skin).Volume);
+        foreach (var hit in model.Session.State.Hits)
+            Assert.Equal(cues.Single(c => c.Lane == hit.Lane && c.Time == hit.Time).Volume, MainWindow.AuditionGain(hit, model.Session.VolumeOf(hit)));
 
         var mixer = new PlaybackMixer { Length = 2000 };
         mixer.SetSound(lane, [1, 1]);
@@ -53,5 +55,15 @@ public class PlaybackRegressionTests
         model.TogglePreviewMute(hit);
         Assert.Single(MainWindow.PlaybackCues(model));
         Assert.Same(state, model.Session.State);
+    }
+
+    [Fact]
+    public void A_declined_reload_is_skipped_until_the_bytes_change()
+    {
+        byte[] open = [1, 2, 3], same = [1, 2, 3], changed = [1, 2, 4];
+        Assert.True(MainWindow.SkipMapReload(open, open, []));
+        Assert.True(MainWindow.SkipMapReload(same, open, same));
+        Assert.False(MainWindow.SkipMapReload(changed, open, same));
+        Assert.True(MainWindow.SkipMapReload([], open, []));
     }
 }

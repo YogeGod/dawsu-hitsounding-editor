@@ -141,12 +141,21 @@ public sealed partial class EditSession
     public event Action? Changed;
 
     /// <summary>The moment a hit at <paramref name="time"/> plays on, or null when no object is that close.</summary>
-    public MomentKey? MomentAt(double time) =>
-        Sorted.Nearest(Moments, time, AnchorTolerance, x => x.Moment.Time,
-            x => !State.HsMode || !State.HsCircles.ContainsKey(x.Key) || HsTime(x.Moment.Time) == HsTime(time)) is >= 0 and var i ? Moments[i].Key : null;
+    /// <param name="keep">An object the hit already plays on. It wins while <paramref name="time"/> is still within
+    /// <see cref="AnchorTolerance"/> of it, so a short move does not jump onto another object stacked there.</param>
+    public MomentKey? MomentAt(double time, MomentKey? keep = null)
+    {
+        bool Fits(MomentKey key, double momentTime) =>
+            !State.HsMode || !State.HsCircles.ContainsKey(key) || HsTime(momentTime) == HsTime(time);
+        if (keep is { } preferred && MomentByKey.TryGetValue(preferred, out var kept)
+            && Math.Abs(kept.Time - time) <= AnchorTolerance && Fits(preferred, kept.Time))
+            return preferred;
+        return Sorted.Nearest(Moments, time, AnchorTolerance, x => x.Moment.Time, x => Fits(x.Key, x.Moment.Time)) is >= 0 and var i
+            ? Moments[i].Key : null;
+    }
 
     /// <summary>A hit in a lane at a time, placed on the moment there if any.</summary>
-    public EditHit HitAt(Lane lane, double time) => MomentAt(time) is { } key
+    public EditHit HitAt(Lane lane, double time, MomentKey? keep = null) => MomentAt(time, keep) is { } key
         ? new EditHit(lane, MomentByKey[key].Time, key)
         : State.HsMode ? HsHit(lane, time) : new EditHit(lane, time, null);
 
@@ -207,7 +216,7 @@ public sealed partial class EditSession
     /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>
     public IReadOnlyList<EditHit> MoveEach(IReadOnlyList<(EditHit Hit, Lane Lane, double Time)> moves, string label)
     {
-        var targets = moves.Select(m => HitAt(m.Lane, m.Time) with { Voice = m.Hit.Voice, SetPlacement = m.Hit.SetPlacement, SetMember = m.Hit.SetMember }).ToList();
+        var targets = moves.Select(m => HitAt(m.Lane, m.Time, m.Hit.Anchor) with { Voice = m.Hit.Voice, SetPlacement = m.Hit.SetPlacement, SetMember = m.Hit.SetMember }).ToList();
         if (targets.SequenceEqual(moves.Select(m => m.Hit))) return targets.Distinct().ToList();
         IReadOnlyList<EditHit> moved = [];
         Change(label, s => PlaceLayers(s, moves.Select((m, i) =>
@@ -262,7 +271,7 @@ public sealed partial class EditSession
         Change(label, s =>
         {
             var next = PlaceLayers(s, originals.Select(h =>
-                (HitAt(h.Lane, h.Time + offset) with { Voice = h.Voice, SetPlacement = whole.GetValueOrDefault(h.SetPlacement)?.Id ?? Guid.Empty, SetMember = whole.ContainsKey(h.SetPlacement) ? h.SetMember : Guid.Empty },
+                (HitAt(h.Lane, h.Time + offset, h.Anchor) with { Voice = h.Voice, SetPlacement = whole.GetValueOrDefault(h.SetPlacement)?.Id ?? Guid.Empty, SetMember = whole.ContainsKey(h.SetPlacement) ? h.SetMember : Guid.Empty },
                  Volume: s.HsMode || s.LayerVolumes.ContainsKey(h) ? (int?)VolumeOf(s, h) : null)), [], out copies);
             return whole.Count == 0 ? next : RenderSoundSets(next with { SoundPlacements = next.SoundPlacements.AddRange(whole.Values) });
         });
