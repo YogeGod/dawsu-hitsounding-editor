@@ -124,9 +124,9 @@ public partial class MainWindow
         AppTitle.IsVisible = width >= 1100;
         FileTitle.IsVisible = width >= 1250;
         TitleBarContent.MinWidth = ControlBarContent.MinWidth = EditBarContent.MinWidth = StatusBarContent.MinWidth = 0;
-        TitleBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
-        ControlBarScroller.HorizontalScrollBarVisibility = EditBarScroller.HorizontalScrollBarVisibility =
-            Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        // No sideways scrolling: the bars fit the window, and the map name shortens with "…" instead of growing the bar.
+        TitleBarScroller.HorizontalScrollBarVisibility = ControlBarScroller.HorizontalScrollBarVisibility =
+            EditBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         SelectionField.MinWidth = narrow ? 100 : 130;
         StartField.MinWidth = narrow ? 140 : 150;
         ObjectField.MinWidth = narrow ? 150 : 200;

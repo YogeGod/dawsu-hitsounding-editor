@@ -14,7 +14,7 @@
   <Grid Name="Root" RowDefinitions="44,Auto,Auto,20,*,160,Auto,Auto" ColumnDefinitions="208,4,*,4,224">
     <!-- 1. Header (V6.39: logo, title, file buttons, menus; map name and settings on the right) -->
     <Border Grid.Row="0" Grid.ColumnSpan="5" Name="TitleBar" Classes="header" BorderThickness="0,0,0,1">
-      <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+      <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
       <Grid Name="TitleBarContent" MinWidth="1080" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
         <TextBlock Text="dawsu!" Classes="appTitle" FontSize="16" />
         <TextBlock Name="AppTitle" Grid.Column="1" Text="" Classes="appTitle" Margin="0,0,16,0" />
