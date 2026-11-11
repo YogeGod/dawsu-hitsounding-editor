@@ -2,6 +2,11 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 2.2.5
+
+- The public tutorial and changelog now match the current editor. Screenshots of older editor versions were removed from the repository.
+- No change to editing, playback, or export from 2.2.4.
+
 ## 2.2.4
 
 - Draw tool uses a drumstick icon and cursor.
