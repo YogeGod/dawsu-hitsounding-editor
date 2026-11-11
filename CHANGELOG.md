@@ -2,6 +2,14 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 2.2.6
+
+- A circle that plays one sample file by name can be changed back to other sounds. Before, Save reported a conflict and kept the file.
+- A hit on a stacked circle stays on its own object when you move it a little.
+- Live reload puts unsaved hits back within the same 2 ms window that editing uses.
+- Deleting a lane keeps protected hitnormals, and lane previews play at playback volume.
+- Adding a circle or bookmarks works in maps with an unreadable object line, or that end at `[Editor]` without a newline.
+
 ## 2.2.5
 
 - The public tutorial and changelog now match the current editor. Screenshots of older editor versions were removed from the repository.
