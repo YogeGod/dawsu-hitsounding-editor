@@ -15,6 +15,7 @@ public partial class StartScreen : UserControl
         OpenPanel.Click += (_, _) => OpenRequested?.Invoke();
         SamplesPanel.Click += (_, _) => SamplesRequested?.Invoke();
         PreferencesLink.Click += (_, _) => PreferencesRequested?.Invoke();
+        OpenFromOsuLink.Click += (_, _) => OpenFromOsuRequested?.Invoke();
         QuickStartLink.Click += (_, _) => QuickStartRequested?.Invoke();
         KeysLink.Click += (_, _) => HelpRequested?.Invoke();
         UpdateLink.Click += (_, _) => UpdateRequested?.Invoke();
@@ -26,6 +27,7 @@ public partial class StartScreen : UserControl
     public event Action<string>? RecentRequested;
     public event Action? SamplesRequested;
     public event Action? PreferencesRequested;
+    public event Action? OpenFromOsuRequested;
     public event Action? QuickStartRequested;
     public event Action? HelpRequested;
     public event Action? KeysoundNewRequested;

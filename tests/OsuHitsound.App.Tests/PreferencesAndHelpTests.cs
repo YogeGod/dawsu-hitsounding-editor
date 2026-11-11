@@ -90,7 +90,7 @@ public class PreferencesAndHelpTests : IDisposable
         Assert.Equal(keys.Count, keys.Distinct().Count());
         // These menu commands have no built-in key; users can assign one in Preferences. The grid-line seeks have keys
         // only in the osu! editor preset (the arrows), where the built-in arrows select hits instead.
-        string[] menuOnly = ["toolRange", "editRange", "scaleByVolume", "quantizeDialog", "importOsz", "openHitsoundFolder", "reviewOutput", "ks.sync", "ks.generate",
+        string[] menuOnly = ["toolRange", "editRange", "scaleByVolume", "quantizeDialog", "importOsz", "openFromOsu", "openHitsoundFolder", "reviewOutput", "ks.sync", "ks.generate",
             "seekBack", "seekForward", "seekBackFar", "seekForwardFar"];
         Assert.All(EditorCommands.Defaults.Where(c => !menuOnly.Contains(c.Id)), c => Assert.NotEmpty(c.Keys));
     }

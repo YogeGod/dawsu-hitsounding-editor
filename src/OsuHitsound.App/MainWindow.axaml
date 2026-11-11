@@ -29,6 +29,8 @@
             <MenuItem Header="File">
               <MenuItem Name="StartScreenItem" Header="Start screen" />
               <MenuItem Name="OpenItem" Header="Open…" />
+              <MenuItem Name="OpenFromOsuItem" Header="Open map from osu!" />
+              <MenuItem Name="ReloadOsuItem" Header="Reload osu!'s editor after Save" ToggleType="CheckBox" />
               <MenuItem Name="ImportOszItem" Header="Import .osz…" />
               <MenuItem Name="OpenFolderItem" Header="Open map folder" />
               <MenuItem Name="OpenHitsoundFolderItem" Header="Open hitsound folder" />

@@ -24,6 +24,7 @@ public partial class MainWindow
             prefs = prefs with { KeepMixedIndexes = KeepMixedIndexesItem.IsChecked };
             RefreshOutputSettings(); SavePrefs();
         };
+        ReloadOsuItem.Click += (_, _) => { prefs = prefs with { ReloadOsuAfterSave = ReloadOsuItem.IsChecked }; SavePrefs(); };
         ConflictWarningsItem.Click += (_, _) =>
         {
             prefs = prefs with { ShowExportWarnings = ConflictWarningsItem.IsChecked };
@@ -46,6 +47,7 @@ public partial class MainWindow
         PerObjectItem.IsChecked = exportSettings.Style == ExportStyle.PerObject;
         MissingWarningsItem.IsChecked = prefs.ShowMissingObjectWarnings;
         ConflictWarningsItem.IsChecked = prefs.ShowExportWarnings;
+        ReloadOsuItem.IsChecked = prefs.ReloadOsuAfterSave;
         KeepMixedIndexesItem.IsChecked = prefs.KeepMixedIndexes;
         if (session is not null) session.KeepMixedIndexes = prefs.KeepMixedIndexes;
         Lanes.ShowMissingObjectWarnings = prefs.ShowMissingObjectWarnings;

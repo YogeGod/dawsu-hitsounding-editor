@@ -264,7 +264,7 @@ public partial class MainWindow : Window
         SaveButton.Click += (_, _) => { if (Keys.Document is not null) _ = SaveKeysound(); else _ = Save(); };
         menuCommands =
         [
-            (OpenItem, "open"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (OpenHitsoundFolderItem, "openHitsoundFolder"), (ReviewOutputItem, "reviewOutput"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
+            (OpenItem, "open"), (OpenFromOsuItem, "openFromOsu"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (OpenHitsoundFolderItem, "openHitsoundFolder"), (ReviewOutputItem, "reviewOutput"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
             (UndoItem, "undo"), (RedoItem, "redo"), (CutItem, "cut"), (CopyItem, "copy"), (PasteItem, "paste"), (DuplicateItem, "duplicate"),
             (DeleteItem, "delete"), (SelectAllItem, "selectAll"), (QuantizeItem, "quantizeDialog"), (RepeatItem, "repeat"), (EditRangeItem, "editRange"), (ScaleVolumeItem, "scaleByVolume"), (ZoomInItem, "zoomIn"), (ZoomOutItem, "zoomOut"), (FilterLanesItem, "filter"),
         ];
@@ -298,6 +298,7 @@ public partial class MainWindow : Window
         Closing += OnEditorClosing;
         Closed += (_, _) =>
         {
+            StopWatchingMap();
             loadNumber++; // a map still loading is dropped, not shown in a closed window
             compileCancel?.Cancel();
             frameTimer.Stop();
@@ -448,6 +449,7 @@ public partial class MainWindow : Window
             ScheduleCompile();
             RevertItem.IsEnabled = true;
             RefreshHsMode();
+            WatchMapFile(full); // live reload when osu! (or anything else) saves it
             HideStartScreen();
             return true;
         }
@@ -677,6 +679,7 @@ public partial class MainWindow : Window
         switch (id)
         {
             case "open": _ = PickMap(); break;
+            case "openFromOsu": _ = OpenFromOsu(); break;
             case "startScreen": _ = GoToStartScreen(); break;
             case "updates": _ = CheckForUpdates(quiet: false); break;
             case "importOsz": _ = ImportOsz(); break;
@@ -1245,11 +1248,22 @@ public partial class MainWindow : Window
         }, cancel.Token).ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
     }
 
+    private bool savedMapWritten; // set by SaveMap/SaveHs when the .osu itself was written
+
+    /// <summary>Saves (see <see cref="SaveMap"/>); when that wrote the .osu and osu!'s editor has it open, reloads it there.</summary>
+    private async Task<bool> Save()
+    {
+        savedMapWritten = false;
+        bool saved = await SaveMap();
+        if (savedMapWritten && prefs.ReloadOsuAfterSave && mapPath is { } path) _ = ReloadOsuEditor(path);
+        return saved;
+    }
+
     /// <summary>
     /// Saves the edits: compiles a fresh copy of the map as opened, refuses if the file changed on disk since, keeps a
     /// timestamped backup in the editor's app-data folder (never in the mapset), writes the .osu and reloads it.
     /// </summary>
-    private async Task<bool> Save()
+    private async Task<bool> SaveMap()
     {
         if (savingHs || generating || !Loading.IsCompleted) return false;
         if (session is null || mapPath is null || originalBytes is null || folder is null) return false;
@@ -1267,11 +1281,8 @@ public partial class MainWindow : Window
             else
             {
                 // Reload so the editor starts again from what is now on disk (and its undo history starts fresh).
-                double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom;
-                var reload = OpenAsync(mapPath);
-                Loading = reload;
-                if (!await reload) return false;
-                (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
+                savedMapWritten = true;
+                if (!await ReopenKeepingView(mapPath)) return false;
                 flash = string.Join(' ', [
                     $"Saved. {result.TimingPointsAdded} green line{(result.TimingPointsAdded == 1 ? "" : "s")} added, {result.TimingPointsChanged} changed."
                         + Problems(result.Conflicts.Count, unanchored),

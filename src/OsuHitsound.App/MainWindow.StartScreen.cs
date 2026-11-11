@@ -11,6 +11,7 @@ public partial class MainWindow
         Start.IsVisible = show && usePreferences;
         if (Start.IsVisible) RefreshStartScreen();
         Start.OpenRequested += () => Run("open");
+        Start.OpenFromOsuRequested += () => Run("openFromOsu");
         Start.RecentRequested += async path => { if (IsKeysoundProject(path) || await MayLeaveMap()) await Open(path); };
         Start.SamplesRequested += ShowSampleTools;
         Start.PreferencesRequested += () => Run("preferences");

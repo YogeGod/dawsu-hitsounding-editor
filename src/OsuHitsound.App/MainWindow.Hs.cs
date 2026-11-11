@@ -40,8 +40,6 @@ public partial class MainWindow
         bool wasEnabled = Root.IsEnabled;
         Root.IsEnabled = false;
         audio?.Pause();
-        var view = model?.CaptureViewState();
-        double left = Lanes.Axis.Left, zoom = Lanes.Axis.Zoom, position = audio?.Position ?? Lanes.Playhead;
         var decoded = new Dictionary<Lane, float[]?>();
         int loose = session.Unanchored.Count();
         bool hs = session.State.HsMode || session.State.HsCircles.Count > 0;
@@ -86,14 +84,10 @@ public partial class MainWindow
                     + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
                     + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return false;
             var written = await Task.Run(() => document.WriteHsSave(plan, mix => SampleMixer.Mix(mix, Decode), MapSaver.DefaultBackupRoot(), manifests));
+            savedMapWritten = written.Backup is not null; // the .osu itself changed (not only its samples)
             bool projectSaved = SaveProject();
             // Preserve editable layers in this window even if a sidecar write unexpectedly fails after the .osu save.
-            var reload = OpenAsync(document.Path, hsOverride: document.HsProject);
-            Loading = reload;
-            if (!await reload) return false;
-            if (view is not null) model?.RestoreViewState(view);
-            (Lanes.Axis.Zoom, Lanes.Axis.Left) = (zoom, left);
-            Seek(position);
+            if (!await ReopenKeepingView(document.Path, document.HsProject)) return false;
             flash = $"Saved this difficulty. Backup: {written.Backup ?? "no map changes"}"
                 + (loose > 0 ? $" {loose} loose hitsound(s) remain in the editor project only." : "")
                 + (plan.Notes.Count > 0 ? " " + string.Join(" ", plan.Notes) : "")

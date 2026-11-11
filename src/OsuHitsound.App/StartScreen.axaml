@@ -156,6 +156,7 @@
           <TextBlock Name="SongsFolder" Classes="mono" FontSize="11" Foreground="{DynamicResource LcdCaption}" MaxWidth="170" TextTrimming="PrefixCharacterEllipsis" VerticalAlignment="Center" Text="not set" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="2" Margin="-10,0,0,0">
+          <Button Name="OpenFromOsuLink" Classes="footLink" Content="Open map from osu!" ToolTip.Tip="Open the map osu!stable has open, or the one osu!lazer is editing externally. It reloads whenever osu! saves it." />
           <Button Name="PreferencesLink" Classes="footLink" Content="Preferences…" />
           <Button Name="QuickStartLink" Classes="footLink" Content="Quick start" />
           <Button Name="KeysLink" Classes="footLink" ToolTip.Tip="Keyboard shortcuts (F1)">

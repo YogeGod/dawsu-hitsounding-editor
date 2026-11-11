@@ -19,6 +19,8 @@ internal sealed record Preferences
     public string? LastSampleFolder { get; init; }
     public bool ShowMissingObjectWarnings { get; init; }
     public bool ShowExportWarnings { get; init; } = true;
+    /// <summary>After Save, make osu!stable's editor reload the map when it has the same one open (Ctrl+L, Enter).</summary>
+    public bool ReloadOsuAfterSave { get; init; } = true;
     /// <summary>Keep sounds from different sample indexes or addition sets on one object instead of moving the object to the new ones.</summary>
     public bool KeepMixedIndexes { get; init; }
     public ExportStyle ExportStyle { get; init; } = ExportStyle.GreenLines;

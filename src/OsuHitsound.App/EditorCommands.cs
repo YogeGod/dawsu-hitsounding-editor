@@ -54,6 +54,7 @@ internal static class EditorCommands
     public static readonly IReadOnlyList<EditorCommand> Defaults =
     [
         new("open", "Files and help", "Open a .osu", [K(Key.O, Ctrl)]),
+        new("openFromOsu", "Files and help", "Open the map osu! has open (it reloads when osu! saves it)", []),
         new("newDiff", "Files and help", "New hitsound diff: an empty difficulty with this map's red lines", [K(Key.N, Ctrl)]),
         new("importOsz", "Files and help", "Import an .osz into the Songs folder", []),
         new("openFolder", "Files and help", "Open the map's folder in Explorer", [K(Key.O, Ctrl | Shift)]),
