@@ -60,6 +60,9 @@ internal sealed record Preferences
     /// <summary>Audition drawn notes and notes moved between lanes.</summary>
     public bool AuditionOnPlacement { get; init; } = true;
 
+    /// <summary>Volume for newly drawn hits; null follows the map.</summary>
+    public int? InsertVolume { get; init; }
+
     /// <summary>The inspector on the left: shown, its width, its cards top to bottom and the folded ones.</summary>
     public bool InspectorOpen { get; init; } = true;
 

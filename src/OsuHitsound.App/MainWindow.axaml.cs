@@ -81,6 +81,14 @@ public partial class MainWindow : Window
 
         Lanes.Axis.Changed += OnAxisChanged;
         Lanes.AuditionOnPlacement = prefs.AuditionOnPlacement;
+        Lanes.InsertVolume = prefs.InsertVolume is { } insertVolume ? Math.Clamp(insertVolume, 0, 100) : null;
+        InsertVolumeBox.Value = Lanes.InsertVolume;
+        InsertVolumeBox.ValueChanged += (_, _) =>
+        {
+            Lanes.InsertVolume = InsertVolumeBox.Value is { } value ? (int)Math.Clamp(value, 0, 100) : null;
+            prefs = prefs with { InsertVolume = Lanes.InsertVolume };
+            SavePrefs();
+        };
         AuditionPlacementButton.IsChecked = prefs.AuditionOnPlacement;
         AuditionPlacementButton.IsCheckedChanged += (_, _) =>
         {

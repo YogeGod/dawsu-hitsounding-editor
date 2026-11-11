@@ -12,6 +12,20 @@ public class HsModeTests
     internal static MapDocument Doc(string objects = "", string version = "Source", int format = 14) =>
         MapDocument.FromBytes("source.osu", Bytes(objects, version, format), new MapFolder([]));
 
+    [Fact]
+    public void New_HS_circles_keep_the_insert_volume_and_undo_as_one_edit()
+    {
+        var session = Doc().Session;
+        session.SetHsMode(true);
+        var before = session.State;
+        var hit = session.HitAt(Clap, 1000);
+        session.Add([hit], volume: 37);
+        Assert.Equal(37, session.VolumeOf(Assert.Single(session.State.Hits)));
+        Assert.Single(session.State.HsCircles);
+        session.Undo();
+        Assert.Same(before, session.State);
+    }
+
     [Theory]
     [InlineData("HS", true)]
     [InlineData("hitsounds", true)]

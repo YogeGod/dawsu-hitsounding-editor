@@ -275,6 +275,12 @@
           <ComboBox Name="VolumeModeBox" Width="96" Focusable="True" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
         </StackPanel>
         <StackPanel Classes="field" Orientation="Horizontal" Spacing="8"><TextBlock Text="VOLUME SCOPE" Classes="fieldLabel" IsVisible="False" /><ComboBox Name="VolumeScopeBox" Width="110" ToolTip.Tip="All lanes changes every sound at the affected times. Selected lanes changes only the selected lanes." /></StackPanel>
+        <StackPanel Classes="field" Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Insert volume · %" Classes="fieldLabel" />
+          <NumericUpDown Name="InsertVolumeBox" Minimum="0" Maximum="100" Increment="1" FormatString="0" Width="104"
+                         Watermark="Map" AutomationProperties.Name="Insert volume percent"
+                         ToolTip.Tip="Volume for newly drawn hits (0–100%). Clear this field to follow the map volume. Existing hits, pasted notes and sound sets keep their volumes." />
+        </StackPanel>
         <StackPanel Name="ObjectField" Classes="field" MinWidth="200">
           <TextBlock Text="GAMEPLAY OBJECT" Classes="fieldLabel" IsVisible="False" />
           <TextBlock Name="InfoObject" Text="—" Classes="fieldValue" TextTrimming="CharacterEllipsis" />

@@ -285,6 +285,8 @@ internal sealed class ArrangeView : Control
     public IReadOnlySet<MomentKey> SelectedMoments => Edits.SelectedMoments;
 
     public bool AuditionOnPlacement { get; set; } = true;
+    /// <summary>Volume for newly drawn hits; null follows the map's volume at that time.</summary>
+    public int? InsertVolume { get; set; }
     public event Action<EditHit>? PlacementPreviewRequested;
     internal void PreviewLaneMove(IReadOnlyList<EditHit> hits)
     {
@@ -300,7 +302,7 @@ internal sealed class ArrangeView : Control
         if (DrawSoundSetRequested?.Invoke(time) == true) return;
         var before = session.State;
         var hit = session.HitAt(lane, time);
-        session.Add([hit]);
+        session.Add([hit], volume: InsertVolume);
         if (AuditionOnPlacement && !ReferenceEquals(before, session.State)) PlacementPreviewRequested?.Invoke(hit);
     }
     public event Action<Lane>? LaneListPreviewRequested;

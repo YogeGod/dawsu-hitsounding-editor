@@ -25,6 +25,53 @@ public class HitEditorTests
     private static EditHit Clap(HitEditor e) => Session(e).State.Hits.Single(h => h.Lane.Name == "soft-hitclap");
 
     [Theory]
+    [InlineData(null, 64)]
+    [InlineData(0, 0)]
+    [InlineData(35, 35)]
+    [InlineData(100, 100)]
+    [InlineData(200, 100)]
+    public void Drawn_hits_use_insert_volume_without_changing_existing_hits(int? preset, int expected)
+    {
+        var e = Editor();
+        var session = Session(e);
+        var original = session.State.Hits.Single(h => h.Time == 1500);
+        session.SetVolume([original.Anchor!.Value], 64);
+        var before = session.State;
+        var view = new ArrangeView { InsertVolume = preset };
+        view.SetModel(e.Model);
+        var lane = e.Model!.LaneRows.First(r => r.Lane.Name == "soft-hitwhistle").Lane;
+        int? previewVolume = null;
+        view.PlacementPreviewRequested += h => previewVolume = session.VolumeOf(h);
+        view.PlaceHit(lane, 1500);
+        var added = session.State.Hits.Single(h => h.Lane == lane && h.Time == 1500);
+        Assert.Equal(expected, session.VolumeOf(added));
+        Assert.Equal(expected, previewVolume);
+        Assert.Equal(64, session.VolumeOf(original));
+        Assert.Same(before.Volumes, session.State.Volumes);
+        var after = session.State;
+        view.InsertVolume = 12;
+        view.PlaceHit(lane, 1500); // Painting over the same hit must not change it.
+        Assert.Same(after, session.State);
+        session.Undo();
+        Assert.Same(before, session.State); // Adding and setting volume are one undo step.
+        session.Redo();
+        Assert.Equal(expected, session.VolumeOf(added));
+    }
+
+    [Fact]
+    public void Drawn_loose_hits_retain_the_insert_volume()
+    {
+        var e = Editor();
+        var view = new ArrangeView { InsertVolume = 28 };
+        view.SetModel(e.Model);
+        var lane = Clap(e).Lane;
+        view.PlaceHit(lane, 1234);
+        var added = Session(e).State.Hits.Single(h => h.Time == 1234);
+        Assert.Null(added.Anchor);
+        Assert.Equal(28, Session(e).VolumeOf(added));
+    }
+
+    [Theory]
     [InlineData(0, 1000)]
     [InlineData(1200, 1000)]
     [InlineData(1250, 1000)]

@@ -158,11 +158,17 @@ public sealed partial class EditSession
 
     // ---- edits; each call outside a gesture is one undo step ----
 
-    public void Add(IEnumerable<EditHit> hits, string label = "Add") => Change(label, s =>
+    public void Add(IEnumerable<EditHit> hits, string label = "Add", int? volume = null) => Change(label, s =>
     {
         var existing = s.Hits.ToHashSet();
         var added = hits.Where(existing.Add).ToList();
-        return added.Count == 0 ? s : s with { Hits = s.Hits.AddRange(added) };
+        return added.Count == 0 ? s : s with
+        {
+            Hits = s.Hits.AddRange(added),
+            LayerVolumes = volume is { } v
+                ? s.LayerVolumes.SetItems(added.Select(h => KeyValuePair.Create(h, Math.Clamp(v, 0, 100))))
+                : s.LayerVolumes,
+        };
     });
 
     public void Remove(IEnumerable<EditHit> hits, string label = "Delete") => Change(label, s =>
