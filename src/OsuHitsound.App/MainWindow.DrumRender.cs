@@ -13,7 +13,7 @@ public partial class MainWindow
     private async Task RenderDrumVst()
     {
         bool fromKit = drumKitPreset is not null;
-        if (renderingDrums || !fromKit && (drumVst is null || drumVstPath is null) || model is null || session is null || mapPath is null || generating || savingHs) return;
+        if (renderingDrums || !fromKit && (drumVst is null || drumVstPath is null) || model is null || session is null || mapPath is null || WriteBusy) return;
         var targetModel = model; var targetSession = session; var state = session.State; var path = mapPath;
         var plan = DrumRenderPlan.Create(state, DrumVstNotes(model), model.DrumRenders);
         if (plan.Hits.Count == 0) { flash = "No mapped drum hits to render."; UpdateStatus(); return; }

@@ -15,7 +15,7 @@ namespace OsuHitsound.App;
 /// Edits are checked by compiling in the background; Save (Ctrl+S) compiles the original file again, keeps a backup
 /// outside the mapset and writes only the .osu.
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IMapWriteHost
 {
     internal static readonly SnapSpacing[] SnapOptions = [new(4, 1), new(3, 1), new(2, 1), .. new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16 }.Select(d => new SnapSpacing(1, d))];
     private static readonly SnapSpacing[] StraightSnaps = [new(4, 1), new(2, 1), new(1, 1), new(1, 2), new(1, 4), new(1, 8), new(1, 16)],
@@ -424,6 +424,8 @@ public partial class MainWindow : Window
             if (session is not null) session.Changed -= OnEdited;
             (doc, lastCompile, closeConfirmed, flash) = (opened, null, false, null);
             editorProject = null; // the previous map's, until RestoreProject makes this map's
+            mapWrites?.Close();
+            mapWrites = new MapWrites(opened, MapSaver.DefaultBackupRoot(), GenerateManifest.DefaultRoot());
 
             // Load every drawable lane's sample, not only the ones the map uses, so new hits sound at once.
             if (audio is not null && prepared is not null)
@@ -490,7 +492,7 @@ public partial class MainWindow : Window
 
     /// <summary>Asks before a command switches to another map while this one has unsaved edits.</summary>
     private async Task<bool> MayLeaveMap() =>
-        !savingHs && (session is not { IsEdited: true }
+        !WriteBusy && (session is not { IsEdited: true }
         || await Dialogs.Confirm(this, "Unsaved edits", "This map has edits that aren't saved. Open the other map and discard them?", "Discard and open"));
 
     /// <summary>File → Import .osz…: unpacks into a new folder in the Songs folder, then opens a difficulty from it.</summary>
@@ -691,7 +693,7 @@ public partial class MainWindow : Window
     /// <summary>Runs a command from <see cref="EditorCommands"/>, from a key press or a menu item.</summary>
     private void Run(string id)
     {
-        if (savingHs || renderingDrums) return;
+        if (WriteBusy || renderingDrums) return;
         switch (id)
         {
             case "open": _ = PickMap(); break;
@@ -1268,59 +1270,36 @@ public partial class MainWindow : Window
         }, cancel.Token).ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    private bool savedMapWritten; // set by SaveMap/SaveHs when the .osu itself was written
 
     /// <summary>Saves (see <see cref="SaveMap"/>); when that wrote the .osu and osu!'s editor has it open, reloads it there.</summary>
     private async Task<bool> Save()
     {
-        savedMapWritten = false;
-        bool saved = await SaveMap();
-        if (savedMapWritten && prefs.ReloadOsuAfterSave && mapPath is { } path) _ = ReloadOsuEditor(path);
+        var (saved, mapWritten) = await SaveMap();
+        if (mapWritten && prefs.ReloadOsuAfterSave && mapPath is { } path) _ = ReloadOsuEditor(path);
         return saved;
     }
 
     /// <summary>
-    /// Saves the edits: compiles a fresh copy of the map as opened, refuses if the file changed on disk since, keeps a
-    /// timestamped backup in the editor's app-data folder (never in the mapset), writes the .osu and reloads it.
+    /// Saves the edits into this difficulty (see <see cref="MapWrites.SaveAsync"/>), then reopens it from disk, keeping
+    /// the view, so the editor starts again from what is now saved (its undo history starts fresh). Also says whether
+    /// the .osu itself changed (osu! may reload it).
     /// </summary>
-    private async Task<bool> SaveMap()
+    private async Task<(bool Saved, bool MapWritten)> SaveMap()
     {
-        if (savingHs || generating || !Loading.IsCompleted) return false;
-        if (session is null || mapPath is null || originalBytes is null || folder is null) return false;
-        if (exportSettings.PairSamples || session.State.HsMode || session.HasHsObjects) return await SaveHs();
-        bool success = false;
+        if (WriteBusy || !Loading.IsCompleted || mapWrites is not { } writes || doc is not { } document) return (false, false);
+        audio?.Pause();
         try
         {
-            int unanchored = session.Unanchored.Count();
-            var saved = doc!.Save(MapSaver.DefaultBackupRoot());
-            var result = saved.Compile;
-            if (!saved.Written)
+            return await WhileWriting(async () =>
             {
-                flash = "Nothing to save: the map already plays like this." + Problems(result.Conflicts.Count, unanchored);
-            }
-            else
-            {
-                // Reload so the editor starts again from what is now on disk (and its undo history starts fresh).
-                savedMapWritten = true;
-                if (!await ReopenKeepingView(mapPath)) return false;
-                flash = string.Join(' ', [
-                    $"Saved. {result.TimingPointsAdded} green line{(result.TimingPointsAdded == 1 ? "" : "s")} added, {result.TimingPointsChanged} changed."
-                        + Problems(result.Conflicts.Count, unanchored),
-                    .. result.Notes, $"Backup: {saved.Backup}"]);
-            }
-            success = result.Conflicts.Count == 0 && unanchored == 0 && SaveProject();
+                var outcome = await writes.SaveAsync(this, exportSettings, skin);
+                // osu! is told about a written .osu even if reopening it here fails.
+                if (outcome.Reopen && !await ReopenKeepingView(document.Path, document.HsProject)) return (false, outcome.MapWritten);
+                if (outcome.Status is { } status) ShowStatus(status);
+                return (outcome.Done, outcome.MapWritten);
+            });
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            flash = $"Not saved: {ex.Message}";
-        }
-
-        UpdateStatus();
-        return success;
-
-        static string Problems(int conflicts, int unanchored) =>
-            (conflicts > 0 ? $" {conflicts} moment{(conflicts == 1 ? "" : "s")} kept their old sounds (conflicts)." : "")
-            + (unanchored > 0 ? $" {unanchored} hit{(unanchored == 1 ? "" : "s")} with no object weren't saved." : "");
+        finally { RefreshHsMode(); }
     }
 
     /// <summary>Opens the UI inspector beside the editor, owned by it so it stays in front; closes it if open.</summary>

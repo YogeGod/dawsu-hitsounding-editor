@@ -60,7 +60,7 @@ public partial class MainWindow
 
     private async Task ReviewOutput()
     {
-        if (doc is not { } document || savingHs || generating || !Loading.IsCompleted) return;
+        if (doc is not { } document || WriteBusy || !Loading.IsCompleted) return;
         try
         {
             var settings = exportSettings.Copy();

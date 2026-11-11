@@ -10,7 +10,7 @@ public partial class MainWindow
 
     private async void OnEditorClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (renderingDrums || savingHs || generating || !Loading.IsCompleted) { e.Cancel = true; updateOnClose = null; return; }
+        if (renderingDrums || WriteBusy || !Loading.IsCompleted) { e.Cancel = true; updateOnClose = null; return; }
         // While Keysound shows, the hitsound map's edits were already given up when Keysound opened (MayLeaveMap).
         if (!closeConfirmed && Keys.Document is { } keys)
         {
