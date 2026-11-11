@@ -35,6 +35,15 @@ public class BookmarkTests
     }
 
     [Fact]
+    public void A_file_ending_at_the_editor_header_gets_the_bookmarks_on_their_own_line()
+    {
+        var file = Parse("osu file format v14\r\n\r\n[Editor]");
+        file.SetBookmarks([1000]);
+        Assert.Equal("osu file format v14\r\n\r\n[Editor]\r\nBookmarks: 1000\r\n", Text(file));
+        Assert.Equal([1000], Parse(Text(file)).Bookmarks);
+    }
+
+    [Fact]
     public void A_map_without_an_editor_section_gets_one_before_metadata()
     {
         var file = Parse("osu file format v14\r\n\r\n[General]\r\nMode: 0\r\n\r\n[Metadata]\r\nTitle:x\r\n");

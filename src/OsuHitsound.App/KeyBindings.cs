@@ -95,11 +95,13 @@ internal static partial class CubaseKeyFile
         var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
         using var reader = XmlReader.Create(path, settings);
         var keys = Parse(XDocument.Load(reader));
-        cache = (stamp, keys);
+        cache = new(stamp, keys);
         return keys;
     }
 
-    private static ((string Path, DateTime Written) Stamp, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> Keys)? cache;
+    // One object, so a reader on another thread sees a whole entry or none.
+    private sealed record CacheEntry((string Path, DateTime Written) Stamp, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> Keys);
+    private static CacheEntry? cache;
 
     /// <summary>Makes the next <see cref="Read"/> parse the file again, even if its write time is unchanged.</summary>
     public static void Forget() => cache = null;

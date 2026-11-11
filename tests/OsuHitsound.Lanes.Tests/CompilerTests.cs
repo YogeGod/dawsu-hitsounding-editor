@@ -192,13 +192,42 @@ public class CompilerTests
     }
 
     [Fact]
-    public void A_custom_filename_is_not_cleared_to_encode_skin_sounds()
+    public void A_custom_filename_is_cleared_when_the_object_should_play_other_sounds()
     {
         var file = Map(Red, "256,192,1000,1,0,0:0:0:0:boom.wav");
-        var (result, _, _) = Apply(file, new MapFolder(["boom.wav"]), (0, [Skin("soft-hitnormal")], 100));
+        var (result, after, _) = Apply(file, new MapFolder(["boom.wav"]), (0, [Skin("soft-hitnormal"), Skin("soft-hitclap")], 100));
 
-        Assert.Single(result.Conflicts);
-        Assert.False(file.IsEdited);
+        Assert.Empty(result.Conflicts);
+        Assert.Contains("256,192,1000,1,8,0:0:0:0:\r\n", Text(file));
+        Assert.Equal(["soft-hitclap", "soft-hitnormal"], Names(after.Moments[0]));
+    }
+
+    [Fact]
+    public void A_custom_filename_is_kept_while_the_object_still_plays_it()
+    {
+        var file = Map(Red, "256,192,1000,1,0,0:0:0:0:boom.wav\n256,192,2000,1,0,0:0:0:0:");
+        var (result, after, _) = Apply(file, new MapFolder(["boom.wav"]), (1, [Skin("soft-hitnormal"), Skin("soft-hitclap")], 100));
+
+        Assert.Empty(result.Conflicts);
+        Assert.Contains("256,192,1000,1,0,0:0:0:0:boom.wav", Text(file));
+        Assert.Equal(["boom.wav"], Names(after.Moments[0]));
+    }
+
+    [Fact]
+    public void A_filename_the_editor_wrote_can_be_changed_back_after_reopening()
+    {
+        var folder = new MapFolder(["snare.wav"]);
+        var file = Map(Red, "256,192,1000,1,0,0:0:0:0:");
+        var (first, _, _) = Apply(file, folder, (0, [File("snare.wav")], 100));
+        Assert.Empty(first.Conflicts);
+        Assert.Contains("snare.wav", Text(file));
+
+        var reopened = OsuFile.Parse(file.ToBytes());
+        var (second, after, _) = Apply(reopened, folder, (0, [Skin("soft-hitnormal"), Skin("soft-hitclap")], 100));
+
+        Assert.Empty(second.Conflicts);
+        Assert.DoesNotContain("snare.wav", Text(reopened));
+        Assert.Equal(["soft-hitclap", "soft-hitnormal"], Names(after.Moments[0]));
     }
 
     [Fact]

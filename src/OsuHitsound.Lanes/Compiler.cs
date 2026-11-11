@@ -30,7 +30,8 @@ public sealed record CompileResult(IReadOnlyList<Conflict> Conflicts, IReadOnlyL
 /// <item>slider nodes: a green line at the node, copying the slider velocity and effects in force; the next moment
 /// that needs the old settings gets its own line back.</item>
 /// </list>
-/// A single existing file on a circle or spinner can use the filename field when bank encoding cannot represent it.
+/// A single existing file on a circle or spinner can use the filename field when bank encoding cannot represent it;
+/// a circle or spinner wanted with other sounds loses its filename.
 /// Moments that can't be encoded become conflicts and keep their old sounds.
 /// The result is checked by decompiling again: any moment that doesn't come back as wanted is a conflict too.
 /// </summary>
@@ -194,9 +195,8 @@ public static partial class Compiler
             var point = Decompiler.PointState(timing.SamplePointAt(time), settings);
             if (obj.Kind is HitObjectKind.Circle or HitObjectKind.Spinner)
             {
-                var hs = obj.HitSample ?? default;
-                if (hs.Filename is not null)
-                    throw new ConflictException("This object plays a custom file (filename field), which this editor never writes.");
+                // A filename would play alone, so it goes. Only moments wanted differently get here: an untouched one keeps it.
+                var hs = (obj.HitSample ?? default) with { Filename = null };
 
                 bool protectSlider = passive.Any(p => p.Kind is PassiveKind.SliderSlide or PassiveKind.SliderWhistle && p.Time - settings.TimeOffset <= time + HitsoundRules.ControlPointLeniency && p.EndTime - settings.TimeOffset >= time);
                 if (style == ExportStyle.GreenLines && protectSlider) protectedCircles++;

@@ -33,24 +33,20 @@ public sealed class OsuFile
     /// <summary>Inserts a centred circle without rewriting other object lines.</summary>
     public HitObject InsertHitCircle(int time)
     {
-        var newline = lines.FirstOrDefault(l => l.Terminator.Length > 0)?.Terminator ?? "\r\n"u8.ToArray();
+        var newline = Newline();
         int header = lines.FindIndex(l => l.Section == "HitObjects" && l.Text.Trim() == "[HitObjects]");
-        void EnsureNewline(int index)
-        {
-            if (index > 0 && lines[index - 1].Terminator.Length == 0)
-            { lines[index - 1].Terminator = newline; removedLines = true; }
-        }
         if (header < 0)
         {
-            EnsureNewline(lines.Count);
+            EnsureNewlineBefore(lines.Count, newline);
             header = lines.Count;
             InsertLine(header, "[HitObjects]", "HitObjects", newline);
         }
-        int objectIndex = hitObjects.FindIndex(o => o.Time > time);
+        // Unreadable lines count as earlier, so the circle goes after them.
+        int objectIndex = hitObjects.FindIndex(o => OsuNumber.TryParseDouble(o.Line.Text.Split(',') is { Length: > 2 } f ? f[2] : "", out double t) && t > time);
         if (objectIndex < 0) objectIndex = hitObjects.Count;
         int lineIndex = objectIndex < hitObjects.Count ? lines.IndexOf(hitObjects[objectIndex].Line)
             : hitObjects.Count > 0 ? lines.IndexOf(hitObjects[^1].Line) + 1 : header + 1;
-        EnsureNewline(lineIndex);
+        EnsureNewlineBefore(lineIndex, newline);
         var line = InsertLine(lineIndex, $"256,192,{time.ToString(System.Globalization.CultureInfo.InvariantCulture)},1,0,0:0:0:0:", "HitObjects", newline);
         var circle = new HitObject(line);
         hitObjects.Insert(objectIndex, circle);
@@ -177,15 +173,16 @@ public sealed class OsuFile
         }
 
         int editor = lines.FindIndex(l => l.Section == "Editor" && l.Text.Trim() == "[Editor]");
+        var newline = Newline();
         if (editor >= 0)
         {
+            EnsureNewlineBefore(editor + 1, newline);
             InsertLine(editor + 1, text, "Editor", lines[editor].Terminator);
             return;
         }
 
         // No [Editor] section: add one before [Metadata] (osu!'s order), or at the end.
         int metadata = lines.FindIndex(l => l.Text.Trim() == "[Metadata]");
-        var newline = lines.FirstOrDefault(l => l.Terminator.Length > 0)?.Terminator ?? "\r\n"u8.ToArray();
         if (metadata < 0)
         {
             if (lines.Count > 0 && lines[^1].Terminator.Length == 0) throw new InvalidOperationException("The file ends without a newline; nothing can be added after it.");
@@ -199,6 +196,16 @@ public sealed class OsuFile
 
     private OsuLine? BookmarksLine() =>
         lines.FirstOrDefault(l => l.Section == "Editor" && l.Text.TrimStart().StartsWith(BookmarksKey, StringComparison.Ordinal));
+
+    /// <summary>The file's own line ending (the first line's), or "\r\n".</summary>
+    private byte[] Newline() => lines.FirstOrDefault(l => l.Terminator.Length > 0)?.Terminator ?? "\r\n"u8.ToArray();
+
+    /// <summary>Gives the line before <paramref name="index"/> a line ending when it is the file's last and has none.</summary>
+    private void EnsureNewlineBefore(int index, byte[] newline)
+    {
+        if (index > 0 && lines[index - 1].Terminator.Length == 0)
+        { lines[index - 1].Terminator = newline; removedLines = true; }
+    }
 
     private OsuLine InsertLine(int index, string text, string section, byte[] terminator)
     {

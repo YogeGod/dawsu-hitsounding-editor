@@ -32,6 +32,15 @@ public class HitCircleEditingTests
         Assert.True(map.IsEdited);
     }
 
+    [Fact]
+    public void An_unreadable_object_line_does_not_stop_a_circle_being_added()
+    {
+        var map = OsuFile.Parse(Encoding.UTF8.GetBytes("osu file format v14\r\n[HitObjects]\r\n256,192,500,1,0,0:0:0:0:\r\n1,2,oops,1,0\r\n256,192,3000,1,0,0:0:0:0:\r\n"));
+        map.InsertHitCircle(2000);
+        Assert.Equal("osu file format v14\r\n[HitObjects]\r\n256,192,500,1,0,0:0:0:0:\r\n1,2,oops,1,0\r\n256,192,2000,1,0,0:0:0:0:\r\n256,192,3000,1,0,0:0:0:0:\r\n",
+            Encoding.UTF8.GetString(map.ToBytes()));
+    }
+
     [Theory]
     [InlineData("237,124,65060,2,0,P|304:134|336:121,1,90")] // ends after length, as old maps do
     [InlineData("174,5,141252,2,8,P|210:21|232:45,1,60,8|8")] // edgeSounds only

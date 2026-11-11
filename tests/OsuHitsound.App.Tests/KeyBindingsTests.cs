@@ -200,9 +200,15 @@ public class KeyBindingsTests : IDisposable
     public void Real_cubase_file_reads_and_mapped_commands_exist()
     {
         if (CubaseKeyFile.FindNewest() is not { } path) return;
-        var keys = CubaseKeyFile.Read(path);
-        Assert.True(keys.Count > 100);
-        var missing = CubaseKeyFile.CommandMap.Values.Where(c => !keys.ContainsKey(c)).ToList();
+        Assert.True(CubaseKeyFile.Read(path).Count > 100);
+        // Every command, bound to a key or not: the user may have cleared a shortcut (the map then has no key for it).
+        var doc = XDocument.Load(path);
+        var names = doc.Root!.Elements("list").Elements("item").SelectMany(category =>
+        {
+            string? Name(XElement e) => e.Elements("string").FirstOrDefault(s => (string?)s.Attribute("name") == "Name")?.Attribute("value")?.Value;
+            return category.Elements("list").Where(l => (string?)l.Attribute("name") == "Commands").Elements("item").Select(c => $"{Name(category)}|{Name(c)}");
+        }).ToHashSet();
+        var missing = CubaseKeyFile.CommandMap.Values.Where(c => !names.Contains(c)).ToList();
         Assert.Empty(missing);
     }
 }
