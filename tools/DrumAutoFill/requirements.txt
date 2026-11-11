@@ -1,0 +1,7 @@
+# Evaluated with Python 3.13 on Windows x64; CPU inference.
+adtof-pytorch @ git+https://github.com/xavriley/ADTOF-pytorch.git@85c192e78f716ea0b111cc8a5ee4a8f6a3a4f8a9
+torch==2.15.0
+librosa==1.0.0
+numpy==2.5.4
+pretty_midi==0.2.11.post0
+soundfile==0.14.0

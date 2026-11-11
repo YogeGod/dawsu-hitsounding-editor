@@ -16,6 +16,7 @@ public partial class MainWindow
     private void WireMapFeatures()
     {
         SetupDrumMaps();
+        DrumAutoFillItem.Click += async (_, _) => await ShowDrumAutoFill();
         Lanes.LaneLayoutChanged += ScheduleProjectSave;
         Lanes.LaneMenuRequested += ShowLaneMenu;
         Lanes.SliderMenuRequested += ShowSliderMenu;
