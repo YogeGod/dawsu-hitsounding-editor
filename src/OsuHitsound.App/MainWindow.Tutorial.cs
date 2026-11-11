@@ -135,7 +135,7 @@ public partial class MainWindow
             () => On(InfoBarLeft)),
         new("Song", "The song's own volume, mute, and an offset in ms if it sounds early or late. None of this is saved into the map.",
             () => On(SongControls)),
-        new("Inspector", "Active lane and Bookmarks stay on the left. Optional bookmark labels appear in the list and on flag hover. View shows History or Sound sets when you need them. Preferences chooses the Classic browser inside the inspector or the Folder tree sidebar. Selecting a file previews; the assignment button or a lane drop replaces its sample.",
+        new("Inspector", "Active lane and Bookmarks stay on the left. Optional bookmark labels appear in the list and next to their flags on the ruler. View shows History or Sound sets when you need them. Preferences chooses the Classic browser inside the inspector or the Folder tree sidebar. Selecting a file previews; the assignment button or a lane drop replaces its sample.",
             () => On(Inspector)),
         new("Sample lanes", "Every sample you can use in a reorderable lane list: hitnormal, whistle, finish and clap, each with the default sound first and the map's own files under it. Type in the filter to find one. Above it, + adds a lane for a sample file already in the mapset, − deletes the highlighted lane (the one you touched last), and ‹ hides or shows the names.",
             () => InLanes(Lanes.LaneListHeaderRect)),

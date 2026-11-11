@@ -569,6 +569,7 @@ internal sealed class ArrangeView : Control
             double rulerTop = SectionsHeight;
             ctx.DrawLine(Paint.DividerPen, new Point(GridLeft, rulerTop), new Point(width, rulerTop));
             double lastLabel = double.NegativeInfinity;
+            var bookmarkLabels = BookmarkLabels(width);
             foreach (var line in lines)
             {
                 double x = GridLeft + Axis.X(line.Time);
@@ -576,12 +577,15 @@ internal sealed class ArrangeView : Control
                 string label = line.IsBar ? line.Bar.ToString() : $"{line.Bar}.{line.Beat}";
                 double labelWidth = line.IsBar ? 24 : 30;
                 if (x - lastLabel < labelWidth + 6 || (!line.IsBar && Axis.Zoom * line.BeatLength < 48)) continue;
+                var numberBox = new Rect(x + 3, rulerTop + 2, labelWidth, 14);
+                if (bookmarkLabels.Exists(b => b.Box.Intersects(numberBox))) continue; // a bookmark label sits there
+
                 Paint.DrawText(ctx, label, new Point(x + 3, rulerTop + 3), RulerFont, line.IsBar ? Paint.RulerBar : Paint.RulerBeat, 0, line.IsBar ? Paint.UiBold : Paint.Ui);
                 lastLabel = x;
             }
 
             DrawLocators(ctx, width);
-            DrawBookmarks(ctx);
+            DrawBookmarks(ctx, bookmarkLabels);
             DrawWaveform(ctx, width);
             DrawObjects(ctx, model, width);
             // The grid runs on through the waveform and the objects, faded so it doesn't fight them, so hits line up
@@ -673,6 +677,7 @@ internal sealed class ArrangeView : Control
 
     private static readonly IBrush StripBg = Paint.Brush("#1f1f21"),
         SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.75), BookmarkFill = Paint.Brush("#4cc3d1");
+    private const double BookmarkLabelSize = 11;
     // A dark outline keeps the objects readable over the waveform.
     private static readonly IPen ObjectRing = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#171a1c"), 1.5);
     private static readonly IPen ObjectConflictPen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#ff453a"), 2);
@@ -885,8 +890,8 @@ internal sealed class ArrangeView : Control
 
     private static readonly IPen ObjectWhiteRing = new Avalonia.Media.Immutable.ImmutablePen(Brushes.White, 1.5);
 
-    /// <summary>Bookmark flags on the ruler (osu!'s editor bookmarks, saved in the .osu).</summary>
-    private void DrawBookmarks(DrawingContext ctx)
+    /// <summary>Bookmark flags on the ruler (osu!'s editor bookmarks, saved in the .osu), with their labels.</summary>
+    private void DrawBookmarks(DrawingContext ctx, List<(Rect Box, FormattedText Text)> labels)
     {
         if (Session is null) return;
         foreach (double t in Session.BookmarkTimes)
@@ -904,6 +909,39 @@ internal sealed class ArrangeView : Control
             ctx.DrawGeometry(BookmarkFill, null, flag);
             ctx.FillRectangle(BookmarkFill, new Rect(x, SectionsHeight, 1, RulerHeight));
         }
+
+        var back = Theme_.Cached("brush:bookmarkLabelBack", () => (IBrush)Paint.Brush(Theme_.Color("arrange.bg"), 0.9));
+        foreach (var (box, text) in labels)
+        {
+            ctx.DrawRectangle(back, null, box, 2, 2);
+            ctx.DrawText(text, new Point(box.X + 3, box.Y + (box.Height - text.Height) / 2));
+        }
+    }
+
+    /// <summary>
+    /// Where each labelled bookmark's label goes: right of its flag, on the ruler's number row (the numbers under a label
+    /// are skipped), cut short before the next flag so labels never overlap.
+    /// </summary>
+    private List<(Rect Box, FormattedText Text)> BookmarkLabels(double width)
+    {
+        var labels = new List<(Rect, FormattedText)>();
+        if (Session is null) return labels;
+        var times = Session.BookmarkTimes.ToList();
+        for (int i = 0; i < times.Count; i++)
+        {
+            if (Session.BookmarkLabel(times[i]) is not { Length: > 0 } label) continue;
+            double x = GridLeft + Axis.X(times[i]);
+            double end = Math.Min(width, i + 1 < times.Count ? GridLeft + Axis.X(times[i + 1]) - 3 : width);
+            double room = end - (x + 8) - 6;
+            if (room < 14 || end < GridLeft) continue;
+            var text = Paint.Format(label, BookmarkLabelSize, BookmarkFill);
+            text.MaxTextWidth = room;
+            text.MaxLineCount = 1;
+            text.Trimming = TextTrimming.CharacterEllipsis;
+            labels.Add((new Rect(x + 8, SectionsHeight + 2, text.Width + 6, 14), text));
+        }
+
+        return labels;
     }
 
     /// <summary>The cycle band in the upper ruler between the L and R flags: blue when cycling, red when it skips (R before L).</summary>
