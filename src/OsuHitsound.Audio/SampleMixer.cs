@@ -60,6 +60,8 @@ public static class SampleMixer
                 count += n;
             }
 
+            // A file that opens but holds no audio (an empty .ogg used to mute a sound) is silence too.
+            if (count == 0) return [0, 0];
             if (count != samples.Length) Array.Resize(ref samples, count);
             return ToStereo(samples, channels, info.Frequency);
         }
@@ -96,7 +98,10 @@ public static class SampleMixer
         return output;
     }
 
-    /// <summary>Sums stereo 44.1 kHz layers at their gains (volume / 100), preserving over-full-scale values as float WAV.</summary>
+    /// <summary>
+    /// Sums stereo 44.1 kHz layers at their gains (volume / 100), preserving over-full-scale values as float WAV. A
+    /// silent result is the 44-byte blank.wav, the only silent hitsound file the ranking criteria allow.
+    /// </summary>
     public static byte[] Mix(IReadOnlyList<(float[] Stereo, float Gain)> layers)
     {
         int length = layers.Count == 0 ? 0 : layers.Max(l => l.Stereo.Length);
@@ -106,6 +111,7 @@ public static class SampleMixer
         foreach (var (stereo, gain) in layers)
             for (int i = 0; i < stereo.Length; i++)
                 sum[i] += stereo[i] * gain;
+        if (Array.TrueForAll(sum, s => s == 0)) return BlankSample.Bytes;
 
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);

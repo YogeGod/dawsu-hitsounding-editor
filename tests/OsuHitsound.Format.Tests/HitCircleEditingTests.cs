@@ -31,4 +31,19 @@ public class HitCircleEditingTests
         Assert.Equal(1234, Assert.Single(reopened.HitObjects).Time);
         Assert.True(map.IsEdited);
     }
+
+    [Theory]
+    [InlineData("237,124,65060,2,0,P|304:134|336:121,1,90")] // ends after length, as old maps do
+    [InlineData("174,5,141252,2,8,P|210:21|232:45,1,60,8|8")] // edgeSounds only
+    public void Writing_slider_edge_fields_also_writes_the_default_hitSample(string line)
+    {
+        var map = OsuFile.Parse(Encoding.UTF8.GetBytes("osu file format v14\r\n[HitObjects]\r\n" + line + "\r\n"));
+        var slider = map.HitObjects[0];
+        slider.SetNodeSound(1, HitSound.Whistle);
+        slider.SetNodeSet(0, SampleSet.None, SampleSet.Drum);
+        // Mapset Verifier reads a final edgeSets field as hitSample and then can't open the mapset at all.
+        var written = Encoding.UTF8.GetString(map.ToBytes()).Split("\r\n")[2];
+        Assert.EndsWith(",0:3|0:0,0:0:0:0:", written);
+        Assert.Equal(HitSound.Whistle, OsuFile.Parse(map.ToBytes()).HitObjects[0].NodeSounds[1]);
+    }
 }

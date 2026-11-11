@@ -133,6 +133,7 @@ public sealed class HitObject(OsuLine line) : FieldLine(line)
         if (sounds[node] == sound && EdgeSounds.Length > node) return;
         sounds[node] = sound;
         SetField(EdgeSoundsField, string.Join('|', sounds.Select(s => ((int)s).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        CompleteSliderFields();
     }
 
     /// <summary>
@@ -150,7 +151,17 @@ public sealed class HitObject(OsuLine line) : FieldLine(line)
                 : i < entries.Length && entries[i].Length > 0 ? entries[i]
                 : $"{(int)own.NormalSet}:{(int)own.AdditionSet}";
         var text = string.Join('|', updated);
-        if (text != Field(EdgeSetsField)) SetField(EdgeSetsField, text);
+        if (text != Field(EdgeSetsField)) { SetField(EdgeSetsField, text); CompleteSliderFields(); }
+    }
+
+    /// <summary>
+    /// Writes the slider's remaining fields up to hitSample once an edge field is written, as osu! does. A line that
+    /// ends at edgeSets is valid for osu!, but Mapset Verifier then reads edgeSets as hitSample and can't open the set.
+    /// The defaults play exactly what the missing fields did.
+    /// </summary>
+    private void CompleteSliderFields()
+    {
+        if (Field(HitSampleField!.Value) is null) SetField(HitSampleField.Value, "0:0:0:0:");
     }
 
     /// <summary>The slider's control points after the start position, from the curve field (e.g. "B|200:100|300:192").</summary>

@@ -23,11 +23,11 @@ public class MixerAndLaneTests
     }
 
     [Fact]
-    public void Addition_companion_is_silent_and_never_shorter_than_25_ms()
+    public void Addition_companion_is_the_blank_wav()
     {
+        // Mapset Verifier accepts only the 44-byte blank.wav as a silent hitsound (and exempts it from the 25 ms rule).
         var blank = SampleMixer.Mix(new MixFile("soft-hitnormal2.wav", []) { SilenceFor = "mix" }, _ => throw new Exception("No input is needed"));
-        Assert.True(blank.Length >= 44 + SampleMixer.Rate * .025 * 4);
-        Assert.All(blank.Skip(44), b => Assert.Equal(0, b));
+        Assert.Equal(BlankSample.Bytes, blank);
     }
 
     [Fact]
@@ -52,11 +52,27 @@ public class MixerAndLaneTests
     [Fact]
     public void A_mix_is_never_shorter_than_25_ms()
     {
-        var wav = SampleMixer.Mix([(new float[10], 1f)]);
+        var wav = SampleMixer.Mix([(new float[] { 0.5f, 0.5f, 0, 0, 0, 0, 0, 0, 0, 0 }, 1f)]);
         Assert.True((wav.Length - 44) / 4.0 / SampleMixer.Rate >= 0.025);
         Assert.Equal(0, (wav.Length - 44) % 4); // every PCM frame has both 16-bit channels
         Assert.Equal(wav.Length - 8, BitConverter.ToInt32(wav, 4));
         Assert.Equal(wav.Length - 44, BitConverter.ToInt32(wav, 40));
+    }
+
+    [Fact]
+    public void Silent_mixes_are_the_44_byte_blank_wav_the_ranking_criteria_require()
+    {
+        Assert.Equal(BlankSample.Bytes, SampleMixer.Mix([(new float[10], 1f), (new float[] { 0.5f, 0.5f }, 0f)]));
+        Assert.Equal(BlankSample.Bytes, SampleMixer.Mix([]));
+    }
+
+    [Fact]
+    public void A_sample_that_opens_but_holds_no_audio_decodes_as_silence()
+    {
+        ManagedBass.Bass.Init(0); // the "no sound" device: decoding only
+        // A valid 16-bit stereo WAV whose data chunk is empty but not the exact blank.wav bytes (an extra LIST chunk).
+        byte[] empty = [.. "RIFF"u8, 46, 0, 0, 0, .. "WAVE"u8, .. "LIST"u8, 2, 0, 0, 0, 0, 0, .. BlankSample.Bytes.AsSpan(12)];
+        Assert.Equal([0f, 0f], SampleMixer.Decode(empty)!);
     }
 
     [Fact]
@@ -86,9 +102,7 @@ public class MixerAndLaneTests
         Assert.Equal([0f, 0f], SampleMixer.Decode([.. blank, 1, 2, 3])!);
         var lane = new Lane(LaneSource.BeatmapFile, "soft-sliderslide.wav");
         var mix = new MixFile("soft-hitnormal2.wav", []) { Loops = [(lane, 100, 100)] };
-        var wav = SampleMixer.Mix(mix, _ => SampleMixer.Decode(blank));
-        Assert.Equal(44 + 4410 * 4, wav.Length);
-        Assert.All(wav.Skip(44), value => Assert.Equal(0, value));
+        Assert.Equal(BlankSample.Bytes, SampleMixer.Mix(mix, _ => SampleMixer.Decode(blank)));
     }
 
     [Fact]
