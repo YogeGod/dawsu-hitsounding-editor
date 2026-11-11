@@ -172,8 +172,7 @@ public partial class MainWindow
         else if (audio is not null && model is not null && doc is { } document && session is not null && folder is not null)
         {
             audio.Load(document.Map with { Lanes = session.Lanes }, folder, skin.Value);
-            foreach (var lane in model.LaneRows.Select(r => r.Lane).Where(l => l.Source == LaneSource.BeatmapFile && !session.Lanes.Contains(l)))
-                if (folder.Find(lane.Name) is { } f) audio.LoadLane(lane, folder.ReadBytes(f));
+            LoadExtraLaneAudio();
             audio.IsAudible = model.IsAudible;
             model.Silent = audio.SilentLanes; // which lanes have no sound may differ with other default sounds
             Lanes.InvalidateVisual();

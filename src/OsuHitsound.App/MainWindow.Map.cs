@@ -350,17 +350,18 @@ public partial class MainWindow
         projectTimer.Start();
     }
 
+    private EditorProject? editorProject;
+
+    private ProjectView CurrentView() => new(Lanes.LocatorLeft, Lanes.LocatorRight, Lanes.Cycle, exportSettings, mapSongOffset);
+
     private bool SaveProject()
     {
         projectTimer?.Stop();
-        if (model is null || session is null || mapPath is null) return true;
-        var data = CaptureProject();
-        // Keep view preferences, but don't resurrect discarded edits from a previous autosave.
-        if (discardProjectOnClose && closeProjectBaseline is { } baseline)
-            data = data with { Unanchored = baseline.Unanchored, HsMode = baseline.HsMode, SoundSets = baseline.SoundSets, BookmarkLabels = baseline.BookmarkLabels };
+        if (editorProject is null) return true;
         try
         {
-            ProjectStore.Save(ProjectStore.DefaultRoot(), mapPath, data);
+            // Closing without saving keeps the view, but doesn't resurrect discarded edits from a previous autosave.
+            editorProject.Save(CurrentView(), discardUnsaved: discardProjectOnClose);
             SaveDrumMaps();
             return true;
         }
@@ -372,87 +373,37 @@ public partial class MainWindow
         }
     }
 
-    private ProjectData CaptureProject()
+    /// <summary>
+    /// Puts back what the project file kept for this map (see <see cref="EditorProject"/>), then its lanes' audio and
+    /// drum maps. Returns a warning for the status bar, or null.
+    /// </summary>
+    private string? RestoreProject(bool restoreUnanchored = true, HsProject? hsOverride = null)
     {
-        var model = this.model ?? throw new InvalidOperationException("No map is open.");
-        var session = this.session ?? throw new InvalidOperationException("No edit session is open.");
-        var (names, order, added, hidden) = model.LaneLayout();
-        return new ProjectData
-        {
-            BookmarkLabels = session.State.BookmarkLabels.ToDictionary(),
-            Unanchored = [.. session.Unanchored.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time) { Volume = session.State.LayerVolumes.TryGetValue(h, out int volume) ? volume : null })],
-            LaneNames = names,
-            LaneSlots = model.SlotLayout(),
-            DrumRenders = model.DrumRenders.ToDictionary(),
-            LaneOrder = order,
-            ActiveLane = model.ActiveLane is { } active ? ProjectStore.KeyOf(active) : null,
-            AddedLanes = added,
-            HiddenLanes = hidden,
-            CollapsedFamilies = [.. model.CollapsedFamilies],
-            HsMode = doc!.HsProject,
-            ExportSettings = exportSettings,
-            SoundSets = session.CaptureSoundSets(doc!.HsProject.FileHash),
-            LocatorLeft = Lanes.LocatorLeft,
-            LocatorRight = Lanes.LocatorRight,
-            Cycle = Lanes.Cycle,
-            PreviewMuted = [.. model.PreviewMutedHits.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time))],
-            SongOffset = mapSongOffset,
-            TimeSignatures = [.. model.TimeSignatures],
-        };
-    }
-
-    /// <summary>Puts back what the project file kept for this map: lanes, hits with no object, locators, mutes, offset.</summary>
-    private void RestoreProject(bool restoreUnanchored = true, HsProject? hsOverride = null)
-    {
-        if (model is null || session is null || mapPath is null || folder is null) return;
-        var project = ProjectStore.Load(ProjectStore.DefaultRoot(), mapPath) ?? new ProjectData();
-        session.RestoreBookmarkLabels(project.BookmarkLabels);
-        exportSettings = project.ExportSettings ?? new ExportMergeSettings { PairSamples = true, Style = prefs.ExportStyle };
-        try { exportSettings.Validate(); }
-        catch (FormatException) { exportSettings = new ExportMergeSettings { PairSamples = true, Style = prefs.ExportStyle }; }
-        exportSettings.PairSamples = true;
+        if (model is null || session is null || mapPath is null || doc is null) return null;
+        editorProject = new EditorProject(ProjectStore.DefaultRoot(), doc, model);
+        var (view, warning) = editorProject.Restore(prefs.ExportStyle, restoreUnanchored, hsOverride);
+        exportSettings = view.ExportSettings;
         RefreshOutputSettings();
-
-        doc!.RestoreHsProject(hsOverride ?? project.HsMode);
-        foreach (var lane in session.State.Hits.Select(h => h.Lane).Distinct())
-        {
-            if (!model.LaneRows.Any(r => r.Lane == lane)) model.AddLane(lane);
-            if (lane.Source == LaneSource.BeatmapFile && folder.Find(lane.Name) is { } sample) audio?.LoadLane(lane, folder.ReadBytes(sample));
-        }
-
-        model.ApplyLaneLayout(project, lane => lane.Source != LaneSource.BeatmapFile || folder.Find(lane.Name) is not null);
-        foreach (string family in project.CollapsedFamilies)
-            if (model.LaneRows.FirstOrDefault(r => model.FamilyKey(r.Lane) == family) is { } row && !model.IsFamilyCollapsed(row.Lane)) model.ToggleFamily(row.Lane);
-        foreach (var lane in project.AddedLanes.Select(ProjectStore.LaneOf).OfType<Lane>())
-            if (folder.Find(lane.Name) is { } f) audio?.LoadLane(lane, folder.ReadBytes(f));
-
-        // Hits with no object: only those that still have no object (the map may have changed since).
-        if (restoreUnanchored)
-        {
-            var loose = project.Unanchored.Select(h => (Project: h,
-                    Hit: ProjectStore.LaneOf(h.Lane) is { } lane ? session.HitAt(lane, h.Time) : null))
-                .Where(p => p.Hit is not null && (p.Hit.Anchor is null || p.Hit.Anchor is { ObjectIndex: < 0 } key && !session.MomentByKey.ContainsKey(key)))
-                .GroupBy(p => p.Hit).SelectMany(g => g.Select((p, i) => (p.Project, Hit: p.Hit! with { Voice = i }))).ToList();
-            session.Restore(loose.Select(p => p.Hit!), loose.Where(p => p.Project.Volume is >= 0 and <= 100)
-                .ToDictionary(p => p.Hit!, p => p.Project.Volume!.Value));
-        }
-
-        try { session.RestoreSoundSets(project.SoundSets, GenerateManifest.Hash(doc!.Opened)); }
-        catch (FormatException ex) { flash = $"Sound-set links were not restored: {ex.Message}"; }
-
-        foreach (var muted in project.PreviewMuted)
-            if (session.State.Hits.FirstOrDefault(h => ProjectStore.KeyOf(h.Lane) == muted.Lane && Math.Abs(h.Time - muted.Time) < 0.5) is { } hit)
-                model.TogglePreviewMute(hit);
-
-        if (project.TimeSignatures.Count > 0) model.SetTimeSignatures(project.TimeSignatures);
-        if (project.LocatorLeft is { } l && project.LocatorRight is { } r) Lanes.SetLocators(l, r);
-        Lanes.Cycle = project.Cycle;
-        mapSongOffset = double.IsFinite(project.SongOffset) ? Math.Clamp(project.SongOffset, -10000, 10000) : 0;
+        LoadExtraLaneAudio();
+        if (view.LocatorLeft is { } l && view.LocatorRight is { } r) Lanes.SetLocators(l, r);
+        Lanes.Cycle = view.Cycle;
+        mapSongOffset = view.SongOffset;
         ApplyOffsets();
-
-        model.RebuildNotes();
         RestoreDrumMaps();
         SyncScrollBars();
+        return warning;
+    }
+
+    /// <summary>
+    /// Loads the audio of file lanes shown beyond the session's own (added by the project, or used by its hits), which the
+    /// map's audio load leaves out. A lane whose file isn't there stays unloaded, so it loads once the file appears.
+    /// </summary>
+    private void LoadExtraLaneAudio()
+    {
+        if (audio is null || model is null || session is null || folder is not { } files) return;
+        var laneAudio = new LaneAudio(files);
+        foreach (var lane in model.LaneRows.Select(r => r.Lane).Where(l => l.Source == LaneSource.BeatmapFile && !session.Lanes.Contains(l) && files.Find(l.Name) is not null))
+            audio.LoadLane(lane, laneAudio.TryRead(lane));
     }
 
     // ---------------------------------------------------------------- Generate mode

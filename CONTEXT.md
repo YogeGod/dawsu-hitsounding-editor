@@ -11,6 +11,9 @@ A row representing one sample sound, together with its hits on the timeline.
 The sound a lane plays, as bytes: read from the mapset folder for file lanes, from the default skin for skin lanes. A file that is absent, unreadable as content, or empty counts as missing.
 _Avoid_: Sample source
 
+**Editor project**:
+What the editor keeps for one map that a .osu can't hold: lane layout, hits with no object, sound-set links, HS-mode state, locators, export settings, song offset and time signatures. Stored in the editor's app data, never in the mapset.
+
 **Folder**:
 A sample-set group containing its lanes in the editing window. It is a visual group, not a directory on disk.
 _Avoid_: Disk folder
