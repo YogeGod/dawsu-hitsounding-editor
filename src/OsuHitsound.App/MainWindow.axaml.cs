@@ -81,6 +81,14 @@ public partial class MainWindow : Window
 
         Lanes.Axis.Changed += OnAxisChanged;
         Lanes.AuditionOnPlacement = prefs.AuditionOnPlacement;
+        Lanes.Edits.ProtectHitnormals = prefs.ProtectHitnormals;
+        ProtectHitnormalsItem.IsChecked = prefs.ProtectHitnormals;
+        ProtectHitnormalsItem.Click += (_, _) =>
+        {
+            Lanes.Edits.ProtectHitnormals = ProtectHitnormalsItem.IsChecked;
+            prefs = prefs with { ProtectHitnormals = Lanes.Edits.ProtectHitnormals };
+            SavePrefs();
+        };
         Lanes.InsertVolume = prefs.InsertVolume is { } insertVolume ? Math.Clamp(insertVolume, 0, 100) : null;
         InsertVolumeBox.Value = Lanes.InsertVolume;
         InsertVolumeBox.ValueChanged += (_, _) =>

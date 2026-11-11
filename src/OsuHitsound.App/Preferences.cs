@@ -63,6 +63,8 @@ internal sealed record Preferences
     /// <summary>Volume for newly drawn hits; null follows the map.</summary>
     public int? InsertVolume { get; init; }
 
+    public bool ProtectHitnormals { get; init; }
+
     /// <summary>The inspector on the left: shown, its width, its cards top to bottom and the folded ones.</summary>
     public bool InspectorOpen { get; init; } = true;
 

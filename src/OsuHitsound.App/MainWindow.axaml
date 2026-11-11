@@ -67,6 +67,8 @@
               <MenuItem Name="PasteItem" Header="Paste at playhead" />
               <MenuItem Name="DuplicateItem" Header="Duplicate" />
               <MenuItem Name="DeleteItem" Header="Delete" />
+              <MenuItem Name="ProtectHitnormalsItem" Header="Protect hitnormals from deletion" ToggleType="CheckBox"
+                        ToolTip.Tip="Keep hitnormal sounds when deleting, cutting, erasing or clearing a range in the Hitsound editor. Turn off to remove them intentionally." />
               <Separator />
               <MenuItem Name="SelectAllItem" Header="Select all" />
               <Separator />

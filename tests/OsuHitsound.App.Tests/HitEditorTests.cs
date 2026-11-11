@@ -24,6 +24,86 @@ public class HitEditorTests
 
     private static EditHit Clap(HitEditor e) => Session(e).State.Hits.Single(h => h.Lane.Name == "soft-hitclap");
 
+    [Fact]
+    public void Protected_bulk_delete_keeps_hitnormals_and_undo_restores_additions()
+    {
+        var e = Editor();
+        e.ProtectHitnormals = true;
+        var before = Session(e).State;
+        e.SelectAll();
+        e.DeleteSelection();
+        Assert.Equal(2, Session(e).State.Hits.Count);
+        Assert.All(Session(e).State.Hits, h => Assert.Equal("hitnormal", h.Lane.Sample!.Value.Sound));
+        Assert.Equal(2, e.Selected.Count);
+        var after = Session(e).State;
+        e.DeleteSelection();
+        Assert.Same(after, Session(e).State); // All protected: no extra undo step.
+        Session(e).Undo();
+        Assert.Same(before, Session(e).State);
+    }
+
+    [Fact]
+    public void Protected_erase_is_a_noop_until_the_setting_is_disabled()
+    {
+        var e = Editor();
+        var normal = Session(e).State.Hits.First(h => h.Lane.Sample is { Sound: "hitnormal" });
+        e.ProtectHitnormals = true;
+        e.Select([normal]);
+        var before = Session(e).State;
+        e.Erase(normal);
+        Assert.Same(before, Session(e).State);
+        Assert.Contains(normal, e.Selected);
+        e.ProtectHitnormals = false;
+        e.Erase(normal);
+        Assert.DoesNotContain(normal, Session(e).State.Hits);
+    }
+
+    [Fact]
+    public void Protected_cut_copies_only_the_hits_it_removes()
+    {
+        var e = Editor();
+        e.ProtectHitnormals = true;
+        e.SelectAll();
+        e.Cut();
+        Assert.Equal(2, Session(e).State.Hits.Count);
+        e.Paste(3000);
+        var pasted = Assert.Single(e.Selected);
+        Assert.Equal("hitclap", pasted.Lane.Sample!.Value.Sound);
+        Assert.Equal(3000, pasted.Time);
+        Assert.Equal(2, Session(e).State.Hits.Count(h => h.Lane.Sample is { Sound: "hitnormal" }));
+    }
+
+    [Fact]
+    public void Protected_range_delete_keeps_normals_and_does_not_create_noop_history()
+    {
+        var e = Editor();
+        e.ProtectHitnormals = true;
+        var before = Session(e).State;
+        e.MarkRange(0, 2000, 0, e.Model!.Rows.Count - 1);
+        e.EditRange(RangeOperation.Delete, 0);
+        Assert.Equal(2, Session(e).State.Hits.Count);
+        Assert.All(Session(e).State.Hits, h => Assert.Equal("hitnormal", h.Lane.Sample!.Value.Sound));
+        var after = Session(e).State;
+        e.EditRange(RangeOperation.Delete, 0);
+        Assert.Same(after, Session(e).State);
+        Session(e).Undo();
+        Assert.Same(before, Session(e).State);
+    }
+
+    [Theory]
+    [InlineData("normal-hitnormal3.wav")]
+    [InlineData("drum-hitnormal2.ogg")]
+    public void Protection_also_covers_numbered_map_hitnormal_files(string name)
+    {
+        var e = Editor();
+        var hit = Session(e).HitAt(new Lane(LaneSource.BeatmapFile, name), 2000);
+        Session(e).Add([hit]);
+        e.ProtectHitnormals = true;
+        e.Select([hit]);
+        e.DeleteSelection();
+        Assert.Contains(hit, Session(e).State.Hits);
+    }
+
     [Theory]
     [InlineData(null, 64)]
     [InlineData(0, 0)]

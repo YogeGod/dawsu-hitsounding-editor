@@ -60,6 +60,10 @@ internal sealed class HitEditor
 
     public bool SnapOn { get; set; } = true;
 
+    public bool ProtectHitnormals { get; set; }
+
+    private bool CanDelete(EditHit hit) => !ProtectHitnormals || hit.Lane.Sample is not { Sound: "hitnormal" };
+
     public SnapMode SnapMode { get; set; } = SnapMode.Grid;
 
     /// <summary>Quantize's strength in % (Q uses the last one).</summary>
@@ -116,6 +120,7 @@ internal sealed class HitEditor
     /// <summary>Removes one hit and drops it from the selection (right-click, Draw strokes that start on a hit, Erase).</summary>
     public void Erase(EditHit hit)
     {
+        if (!CanDelete(hit)) return;
         Session?.Remove([hit], "Erase");
         Selected.Remove(hit);
     }
@@ -123,8 +128,10 @@ internal sealed class HitEditor
     public void DeleteSelection(string label = "Delete")
     {
         if (Session is not { } session || Selected.Count == 0) return;
-        session.Remove(Selected.ToList(), label);
-        Clear();
+        var removed = Selected.Where(CanDelete).ToList();
+        if (removed.Count == 0) return;
+        session.Remove(removed, label);
+        Select(Selected.Except(removed));
     }
 
     /// <summary>Moves the selected hits and keeps them selected.</summary>
@@ -249,8 +256,13 @@ internal sealed class HitEditor
 
     public void Cut()
     {
+        var protectedHits = Selected.Where(h => !CanDelete(h)).ToList();
+        var cut = Selected.Where(CanDelete).ToList();
+        if (cut.Count == 0) return;
+        Select(cut);
         Copy();
         DeleteSelection("Cut");
+        if (protectedHits.Count > 0) Select(protectedHits);
     }
 
     /// <summary>Pastes at <paramref name="time"/> (snapped), selecting the pasted hits.</summary>
@@ -313,6 +325,13 @@ internal sealed class HitEditor
     public IReadOnlyList<EditHit> EditRange(RangeOperation operation, double offset)
     {
         if (Session is not { } session || Range is not { } r) return [];
+        if (operation == RangeOperation.Delete && ProtectHitnormals)
+        {
+            var removed = session.InRange(r.Start, r.End, r.Lanes).Where(CanDelete).ToList();
+            if (removed.Count > 0) session.Remove(removed, "Range delete");
+            Clear();
+            return [];
+        }
         var hits = session.EditRange(r.Start, r.End, r.Lanes, operation, offset);
         Select(hits);
         return hits;

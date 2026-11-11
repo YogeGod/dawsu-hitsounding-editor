@@ -10,6 +10,15 @@ public class PreferencesAndHelpTests : IDisposable
     public void Dispose() => Directory.Delete(dir, recursive: true);
 
     [Fact]
+    public void Hitnormal_protection_defaults_off_and_can_be_enabled()
+    {
+        Assert.False(new Preferences().ProtectHitnormals);
+        var path = Path.Combine(dir, "protection.json");
+        new Preferences { ProtectHitnormals = true }.Save(path);
+        Assert.True(Preferences.Load(path).ProtectHitnormals);
+    }
+
+    [Fact]
     public void Objects_snap_mode_is_remembered()
     {
         var path = Path.Combine(dir, "objects-snap.json");
