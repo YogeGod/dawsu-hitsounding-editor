@@ -40,7 +40,6 @@ public partial class MainWindow
         bool wasEnabled = Root.IsEnabled;
         Root.IsEnabled = false;
         audio?.Pause();
-        var decoded = new Dictionary<Lane, float[]?>();
         int loose = session.Unanchored.Count();
         bool hs = session.State.HsMode || session.State.HsCircles.Count > 0;
         try
@@ -50,14 +49,8 @@ public partial class MainWindow
             { flash = $"{loose} hitsound(s) have no hit object and cannot be saved into this difficulty. Use HS mode or Generate. Their editor project is kept."; UpdateStatus(); return false; }
             string manifests = GenerateManifest.DefaultRoot();
             var defaults = skin.Value;
-            var (plan, fresh) = await Task.Run(() => document.PlanHsSave(manifests, defaults, exportSettings));
-            float[]? Decode(Lane lane)
-            {
-                if (decoded.TryGetValue(lane, out var samples)) return samples;
-                var bytes = lane.Source == LaneSource.Skin ? defaults.GetValueOrDefault(lane.Name)
-                    : fresh.Find(lane.Name) is { } file ? fresh.ReadBytes(file) : null;
-                return decoded[lane] = bytes is null ? null : SampleMixer.Decode(bytes);
-            }
+            var (plan, laneAudio) = await Task.Run(() => document.PlanHsSave(manifests, defaults, exportSettings));
+            var mixer = new LaneMixer(laneAudio);
             if (!exportSettings.PairSamples && plan.Storage.MergeCombinations.Count > 0)
             {
                 ExportMergeSettings? settings;
@@ -66,13 +59,13 @@ public partial class MainWindow
                     settings = await Dialogs.MergePriorities(this, plan.Storage.MergeCombinations, mix =>
                     {
                         if (audio is null) throw new IOException("Audio output is unavailable. Check Preferences → Audio output.");
-                        audio.PreviewMix(SampleMixer.Mix(mix, Decode));
+                        audio.PreviewMix(mixer.Mix(mix));
                     });
                 }
                 finally { audio?.StopAudition(); }
                 if (settings is null) return false;
-                decoded.Clear();
-                (plan, fresh) = await Task.Run(() => document.PlanHsSave(manifests, defaults, settings));
+                (plan, laneAudio) = await Task.Run(() => document.PlanHsSave(manifests, defaults, settings));
+                mixer = new LaneMixer(laneAudio);
             }
             if (plan.Storage.Conflicts.Count > 0)
                 throw new IOException(plan.Storage.Conflicts[0].Reason);
@@ -83,7 +76,7 @@ public partial class MainWindow
                       + ". Your lanes stay as they are; existing samples are not changed.")
                     + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
                     + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : ""), "Save")) return false;
-            var written = await Task.Run(() => document.WriteHsSave(plan, mix => SampleMixer.Mix(mix, Decode), MapSaver.DefaultBackupRoot(), manifests));
+            var written = await Task.Run(() => document.WriteHsSave(plan, mixer.Mix, MapSaver.DefaultBackupRoot(), manifests));
             savedMapWritten = written.Backup is not null; // the .osu itself changed (not only its samples)
             bool projectSaved = SaveProject();
             // Preserve editable layers in this window even if a sidecar write unexpectedly fails after the .osu save.

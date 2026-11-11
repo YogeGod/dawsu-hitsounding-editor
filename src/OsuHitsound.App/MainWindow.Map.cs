@@ -99,9 +99,9 @@ public partial class MainWindow
         {
             session.SetSlides(sliders, change, label);
             // A slide sound the map didn't use before needs its audio (loading one already loaded does nothing).
+            var laneAudio = new LaneAudio(folder ?? new MapFolder([]), skin.Value);
             foreach (var lane in session.Map.Passive.Select(p => p.Lane).Distinct())
-                audio?.LoadLane(lane, lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name)
-                    : folder?.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null);
+                audio?.LoadLane(lane, laneAudio.TryRead(lane));
             Lanes.InvalidateVisual();
         }
 
@@ -507,48 +507,32 @@ public partial class MainWindow
                 var (source, folder) = fromOpen
                     ? (document.Compile(state).File, document.Folder)
                     : (OsuFile.Read(sourcePath), MapFolder.FromDirectory(Path.GetDirectoryName(sourcePath)!));
-                // New tick and slide samples are mixed from the source's files (and the default sounds), as Generate mixes.
-                var decoded = new Dictionary<Lane, float[]?>();
-                byte[]? Render(MixFile mix)
-                {
-                    float[]? Decode(Lane lane)
-                    {
-                        if (!decoded.TryGetValue(lane, out var stereo))
-                        {
-                            var bytes = lane.Source == LaneSource.Skin ? skinSounds.GetValueOrDefault(lane.Name) : folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null;
-                            decoded[lane] = stereo = bytes is null ? null : SampleMixer.Decode(bytes);
-                        }
-                        return stereo;
-                    }
-                    return SampleMixer.Mix(mix, Decode);
-                }
                 var sourceSamples = new List<MixFile>();
                 GeneratePlan? sourcePlan = null;
                 if (fromOpen)
                 {
-                    (GeneratePlan Plan, MapFolder Folder) planned;
+                    (GeneratePlan Plan, LaneAudio Audio) planned;
                     if (document.Session.Unanchored.Any()) planned = document.PlanGenerate(GenerateManifest.DefaultRoot(), skinSounds, exportSettings, includeSliderAudio: true);
                     else
                     {
                         var savedSource = document.PlanHsSave(GenerateManifest.DefaultRoot(), skinSounds, exportSettings);
-                        planned = (savedSource.Plan.Storage, savedSource.Folder);
+                        planned = (savedSource.Plan.Storage, savedSource.Audio);
                     }
                     sourcePlan = planned.Plan;
                     if (sourcePlan.Conflicts.Count > 0) throw new IOException(sourcePlan.Conflicts[0].Reason);
                     if (!options.CopySampleSets && sourcePlan.Mixes.Count > 0)
                         throw new IOException("Enable Copy sample sets and indexes to preserve the unsaved source's paired or fused sounds.");
-                    folder = planned.Folder;
+                    var sourceMixer = new LaneMixer(planned.Audio);
                     foreach (var sample in sourcePlan.Mixes)
-                    {
-                        var rendered = Render(sample) ?? throw new IOException($"Could not render {sample.FileName}.");
-                        sourceSamples.Add(sample with { CopyBytes = sample.CopyBytes ?? rendered });
-                    }
-                    var fresh = folder;
+                        sourceSamples.Add(sample with { CopyBytes = sample.CopyBytes ?? sourceMixer.Mix(sample) });
+                    var fresh = planned.Audio.Folder;
                     var assets = sourceSamples.ToDictionary(m => m.FileName, m => m.CopyBytes!, StringComparer.OrdinalIgnoreCase);
                     folder = new MapFolder(fresh.Files.Concat(assets.Keys), name => assets.TryGetValue(name, out var raw) ? raw : fresh.ReadBytes(name));
                     source = sourcePlan.Diff;
                 }
-                var copied = HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), Render, exportSettings, skinSounds, sourceSamples, sourcePlan?.InputFiles);
+                // New tick and slide samples are mixed from the source's files (its new samples included) and the default sounds, as Generate mixes.
+                var mixer = new LaneMixer(new LaneAudio(folder, skinSounds));
+                var copied = HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), mixer.Mix, exportSettings, skinSounds, sourceSamples, sourcePlan?.InputFiles);
                 if (sourcePlan is not null && copied.Any(r => r.Error is null))
                 {
                     // Reuse these generated assets next time even though Copy did not save the source difficulty.
@@ -610,12 +594,12 @@ public partial class MainWindow
         var path = mapPath;
         var generatingState = session.State;
         GeneratePlan plan;
-        MapFolder fresh;
+        LaneAudio laneAudio;
         try
         {
             flash = "Planning the hitsound diff…";
             UpdateStatus();
-            (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, exportSettings));
+            (plan, laneAudio) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, exportSettings));
         }
         catch (Exception ex)
         {
@@ -635,26 +619,21 @@ public partial class MainWindow
         ExportMergeSettings? mergeSettings = null;
         if (!exportSettings.PairSamples && plan.MergeCombinations.Count > 0)
         {
-            var previewDecoded = new Dictionary<Lane, float[]?>();
+            var previewMixer = new LaneMixer(laneAudio);
+            bool previewed = false;
             void Preview(MixFile mix)
             {
                 if (audio is null) throw new IOException("Audio output is unavailable. Check Preferences → Audio output.");
-                float[]? Decode(Lane lane)
-                {
-                    if (previewDecoded.TryGetValue(lane, out var cached)) return cached;
-                    var bytes = lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name)
-                        : fresh.Find(lane.Name) is { } file ? fresh.ReadBytes(file) : null;
-                    return previewDecoded[lane] = bytes is null ? null : SampleMixer.Decode(bytes);
-                }
+                previewed = true;
                 audio.Pause();
-                audio.PreviewMix(SampleMixer.Mix(mix, Decode));
+                audio.PreviewMix(previewMixer.Mix(mix));
             }
             try { mergeSettings = await Dialogs.MergePriorities(this, plan.MergeCombinations, Preview); }
-            finally { if (previewDecoded.Count > 0) audio?.StopAudition(); }
+            finally { if (previewed) audio?.StopAudition(); }
             if (mergeSettings is null) return;
             try
             {
-                (plan, fresh) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, mergeSettings));
+                (plan, laneAudio) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, mergeSettings));
             }
             catch (Exception ex)
             {
@@ -679,33 +658,20 @@ public partial class MainWindow
                 : "") +
             (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
             "Your opened map is not changed.";
-        var confirmed = await Dialogs.ConfirmGenerate(this, (plan, fresh), Summary,
+        var confirmed = await Dialogs.ConfirmGenerate(this, (plan, laneAudio), Summary,
             includeSliderAudio => Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value,
                 mergeSettings ?? exportSettings, includeSliderAudio)), mergeSettings);
         if (confirmed is null) return;
-        (plan, fresh) = confirmed.Value;
+        (plan, laneAudio) = confirmed.Value;
         if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
         { flash = "The edits changed before Generate was confirmed. Generate again; nothing was written."; UpdateStatus(); return; }
 
-        var skinSounds = skin.Value;
         try
         {
             string? note = null;
             await Task.Run(() =>
             {
-                // Each sample is read and decoded once, however many mixes use it.
-                var decoded = new Dictionary<Lane, float[]?>();
-                float[]? Decoded(Lane lane)
-                {
-                    if (decoded.TryGetValue(lane, out var d)) return d;
-                    var bytes = lane.Source == LaneSource.Skin ? skinSounds.GetValueOrDefault(lane.Name)
-                        : fresh.Find(lane.Name) is { } f ? fresh.ReadBytes(f) : null;
-                    return decoded[lane] = bytes is null ? null : SampleMixer.Decode(bytes);
-                }
-
-                byte[]? Render(MixFile mix) => SampleMixer.Mix(mix, Decoded);
-
-                var written = GenerateWriter.Write(plan, Render, MapSaver.DefaultBackupRoot());
+                var written = GenerateWriter.Write(plan, new LaneMixer(laneAudio).Mix, MapSaver.DefaultBackupRoot());
                 try
                 {
                     written.Manifest.Save(GenerateManifest.DefaultRoot(), plan.OsuPath);

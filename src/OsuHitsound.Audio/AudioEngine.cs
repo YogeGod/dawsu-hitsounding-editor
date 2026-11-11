@@ -188,15 +188,12 @@ public sealed class AudioEngine : IDisposable
 
             var samples = new List<(Lane Lane, float[]? Stereo)>();
             var seen = new HashSet<Lane>();
+            var laneAudio = new LaneAudio(folder, skin);
             foreach (var lane in map.Lanes)
             {
                 if (!seen.Add(lane)) continue; // the first sample wins, as LoadLane ignores a lane already loaded
-                byte[]? data = lane.Missing ? null : lane.Source switch
-                {
-                    LaneSource.Skin => skin.GetValueOrDefault(lane.Name),
-                    _ => folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null,
-                };
-                float[]? stereo = data is { Length: > 0 } ? SampleMixer.Decode(data) : null;
+                byte[]? data = lane.Missing ? null : laneAudio.TryRead(lane);
+                float[]? stereo = data is null ? null : SampleMixer.Decode(data);
                 samples.Add((lane, stereo is { Length: > 0 } ? stereo : null));
             }
 

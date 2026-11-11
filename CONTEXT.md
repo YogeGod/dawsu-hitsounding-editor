@@ -7,6 +7,10 @@ A standalone editor for arranging osu! hitsounds in sample lanes.
 **Lane**:
 A row representing one sample sound, together with its hits on the timeline.
 
+**Lane audio**:
+The sound a lane plays, as bytes: read from the mapset folder for file lanes, from the default skin for skin lanes. A file that is absent, unreadable as content, or empty counts as missing.
+_Avoid_: Sample source
+
 **Folder**:
 A sample-set group containing its lanes in the editing window. It is a visual group, not a directory on disk.
 _Avoid_: Disk folder

@@ -189,7 +189,7 @@ public static class HitsoundCopier
         CustomSampleIndexes? indexes = null, ExportMergeSettings? mergeSettings = null, IReadOnlyDictionary<string, byte[]>? skin = null,
         PairingPlanner? pairing = null)
     {
-        if (mergeSettings?.PairSamples == true) pairing ??= new PairingPlanner(targetFolder, skin, mergeSettings);
+        if (mergeSettings?.PairSamples == true) pairing ??= new PairingPlanner(new LaneAudio(targetFolder, skin), mergeSettings);
         pairing?.ClearConflicts();
         if (!double.IsFinite(options.Leniency) || options.Leniency < 0)
             throw new ArgumentOutOfRangeException(nameof(options), options.Leniency, "The leniency must be a number of milliseconds, 0 or more.");
@@ -471,7 +471,7 @@ public static class HitsoundCopier
                 {
                     string directory = Path.GetDirectoryName(doc.Path)!;
                     if (!pairings.TryGetValue(directory, out pairing))
-                        pairings[directory] = pairing = new PairingPlanner(workingFolder, skin, mergeSettings);
+                        pairings[directory] = pairing = new PairingPlanner(new LaneAudio(workingFolder, skin), mergeSettings);
                 }
                 var plan = Plan(source, sourceFolder, doc.File, workingFolder, options, indexes, mergeSettings, skin, pairing);
 
@@ -495,10 +495,12 @@ public static class HitsoundCopier
                         .Where(l => l.Source == LaneSource.BeatmapFile).Select(l => pairedFolder.Find(l.Name) ?? l.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     toWrite = toWrite.Where(m => usedFiles.Contains(m.FileName)).ToList();
                     var writingNames = toWrite.Select(m => m.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var physicalInputs = (pairing?.InputFiles ?? new Dictionary<string, string>())
+                    var physicalInputs = (pairing?.Audio.FilesRead ?? new Dictionary<string, string>())
                         .Where(p => !stagedSource.ContainsKey(p.Key) || writingNames.Contains(p.Key) || doc.Folder.Find(p.Key) is not null);
+                    // Source files are checked where they are in this target's folder; one elsewhere can't be read from here.
+                    var sourceInFolder = (sourceInputs ?? new Dictionary<string, string>()).Where(p => doc.Folder.Find(p.Key) is not null);
                     var storage = new GeneratePlan(doc.Path, compiledFile, toWrite, 0, compiled.Conflicts)
-                    { InputFiles = (sourceInputs ?? new Dictionary<string, string>()).Concat(physicalInputs).GroupBy(p => p.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Value) };
+                    { InputFiles = sourceInFolder.Concat(physicalInputs).GroupBy(p => p.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Value) };
                     var writtenPair = GenerateWriter.Write(storage, render ?? (_ => throw new IOException("Sample rendering is unavailable.")), backupRoot, doc.Opened);
                     results.Add(new HitsoundCopyTarget(doc.Path, plan.Matched, plan.Changed, 0, writtenPair.Backup, null, plan.Muted)
                     { Generated = toWrite.Count, OnTicksAndSlides = plan.GreenLines.Count });

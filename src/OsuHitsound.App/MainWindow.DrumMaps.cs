@@ -216,10 +216,11 @@ public partial class MainWindow
     private DrumMapPreset CaptureDrumMapPreset(DrumMapPreset preset)
     {
         if (doc is null) throw new InvalidOperationException("Open a map first.");
+        var laneAudio = new LaneAudio(doc.Folder, skin.Value);
         var samples = preset.Rows.Where(r => r.LaneKey is not null).DistinctBy(r => r.LaneKey).Select(r =>
         {
             var lane = ProjectStore.LaneOf(r.LaneKey!)!;
-            byte[] bytes = lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name) ?? throw new IOException($"Missing {lane.Name}.") : doc.Folder.ReadBytes(lane.Name);
+            byte[] bytes = laneAudio.Read(lane);
             return new DrumMapAudio(r.LaneKey!, r.SlotKey ?? r.LaneKey!, bytes.ToArray());
         }).ToImmutableList();
         var portable = preset with { Audio = samples }; portable.Validate(); return portable;

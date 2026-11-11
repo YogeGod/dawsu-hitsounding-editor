@@ -90,10 +90,10 @@ public class MapDocumentTests : IDisposable
         var doc = MapDocument.Load(Map());
         doc.Session.Add([doc.Session.HitAt(new Lane(LaneSource.Skin, "drum-hitclap"), 1250)]); // no hitnormal: needs a mix
 
-        var (plan, folder) = doc.PlanGenerate(Path.Combine(dir, "generated"));
+        var (plan, audio) = doc.PlanGenerate(Path.Combine(dir, "generated"));
 
         Assert.Equal(Path.Combine(Path.GetDirectoryName(doc.Path)!, "Band - Song (Me) [Hitsounds].osu"), plan.OsuPath);
         Assert.Equal("soft-hitnormal2.wav", Assert.Single(plan.Mixes).FileName);
-        Assert.Contains(Path.GetFileName(doc.Path), folder.Files);
+        Assert.Contains(Path.GetFileName(doc.Path), audio.Folder.Files);
     }
 }

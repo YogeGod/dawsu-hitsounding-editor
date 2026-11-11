@@ -14,7 +14,7 @@ public partial class MainWindow
     {
         Lanes.Edits.ReadClipboardAudio = lane =>
         {
-            try { return lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name) : doc?.Folder.Find(lane.Name) is { } file ? doc.Folder.ReadBytes(file) : null; }
+            try { return new LaneAudio(doc?.Folder ?? new MapFolder([]), skin.Value).TryRead(lane); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
         };
         Lanes.Edits.ImportSetClipboard = ImportSoundSetClipboard;

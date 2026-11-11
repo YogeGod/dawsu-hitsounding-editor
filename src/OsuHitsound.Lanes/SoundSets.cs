@@ -48,12 +48,12 @@ public static class SoundSetFiles
     public const string Extension = ".dawsuset";
     public static SoundSet Capture(string name, IEnumerable<(Lane Lane, int Volume)> layers, MapFolder folder, IReadOnlyDictionary<string, byte[]> skin)
     {
+        var audio = new LaneAudio(folder, skin);
         var members = layers.Select(l =>
         {
             var sample = l.Lane.Sample;
             if (sample is { Sound: not ("hitnormal" or "hitwhistle" or "hitfinish" or "hitclap") }) throw new IOException("Use hitnormal, whistle, finish or clap sounds in a set.");
-            byte[] raw = l.Lane.Source == LaneSource.Skin ? skin.GetValueOrDefault(l.Lane.Name) ?? throw new IOException($"Missing {l.Lane.Name}.")
-                : folder.Find(l.Lane.Name) is { } file ? folder.ReadBytes(file) : throw new IOException($"Missing {l.Lane.Name}.");
+            byte[] raw = audio.Read(l.Lane);
             return new SoundSetMember(Guid.NewGuid(), ProjectStore.KeyOf(l.Lane), l.Lane,
                 sample is { } s ? HitsoundRules.SampleName(s.Set, s.Sound) : "normal-hitnormal", l.Volume, raw.ToArray());
         }).ToImmutableList();

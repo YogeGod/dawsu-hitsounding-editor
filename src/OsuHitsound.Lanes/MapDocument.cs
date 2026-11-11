@@ -88,7 +88,7 @@ public sealed partial class MapDocument
         {
             var direct = Compiler.Apply(OsuFile.Parse(projection.File.ToBytes()), Folder, projection.Wanted);
             var needsPreparation = direct.Conflicts.Select(c => c.Moment).ToHashSet();
-            pairing = new(Folder, skin, settings);
+            pairing = new(new LaneAudio(Folder, skin), settings);
             var hits = state.Hits.Where(h => h.Anchor is not null).ToLookup(h => h.Anchor!.Value);
             foreach (var (key, projected) in projection.Keys)
                 try
@@ -126,15 +126,17 @@ public sealed partial class MapDocument
 
     /// <summary>
     /// Plans the [Hitsounds] diff from a fresh look at the folder (another difficulty may have changed since the map was
-    /// opened), with what the last Generate for that diff recorded. Returns the folder it planned against.
+    /// opened), with what the last Generate for that diff recorded.
     /// Slider body/tick audio is excluded unless explicitly requested; heads, repeats and tails remain included.
+    /// Returns the job's lane audio (over that folder), to render the mixes from.
     /// </summary>
     /// <exception cref="IOException">A difficulty or storyboard in the folder couldn't be read.</exception>
-    public (GeneratePlan Plan, MapFolder Folder) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null, bool includeSliderAudio = false)
+    public (GeneratePlan Plan, LaneAudio Audio) PlanGenerate(string manifestRoot, IReadOnlyDictionary<string, byte[]>? skin = null, ExportMergeSettings? mergeSettings = null, bool includeSliderAudio = false)
     {
         var current = MapFolder.FromDirectory(System.IO.Path.GetDirectoryName(Path)!);
         if (Session.SoundSetInputProblems(current).FirstOrDefault().Error is { } problem) throw new IOException(problem);
         var previous = GenerateManifest.Load(manifestRoot, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path)!, HitsoundDiff.FileNameFor(File, Path)));
-        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, current, Session, previous, skin, mergeSettings, includeSliderAudio), current);
+        var audio = new LaneAudio(current, skin);
+        return (HitsoundDiff.Plan(OsuFile.Parse(Opened), Path, audio, Session, previous, mergeSettings, includeSliderAudio), audio);
     }
 }

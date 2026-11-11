@@ -6,7 +6,7 @@ namespace OsuHitsound.Lanes.Tests;
 public class PairingTests
 {
     private static Lane File(string name) => new(LaneSource.BeatmapFile, name);
-    private static PairingPlanner Planner(params string[] names) => new(new MapFolder(names, Encoding.UTF8.GetBytes));
+    private static PairingPlanner Planner(params string[] names) => new(new LaneAudio(new MapFolder(names, Encoding.UTF8.GetBytes)));
 
     [Fact]
     public void Index_pairing_copies_audio_without_fusing_distinct_roles()
@@ -119,11 +119,11 @@ public class PairingTests
         var folder = new MapFolder(names, Encoding.UTF8.GetBytes);
         var settings = new ExportMergeSettings { PairSamples = true, Priorities = ExportMergeSettings.Slots.OrderBy(s => s.StartsWith("drum-", StringComparison.Ordinal) ? 0 : 1).ToList() };
         var layers = names.Select(n => (File(n), 100)).ToList();
-        var probe = new PairingPlanner(folder, settings: settings);
+        var probe = new PairingPlanner(new LaneAudio(folder), settings: settings);
         probe.For(layers, 1000);
         var combination = probe.Combinations.Single();
         settings.OccurrenceRules[combination.OccurrenceKey] = "soft-hitfinish";
-        var planner = new PairingPlanner(folder, settings: settings);
+        var planner = new PairingPlanner(new LaneAudio(folder), settings: settings);
         var one = planner.For(layers, 1000);
         var two = planner.For(layers, 2000);
         Assert.Equal(SampleSet.Soft, one.Lanes.Single(l => l.Sample?.Sound == "hitfinish").Sample!.Value.Set);
