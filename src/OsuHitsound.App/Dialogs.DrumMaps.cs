@@ -16,6 +16,7 @@ internal static partial class Dialogs
             body.Children.Add(MergeText("Named instrument rows over your existing sample lanes. Editing notes works the same. Presets are shared by this mapset."));
             var list = new ListBox { ItemsSource = maps.Presets.Select(p => p.Name).ToList(), MinWidth = 500, Height = 160,
                 SelectedIndex = Math.Max(0, maps.Presets.FindIndex(p => p.Id == maps.Active)) };
+            TypeAhead.Attach(list);
             Guid? Selected() => list.SelectedIndex is >= 0 and var i && i < maps.Presets.Count ? maps.Presets[i].Id : null;
             var detail = MergeText("");
             void Refresh() { detail.Text = Selected() is { } id ? string.Join("\n", maps.Presets.Single(p => p.Id == id).Rows.Take(8).Select(r => r.Name + (r.MidiNote is { } note ? $" · MIDI {note}" : " · MIDI unassigned") + " → " + (ProjectStore.LaneOf(r.LaneKey ?? "")?.Name ?? "Unassigned"))) : "New Map creates an editing preset, not a .osu difficulty."; }
@@ -109,6 +110,30 @@ internal static partial class Dialogs
                 try { edited.Validate(); close(edited); } catch (FormatException ex) { error.Text = ex.Message; }
             }, "Save map");
         }, scroll: true);
+
+    /// <summary>
+    /// Asks whether to build a drum map from a kit's own mapping: (include chokes, also render a one-shot per lane now).
+    /// Playing through the VST3 is the default: it plays each hit at its volume as velocity, and Render drums bakes those
+    /// velocities later; the one-shot is a single velocity, a stand-in for playing without the plug-in.
+    /// </summary>
+    /// <param name="fill">The active drum map's name and its unassigned rows, when it fills those rows instead of adding a map.</param>
+    public static Task<(bool Chokes, bool Render)?> DrumKitMap(Window owner, string kit, int instruments, int chokes, (string Map, int Unassigned)? fill = null) =>
+        Show<(bool Chokes, bool Render)?>(owner, "Map lanes from the drum instrument", (body, close) =>
+        {
+            var includeChokes = new CheckBox { Content = $"Include chokes ({chokes})", IsChecked = false, IsEnabled = chokes > 0, IsVisible = fill is null };
+            var playback = new RadioButton { GroupName = "kitSound", IsChecked = true,
+                Content = MergeText("Play through the VST3: each hit plays live with its volume as velocity. Render drums… bakes every velocity into WAVs when you're done.") };
+            var render = new RadioButton { GroupName = "kitSound",
+                Content = MergeText("Also give each lane a one-shot sample now (one velocity, 100), so the lanes sound like the kit without the VST3 loaded.") };
+            string text = fill is var (map, unassigned)
+                ? $"Assign {instruments} of the {unassigned} unassigned rows in {map} from the mapping in {kit}? Each gets its own lane, sample index and MIDI note, " +
+                  "and keeps its name." + (instruments < unassigned ? " Rows the kit has no instrument for stay unassigned." : "")
+                : $"Make a drum map from the mapping in {kit}? It adds {instruments} named lanes (one per mapped drum and articulation), " +
+                  "each with its own sample index and MIDI note. Your current drum maps stay in the list.";
+            body.Children.AddRange([MergeText(text), includeChokes, playback, render,
+                MergeText("With playback only, the lanes' own files keep dawsu!'s default sounds; the VST3 plays instead while it's loaded.")]);
+            return (() => close((includeChokes.IsChecked == true, render.IsChecked == true)), "Map lanes");
+        });
 
     public static Task<bool?> DrumMapSamples(Window owner, bool hasAudio) =>
         Show<bool?>(owner, "Load drum map", (body, close) =>

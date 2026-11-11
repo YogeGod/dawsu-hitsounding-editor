@@ -10,7 +10,8 @@
 //       - Audio: the shared memory "Local\<name>" (layout below). dawsu! fills events and frames, bumps requestSeq
 //         and signals "Local\<name>-req"; the host renders, sets doneSeq and signals "Local\<name>-done".
 //       - Control: "<id> \t <command>" per stdin line, "<id> \t <reply>" per stdout line:
-//         SHOW / HIDE (the plug-in's editor window), GETSTATE -> STATE \t <base64>, SETSTATE \t <base64> -> OK, QUIT.
+//         SHOW / HIDE (the plug-in's editor window), GETSTATE -> STATE \t <base64>, SETSTATE \t <base64> -> OK,
+//         NOTENAMES -> NAMES \t <pitch>=<name> ... (VST 3 program pitch names, if the plug-in has any), QUIT.
 //         Errors reply ERROR \t <message>. The state is a format byte (1), then component and controller state.
 //       The host exits when dawsu! (parentPid) exits.
 
@@ -25,6 +26,7 @@
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
+#include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 
 #define NOMINMAX
@@ -364,11 +366,41 @@ struct Pending { std::string id, line, reply; };
 
 std::string Render(const std::string& line);
 
+// The plug-in's names for its MIDI notes (VST 3 program pitch names, as DAWs use for drum maps):
+// NAMES 	 <pitch>=<name> 	 ... for the first program that has them; NAMES alone when it has none.
+std::string NoteNames()
+{
+    std::string reply = "NAMES";
+    FUnknownPtr<IUnitInfo> units(controller);
+    if (!units) return reply;
+    for (int32 l = 0; l < units->getProgramListCount(); l++)
+    {
+        ProgramListInfo list{};
+        if (units->getProgramListInfo(l, list) != kResultOk) continue;
+        for (int32 program = 0; program < std::max<int32>(1, list.programCount); program++)
+        {
+            if (units->hasProgramPitchNames(list.id, program) != kResultTrue) continue;
+            for (int16 pitch = 0; pitch < 128; pitch++)
+            {
+                String128 name{};
+                if (units->getProgramPitchName(list.id, program, pitch, name) != kResultOk || !name[0]) continue;
+                std::u16string wide(reinterpret_cast<const char16_t*>(name));
+                std::string utf8(WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wide.c_str(), (int)wide.size(), nullptr, 0, nullptr, nullptr), ' ');
+                WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wide.c_str(), (int)wide.size(), utf8.data(), (int)utf8.size(), nullptr, nullptr);
+                reply += "	" + std::to_string(pitch) + "=" + Clean(utf8);
+            }
+            return reply;
+        }
+    }
+    return reply;
+}
+
 std::string Run(const std::string& line)
 {
     if (line == "SHOW") return ShowEditor();
     if (line == "HIDE") { if (editorWindow) ShowWindow(editorWindow, SW_HIDE); return "OK"; }
     if (line == "GETSTATE") return GetState();
+    if (line == "NOTENAMES") return NoteNames();
     if (line.rfind("SETSTATE\t", 0) == 0) return SetState(line, 9);
     if (line.rfind("RENDER\t", 0) == 0) return offline ? Render(line) : "ERROR\tThis host plays live; start one with --offline to render.";
     return "ERROR\tUnknown command.";

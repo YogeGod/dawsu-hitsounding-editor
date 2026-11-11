@@ -26,7 +26,11 @@ public partial class MainWindow
     private SoundFontDrumKit? drumKit;
     private OsuHitsound.Lanes.Keysound.KeyInstrument? drumKitPreset;
 
-    private void SetupDrumVst() => DrumVstItem.Click += (_, _) => ShowDrumVst();
+    private void SetupDrumVst()
+    {
+        DrumVstItem.Click += (_, _) => ShowDrumVst();
+        SetupDrumKitMapping();
+    }
 
     internal static Dictionary<Lane, int> DrumVstNotes(ArrangeModel model)
     {
@@ -83,7 +87,8 @@ public partial class MainWindow
         var saveState = new Button { Content = "Save instrument state…" };
         stateControls.Children.Add(loadState); stateControls.Children.Add(saveState); body.Children.Add(stateControls);
         var mapping = new Button { Content = "Edit lane MIDI assignments…" };
-        body.Children.Add(mapping);
+        var kitMap = new Button { Content = "Map lanes from instrument…" };
+        body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { mapping, kitMap } });
         var render = new Button { Content = "Render drums to WAVs…" };
         body.Children.Add(render);
         render.Click += async (_, _) => await RenderDrumVst();
@@ -100,6 +105,7 @@ public partial class MainWindow
             unload.IsEnabled = drumVst is not null || drumKit is not null;
             startLive.IsEnabled = drumVst is not null && !drumVstReady;
             mapping.IsEnabled = model is not null;
+            kitMap.IsEnabled = model is not null && drumVst is not null && !renderingDrums;
             render.IsEnabled = model is not null && (drumKit is not null || drumVst is not null && drumVstReady) && !renderingDrums;
             kitEffects.IsVisible = drumKit is not null;
             kitEffects.IsChecked = drumKitPreset?.Effects != false;
@@ -115,9 +121,11 @@ public partial class MainWindow
             string? path = selected == browse ? await Vst3Picker.Browse(panel) : choices.GetValueOrDefault(selected);
             if (path is null || drumVstPanel is null) return;
             choose.IsEnabled = false;
-            try { LoadDrumVst(path); }
+            bool loaded = false;
+            try { LoadDrumVst(path); loaded = true; }
             catch (Exception ex) { ReportDrumVstError(ex); }
             finally { choose.IsEnabled = true; Refresh(); }
+            if (loaded) await OfferKitMappingAfterLoad(); // a known kit at once; Kontakt and the like once a kit is loaded in them
         };
         chooseKit.Click += async (_, _) =>
         {
@@ -146,6 +154,7 @@ public partial class MainWindow
         unload.Click += (_, _) => { drumVstError = null; UnloadDrumVst(); UnloadDrumKit(); Refresh(); };
         enabled.IsCheckedChanged += (_, _) => { drumVstEnabled = enabled.IsChecked == true; RefreshDrumVstRouting(); };
         mapping.Click += async (_, _) => { await ShowDrumMapSetup(); Refresh(); };
+        kitMap.Click += async (_, _) => { await MapLanesFromDrumKit(onLoad: false); Refresh(); };
         loadState.Click += async (_, _) =>
         {
             var files = await drumVstPanel!.StorageProvider.OpenFilePickerAsync(new() { Title = "Load instrument state", FileTypeFilter = [new("Instrument state") { Patterns = ["*.bin"] }] });

@@ -22,14 +22,16 @@ public static class DrumVstRenderer
         }
     }
 
-    public static Task Render(Vst3Instrument instrument, DrumRenderKey key, string output, CancellationToken cancellation) =>
-        RenderCore(instrument.Process, () => instrument.Pump(1), key, output, cancellation);
+    /// <param name="fadeAtLimit">A note still ringing at the tail limit fades out over its last half second instead of
+    /// failing (lane samples, where a cut cymbal is fine; Render drums keeps refusing to truncate).</param>
+    public static Task Render(Vst3Instrument instrument, DrumRenderKey key, string output, CancellationToken cancellation, bool fadeAtLimit = false) =>
+        RenderCore(instrument.Process, () => instrument.Pump(1), key, output, cancellation, fadeAtLimit: fadeAtLimit);
 
     /// <summary>The same one-shot render from a SoundFont kit: no plug-in window to keep alive, so it runs unpaced.</summary>
     public static Task Render(SoundFontDrumKit kit, DrumRenderKey key, string output, CancellationToken cancellation) =>
         RenderCore(kit.Process, () => { }, key, output, cancellation, pace: false);
 
-    internal static async Task RenderCore(Action<float[], int, MidiEvent[]> process, Action pump, DrumRenderKey key, string output, CancellationToken cancellation, bool pace = true)
+    internal static async Task RenderCore(Action<float[], int, MidiEvent[]> process, Action pump, DrumRenderKey key, string output, CancellationToken cancellation, bool pace = true, bool fadeAtLimit = false)
     {
         key.Validate();
         var buffer = new float[Block * 2];
@@ -56,6 +58,13 @@ public static class DrumVstRenderer
             if (frame == 0) midi.Add(new(0, 0x99, key.Note, key.Velocity));
             if (frame <= Rate / 10 && frame + frames > Rate / 10) midi.Add(new(Rate / 10 - frame, 0x89, key.Note, 0));
             process(buffer, frames, midi.ToArray());
+            int limit = Rate * TailLimitSeconds, fade = Rate / 2;
+            if (fadeAtLimit && frame + frames > limit - fade)
+                for (int i = 0; i < frames; i++)
+                {
+                    float gain = Math.Clamp((limit - (frame + i)) / (float)fade, 0, 1);
+                    buffer[2 * i] *= gain; buffer[2 * i + 1] *= gain;
+                }
             float peak = 0;
             for (int i = 0; i < frames * 2; i++)
             {
@@ -66,9 +75,13 @@ public static class DrumVstRenderer
             quiet = peak < Silence ? quiet + frames : 0;
             writer.WriteSamples(buffer, 0, frames * 2);
             if (sounding && frame >= Rate * 2 && quiet >= Rate) return;
-            if (!sounding && frame >= Rate * 2) throw new IOException($"MIDI note {key.Note}, velocity {key.Velocity} rendered silence. Check the kit mapping.");
+            if (!sounding && frame >= Rate * 2) throw new SilentRenderException($"MIDI note {key.Note}, velocity {key.Velocity} rendered silence. Check the kit mapping.");
             pump(); if (pace) await Task.Delay(12, cancellation);
         }
+        if (fadeAtLimit) return;
         throw new IOException($"MIDI note {key.Note}, velocity {key.Velocity} still sounds at the 15-second tail limit. Export stopped without truncating it; shorten the kit's release or effects and retry.");
     }
 }
+
+/// <summary>A note the kit plays nothing for (no sound in its first two seconds).</summary>
+public sealed class SilentRenderException(string message) : IOException(message);
