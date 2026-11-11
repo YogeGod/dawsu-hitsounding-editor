@@ -60,7 +60,7 @@ public partial class MainWindow
         if (doc is not { } document || session is not { } editing || mapPath is not { } path) return;
         // Busy (a save, render or load, or a drag), or not in the hitsound editor: look again shortly. Only flags are
         // checked meanwhile; the file is read once dawsu! is free.
-        if (savingHs || generating || renderingDrums || !Loading.IsCompleted || editing.IsGestureActive || Keys.Document is not null || Start.IsVisible
+        if (WriteBusy || renderingDrums || !Loading.IsCompleted || editing.IsGestureActive || Keys.Document is not null || Start.IsVisible
             || OwnedWindows.Any(w => w.Classes.Contains("editorDialog"))) // a question open: its answer is about this map
         {
             ScheduleMapCheck();

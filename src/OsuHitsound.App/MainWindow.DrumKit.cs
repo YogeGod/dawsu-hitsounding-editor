@@ -85,7 +85,7 @@ public partial class MainWindow
         void Say(string message) { if (!onLoad) { flash = message; UpdateStatus(); } }
         if (model is null || doc is null || session is null) { Say("Open a map first: the lanes are made in its mapset."); return; }
         if (drumVst is null || drumVstPath is null || drumVstName is null) { Say("Load a drum VST3 first (Playback → Drums VST…)."); return; }
-        if (renderingDrums || generating || savingHs || drumReadFailed) { Say("Finish the current render or save first."); return; }
+        if (renderingDrums || WriteBusy || drumReadFailed) { Say("Finish the current render or save first."); return; }
         string kitName = drumVstName.Length > 128 ? drumVstName[..128] : drumVstName;
         var targetModel = model;
         // Asked by itself only while the drum map is untouched: once rows are assigned (by this or by hand), loading

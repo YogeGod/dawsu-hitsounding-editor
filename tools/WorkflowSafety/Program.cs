@@ -24,7 +24,7 @@ w.Close(); Pump(); Check(w.OwnedWindows.Count == 1, "repeated close keeps one pr
 Choose(prompt, "Cancel"); Check(w.IsVisible && ReferenceEquals(s.State, edited), "Cancel preserves dirty edits");
 w.Close(); Pump(); Prompt(w).Close(); Pump(); Check(w.IsVisible && s.IsEdited, "dialog X cancels close");
 w.Close(); Pump(); Press(Prompt(w), Key.Escape); Check(w.IsVisible && !w.OwnedWindows.Any(), "Escape cancels close");
-w.Close(); Pump(); Choose(Prompt(w), "Save"); Wait(() => !w.IsVisible || w.OwnedWindows.Any() || !((bool)typeof(MainWindow).GetField("savingHs", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!));
+w.Close(); Pump(); Choose(Prompt(w), "Save"); Wait(() => !w.IsVisible || w.OwnedWindows.Any() || !((bool)typeof(MainWindow).GetProperty("WriteBusy", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!));
 if (w.OwnedWindows.Any()) Choose(w.OwnedWindows.Last(), "Save");
 Wait(() => !w.IsVisible); Check(!w.IsVisible, "successful Save closes editor");
 Check(Volume(MapPath(w)) == 37, "close Save writes changed volume");
@@ -210,7 +210,7 @@ bytes = File.ReadAllBytes(path); w.Close(); Pump(); Choose(Prompt(w), "Save");
 Wait(() => w.OwnedWindows.Any()); var confirmation = w.OwnedWindows.Last();
 Check(confirmation.Title != "Unsaved changes", "close Save waits for export confirmation");
 confirmation.Close(); Pump();
-Wait(() => !(bool)typeof(MainWindow).GetField("savingHs", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!);
+Wait(() => !(bool)typeof(MainWindow).GetProperty("WriteBusy", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!);
 Check(w.IsVisible && s.IsEdited && File.ReadAllBytes(path).SequenceEqual(bytes), "cancelled Save keeps editor and file unchanged");
 w.Close(); Pump(); Choose(Prompt(w), "Discard");
 Console.WriteLine($"PASS: {checks} safety checks");

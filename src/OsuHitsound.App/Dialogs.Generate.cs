@@ -9,7 +9,7 @@ internal static partial class Dialogs
     /// <summary>Replans read-only when scope changes; only the currently displayed, valid plan can be accepted.</summary>
     public static Task<(GeneratePlan Plan, LaneAudio Audio)?> ConfirmGenerate(Window owner,
         (GeneratePlan Plan, LaneAudio Audio) initial, Func<GeneratePlan, string> summary,
-        Func<bool, Task<(GeneratePlan Plan, LaneAudio Audio)>> replan, ExportMergeSettings? mergeSettings = null)
+        Func<bool, Task<(GeneratePlan Plan, LaneAudio Audio)>> replan)
     {
         Button? generate = null;
         return Show<(GeneratePlan Plan, LaneAudio Audio)?>(owner, "Generate hitsound diff", (body, close) =>
@@ -46,13 +46,6 @@ internal static partial class Dialogs
                     if (generate is not null) generate.IsEnabled = ready;
                 }
             };
-            if (mergeSettings is not null)
-            {
-                var status = MergeText($"{mergeSettings.Rules.Count} combination rules.");
-                var save = new Button { Content = "Save merge preset…" };
-                save.Click += async (_, _) => await SaveMergePreset((Window)TopLevel.GetTopLevel(body)!, mergeSettings, status);
-                body.Children.AddRange([save, status]);
-            }
             return (() => { if (ready) close(current); }, "Generate");
         }, scroll: true, configureOk: button => { generate = button; button.IsEnabled = initial.Plan.Conflicts.Count == 0; });
     }

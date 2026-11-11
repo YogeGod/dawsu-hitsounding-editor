@@ -520,143 +520,49 @@ public partial class MainWindow
         UpdateStatus();
     }
 
-    private bool generating;
-    private async Task Generate()
+    private MapWrites? mapWrites;
+
+    // Also true while the map reopens after a save, which is part of saving.
+    private bool writing;
+
+    /// <summary>A save or Generate of the open map is running.</summary>
+    private bool WriteBusy => writing || mapWrites?.IsBusy == true;
+
+    Task<bool> IMapWriteHost.ConfirmSave(string title, string text) => Dialogs.Confirm(this, title, text, "Save");
+
+    Task<(GeneratePlan Plan, LaneAudio Audio)?> IMapWriteHost.ConfirmGenerate((GeneratePlan Plan, LaneAudio Audio) initial,
+        Func<GeneratePlan, string> summary, Func<bool, Task<(GeneratePlan Plan, LaneAudio Audio)>> replan) =>
+        Dialogs.ConfirmGenerate(this, initial, summary, replan);
+
+    bool IMapWriteHost.SaveProject() => SaveProject();
+
+    void IMapWriteHost.ShowStatus(string text) => ShowStatus(text);
+
+    private void ShowStatus(string text) { flash = text; UpdateStatus(); }
+
+    /// <summary>Runs a save or Generate with the window disabled and <see cref="WriteBusy"/> on, so nothing edits the map meanwhile.</summary>
+    private async Task<T> WhileWriting<T>(Func<Task<T>> write)
     {
-        if (generating || savingHs || !Loading.IsCompleted) return;
-        generating = true;
         bool wasEnabled = Root.IsEnabled;
-        Root.IsEnabled = false;
-        try { await GenerateCore(); }
-        finally { Root.IsEnabled = wasEnabled; generating = false; }
+        (Root.IsEnabled, writing) = (false, true);
+        try { return await write(); }
+        finally { (Root.IsEnabled, writing) = (wasEnabled, false); }
     }
 
-    private async Task GenerateCore()
+    /// <summary>Writes the [Hitsounds] diff (see <see cref="MapWrites.GenerateAsync"/>), then offers what to do next.</summary>
+    private async Task Generate()
     {
-        if (doc is not { } document || session is null || mapPath is null) return;
-        if (session.State.Hits.Count == 0)
-        {
-            flash = "Nothing to generate: there are no hits.";
-            UpdateStatus();
-            return;
-        }
+        if (WriteBusy || !Loading.IsCompleted || mapWrites is not { } writes) return;
+        var outcome = await WhileWriting(() => writes.GenerateAsync(this, exportSettings, skin));
+        if (outcome.Status is { } status) ShowStatus(status);
+        if (outcome.GeneratedPath is not { } generated) return;
 
-        // Plan from a fresh look at the mapset (another difficulty may have changed since the map was opened), off the UI thread.
-        var path = mapPath;
-        var generatingState = session.State;
-        GeneratePlan plan;
-        LaneAudio laneAudio;
-        try
-        {
-            flash = "Planning the hitsound diff…";
-            UpdateStatus();
-            (plan, laneAudio) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, exportSettings));
-        }
-        catch (Exception ex)
-        {
-            // Planning only reads, so any failure here leaves everything as it was: say so instead of closing the editor.
-            flash = $"Generate stopped, nothing was written: {ex.Message}";
-            UpdateStatus();
-            return;
-        }
-
-        if (string.Equals(Path.GetFullPath(plan.OsuPath), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
-        {
-            flash = "This map is the [Hitsounds] diff itself: open the difficulty you hitsound in, then Generate.";
-            UpdateStatus();
-            return;
-        }
-
-        ExportMergeSettings? mergeSettings = null;
-        if (!exportSettings.PairSamples && plan.MergeCombinations.Count > 0)
-        {
-            var previewMixer = new LaneMixer(laneAudio);
-            bool previewed = false;
-            void Preview(MixFile mix)
-            {
-                if (audio is null) throw new IOException("Audio output is unavailable. Check Preferences → Audio output.");
-                previewed = true;
-                audio.Pause();
-                audio.PreviewMix(previewMixer.Mix(mix));
-            }
-            try { mergeSettings = await Dialogs.MergePriorities(this, plan.MergeCombinations, Preview); }
-            finally { if (previewed) audio?.StopAudition(); }
-            if (mergeSettings is null) return;
-            try
-            {
-                (plan, laneAudio) = await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, mergeSettings));
-            }
-            catch (Exception ex)
-            {
-                flash = $"Generate stopped, nothing was written: {ex.Message}";
-                UpdateStatus();
-                return;
-            }
-        }
-
-        if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
-        { flash = "The edits changed while Generate was being prepared. Generate again; nothing was written."; UpdateStatus(); return; }
-        string Summary(GeneratePlan plan) =>
-            $"Write {Path.GetFileName(plan.OsuPath)}{(File.Exists(plan.OsuPath) ? " (replacing the existing one; a backup is kept in the editor's app data)" : "")} " +
-            $"with {plan.Circles} circle{(plan.Circles == 1 ? "" : "s")}.\n\n" +
-            (plan.Mixes.Count > 0
-                ? $"{plan.Mixes.Count} mixed sample{(plan.Mixes.Count == 1 ? "" : "s")} will be written to the mapset ({string.Join(", ", plan.Mixes.Take(4).Select(m => m.FileName))}{(plan.Mixes.Count > 4 ? ", …" : "")}). " +
-                  "Mixes that include default skin sounds contain that audio (non-commercial licence).\n\n"
-                : "No new mixed samples are needed.\n\n") +
-            (plan.Reused.Count > 0 ? $"{plan.Reused.Count} mix(es) from the last Generate are used again as they are (same files, same indexes).\n\n" : "") +
-            (plan.Removes.Count > 0
-                ? $"{plan.Removes.Count} mix(es) from the last Generate that nothing uses any more will be removed ({string.Join(", ", plan.Removes.Take(4))}{(plan.Removes.Count > 4 ? ", …" : "")}).\n\n"
-                : "") +
-            (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
-            "Your opened map is not changed.";
-        var confirmed = await Dialogs.ConfirmGenerate(this, (plan, laneAudio), Summary,
-            includeSliderAudio => Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value,
-                mergeSettings ?? exportSettings, includeSliderAudio)), mergeSettings);
-        if (confirmed is null) return;
-        (plan, laneAudio) = confirmed.Value;
-        if (!ReferenceEquals(document, doc) || !ReferenceEquals(generatingState, document.Session.State))
-        { flash = "The edits changed before Generate was confirmed. Generate again; nothing was written."; UpdateStatus(); return; }
-
-        try
-        {
-            string? note = null;
-            await Task.Run(() =>
-            {
-                var written = GenerateWriter.Write(plan, new LaneMixer(laneAudio).Mix, MapSaver.DefaultBackupRoot());
-                try
-                {
-                    written.Manifest.Save(GenerateManifest.DefaultRoot(), plan.OsuPath);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    // The mapset is written; only reuse next time is lost (the next Generate takes fresh indexes).
-                    note = $" (Couldn't record its mixes for next time: {ex.Message})";
-                }
-            });
-            flash = $"Generated {Path.GetFileName(plan.OsuPath)}: {plan.Circles} circles, {plan.Mixes.Count} new and {plan.Reused.Count} reused mixed sample(s)." +
-                    (plan.Conflicts.Count > 0 ? $" {plan.Conflicts.Count} moment(s) couldn't be written." : "") + note;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException or OverflowException)
-        {
-            flash = $"Generate stopped, nothing was written: {ex.Message}";
-            UpdateStatus();
-            return;
-        }
-        catch (Exception ex)
-        {
-            // Unexpected: report it rather than close the editor (the old diff, if any, has a backup in the editor's app data).
-            flash = $"Generate failed: {ex.Message}";
-            UpdateStatus();
-            return;
-        }
-
-        UpdateStatus();
-        var next = await Dialogs.Choose(this, "Hitsound diff generated", $"Generated {Path.GetFileName(plan.OsuPath)}. What next?",
+        var next = await Dialogs.Choose(this, "Hitsound diff generated", $"Generated {Path.GetFileName(generated)}. What next?",
             ["Stay here", "Open generated difficulty", "Copy into other difficulties…"], "Stay here", accept: "Continue");
         if (next is "Open generated difficulty" or "Copy into other difficulties…" && await MayLeaveMap())
         {
-            await Open(plan.OsuPath);
-            if (next == "Copy into other difficulties…" && string.Equals(doc?.Path, plan.OsuPath, StringComparison.OrdinalIgnoreCase))
+            await Open(generated);
+            if (next == "Copy into other difficulties…" && string.Equals(doc?.Path, generated, StringComparison.OrdinalIgnoreCase))
                 await CopyHitsounds();
         }
     }
