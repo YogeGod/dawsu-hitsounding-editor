@@ -20,39 +20,26 @@ public sealed class MixPlanner
 
     public int LastIndex { get; private set; }
 
-    /// <param name="folder">The mapset as it is now.</param>
+    /// <param name="audio">The mapset as it is now, and the skin.</param>
     /// <param name="previous">What the last run recorded, or null.</param>
     /// <param name="replacedFile">The .osu being written over: its own indexes don't count as in use.</param>
     /// <param name="needed">Every layer set that will be asked for, so reuse is decided before new indexes are handed out.</param>
     /// <exception cref="IOException">A difficulty or storyboard in the folder couldn't be read (fail closed).</exception>
-    public MixPlanner(MapFolder folder, GenerateManifest? previous, string replacedFile, IEnumerable<IReadOnlyList<(Lane Lane, int Volume)>> needed,
-        IReadOnlyDictionary<string, byte[]>? skin = null,
+    public MixPlanner(LaneAudio audio, GenerateManifest? previous, string replacedFile, IEnumerable<IReadOnlyList<(Lane Lane, int Volume)>> needed,
         IEnumerable<(IReadOnlyList<(Lane Lane, int Volume)> Layers, IReadOnlyList<(Lane Lane, int Volume, double Duration)> Loops)>? loopNeeded = null,
         IEnumerable<Lane>? liveLanes = null, IReadOnlyDictionary<string, string>? destinations = null)
     {
+        var folder = audio.Folder;
         this.destinations = destinations ?? new Dictionary<string, string>();
         if (this.destinations.Values.Any(slot => !ExportMergeSettings.Slots.Contains(slot)))
             throw new ArgumentException("Unknown destination hitsound slot.", nameof(destinations));
         var required = needed.ToList();
-        var fingerprints = new Dictionary<Lane, string?>();
-        string? Fingerprint(Lane lane)
-        {
-            if (fingerprints.TryGetValue(lane, out var found)) return found;
-            byte[]? bytes = null;
-            try
-            {
-                bytes = lane.Source == LaneSource.Skin ? skin?.GetValueOrDefault(lane.Name)
-                    : folder.Find(lane.Name) is { } f ? folder.ReadBytes(f) : null;
-            }
-            catch (InvalidOperationException) { }
-            return fingerprints[lane] = bytes is null ? null : GenerateManifest.Hash(bytes);
-        }
         void AddFingerprint(IReadOnlyList<(Lane Lane, int Volume)> layers, IReadOnlyList<(Lane Lane, int Volume, double Duration)> loops)
         {
             var signature = MixFile.SignatureOf(layers, loops);
             var slot = this.destinations.GetValueOrDefault(signature);
             signature += MixFile.SlotSuffix(slot);
-            var hashes = layers.Select(l => Fingerprint(l.Lane)).Concat(loops.Select(l => Fingerprint(l.Lane))).ToList();
+            var hashes = layers.Select(l => audio.TryHash(l.Lane)).Concat(loops.Select(l => audio.TryHash(l.Lane))).ToList();
             inputHashes[signature] = hashes.Any(h => h is null) ? null : GenerateManifest.Hash(System.Text.Encoding.UTF8.GetBytes("mix-v2;" + string.Join(";", hashes)));
             if (slot is not null && !slot.EndsWith("-hitnormal", StringComparison.Ordinal)) inputHashes[signature + "|silent-normal"] = "blank-v1";
         }

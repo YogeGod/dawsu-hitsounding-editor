@@ -7,55 +7,43 @@ namespace OsuHitsound.Lanes;
 /// <summary>Preserves sound roles while allocating a compatible bank/index for every component of an overlap.</summary>
 public sealed class PairingPlanner
 {
-    private readonly MapFolder folder;
-    private readonly IReadOnlyDictionary<string, byte[]>? skin;
+    private readonly LaneAudio audio;
     private readonly ExportMergeSettings settings;
     private readonly GenerateManifest? previous;
     private readonly HashSet<int> occupied;
-    private readonly Dictionary<string, byte[]> bytes = [];
-    private readonly Dictionary<Lane, string> fingerprints = [];
     private readonly Dictionary<string, WantedSound> planned = [];
     private readonly List<MixFile> files = [];
     private readonly List<GeneratedMix> reused = [];
     private readonly Dictionary<string, string?> hashes = [];
     private readonly List<MergeCombination> combinations = [];
-    private readonly Dictionary<string, string> inputFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Conflict> conflicts = [];
     private long next = 2;
 
-    public PairingPlanner(MapFolder folder, IReadOnlyDictionary<string, byte[]>? skin = null,
-        ExportMergeSettings? settings = null, GenerateManifest? previous = null)
+    /// <param name="audio">The job's lane audio; its folder listing also decides which indexes are taken.</param>
+    public PairingPlanner(LaneAudio audio, ExportMergeSettings? settings = null, GenerateManifest? previous = null)
     {
-        this.folder = folder; this.skin = skin; this.settings = settings ?? new(); this.previous = previous;
+        this.audio = audio; this.settings = settings ?? new(); this.previous = previous;
         this.settings.Validate();
-        occupied = [.. HitsoundDiff.IndexesUsed(folder, except: null), .. folder.Files.Select(HitsoundDiff.IndexOf).OfType<int>()];
+        occupied = [.. HitsoundDiff.IndexesUsed(audio.Folder, except: null), .. audio.Folder.Files.Select(HitsoundDiff.IndexOf).OfType<int>()];
     }
+
+    /// <summary>The lane audio it reads (and whose files were read, to check before writing).</summary>
+    public LaneAudio Audio => audio;
 
     public IReadOnlyList<MixFile> Files => files;
     public IReadOnlyList<GeneratedMix> Reused => reused;
     public IReadOnlyDictionary<string, string?> InputHashes => hashes;
     public IReadOnlyList<MergeCombination> Combinations => combinations;
-    public IReadOnlyDictionary<string, string> InputFiles => inputFiles;
     public IReadOnlyList<Conflict> Conflicts => conflicts;
     internal void ClearConflicts() => conflicts.Clear();
     public int LastIndex { get; private set; } = 1;
 
-    private byte[] Read(Lane lane)
-    {
-        string key = ProjectStore.KeyOf(lane);
-        if (bytes.TryGetValue(key, out var cached)) return cached;
-        var data = lane.Source == LaneSource.Skin ? skin?.GetValueOrDefault(lane.Name)
-            : lane.Source == LaneSource.BeatmapFile && folder.Find(lane.Name) is { } name ? folder.ReadBytes(name) : null;
-        if (data is not { Length: > 0 }) throw new IOException($"Cannot prepare {lane.Name}: its audio is missing or empty.");
-        if (lane.Source == LaneSource.BeatmapFile) inputFiles[lane.Name] = GenerateManifest.Hash(data);
-        return bytes[key] = data;
-    }
+    private byte[] Read(Lane lane) => audio.Read(Pairable(lane));
 
-    private string Fingerprint(Lane lane)
-    {
-        if (!fingerprints.TryGetValue(lane, out var hash)) fingerprints[lane] = hash = GenerateManifest.Hash(Read(lane));
-        return hash;
-    }
+    private string Fingerprint(Lane lane) => audio.Hash(Pairable(lane));
+
+    // Storyboard samples are never paired: only skin sounds and the map's own sample files.
+    private static Lane Pairable(Lane lane) => lane.Source == LaneSource.StoryboardFile ? throw new IOException($"Storyboard samples can't be paired: {lane.Name}.") : lane;
 
     public static bool CanEncode(MapFolder folder, IReadOnlyList<(Lane Lane, int Volume)> layers)
     {
@@ -78,11 +66,11 @@ public sealed class PairingPlanner
             : MixPlanner.Normalize(original, includeMissing: true);
         var combination = new MergeCombination(layers, []) { Time = time, MatchBalance = true };
         // Native combinations always win over saved merge rules, including low inherited volumes.
-        if (!bakeExactGain && original.Count > 0 && (alreadyEncoded || CanEncode(folder, original)))
+        if (!bakeExactGain && original.Count > 0 && (alreadyEncoded || CanEncode(audio.Folder, original)))
             return new(original.Select(l => l.Lane).ToList(), original[0].Volume);
         combination = combination with { Fingerprints = layers.Select(l => l.Lane).Distinct().ToDictionary(l => l, Fingerprint) };
         if (layers.Count > 1) combinations.Add(combination);
-        if (settings.KeepOriginal(combination) && (bakeExactGain || !alreadyEncoded && !CanEncode(folder, original)))
+        if (settings.KeepOriginal(combination) && (bakeExactGain || !alreadyEncoded && !CanEncode(audio.Folder, original)))
         {
             conflicts.Add(new(time, moment ?? new(-1, 0), "Original files were requested, but these layers need pairing or fusion. Use automatic handling in Review output, or change the layers."));
             return new(original.Select(l => l.Lane).ToList(), original.FirstOrDefault().Volume);
@@ -104,7 +92,7 @@ public sealed class PairingPlanner
         string Signature(string slot) => identity + "|output:" + slot;
         var old = components.Select(c => previous?.Mixes.FirstOrDefault(m => m.Signature == Signature(c.Slot)
             && m.InputHash == inputHash && MapFolder.IsInside(m.FileName)
-            && Path.GetFileName(m.FileName) == m.FileName && folder.Find(m.FileName) is { } f && GenerateManifest.Hash(folder.ReadBytes(f)) == m.Sha256)).ToList();
+            && Path.GetFileName(m.FileName) == m.FileName && audio.Folder.Find(m.FileName) is { } f && GenerateManifest.Hash(audio.Folder.ReadBytes(f)) == m.Sha256)).ToList();
         bool reuse = old.All(m => m is not null) && old.Select(m => HitsoundDiff.IndexOf(m!.FileName)).Distinct().Count() == 1;
         var outputs = new List<Lane>();
         if (reuse)

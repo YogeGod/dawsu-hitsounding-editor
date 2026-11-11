@@ -65,21 +65,14 @@ public partial class MainWindow
         {
             var settings = exportSettings.Copy();
             var state = document.Session.State;
-            var (plan, fresh) = session!.Unanchored.Any()
+            var (plan, laneAudio) = session!.Unanchored.Any()
                 ? await Task.Run(() => document.PlanGenerate(GenerateManifest.DefaultRoot(), skin.Value, settings, includeSliderAudio: true))
-                : await Task.Run(() => { var result = document.PlanHsSave(GenerateManifest.DefaultRoot(), skin.Value, settings); return (result.Plan.Storage, result.Folder); });
-            var decoded = new Dictionary<Lane, float[]?>();
+                : await Task.Run(() => { var result = document.PlanHsSave(GenerateManifest.DefaultRoot(), skin.Value, settings); return (result.Plan.Storage, result.Audio); });
+            var mixer = new LaneMixer(laneAudio);
             void Preview(MixFile mix)
             {
                 if (audio is null) throw new IOException("Audio output is unavailable. Check Preferences.");
-                float[]? Decode(Lane lane)
-                {
-                    if (decoded.TryGetValue(lane, out var data)) return data;
-                    byte[]? raw = lane.Source == LaneSource.Skin ? skin.Value.GetValueOrDefault(lane.Name)
-                        : fresh.Find(lane.Name) is { } file ? fresh.ReadBytes(file) : null;
-                    return decoded[lane] = raw is null ? null : SampleMixer.Decode(raw);
-                }
-                audio.PreviewMix(SampleMixer.Mix(mix, Decode));
+                audio.PreviewMix(mixer.Mix(mix));
             }
             ExportMergeSettings? edited;
             if (!ReferenceEquals(document, doc) || !ReferenceEquals(state, document.Session.State))

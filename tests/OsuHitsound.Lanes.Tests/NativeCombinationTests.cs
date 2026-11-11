@@ -36,7 +36,7 @@ public sealed class NativeCombinationTests : IDisposable
                     var layers = new List<(Lane Lane, int Volume)> { (new(LaneSource.BeatmapFile, HitsoundRules.SampleName(normal, "hitnormal") + "2.ogg"), 40) };
                     for (int i = 0; i < 3; i++)
                         if ((flags & (1 << i)) != 0) layers.Add((new(LaneSource.BeatmapFile, HitsoundRules.SampleName(addition, roles[i + 1]) + "2.ogg"), 40));
-                    var planner = new PairingPlanner(folder, settings: Overrides(layers, folder));
+                    var planner = new PairingPlanner(new LaneAudio(folder), settings: Overrides(layers, folder));
                     var wanted = planner.For(layers, 1000);
                     Assert.Equal(layers.Select(l => l.Lane), wanted.Lanes);
                     Assert.Equal(40, wanted.Volume);

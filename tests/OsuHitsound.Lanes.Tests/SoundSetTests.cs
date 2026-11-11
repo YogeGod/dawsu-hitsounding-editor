@@ -278,7 +278,7 @@ public sealed class SoundSetTests : IDisposable
     public void Very_quiet_set_members_are_baked_without_raising_their_gain_or_unrelated_layers()
     {
         var normal = new Lane(LaneSource.BeatmapFile, "normal-hitnormal.wav"); var clap = new Lane(LaneSource.BeatmapFile, "soft-hitclap2.wav");
-        var p = new PairingPlanner(new MapFolder([normal.Name, clap.Name], Encoding.UTF8.GetBytes));
+        var p = new PairingPlanner(new LaneAudio(new MapFolder([normal.Name, clap.Name], Encoding.UTF8.GetBytes)));
         var wanted = p.For([(normal, 5), (clap, 4)], exactGainLanes: new HashSet<Lane> { clap });
         Assert.Equal(100, wanted.Volume);
         Assert.Contains(p.Files, m => m.Layers.Any(l => l.Lane == clap && l.Volume == 4));
@@ -289,7 +289,7 @@ public sealed class SoundSetTests : IDisposable
     public void Zero_volume_set_uses_zero_gain_audio_even_when_direct_fields_would_inherit_volume()
     {
         var normal = new Lane(LaneSource.BeatmapFile, "normal-hitnormal.wav");
-        var p = new PairingPlanner(new MapFolder([normal.Name], Encoding.UTF8.GetBytes));
+        var p = new PairingPlanner(new LaneAudio(new MapFolder([normal.Name], Encoding.UTF8.GetBytes)));
         var wanted = p.For([(normal, 0)], alreadyEncoded: true, exactGainLanes: new HashSet<Lane> { normal });
         Assert.Equal(100, wanted.Volume); Assert.Null(p.Files.Single().CopyBytes);
         Assert.Equal(0, p.Files.Single().Layers.Single().Volume);

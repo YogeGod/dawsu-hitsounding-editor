@@ -7,12 +7,12 @@ namespace OsuHitsound.App;
 internal static partial class Dialogs
 {
     /// <summary>Replans read-only when scope changes; only the currently displayed, valid plan can be accepted.</summary>
-    public static Task<(GeneratePlan Plan, MapFolder Folder)?> ConfirmGenerate(Window owner,
-        (GeneratePlan Plan, MapFolder Folder) initial, Func<GeneratePlan, string> summary,
-        Func<bool, Task<(GeneratePlan Plan, MapFolder Folder)>> replan, ExportMergeSettings? mergeSettings = null)
+    public static Task<(GeneratePlan Plan, LaneAudio Audio)?> ConfirmGenerate(Window owner,
+        (GeneratePlan Plan, LaneAudio Audio) initial, Func<GeneratePlan, string> summary,
+        Func<bool, Task<(GeneratePlan Plan, LaneAudio Audio)>> replan, ExportMergeSettings? mergeSettings = null)
     {
         Button? generate = null;
-        return Show<(GeneratePlan Plan, MapFolder Folder)?>(owner, "Generate hitsound diff", (body, close) =>
+        return Show<(GeneratePlan Plan, LaneAudio Audio)?>(owner, "Generate hitsound diff", (body, close) =>
         {
             var current = initial;
             bool ready = current.Plan.Conflicts.Count == 0;
