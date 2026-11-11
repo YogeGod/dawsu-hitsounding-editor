@@ -8,6 +8,8 @@
   <StreamGeometry x:Key="IconCircleHelp">M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3 M12 17h.01</StreamGeometry>
   <StreamGeometry x:Key="IconCopy">M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2</StreamGeometry>
   <StreamGeometry x:Key="IconDownload">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10L12 15L17 10 M12 15L12 3</StreamGeometry>
+  <!-- Filled Cubase drum-editor stick, 32-unit box. Same path as ToolCursors.DrumstickPath; AppIcon fills it and scales from 32. -->
+  <StreamGeometry x:Key="IconDrumstick">M3 3C1 5 3 9 6 10C8 11 9 10 10 11L26 28Q28 30 29 28Q30 27 28 25L12 9C11 8 12 7 10 5C8 2 5 1 3 3Z</StreamGeometry>
   <StreamGeometry x:Key="IconEraser">M7 21l-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21 M22 21H7 M5 11l9 9</StreamGeometry>
   <StreamGeometry x:Key="IconFoldVertical">M12 22v-6 M12 8V2 M4 12H2 M10 12H8 M16 12h-2 M22 12h-2 M15 19l-3-3-3 3 M15 5l-3 3-3-3</StreamGeometry>
   <StreamGeometry x:Key="IconFolderOpen">M6 14l1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2</StreamGeometry>

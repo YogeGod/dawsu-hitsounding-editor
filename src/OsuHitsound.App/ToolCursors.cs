@@ -16,7 +16,7 @@ internal enum ToolCursor
 }
 
 /// <summary>
-/// V6.39's tool cursors: the arrow for Select, its pen (cursors/pen.svg on tag V6.39) for Draw and while Alt is held,
+/// The arrow for Select, a Cubase-style drumstick for Draw and while Alt is held,
 /// an eraser in the same style for Erase, and a crosshair for the other tools. Elsewhere it is the normal arrow.
 /// </summary>
 internal static class ToolCursors
@@ -46,7 +46,7 @@ internal static class ToolCursors
         {
             cursor = kind switch
             {
-                ToolCursor.Pen => Drawn(PenParts, new PixelPoint(3, 28)),
+                ToolCursor.Pen => Drawn(PenParts, new PixelPoint(4, 4)),
                 ToolCursor.Eraser => Drawn(EraserParts, new PixelPoint(5, 27)),
                 ToolCursor.Hand => new Cursor(StandardCursorType.Hand),
                 ToolCursor.Cross => new Cursor(StandardCursorType.Cross),
@@ -61,13 +61,14 @@ internal static class ToolCursors
         return Made[kind] = cursor;
     }
 
+    // Rounded bead at the upper left, tapering neck and slim handle, as in Cubase's Drum Editor.
+    // Shared with the toolbar so the button and cursor have the same silhouette.
+    public const string DrumstickPath = "M3 3C1 5 3 9 6 10C8 11 9 10 10 11L26 28Q28 30 29 28Q30 27 28 25L12 9C11 8 12 7 10 5C8 2 5 1 3 3Z";
+
     // (SVG path data, fill, stroke, stroke width) in a 32×32 box.
     private static readonly (string Path, string? Fill, string? Stroke, double Width)[] PenParts =
     [
-        ("M3 28 6 18 22 2Q23 1 24 2L29 7Q30 8 29 9L13 25Z", "#ffffff", "#151515", 1.5),
-        ("m6 18 7 7M19 5l7 7M8 20 22 6m-11 17L25 9", null, "#303030", 1),
-        ("m3 28 1.5-5L8 26.5Z", "#151515", null, 0),
-        ("m22 2 7 7-3 3-7-7Z", "#b8bcc2", "#151515", 1),
+        (DrumstickPath, "#ffffff", "#151515", 1.25),
     ];
 
     // An eraser in the pen's style: a white block tilted the same way, its rubber end (bottom left) grey; the tip at (5, 27).

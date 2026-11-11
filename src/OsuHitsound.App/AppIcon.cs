@@ -88,9 +88,11 @@ public sealed class AppIcon : Control
         geometry ??= this.TryFindResource("Icon" + Glyph, out var found) ? found as Geometry : null;
         if (geometry is null) return;
         // Lucide's 2-unit stroke with round ends, scaled with the shape as in the SVGs.
+        // The drumstick is a filled 32-unit silhouette, not a 24-unit outline.
+        bool filled = Glyph == "Drumstick";
         pen ??= new ImmutablePen(brush.ToImmutable(), 2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
-        double scale = Size / 24;
+        double scale = Size / (filled ? 32 : 24);
         using (context.PushTransform(Matrix.CreateScale(scale, scale)))
-            context.DrawGeometry(null, pen, geometry);
+            context.DrawGeometry(filled ? brush : null, filled ? null : pen, geometry);
     }
 }
