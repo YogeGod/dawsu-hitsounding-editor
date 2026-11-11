@@ -17,6 +17,7 @@ public partial class StartScreen : UserControl
         PreferencesLink.Click += (_, _) => PreferencesRequested?.Invoke();
         QuickStartLink.Click += (_, _) => QuickStartRequested?.Invoke();
         KeysLink.Click += (_, _) => HelpRequested?.Invoke();
+        UpdateLink.Click += (_, _) => UpdateRequested?.Invoke();
         KeysoundNewItem.Click += (_, _) => KeysoundNewRequested?.Invoke();
         KeysoundOpenItem.Click += (_, _) => KeysoundOpenRequested?.Invoke();
     }
@@ -29,6 +30,15 @@ public partial class StartScreen : UserControl
     public event Action? HelpRequested;
     public event Action? KeysoundNewRequested;
     public event Action? KeysoundOpenRequested;
+    public event Action? UpdateRequested;
+
+    /// <summary>The update link: "Check for updates", or "Update to …" (highlighted) once a new version is found.</summary>
+    public void SetUpdate(string? version)
+    {
+        UpdateLink.Content = version is null ? "Check for updates" : $"Update to {version}";
+        UpdateLink.Classes.Set("available", version is not null);
+        ToolTip.SetTip(UpdateLink, version is null ? null : "Downloads it, asks about unsaved work, then restarts dawsu!");
+    }
 
     /// <summary>A recent entry's name: the difficulty, or for a Keysound project its folder.</summary>
     public static string RecentLabel(string path) =>

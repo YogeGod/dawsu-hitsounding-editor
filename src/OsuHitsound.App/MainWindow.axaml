@@ -167,6 +167,9 @@
         </StackPanel>
         <TextBlock Grid.Column="3" Name="FileTitle" Text="No map open" Classes="projectName" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" Margin="16,0" />
         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Name="UpdateButton" Classes="flat icon" IsVisible="False" AutomationProperties.Name="Update dawsu!">
+            <app:AppIcon Glyph="Download" Foreground="{DynamicResource Brand}" />
+          </Button>
           <Button Name="WorkflowStatusButton" Classes="flat icon" IsVisible="False" AutomationProperties.Name="Operation details">
             <app:AppIcon Name="WorkflowStatusIcon" Glyph="Info" />
           </Button>

@@ -77,13 +77,20 @@
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
     </Style>
+    <Style Selector="Button.footLink.available">
+      <Setter Property="Foreground" Value="{DynamicResource Brand}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
   </UserControl.Styles>
 
   <ScrollViewer Name="StartScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
   <Border Padding="20">
   <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" RowDefinitions="Auto,22,Auto,Auto,22,Auto">
     <DockPanel>
-      <TextBlock Name="Version" DockPanel.Dock="Right" VerticalAlignment="Bottom" Margin="0,0,0,4" Classes="mono" Foreground="{DynamicResource TextDim}" FontSize="11" Text="hitsound studio" />
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom">
+        <Button Name="UpdateLink" Classes="footLink" Content="Check for updates" Padding="6,2" Margin="0,0,0,1" />
+        <TextBlock Name="Version" VerticalAlignment="Center" Classes="mono" Foreground="{DynamicResource TextDim}" FontSize="11" Text="hitsound studio" />
+      </StackPanel>
       <TextBlock FontFamily="{StaticResource StartHeading}" FontWeight="ExtraBold" FontSize="26" Foreground="{DynamicResource ButtonText}">
         <Run Text="dawsu" /><Run Text="!" Foreground="{DynamicResource Brand}" />
       </TextBlock>
