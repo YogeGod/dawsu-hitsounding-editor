@@ -17,6 +17,8 @@ internal sealed record Preferences
     public string? SongsFolder { get; init; }
     public string? HitsoundFolder { get; init; }
     public string? LastSampleFolder { get; init; }
+    public string? AutoFillKickLane { get; init; }
+    public string? AutoFillSnareLane { get; init; }
     public bool ShowMissingObjectWarnings { get; init; }
     public bool ShowExportWarnings { get; init; } = true;
     /// <summary>After Save, make osu!stable's editor reload the map when it has the same one open (Ctrl+L, Enter).</summary>

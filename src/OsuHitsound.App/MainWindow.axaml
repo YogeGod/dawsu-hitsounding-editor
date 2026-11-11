@@ -76,6 +76,8 @@
               <MenuItem Name="RepeatItem" Header="Repeat…" />
               <MenuItem Name="EditRangeItem" Header="Edit range…" />
               <MenuItem Name="ScaleVolumeItem" Header="Scale by volume…" />
+              <Separator />
+              <MenuItem Name="DrumAutoFillItem" Header="Drum Hits auto-fill…" />
             </MenuItem>
             <MenuItem Header="Playback">
               <MenuItem Name="DrumVstItem" Header="Drums VST…" />
