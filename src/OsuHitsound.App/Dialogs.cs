@@ -35,8 +35,14 @@ internal static partial class Dialogs
     public static async Task<string?> Choose(Window owner, string title, string label, IReadOnlyList<string> items, string? initial = null, string accept = "Add") =>
         await Show<string?>(owner, title, (body, close) =>
         {
+            // Typing jumps to the entries that start with what was typed (K → Kontakt), as in file dialogs.
             var list = new ListBox { ItemsSource = items, Height = 260, Width = 400, SelectedItem = initial };
-            list.AttachedToVisualTree += (_, _) => { if (list.SelectedItem is { } s) list.ScrollIntoView(s); };
+            TypeAhead.Attach(list);
+            list.AttachedToVisualTree += (_, _) =>
+            {
+                if (list.SelectedItem is { } s) list.ScrollIntoView(s);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => list.Focus()); // so typing a letter works at once
+            };
             list.KeyDown += (_, e) => { if (e.Key == Key.Enter && list.SelectedItem is string s) close(s); };
             list.DoubleTapped += (_, _) => { if (list.SelectedItem is string s) close(s); };
             body.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap, MaxWidth = 400 });
@@ -506,6 +512,7 @@ internal static partial class Dialogs
         var name = new TextBlock { FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 260, Text = "Pick a command" };
         var description = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 260, Opacity = 0.8 };
         var keyList = new ListBox { Height = 90, Width = 260 };
+        TypeAhead.Attach(keyList, dialogWide: false); // the command tree beside it takes letters too
         var remove = new Button { Content = "Remove" };
         var clear = new Button { Content = "Clear command" };
         var resetCommand = new Button { Content = "Reset command" };

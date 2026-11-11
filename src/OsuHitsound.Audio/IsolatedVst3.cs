@@ -211,6 +211,23 @@ public sealed class IsolatedVst3 : IMidiPart, IDisposable
         }
     }
 
+    /// <summary>
+    /// The plug-in's names for its MIDI notes (VST 3 program pitch names, as DAWs read for drum maps); empty when it has
+    /// none, or when the host is older than this command.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<int, string>> NoteNamesAsync()
+    {
+        string reply;
+        try { reply = await CommandAsync("NOTENAMES", TimeSpan.FromSeconds(30)); }
+        catch (InvalidOperationException) { return new Dictionary<int, string>(); } // "Unknown command." from an older host
+        var names = new Dictionary<int, string>();
+        foreach (var field in (Tagged(reply, "NAMES") ?? "").Split('	'))
+            if (field.IndexOf('=') is > 0 and var eq && int.TryParse(field.AsSpan(0, eq), System.Globalization.CultureInfo.InvariantCulture, out int pitch)
+                && pitch is >= 0 and <= 127 && field.Length - eq - 1 is > 0 and <= 128)
+                names[pitch] = field[(eq + 1)..];
+        return names;
+    }
+
     /// <summary>Opens the plug-in's own editor window (owned by its host process).</summary>
     public Task ShowEditorAsync() => CommandAsync("SHOW", TimeSpan.FromSeconds(30));
     public Task HideEditorAsync() => CommandAsync("HIDE", TimeSpan.FromSeconds(10));

@@ -77,6 +77,7 @@
             </MenuItem>
             <MenuItem Header="Playback">
               <MenuItem Name="DrumVstItem" Header="Drums VST…" />
+              <MenuItem Name="DrumKitMapPlaybackItem" Header="Map lanes from drum instrument…" />
               <Separator />
               <MenuItem Header="Start from">
                 <MenuItem Name="StartCursorItem" Header="Cursor" ToggleType="Radio" GroupName="start" IsChecked="True" />
@@ -297,7 +298,7 @@
       <ToggleButton Name="DrumMapToggle" Width="22" Height="28" MinHeight="28" Padding="3" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True"
                     AutomationProperties.Name="Drum-map view" ToolTip.Tip="Switch Sample / Drum-map view. Right-click for Drum Map Setup." IsEnabled="False">
         <app:AppIcon Glyph="Piano" />
-        <ToggleButton.ContextMenu><ContextMenu><MenuItem Name="DrumMapSetupItem" Header="Drum Map Setup…" /></ContextMenu></ToggleButton.ContextMenu>
+        <ToggleButton.ContextMenu><ContextMenu><MenuItem Name="DrumMapSetupItem" Header="Drum Map Setup…" /><MenuItem Name="DrumKitMapItem" Header="Map lanes from drum instrument…" /></ContextMenu></ToggleButton.ContextMenu>
       </ToggleButton>
       <ScrollBar Grid.Column="1" Name="VScroll" Orientation="Vertical" />
       <ScrollBar Grid.Row="1" Name="HScroll" Orientation="Horizontal" Margin="328,0,0,0" />
