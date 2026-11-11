@@ -2,6 +2,14 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 2.2.7
+
+- Save and Generate check all sample files used in their plan before writing, so changed files are caught.
+- Sound-set restore warnings stay visible after opening a map. A failed open no longer leaves the previous map's project active.
+- Cancelling Generate clears the planning message. Switching maps during Generate no longer reports changed edits on the new map.
+- osu!'s editor still reloads a saved map if reopening it in dawsu! fails.
+- Lane audio, project settings, and Save/Generate now use shared internal modules.
+
 ## 2.2.6
 
 - A circle that plays one sample file by name can be changed back to other sounds. Before, Save reported a conflict and kept the file.
