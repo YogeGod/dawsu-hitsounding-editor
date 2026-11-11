@@ -1,6 +1,8 @@
 # Main screen UI design
 
-Final design chosen 2026-10-30. Design canvas: https://claude.ai/artifact/C3ChZkS3d9onU2eF5bHW41
+Direction chosen 2026-10-30. The shipped editor from V2.0 onward uses the later window (custom title bar, icon toolbar, volume-coloured hits). This note is not a picture of 2.2.4.
+
+Design canvas: https://claude.ai/artifact/C3ChZkS3d9onU2eF5bHW41
 (private until shared from its Share menu). The final design is the artboard
 **"FINAL · solid lanes, grouped by set"** in the bottom row ("Final design").
 Everything above it (A–D, v1, v2, E–G) is earlier exploration, kept for reference.

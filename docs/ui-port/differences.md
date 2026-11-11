@@ -1,10 +1,12 @@
 # V6.39 screen vs the C# editor: differences
 
-Screenshots: `v639.png` shows dawsu! V6.39 (Sample Packing build, 1600×1000, no map open), and `csharp-now.png` shows the C# editor at the same size with a test map open. The goal is that the C# editor **looks and is laid out like V6.39**, while its map engine (byte-exact export, conflicts, Generate) stays as it is.
+Historical comparison from the first C# port, before the V2.0 editor. The screenshots of V6.39 and that early C# window have been removed. The table describes that older screen, not dawsu! 2.2.4.
+
+The goal at the time was that the C# editor **looks and is laid out like V6.39**, while its map engine (byte-exact export, conflicts, Generate) stays as it is.
 
 ## Top to bottom, region by region
 
-| # | Region | V6.39 | C# editor now |
+| # | Region | V6.39 | C# editor then |
 |---|---|---|---|
 | 1 | App header | A pink "hs" logo and "dawsu!daw hitsounding editor". Text buttons: Open…, Save project, Export MIDI, Export beatmap, Edit. On the right: project name, Timing points, Preferences, Keys, Projects, Key Commands. | A small "HITSOUND EDITOR" title strip, then an "Open .osu…" button and a blue "Save .osu". A menu bar (File, Edit, Playback, Map, View) sits in the row below. |
 | 2 | Toolbar | Undo/redo icons, then **icon** tool buttons (select, range, draw, erase, mute, ramp, audition). A blue **Snap** toggle, a Grid mode dropdown and a 1/4 divisor. On the right: Info, a Colour dropdown and Fit. | **Text** tool buttons (Select, Range, Draw…), Snap 1/4, a Grid/Grid relative box and a Zoom slider. The transport buttons and the LCD sit in the **top** bar. |
