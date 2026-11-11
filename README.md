@@ -1,10 +1,8 @@
-![dawsu! hitsound editor](docs/banner.png)
-
 # dawsu! hitsounding editor
 
 A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you draw hits on, over the song's waveform, and the editor writes them back into the map.
 
-![Sample lanes and the grid](docs/tutorial/lanes-grid.png)
+Current release: **2.2.4**. Changes for every version are in [CHANGELOG.md](CHANGELOG.md). A written tour of the current screen is in [docs/TUTORIAL.md](docs/TUTORIAL.md).
 
 ## What it does
 
@@ -14,6 +12,9 @@ A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you 
 - **Save .osu** writes the hitsounds into the difficulty (a backup is kept outside the mapset). It uses osu!'s native sound combinations where it can and mixes samples only where it must.
 - **Generate…** makes a separate hitsound difficulty, and **Map → Copy hitsounds…** copies it into the other difficulties, like Mapping Tools' Hitsound Copier.
 - Drum maps, reusable sound sets, and a drum instrument (a VST3 or a SoundFont kit) for playback and WAV export.
+- **Objects** in the snap menu aligns hits with circles, slider nodes and spinner ends, including ones off the beat grid. **Insert volume** sets the volume of hits you draw next; clear it to follow the map volume.
+- **Edit → Protect hitnormals from deletion** keeps base hitnormal sounds when you delete, cut, erase or clear a range. It is off until you turn it on.
+- **File → Open map from osu!** opens the map osu! has open and reloads it when that editor saves. After you save here, osu!'s editor can reload the same map (**File → Reload osu!'s editor after Save**).
 
 **Keysound mode** (start screen → Keysounding)
 - A project made from a reference beatmap, with instrument tracks in a piano roll (DAW-style editing).

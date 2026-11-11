@@ -1,6 +1,10 @@
 # osu! Hitsound Editor: project context
 
-A summary of the planning chat from 2026-10-29, updated at the end of the 2026-10-30 build session. Load this file at the start of a new session to pick up where it left off.
+**Current release: dawsu! 2.2.4** on `dawsu/main` (https://github.com/YogeGod/dawsu-hitsounding-editor). The app is `dawsu!.exe`. Install with `dawsu-win-Setup.exe`, or extract `dawsu-win-Portable.zip`. Release notes are in [CHANGELOG.md](../CHANGELOG.md). The written tour is [TUTORIAL.md](TUTORIAL.md).
+
+Everything below this heading is the planning note from 2026-10-29 and 2026-10-30. Its "current state", remote layout and next steps describe that checkout, not 2.2.4. Do not treat "never push to dawsu/main" as a current rule: this repository is `dawsu/main`.
+
+A summary of the planning chat from 2026-10-29, updated at the end of the 2026-10-30 build session.
 
 ## What we're building
 

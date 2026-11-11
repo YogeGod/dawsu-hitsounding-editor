@@ -1,0 +1,86 @@
+# Changelog
+
+Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
+
+## 2.2.4
+
+- Draw tool uses a drumstick icon and cursor.
+- Collapsing the selection details gives that space back, leaving a small expand handle in both editors.
+- Moving hits to another lane plays that lane's sample, with the mouse or the keyboard, when Audition is on.
+- **Objects** in the snap menu aligns hits with circles, slider nodes and spinner ends, including ones off the beat grid.
+- **Insert volume** presets the volume of newly drawn hits. Clear it to follow the map volume.
+- **Edit → Protect hitnormals from deletion** keeps base hitnormals when deleting, cutting, erasing or clearing a range. Off by default.
+
+## 2.2.3
+
+- **File → Open map from osu!** opens the map osu! has open (un!stable directly, osu!stable from the open map, osu!lazer after Edit externally).
+- Live reload when osu!'s editor saves: zoom, scroll, playhead, lane layout and unsaved hitsound edits stay. A hit whose object was deleted stays, with no object.
+- **File → Reload osu!'s editor after Save** makes osu!'s editor show the save. Unsaved work in osu!'s editor is lost when it reloads.
+
+## 2.2.2
+
+- Drum maps can be built from a drum VST's own mapping, including GGD exports and kits that report note names. Chokes are optional. Lanes can play through the VST or be rendered to WAVs.
+- Typing in dialog lists jumps to the next matching name.
+- The start screen and the editor top bar can download an update and restart.
+- Bookmark labels show beside their flags on the ruler.
+- A long map name ends with "…" instead of adding a scrollbar.
+
+## 2.2.1
+
+- Older slider lines that stop early are written in full when edge hitsounds are added, so Mapset Verifier can open the mapset.
+- Silent sounds dawsu! writes are the 44-byte `blank.wav`.
+- A sample file with no audio counts as silence instead of failing Save.
+
+## 2.2.0
+
+- Keysound tracks and the hitsound drum instrument can use a SoundFont (`.sf2`) preset, including the SoundFont's reverb and chorus. Generate and drum WAV export use the same preset. The `.sf2` stays where it is on this computer.
+
+## 2.1.0
+
+- Installer (`dawsu-win-Setup.exe`) for the current Windows user, with in-app updates. The app is `dawsu!.exe`. Unzipped V2.0 folders are not upgraded in place.
+- First launch asks for DAW-like keys or osu! editor controls.
+- Keysound editor matches the Hitsound editor's toolbar, selection bar, bottom bar and themes.
+- Musical typing (Alt+K) plays and records the selected track from the computer keyboard.
+- House button, or File → Start screen, returns to the start screen.
+
+## 2.0.1
+
+- The lane-list splitter no longer steals clicks at the start of the grid, on the ruler or on ‹. Width is saved, and double-click restores the default.
+
+## 2.0.0
+
+- Keysound mode: a key editor with the bundled piano or a VST3 per track, each plug-in in its own process. Import MIDI, record from a MIDI keyboard, sync notes to gameplay objects, generate a `[Keysounds]` difficulty and export `.osz`.
+- Hitsound editor: the V2 window, volume-coloured hits, gameplay objects on the waveform, Cubase-style editing, slider-body sound editing, and live Drums VST playback with WAV export.
+- Save no longer writes hidden copies of hitnormals. A green line within 5 ms after an object is the one that changes.
+
+## 1.5.0
+
+- Preferences chooses the Classic file browser or the Folder tree sidebar.
+- Opening a beatmap edits that file directly. The file browser is on the left. The empty first-click Recent projects menu is fixed.
+- Start screen with Open, Recent projects and sample auditioning.
+- Flat sample lanes (no sample-set folders), multi-lane mute/solo, native osu! sample combinations before mixing, a right-side sample browser, the Grab tool, optional panels and editor-only bookmark labels.
+
+## 1.4.0
+
+- Unsaved close offers Save, Discard or Cancel.
+- Ctrl+S and F1 work while a text field is focused.
+- Clearer sample browser, shared-volume control, Next problem, and compact-window popovers.
+
+## 1.3.0
+
+- Drum-map view with Yoge Expanded Kit and Yoge Simple Kit, portable `.dawsudrum` presets, and extra numbered layers.
+- New numbered lanes start empty with the bundled family sound.
+- Hitsounds-only Generate by default, reusable sound sets, long 2/1–4/1 snapping, and role-preserving hitsound pairing.
+
+## 1.2.0
+
+Portable package of commit `5b3dc95`. The GitHub release notes do not list separate changes; 1.3.0 is the notes for that work.
+
+## 1.1.0
+
+- HS difficulty mode for empty difficulties and difficulties named HS or hitsounds.
+- Layer volumes survive mixing, undo and save. Sample replacement, revert and simultaneous copy fixes.
+
+## 1.0.0
+
+First public dawsu! hitsound studio build (`csharp-preview-2026.11.03.6`), 2026-11-03. The same-day previews before it are on GitHub and are not repeated here.
