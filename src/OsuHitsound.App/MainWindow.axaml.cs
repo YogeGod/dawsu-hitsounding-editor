@@ -423,6 +423,7 @@ public partial class MainWindow : Window
             compileCancel?.Cancel();
             if (session is not null) session.Changed -= OnEdited;
             (doc, lastCompile, closeConfirmed, flash) = (opened, null, false, null);
+            editorProject = null; // the previous map's, until RestoreProject makes this map's
 
             // Load every drawable lane's sample, not only the ones the map uses, so new hits sound at once.
             if (audio is not null && prepared is not null)
@@ -437,8 +438,7 @@ public partial class MainWindow : Window
             LoadWaveform();
             mapSongOffset = 0; // a map without a project has none of its own
             ApplyOffsets();
-            RestoreProject(restoreUnanchored, hsOverride);
-            closeProjectBaseline = CaptureProject();
+            string? projectWarning = RestoreProject(restoreUnanchored, hsOverride);
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             model.Changed += Volume.InvalidateVisual;
@@ -457,7 +457,7 @@ public partial class MainWindow : Window
             ToolTip.SetTip(FileTitle, full);
             Inspector.Browser.SetRoots(Path.GetDirectoryName(full), prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : Path.GetDirectoryName(full)));
             Title = $"{Path.GetFileNameWithoutExtension(full)} — dawsu! Hitsound";
-            flash = $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty.";
+            flash = $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty." + (projectWarning is null ? "" : " " + projectWarning);
             UpdateLoop();
             SyncScrollBars();
             UpdateLcd();
@@ -880,8 +880,8 @@ public partial class MainWindow : Window
     private double SongOffsetInForce => EffectiveSongOffset(mapSongOffset, prefs.GlobalSongOffset);
 
     internal static double EffectiveSongOffset(double map, double global) => Math.Clamp(
-        (double.IsFinite(map) ? Math.Clamp(map, -10000, 10000) : 0) +
-        (double.IsFinite(global) ? Math.Clamp(global, -1000, 1000) : 0), -10000, 10000);
+        (double.IsFinite(map) ? Math.Clamp(map, -EditorProject.MaxSongOffset, EditorProject.MaxSongOffset) : 0) +
+        (double.IsFinite(global) ? Math.Clamp(global, -1000, 1000) : 0), -EditorProject.MaxSongOffset, EditorProject.MaxSongOffset);
 
     /// <summary>Puts the map's offset plus the one for all maps on the song and its waveform, and shows the map's in its box.</summary>
     private void ApplyOffsets()
@@ -900,8 +900,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (Math.Clamp(offset, -10000, 10000) == mapSongOffset) return;
-        mapSongOffset = Math.Clamp(offset, -10000, 10000);
+        if (Math.Clamp(offset, -EditorProject.MaxSongOffset, EditorProject.MaxSongOffset) == mapSongOffset) return;
+        mapSongOffset = Math.Clamp(offset, -EditorProject.MaxSongOffset, EditorProject.MaxSongOffset);
         ApplyOffsets();
         ScheduleProjectSave();
     }

@@ -7,7 +7,6 @@ public partial class MainWindow
 {
     private bool closePromptOpen;
     private bool discardProjectOnClose;
-    private ProjectData? closeProjectBaseline;
 
     private async void OnEditorClosing(object? sender, WindowClosingEventArgs e)
     {
