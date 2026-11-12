@@ -181,4 +181,25 @@ public class OsuFileTests
         var file = OsuFile.Parse(Bytes("[TimingPoints]\r\n// note, with comma\r\n\r\n0,500,4,1,0,100,1,0\r\n"));
         Assert.Single(file.TimingPoints);
     }
+
+    [Fact]
+    public void A_green_line_can_be_removed_and_every_other_line_keeps_its_bytes()
+    {
+        var file = OsuFile.Parse(Bytes("[TimingPoints]\r\n0,500,4,1,0,100,1,0\r\n500,-100,4,1,0,100,0,0\n1000,-50,4,1,0,100,0,0\r\n"));
+
+        file.RemoveGreenLine(file.TimingPoints[1]);
+
+        Assert.Equal("[TimingPoints]\r\n0,500,4,1,0,100,1,0\r\n1000,-50,4,1,0,100,0,0\r\n", Text(file));
+        Assert.Equal(2, file.TimingPoints.Count);
+        Assert.True(file.IsEdited);
+    }
+
+    [Theory]
+    [InlineData("0,500,4,1,0,100,1,0")] // a red line
+    [InlineData("500,-100")]            // an old short line: no inherited flag, so it isn't known to be green
+    public void Only_lines_marked_inherited_can_be_removed(string line)
+    {
+        var file = OsuFile.Parse(Bytes($"[TimingPoints]\r\n{line}\r\n"));
+        Assert.Throws<InvalidOperationException>(() => file.RemoveGreenLine(file.TimingPoints[0]));
+    }
 }
