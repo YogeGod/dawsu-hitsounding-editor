@@ -24,3 +24,16 @@ _Avoid_: Note timing, sample assignment
 
 **Keysounding**:
 A separate editor mode for arranging pitched musical notes and turning their instrument sounds into samples assigned to an osu! beatmap. Editable notes and instrument settings remain part of the project.
+
+### Keys
+
+**Key preset**:
+One of the editor's built-in starting keymaps, DAW-like (read from the user's Cubase key commands) or osu!. Each keeps its own key changes. There are no user-named presets.
+_Avoid_: Keymap, profile, scheme
+
+**Key change**:
+A user's edit to a command's keys within one key preset. It covers assigning, removing or clearing a key, and the key a command loses when another command takes it.
+_Avoid_: Override, binding
+
+**Customized command**:
+A command whose keys differ from what its key preset alone would give it, whoever caused the difference.

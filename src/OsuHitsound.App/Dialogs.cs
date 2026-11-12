@@ -504,10 +504,14 @@ internal static partial class Dialogs
         page.Children.AddRange([cubaseRows, status]);
 
         // Left: search and the command tree. Right: the picked command.
-        var search = new TextBox { Watermark = "Search commands or keys…", Width = 420 };
+        var search = new TextBox { Watermark = "Search commands or keys…", Width = 270 };
+        // All / Assigned / Customized / Unassigned; with search, starts blank each time Preferences opens.
+        var filter = new ComboBox { Width = 144 };
+        var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        searchRow.Children.AddRange([search, filter]);
         var tree = new TreeView { Height = 360, Width = 420 };
         var left = new StackPanel { Spacing = 6 };
-        left.Children.AddRange([search, tree]);
+        left.Children.AddRange([searchRow, tree]);
 
         var name = new TextBlock { FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 260, Text = "Pick a command" };
         var description = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 260, Opacity = 0.8 };
@@ -528,11 +532,21 @@ internal static partial class Dialogs
         var columns = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
         columns.Children.AddRange([left, right]);
         var resetPreset = new Button { Content = "Reset preset…" };
-        page.Children.AddRange([columns, resetPreset]);
+        var import = new Button { Content = "Import…" };
+        var export = new Button { Content = "Export…" };
+        var presetButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        presetButtons.Children.AddRange([resetPreset, import, export]);
+        page.Children.AddRange([columns, presetButtons]);
 
         Dictionary<string, List<string>> Overrides() => edited.KeyOverrides.GetValueOrDefault(edited.KeyPreset.ToString()) ?? [];
         Dictionary<string, IReadOnlyList<KeyGesture>> current = [];
+        Dictionary<string, IReadOnlyList<KeyGesture>> presetKeys = []; // the key preset alone, for "customized"
         string? selectedId = null;
+        HashSet<string> shown = []; // rows in the tree: kept after an edit until the filter or search changes
+        bool Customized(string id) => Keymap.IsCustomized(current, presetKeys, id);
+        string PresetKeysOf(string id) => presetKeys.GetValueOrDefault(id, []) is { Count: > 0 } k ? EditorCommand.Text(k) : "Unassigned";
+        string[] filterNames = ["All", "Assigned", "Customized", "Unassigned"];
+        string PresetName() => presets.First(p => p.Preset == edited.KeyPreset).Name.Split(' ')[0];
         KeyGesture? pending = null;
         bool HasKeys(string id) => current.GetValueOrDefault(id, []).Count > 0;
         string KeysOf(string id) => HasKeys(id) ? EditorCommand.Text(current[id]) : "Unassigned";
@@ -553,19 +567,36 @@ internal static partial class Dialogs
             }
 
             var command = EditorCommands.Get(id);
-            bool changed = Overrides().ContainsKey(id);
             name.Text = command.Description;
-            description.Text = $"{command.Group}{(changed ? " · changed by you" : "")}";
+            description.Text = $"{command.Group}{(Customized(id) ? $" · customized (preset: {PresetKeysOf(id)})" : "")}";
             keyList.ItemsSource = current.GetValueOrDefault(id, []).Select(EditorCommand.Name).ToList();
-            resetCommand.IsEnabled = changed;
+            resetCommand.IsEnabled = Overrides().ContainsKey(id);
         }
 
-        void FillTree()
+        bool Matches(int f, string id) => f switch { 1 => HasKeys(id), 2 => Customized(id), 3 => !HasKeys(id), _ => true };
+        bool fillingFilter = false;
+        void FillFilter()
+        {
+            // The counts change with every edit; replacing the items drops the choice, so it's put back.
+            int chosen = Math.Max(0, filter.SelectedIndex);
+            fillingFilter = true;
+            filter.ItemsSource = filterNames.Select((n, i) => i == 0 ? n : $"{n} ({EditorCommands.Defaults.Count(c => Matches(i, c.Id))})").ToList();
+            filter.SelectedIndex = chosen;
+            fillingFilter = false;
+        }
+
+        /// <param name="keepShown">After an edit: rows that no longer match stay until the filter or search changes.</param>
+        void FillTree(bool keepShown = false)
         {
             string term = search.Text?.Trim() ?? "";
+            int f = Math.Max(0, filter.SelectedIndex);
             TreeViewItem? reselect = null;
-            tree.ItemsSource = EditorCommands.Defaults
-                .Where(c => term.Length == 0 || $"{c.Group} {c.Description} {KeysOf(c.Id)}".Contains(term, StringComparison.OrdinalIgnoreCase))
+            var commands = EditorCommands.Defaults
+                .Where(c => (keepShown && shown.Contains(c.Id))
+                    || (Matches(f, c.Id) && (term.Length == 0 || $"{c.Group} {c.Description} {KeysOf(c.Id)}".Contains(term, StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+            shown = [.. commands.Select(c => c.Id)];
+            tree.ItemsSource = commands
                 .GroupBy(c => c.Group)
                 .Select(g => new TreeViewItem
                 {
@@ -573,11 +604,15 @@ internal static partial class Dialogs
                     IsExpanded = true,
                     ItemsSource = g.Select(c =>
                     {
-                        var row = new Grid { ColumnDefinitions = new("230,*") };
+                        bool customized = Customized(c.Id);
+                        var row = new Grid { ColumnDefinitions = new("12,218,*") };
+                        var mark = new TextBlock { Text = customized ? "●" : "", FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
+                        var label = new TextBlock { Text = c.Description, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 8, 0) };
                         var keys = new TextBlock { Text = KeysOf(c.Id), Opacity = HasKeys(c.Id) ? 1 : 0.5 };
-                        Grid.SetColumn(keys, 1);
-                        row.Children.AddRange([new TextBlock { Text = c.Description, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 0, 8, 0) }, keys]);
-                        ToolTip.SetTip(row, c.Description);
+                        Grid.SetColumn(label, 1);
+                        Grid.SetColumn(keys, 2);
+                        row.Children.AddRange([mark, label, keys]);
+                        ToolTip.SetTip(row, customized ? $"{c.Description}\nPreset: {PresetKeysOf(c.Id)}" : c.Description);
                         var item = new TreeViewItem { Header = row, Tag = c.Id };
                         if (c.Id == selectedId) reselect = item;
                         return item;
@@ -592,15 +627,18 @@ internal static partial class Dialogs
             }
         }
 
-        void Refresh(string? message = null)
+        /// <param name="keepShown">True after an edit to the keys, so the rows the user is working down stay put.</param>
+        void Refresh(string? message = null, bool keepShown = false)
         {
             cubaseRows.IsVisible = edited.KeyPreset == KeyPreset.Cubase;
             edited = edited with { CubaseKeyFile = Blank(file.Text) };
             (current, var problem) = Keymap.For(edited);
+            presetKeys = Keymap.For(edited, withChanges: false).Keys;
             status.Text = problem ?? message ?? (edited.KeyPreset == KeyPreset.Cubase
                 ? "Commands with a Cubase match take its keys; the rest keep the editor's own keys where they're free."
                 : "");
-            FillTree();
+            FillFilter();
+            FillTree(keepShown);
             ShowCommand();
         }
 
@@ -616,6 +654,7 @@ internal static partial class Dialogs
             }
         };
         search.TextChanged += (_, _) => FillTree();
+        filter.SelectionChanged += (_, _) => { if (!fillingFilter) FillTree(); };
         preset.SelectionChanged += (_, _) =>
         {
             edited = edited with { KeyPreset = presets[Math.Max(0, preset.SelectedIndex)].Preset };
@@ -633,13 +672,13 @@ internal static partial class Dialogs
             if (selectedId is not { } id || keyList.SelectedIndex < 0) return;
             var gone = current[id][keyList.SelectedIndex];
             SetOverrides(new(Overrides()) { [id] = [.. current[id].Where(g => g != gone).Select(Keymap.Format)] });
-            Refresh();
+            Refresh(keepShown: true);
         };
         clear.Click += (_, _) =>
         {
             if (selectedId is not { } id) return;
             SetOverrides(new(Overrides()) { [id] = [] });
-            Refresh();
+            Refresh(keepShown: true);
         };
         resetCommand.Click += (_, _) =>
         {
@@ -647,16 +686,58 @@ internal static partial class Dialogs
             var overrides = new Dictionary<string, List<string>>(Overrides());
             overrides.Remove(id);
             SetOverrides(overrides);
-            Refresh();
+            Refresh(keepShown: true);
         };
         resetPreset.Click += async (_, _) =>
         {
             if (Overrides().Count == 0) return;
             if (!await Confirm((Window)TopLevel.GetTopLevel(body)!, "Reset preset",
-                $"Undo all {Overrides().Count} of your key changes to the {presets.First(p => p.Preset == edited.KeyPreset).Name.Split(' ')[0]} preset?", "Reset"))
+                $"Undo all {Overrides().Count} of your key changes to the {PresetName()} preset?", "Reset"))
                 return;
             SetOverrides([]);
             Refresh("Your changes to this preset are undone.");
+        };
+
+        var keyFileType = new FilePickerFileType("Key file") { Patterns = [$"*.{KeyFile.Extension}"] };
+        export.Click += async (_, _) =>
+        {
+            var target = await TopLevel.GetTopLevel(body)!.StorageProvider.SaveFilePickerAsync(new()
+            {
+                Title = "Export keys",
+                SuggestedFileName = $"{PresetName()} keys.{KeyFile.Extension}",
+                DefaultExtension = KeyFile.Extension,
+                FileTypeChoices = [keyFileType],
+            });
+            if (target?.TryGetLocalPath() is not { } path) return;
+            try
+            {
+                await File.WriteAllTextAsync(path, KeyFile.Write(edited.KeyPreset.ToString(), current));
+                status.Text = $"Exported the {PresetName()} keys to {Path.GetFileName(path)}.";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                status.Text = $"Couldn't export the keys: {ex.Message}";
+            }
+        };
+        import.Click += async (_, _) =>
+        {
+            var owner = (Window)TopLevel.GetTopLevel(body)!;
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new() { Title = "Import keys", FileTypeFilter = [keyFileType] });
+            if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
+            KeyFile.ImportResult result;
+            try
+            {
+                result = KeyFile.Read(await File.ReadAllTextAsync(path), presetKeys);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+            {
+                status.Text = $"Couldn't import {Path.GetFileName(path)}: {ex.Message}";
+                return;
+            }
+            if (!await Confirm(owner, "Import keys", $"Replace your key changes to the {PresetName()} preset with the keys in {Path.GetFileName(path)}?", "Import"))
+                return;
+            SetOverrides(result.Changes);
+            Refresh(result.Summary());
         };
 
         // Keys are caught only while this box has focus, before the dialog sees them, so Enter, Esc or Ctrl+Tab can be assigned too.
@@ -688,7 +769,7 @@ internal static partial class Dialogs
                     $"Move {EditorCommand.Name(gesture)} from \"{EditorCommands.Get(owner).Description}\" to \"{EditorCommands.Get(id).Description}\"?", "Move"))
                 return;
             SetOverrides(Keymap.AddKey(Overrides(), current, id, gesture));
-            Refresh();
+            Refresh(keepShown: true);
         };
 
         Refresh();
