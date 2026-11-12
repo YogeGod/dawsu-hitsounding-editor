@@ -97,7 +97,8 @@ public sealed partial class EditSession
 
     public bool IsGestureActive => gestureStart is not null;
 
-    public bool IsEdited => undo.Any(u => MapChanged(u.State, State)) || gestureStart is { } start && MapChanged(start, State);
+    public bool IsEdited => (cleanState is { } clean ? MapChanged(clean, State) : undo.Any(u => MapChanged(u.State, State)))
+                            || gestureStart is { } start && MapChanged(start, State);
 
     private static bool MapChanged(EditState a, EditState b) =>
         !ReferenceEquals(a.Hits, b.Hits) || !ReferenceEquals(a.Volumes, b.Volumes) || !ReferenceEquals(a.Bookmarks, b.Bookmarks)
