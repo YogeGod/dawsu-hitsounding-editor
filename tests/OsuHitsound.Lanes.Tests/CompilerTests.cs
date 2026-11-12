@@ -241,11 +241,10 @@ public class CompilerTests
         Assert.Equal(["soft-hitclap", "soft-hitnormal"], Names(after.Moments[0]));
     }
 
-    [Fact]
+    [CorpusFact]
     public void Every_corpus_map_compiles_unchanged_and_survives_an_edit_on_every_tenth_moment()
     {
-        var corpus = Path.Combine(RealMapTests.RepoRoot(), "corpus");
-        Assert.True(Directory.Exists(corpus), "corpus/ is missing. Run tools/build-corpus.ps1.");
+        var corpus = CorpusFactAttribute.Folder;
 
         var failures = new List<string>();
         foreach (var path in Directory.EnumerateFiles(corpus, "*.osu"))

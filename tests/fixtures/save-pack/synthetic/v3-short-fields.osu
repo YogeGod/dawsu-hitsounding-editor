@@ -1,0 +1,29 @@
+osu file format v3
+
+[General]
+AudioFilename: audio.mp3
+
+[Metadata]
+Title:Old
+Artist:dawsu!
+Creator:dawsu! tests
+Version:v3
+
+[Difficulty]
+HPDrainRate:5
+CircleSize:4
+OverallDifficulty:5
+SliderMultiplier:1.4
+SliderTickRate:1
+
+[Events]
+//Background and Video events
+
+[TimingPoints]
+0,500
+1000,-100
+
+[HitObjects]
+256,192,0,1,0
+100,100,500,1,2
+300,200,1000,2,0,B|400:200|400:300,1,140
