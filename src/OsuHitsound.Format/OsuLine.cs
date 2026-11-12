@@ -45,9 +45,12 @@ public sealed class OsuLine
         }
     }
 
+    /// <summary>The bytes this line writes, without its terminator.</summary>
+    internal byte[] Content => IsEdited ? Encoding.UTF8.GetBytes(text) : original;
+
     internal void WriteTo(Stream output)
     {
-        output.Write(IsEdited ? Encoding.UTF8.GetBytes(text) : original);
+        output.Write(Content);
         output.Write(Terminator);
     }
 }
