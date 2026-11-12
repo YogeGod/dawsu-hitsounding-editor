@@ -131,7 +131,24 @@ public class IsolatedVst3Tests
         var mixer = new PlaybackMixer { Length = 10_000 };
         mixer.SetLiveParts([a, b]);
         var block = new float[882];
-        mixer.Read(block);
-        Assert.Equal(0.5f, block[200], 4);
+        // Each host gets only most of a 10 ms block to answer, as in real playback. A freshly started host in a busy test
+        // run can miss that (its first block is still being compiled), and its late blocks are silence. Read blocks at
+        // playback pace and judge the mix on the first one both answered in time.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            int late = a.LateBlocks + b.LateBlocks;
+            Array.Clear(block);
+            mixer.Read(block);
+            if (a.LateBlocks + b.LateBlocks == late)
+            {
+                Assert.Equal(0.5f, block[200], 4);
+                return;
+            }
+
+            Thread.Sleep(10); // a late host is skipped, not waited for: give it the block's time, as playback would
+        }
+
+        Assert.Fail($"In 10 s, both instruments never answered a block in time ({a.LateBlocks} and {b.LateBlocks} late).");
     }
 }
