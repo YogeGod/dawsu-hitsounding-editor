@@ -2,7 +2,7 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
-## Unreleased
+## 2.2.9
 
 - **F1** and **Preferences → Keys** group commands by feature area, such as "Hitsound – Hit editing" and "Keysound – Note editing". In F1, a command both editors run (Undo, Play, zoom…) is listed under each mode's area. In Preferences → Keys it is listed once, its details name the Keysound area too, and searching for that area finds it.
 - Menu renames:
@@ -10,6 +10,12 @@ Public releases of the C# dawsu! editor, newest first. Each version's notes are 
   - **File → Save** is now **Save .osu**.
   - **Edit → Drum Hits auto-fill (test build only)…** is now **Drum hit detection (test build only)…**.
 - The README and the tutorial are organised by the same feature areas.
+- Fixes:
+  - Saving a map with older slider lines keeps the whistle, finish and clap on every slider node. Before, nodes with no edge sounds of their own were saved as plain hits.
+  - Saving refuses hits that fail its own "came out as" check, the same way it refuses other conflicts. Before, some of them could be written after **Copy hitsounds**.
+  - Preferences and projects are written to disk before they replace the old file. A file that can't be read is kept as a `.unreadable` copy instead of being reset to defaults.
+  - VST instruments no longer leave notes hanging after playback stalls.
+  - Adding circles to very long maps is faster.
 
 ## 2.2.8
 
