@@ -593,7 +593,7 @@ internal static partial class Dialogs
             TreeViewItem? reselect = null;
             var commands = EditorCommands.Defaults
                 .Where(c => (keepShown && shown.Contains(c.Id))
-                    || (Matches(f, c.Id) && (term.Length == 0 || $"{c.Group} {c.Description} {KeysOf(c.Id)}".Contains(term, StringComparison.OrdinalIgnoreCase))))
+                    || (Matches(f, c.Id) && (term.Length == 0 || $"{c.Group} {c.KeysoundGroup} {c.Description} {KeysOf(c.Id)}".Contains(term, StringComparison.OrdinalIgnoreCase))))
                 .ToList();
             shown = [.. commands.Select(c => c.Id)];
             tree.ItemsSource = commands

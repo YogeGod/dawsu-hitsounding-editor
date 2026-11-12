@@ -15,7 +15,8 @@ public static class MapSaver
     public static string DefaultBackupRoot() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OsuHitsoundEditor", "backups");
 
-    /// <exception cref="IOException">The file changed on disk since it was opened, or couldn't be written.</exception>
+    /// <exception cref="IOException">The file changed on disk since it was opened, the compiled map didn't play what was
+    /// wanted (<see cref="Conflict.Unverified"/>), or it couldn't be written.</exception>
     /// <param name="alsoEdit">Further changes to the compiled copy before it's written (Copy hitsounds' storyboard samples).</param>
     public static SaveResult Save(string osuPath, byte[] opened, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, string backupRoot,
         IReadOnlyList<int>? bookmarks = null, Action<OsuFile>? alsoEdit = null, ExportStyle style = ExportStyle.PerObject)
@@ -25,6 +26,9 @@ public static class MapSaver
 
         var copy = OsuFile.Parse(opened);
         var result = Compiler.Apply(copy, folder, wanted, style);
+        // Other conflicts keep their old sounds; this one means the compiled map plays something nobody asked for.
+        if (result.Conflicts.FirstOrDefault(c => c.Unverified) is { } wrong)
+            throw new IOException($"Nothing was saved: {wrong.Reason}");
         alsoEdit?.Invoke(copy);
 
         // Bookmarks: only when the set changed, so a map with bookmarks out of order is left as it is.

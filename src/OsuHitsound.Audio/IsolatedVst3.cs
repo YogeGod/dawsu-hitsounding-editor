@@ -43,6 +43,7 @@ public sealed class IsolatedVst3 : IMidiPart, IDisposable
     private readonly TaskCompletionSource<string> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly ConcurrentQueue<(byte Status, byte Data1, byte Data2)> live = new();
     private readonly List<(byte Status, byte Data1, byte Data2)> carried = []; // scheduled events of blocks skipped while late
+    private readonly List<(byte Status, byte Data1, byte Data2)> overflow = []; // events past MaxEvents in the block being sent
     private readonly float[] left = new float[ShmLayout.MaxFrames], right = new float[ShmLayout.MaxFrames];
     private readonly HashSet<(int Channel, int Pitch)> sounding = []; // scheduled notes on, for release on stop
     private TimedMidi[] scheduled = [];
@@ -311,7 +312,9 @@ public sealed class IsolatedVst3 : IMidiPart, IDisposable
         int count = 0;
         void Add(int offset, byte status, byte d1, byte d2)
         {
-            if (count >= ShmLayout.MaxEvents) return;
+            // A full block (after a long stall, say) sends the rest with the next one, a block late, instead of dropping
+            // them: a dropped note-off would leave the note hanging.
+            if (count >= ShmLayout.MaxEvents) { overflow.Add((status, d1, d2)); return; }
             int at = ShmLayout.EventsOffset + count++ * ShmLayout.EventSize;
             view.Write(at, offset);
             view.Write(at + 4, status);
@@ -323,6 +326,8 @@ public sealed class IsolatedVst3 : IMidiPart, IDisposable
         carried.Clear();
         while (live.TryDequeue(out var e)) Add(0, e.Status, e.Data1, e.Data2);
         if (playing && msPerFrame > 0) Scheduled(start, frames, msPerFrame, Add);
+        carried.AddRange(overflow); // first in the next block, in their order
+        overflow.Clear();
 
         view.Write(ShmLayout.FramesOffset, frames);
         view.Write(ShmLayout.EventCountOffset, count);

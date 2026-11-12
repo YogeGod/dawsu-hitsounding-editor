@@ -53,24 +53,9 @@ internal static class EditorCommands
 
     private const KeyModifiers Ctrl = KeyModifiers.Control, Shift = KeyModifiers.Shift, Alt = KeyModifiers.Alt;
 
-    /// <summary>The commands the key editor runs too (see KeysoundEditor.RunShortcut), with their Keysound area.</summary>
-    private static string? KeysoundGroupOf(string id) => id switch
-    {
-        "play" or "start" or "stop" or "cycle" or "jumpLeft" or "jumpRight" or "setLeft" or "setRight"
-            or "seekBack" or "seekForward" or "seekBackFar" or "seekForwardFar" or "first" or "last"
-            or "locatorsToSelection" or "playLocatorRange" => Areas.KsPlayback,
-        "toolSelect" or "toolGrab" or "toolDraw" or "toolErase" or "snap" or "undo" or "redo" or "cut" or "copy"
-            or "paste" or "duplicate" or "delete" or "selectAll" or "deselect" or "quantize" or "zoomIn" or "zoomOut"
-            or "nudgeLeft" or "nudgeRight" or "volumeUp" or "volumeDown" or "volumeUpFine" or "volumeDownFine"
-            or "navUp" or "navDown" or "navAddUp" or "navAddDown" or "selectPrevious" or "selectNext"
-            or "addPrevious" or "addNext" or "rowsOut" or "rowsIn" => Areas.KsNoteEditing,
-        _ when id.StartsWith("snap", StringComparison.Ordinal) && int.TryParse(id[4..], out _) => Areas.KsNoteEditing,
-        _ => null,
-    };
-
-    /// <summary>The built-in keys, before any preset or user change.</summary>
+    /// <summary>The built-in keys, before any preset or user change. Shared commands get their Keysound area from the key editor's own list.</summary>
     public static readonly IReadOnlyList<EditorCommand> Defaults =
-        [.. Commands().Select(c => KeysoundGroupOf(c.Id) is { } ks ? c with { KeysoundGroup = ks } : c)];
+        [.. Commands().Select(c => KeysoundShortcuts.AreaOf(c.Id) is { } ks ? c with { KeysoundGroup = ks } : c)];
 
     private static IReadOnlyList<EditorCommand> Commands() =>
     [
@@ -183,7 +168,7 @@ internal static class EditorCommands
         (Areas.Mouse(Areas.HsHitEditing), "Right-click a hit", "Delete it"),
         (Areas.Mouse(Areas.HsHitEditing), "Alt+drag", "Draw with any tool"),
         (Areas.Mouse(Areas.HsTimeline), "Ctrl+wheel or Ctrl+Alt+wheel", "Zoom in time around the pointer"),
-        (Areas.Mouse(Areas.HsTimeline), "Ctrl+Shift+wheel", "Zoom rows (vertical zoom)"),
+        (Areas.Mouse(Areas.HsLanes), "Ctrl+Shift+wheel", "Zoom rows (vertical zoom)"), // with rowsIn / rowsOut
         (Areas.Mouse(Areas.HsTimeline), "Shift+wheel", "Scroll in time"),
         (Areas.Mouse(Areas.HsTimeline), "Alt+wheel", "Snap finer / coarser"),
         (Areas.Mouse(Areas.HsTimeline), "Click the ruler or waveform", "Move the playhead (onto a bookmark when near one)"),

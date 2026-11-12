@@ -5,19 +5,43 @@ public static class SafeFile
 {
     /// <summary>
     /// Writes through a temporary file next to the target and moves it into place, so a failed write never leaves a
-    /// half-written file; the temporary file is always removed.
+    /// half-written file; the temporary file is always removed. The data reaches the disk before the move, so a crash or
+    /// power cut right after can't leave the rename without its contents (an empty file).
     /// </summary>
     public static void WriteAllBytes(string path, byte[] bytes)
     {
         var temp = path + ".saving";
         try
         {
-            File.WriteAllBytes(temp, bytes);
+            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
             File.Move(temp, path, overwrite: true);
         }
         finally
         {
             if (File.Exists(temp)) File.Delete(temp);
+        }
+    }
+
+    /// <summary>
+    /// Moves a file that couldn't be read aside as path.unreadable so the next save doesn't overwrite it. An earlier
+    /// .unreadable copy is kept: the new one gets a timestamp. Returns where it went, or null when it couldn't be moved.
+    /// </summary>
+    public static string? KeepUnreadable(string path)
+    {
+        try
+        {
+            var target = path + ".unreadable";
+            if (File.Exists(target)) target = $"{path}.{DateTime.Now:yyyyMMdd-HHmmss-fff}.unreadable";
+            File.Move(path, target, overwrite: false);
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 
