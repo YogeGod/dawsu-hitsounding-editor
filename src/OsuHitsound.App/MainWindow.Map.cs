@@ -644,7 +644,8 @@ public partial class MainWindow
             try
             {
                 SafeFile.Backup(MapSaver.DefaultBackupRoot(), document.Path, before);
-                SafeFile.WriteAllBytes(document.Path, after);
+                // The confirm dialog may have stayed open while osu! saved the map: only replace what was cleaned.
+                SafeFile.ReplaceIfUnchanged(document.Path, before, after, "the .osu changed on disk while you were deciding. Reopen it, then clean up.");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
