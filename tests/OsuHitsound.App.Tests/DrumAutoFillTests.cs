@@ -35,7 +35,7 @@ public class DrumAutoFillTests
         var before = session.State;
         var plan = DrumAutoFillPlan.Create(session, [new("kick", 1010, .9), new("snare", 1490, .8)], Options());
         Assert.Equal(2, plan.Hits.Count);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         Assert.Equal(before.Hits.Count + 2, session.State.Hits.Count);
         Assert.All(before.Hits, h => Assert.Contains(h, session.State.Hits));
         Assert.Same(before.Volumes, session.State.Volumes);
@@ -54,11 +54,11 @@ public class DrumAutoFillTests
         var plan = DrumAutoFillPlan.Create(session, candidates, Options());
         Assert.Equal(2, plan.Hits.Count);
         Assert.Equal(1, plan.Duplicates);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         int steps = session.StepCount;
         plan = DrumAutoFillPlan.Create(session, candidates, Options());
         Assert.Empty(plan.Hits);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         Assert.Equal(steps, session.StepCount);
     }
 
@@ -113,7 +113,7 @@ public class DrumAutoFillTests
         var plan = DrumAutoFillPlan.Create(session, candidates, Options(unmatched: true));
         Assert.Single(plan.Hits);
         Assert.Same(before, session.State);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         Assert.Single(session.State.HsCircles);
         session.Undo();
         Assert.Same(before, session.State);

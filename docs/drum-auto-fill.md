@@ -6,7 +6,7 @@ Status: local **kick-and-snare-only Windows editor test**. Toms are excluded. Th
 
 The local test copy is `E:/Codex-releases/dawsu!/Drum-Auto-fill-Test/app/dawsu!.exe`. A staged mapset is alongside it in `mapset/`, with `Roselia - MIIRO [Drum auto-fill test].osu` and demonstration `Kick.wav`/`Snare.wav` lanes. The first two circles introduce those samples; original library files are unchanged.
 
-1. Open the staged `.osu` in the test editor, then **Edit → Drum Hits auto-fill (test build only)…**.
+1. Open the staged `.osu` in the test editor, then **Edit → Drum hit detection (test build only)…** (called Drum Hits auto-fill up to 2.2.8).
 2. Choose the kick and snare destination lanes, or Skip either category. Start with Conservative sensitivity and 30 ms object tolerance.
 3. Analyse the whole song, or use the Range tool first and leave Selected range checked. An aligned external drum stem is optional.
 4. Review the proposed hits. Uncheck any to exclude them; the Listen button plays the source on the left and diagnostic cues on the right.

@@ -113,13 +113,32 @@ public class PreferencesAndHelpTests : IDisposable
     }
 
     [Fact]
-    public void Help_lists_every_command_and_mouse_action_once_and_searches()
+    public void Help_lists_every_command_once_per_area_and_every_mouse_action_once_and_searches()
     {
         var rows = HelpWindow.Rows("").ToList();
-        Assert.Equal(EditorCommands.All.Count + EditorCommands.Mouse.Count, rows.Count);
-        foreach (var c in EditorCommands.All) Assert.Single(rows, r => r.Description == c.Description && r.Keys == c.KeysText);
+        int shared = EditorCommands.All.Count(c => c.KeysoundGroup is not null);
+        Assert.Equal(EditorCommands.All.Count + shared + EditorCommands.Mouse.Count, rows.Count);
+        foreach (var c in EditorCommands.All)
+        {
+            Assert.Single(rows, r => r.Group == c.Group && r.Description == c.Description && r.Keys == c.KeysText);
+            if (c.KeysoundGroup is { } ks) Assert.Single(rows, r => r.Group == ks && r.Description == c.Description && r.Keys == c.KeysText);
+        }
 
         Assert.Contains(HelpWindow.Rows("bookmark"), r => r.Description == "Next bookmark");
         Assert.Empty(HelpWindow.Rows("zzz-nothing"));
+    }
+
+    [Fact]
+    public void Help_groups_are_feature_areas_in_area_order()
+    {
+        var groups = HelpWindow.Rows("").Select(r => r.Group).ToList();
+        Assert.All(groups, g => Assert.True(Areas.Order(g) < Areas.Order("not an area"), $"'{g}' is not a feature area"));
+        Assert.Equal(groups.OrderBy(Areas.Order), groups);
+        // A command both editors run is listed under each mode's area, the key editor's own only under Keysound.
+        Assert.Equal(Areas.HsHitEditing, EditorCommands.Get("undo").Group);
+        Assert.Equal(Areas.KsNoteEditing, EditorCommands.Get("undo").KeysoundGroup);
+        Assert.Equal(Areas.KsPlayback, EditorCommands.Get("play").KeysoundGroup);
+        Assert.Null(EditorCommands.Get("ks.sync").KeysoundGroup);
+        Assert.Null(EditorCommands.Get("save").KeysoundGroup);
     }
 }

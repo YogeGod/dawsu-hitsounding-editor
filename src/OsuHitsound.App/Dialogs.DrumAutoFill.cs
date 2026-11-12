@@ -9,7 +9,7 @@ internal static partial class Dialogs
 {
     public static Task<DrumAutoFillOptions?> DrumAutoFill(Window owner, IReadOnlyList<Lane> lanes,
         Func<Lane, string> nameOf, string? lastKick, string? lastSnare, TimeRange? range) =>
-        Show<DrumAutoFillOptions>(owner, "Drum Hits auto-fill", (body, close) =>
+        Show<DrumAutoFillOptions>(owner, "Drum hit detection", (body, close) =>
         {
             var choices = new[] { "Skip" }.Concat(lanes.Select(l => nameOf(l) + " · " + l.Name)).ToArray();
             int Initial(string? saved, string word, string fallback)
@@ -57,7 +57,7 @@ internal static partial class Dialogs
         }, scroll: true);
 
     public static Task<EditHit[]?> ReviewDrumAutoFill(Window owner, DrumAutoFillPlan plan, Func<Lane, string> nameOf, Action listen) =>
-        Show<EditHit[]>(owner, "Review Drum Hits auto-fill", (body, close) =>
+        Show<EditHit[]>(owner, "Review Drum hit detection", (body, close) =>
         {
             body.Children.Add(new TextBlock { Text = $"{plan.Hits.Count} new hits · {plan.Duplicates} duplicates skipped · {plan.Unmatched} without a nearby object\nUncheck any hit to leave it out. Existing hits and volumes stay. Apply is one Undo step; Save is separate.", TextWrapping = TextWrapping.Wrap, MaxWidth = 570 });
             var checks = plan.Hits.Select(h => new CheckBox { IsChecked = true,

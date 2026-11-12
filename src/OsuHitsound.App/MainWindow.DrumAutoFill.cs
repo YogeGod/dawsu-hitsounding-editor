@@ -14,7 +14,7 @@ public partial class MainWindow
     {
         if (drumAutoFillBusy || WriteBusy || renderingDrums) return;
         if (doc is not { } document || model is not { } targetModel)
-        { flash = "Open a beatmap before using Drum Hits auto-fill."; UpdateStatus(); return; }
+        { flash = "Open a beatmap before using Drum hit detection."; UpdateStatus(); return; }
         if (document.Session.IsGestureActive) return;
         var state = document.Session.State;
         var range = Lanes.Edits.Range;
@@ -32,7 +32,7 @@ public partial class MainWindow
         {
             var options = await Dialogs.DrumAutoFill(this, lanes, targetModel.NameOf, prefs.AutoFillKickLane, prefs.AutoFillSnareLane, range);
             if (options is null) return;
-            if (!Current()) throw new IOException("The map or edits changed. Run Drum Hits auto-fill again.");
+            if (!Current()) throw new IOException("The map or edits changed. Run Drum hit detection again.");
             string? song = document.Map.Settings.AudioFilename;
             if (options.Stem is null && (song is null || document.Folder.Find(song) is null))
                 throw new IOException("This map's song could not be found. Choose a drum stem instead.");
@@ -41,7 +41,7 @@ public partial class MainWindow
             var stop = new Button { Content = "Cancel", HorizontalAlignment = HorizontalAlignment.Right };
             var status = new TextBlock { Text = "Analysing kick and snare locally…", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
             stop.Click += (_, _) => { cancel.Cancel(); status.Text = "Cancelling…"; stop.IsEnabled = false; };
-            progress = new Window { Title = "Drum Hits auto-fill", Width = 420, CanResize = false, SizeToContent = SizeToContent.Height,
+            progress = new Window { Title = "Drum hit detection", Width = 420, CanResize = false, SizeToContent = SizeToContent.Height,
                 Background = Background, RequestedThemeVariant = RequestedThemeVariant,
                 Content = new StackPanel { Margin = new Thickness(20), Spacing = 16, Children = { status, stop } } };
             progress.Closing += PreventClose;
@@ -71,7 +71,7 @@ public partial class MainWindow
                 throw new IOException("The map, audio, or edits changed. Nothing was applied; analyse again.");
             if (selected.Any(h => !targetModel.LaneRows.Any(r => r.Lane == h.Lane)))
                 throw new IOException("A destination lane changed. Nothing was applied.");
-            document.Session.Add(selected, "Drum Hits auto-fill");
+            document.Session.Add(selected, "Drum hit detection");
             Lanes.Edits.Select(selected);
             prefs = prefs with { AutoFillKickLane = options.Kick is null ? null : ProjectStore.KeyOf(options.Kick),
                 AutoFillSnareLane = options.Snare is null ? null : ProjectStore.KeyOf(options.Snare) };
@@ -83,7 +83,7 @@ public partial class MainWindow
         {
             flash = $"Drum auto-fill stopped: {ex.Message}";
             if (progress is not null) { progress.Closing -= PreventClose; progress.Close(); progress = null; }
-            await Dialogs.Confirm(this, "Drum Hits auto-fill", flash, "OK", "Close");
+            await Dialogs.Confirm(this, "Drum hit detection", flash, "OK", "Close");
         }
         finally
         {
