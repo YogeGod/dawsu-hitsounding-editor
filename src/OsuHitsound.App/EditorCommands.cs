@@ -84,6 +84,7 @@ internal static class EditorCommands
         new("cycle", Areas.HsTimeline, "Cycle between the L and R locators", [K(Key.L), K(Key.Divide), K(Key.Oem2)]),
         new("locatorsToSelection", Areas.HsTimeline, "Locators to the selection (or the visible range)", [K(Key.P)]),
         new("playLocatorRange", Areas.HsTimeline, "Locators to the selection, cycle on, play from L", [K(Key.P, Alt)]),
+        new("jumpToSelection", Areas.HsTimeline, "Playhead to the selected note (the first one of a selection)", [K(Key.Space, Alt)]),
         new("jumpLeft", Areas.HsTimeline, "Jump to the left locator", [K(Key.NumPad1)]),
         new("jumpRight", Areas.HsTimeline, "Jump to the right locator", [K(Key.NumPad2)]),
         new("setLeft", Areas.HsTimeline, "Set the left locator at the playhead", [K(Key.NumPad1, Ctrl)]),
