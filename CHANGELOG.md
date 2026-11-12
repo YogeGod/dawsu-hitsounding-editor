@@ -2,6 +2,27 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 2.2.12
+
+Saving is safer: dawsu! never changes a line of your .osu that you didn't edit, and it shows you what a write will change before it happens.
+
+- **Copy hitsounds** works out every difficulty first and writes nothing until you confirm:
+  - A summary shows each difficulty with what will change. Expand a row to see the changed lines.
+  - A difficulty with conflicts starts unticked ("Write anyway: these moments keep their old sounds").
+  - The ticked difficulties are written together. If one can't be written, the others are put back as they were and any new samples are removed.
+  - New option **Never create silent hitnormals**: a hit point keeps its own sound instead of getting a silent custom hitnormal, including points the source has nothing for.
+- **Save .osu** saves straight away when only hitsounds change, and the status bar says what changed ("Saved this difficulty (3 objects, 1 green line added)"). If a save would change anything else in the file, it lists those lines and asks first.
+- **Undo and redo keep working after you save.** Undoing past a save brings those edits back as unsaved changes.
+- **Generate** and **File → New hitsound diff** keep the source difficulty's storyboard, colours, green lines (kiai and slider velocity), line endings and file encoding. Generate also shows what changes in an existing [Hitsounds] diff.
+- **Save** removes the sample files it made in an earlier save once nothing in the mapset uses them, now with paired samples too. It lists them first. A file you changed, or that another difficulty uses, is kept.
+- The mix files dawsu! makes itself (such as `normal-hitnormal3.wav`) no longer show up as empty lanes.
+- **Map → Clean up green lines…** removes green lines that change nothing (same sample set, index, volume, slider velocity and kiai as already in force). It lists them first and keeps a backup. Nothing plays differently.
+- **Alt+Space** moves the playhead to the selected note, or to the first one of a selection.
+- Backups keep the newest 20 per difficulty. **Map → Open backups folder** opens them.
+- Fixes:
+  - Copy hitsounds' green lines for slider ticks no longer switch to the Soft sample set after a line without a sample set, and no longer carry the "omit first bar line" flag.
+  - Two backups made in the same millisecond no longer overwrite each other.
+
 ## 2.2.11
 
 - **Edit → Drum hit detection…** now works in every install. It finds kicks and snares on your PC with the [ADTOF](https://github.com/MZehren/ADTOF) drum model, with no Python or extra download. Before, it only worked on a PC with a local Python detector and said "not configured" everywhere else. It is no longer labelled "test build only".
