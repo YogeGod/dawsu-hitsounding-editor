@@ -154,6 +154,33 @@ public class HitEditorTests
     }
 
     [Fact]
+    public void Left_and_right_step_through_hits_in_any_lane_in_time_then_row_order()
+    {
+        var e = Editor();
+        var rows = e.Model!.Rows.OfType<LaneRow>().Select(r => r.Lane).ToList();
+        var order = Session(e).State.Hits.OrderBy(h => h.Time).ThenBy(h => rows.IndexOf(h.Lane)).ToList();
+        Assert.Equal(3, order.Count); // the normal and the clap at 1000, the normal at 1500
+        Assert.NotEqual(order[0].Lane, order[1].Lane);
+
+        e.SelectNeighbour(1, extend: false, playhead: 0);
+        Assert.Equal([order[0]], e.Selected);
+        e.SelectNeighbour(1, extend: false, playhead: 0); // same moment, next lane down
+        Assert.Equal([order[1]], e.Selected);
+        e.SelectNeighbour(1, extend: false, playhead: 0); // crosses back to the first lane, later in time
+        Assert.Equal([order[2]], e.Selected);
+        e.SelectNeighbour(1, extend: false, playhead: 0); // nothing later: the selection stays
+        Assert.Equal([order[2]], e.Selected);
+        e.SelectNeighbour(-1, extend: false, playhead: 0);
+        Assert.Equal([order[1]], e.Selected);
+        e.SelectNeighbour(-1, extend: true, playhead: 0);
+        Assert.Equal(order.Take(2).ToHashSet(), e.Selected.ToHashSet());
+
+        e.Select([]);
+        e.SelectNeighbour(-1, extend: false, playhead: 1200); // from the playhead, in any lane
+        Assert.Equal([order[1]], e.Selected);
+    }
+
+    [Fact]
     public void Drawn_loose_hits_retain_the_insert_volume()
     {
         var e = Editor();

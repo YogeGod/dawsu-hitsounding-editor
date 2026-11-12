@@ -120,7 +120,7 @@ public partial class MainWindow
             () => On(GrabTool)),
         new("Draw tool (3)", "Click or drag along a lane to place hits. Starting on a hit erases instead. Holding Alt draws with any tool.",
             () => On(DrawTool)),
-        new("Erase tool (4)", "Drag across hits to remove them. Right-click also deletes a hit with any tool.", () => On(EraseTool)),
+        new("Erase tool (4)", "Drag across hits to remove them.", () => On(EraseTool)),
         new("Mute tool (5)", "Click a hit to silence it while you listen. This is only for listening: osu! can't store a muted sound, so it's never saved.",
             () => On(MuteTool)),
         new("Ramp tool (6)", "Drag in the volume controller at the bottom to draw a smooth volume ramp.", () => On(RampTool)),

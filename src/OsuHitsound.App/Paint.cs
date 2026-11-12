@@ -26,6 +26,13 @@ internal static class Paint
 
     private static IBrush B(string key) => T.Cached("brush:" + key, () => (IBrush)Brush(T.Color(key)));
 
+    /// <summary>A colour token's brush at an opacity (times the colour's own alpha), cached until the theme changes.</summary>
+    public static IBrush TokenAt(string key, double opacity) =>
+        T.Cached($"brush:{key}:{opacity}", () => (IBrush)Brush(T.Color(key), opacity));
+
+    /// <summary>The grid's shading between L and R while cycling; transparent (nothing drawn) unless the user sets it.</summary>
+    public static IBrush? GridCycle => T.Color("cycle.grid").A == 0 ? null : B("cycle.grid");
+
     private static IPen P(string key, double width) => T.Cached($"pen:{key}:{width}", () => (IPen)new ImmutablePen(Brush(T.Color(key)), width));
 
     public static IBrush Bg => B("arrange.bg");

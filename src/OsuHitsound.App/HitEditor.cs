@@ -133,7 +133,7 @@ internal sealed class HitEditor
         if (Session is { } session) Select(session.State.Hits.Where(predicate));
     }
 
-    /// <summary>Removes one hit and drops it from the selection (right-click, Draw strokes that start on a hit, Erase).</summary>
+    /// <summary>Removes one hit and drops it from the selection (Draw strokes that start on a hit, Erase).</summary>
     public void Erase(EditHit hit)
     {
         if (!CanDelete(hit)) return;
@@ -202,26 +202,42 @@ internal sealed class HitEditor
     }
 
     /// <summary>
-    /// Left/Right (Shift adds), as Cubase's Navigate: the next or previous hit in the lane of the last or first selected
-    /// hit; with nothing selected, the first hit after (or before) the playhead in the active lane.
+    /// Left/Right (Shift adds), as Cubase's Drum Editor navigates: the next or previous hit in any shown lane, in time
+    /// order, hits at the same moment going from the top lane down. It steps from the last (or first) selected hit;
+    /// with nothing selected, from the playhead.
     /// </summary>
     public void SelectNeighbour(int direction, bool extend, double playhead)
     {
         if (model is null || Session is not { } session) return;
-        var anchor = direction > 0 ? Selected.MaxBy(h => h.Time) : Selected.MinBy(h => h.Time);
-        var lane = anchor?.Lane ?? model.ActiveLane;
-        if (lane is null) return;
-        double from = anchor?.Time ?? playhead;
-        var inLane = session.State.Hits.Where(h => h.Lane == lane);
-        var next = direction > 0
-            ? inLane.Where(h => anchor is null ? h.Time >= from - 0.5 : h.Time > from + 0.5).MinBy(h => h.Time)
-            : inLane.Where(h => anchor is null ? h.Time <= from + 0.5 : h.Time < from - 0.5).MaxBy(h => h.Time);
+        var rowOf = new Dictionary<Lane, int>();
+        foreach (var row in model.Rows)
+            if (row is LaneRow l) rowOf.TryAdd(l.Lane, rowOf.Count);
+        int Compare(double timeA, int rowA, double timeB, int rowB) =>
+            Math.Abs(timeA - timeB) > 0.5 ? timeA.CompareTo(timeB) : rowA.CompareTo(rowB);
+        int Row(EditHit h) => rowOf.TryGetValue(h.Lane, out int r) ? r : -1;
+
+        // Where to step from: the selected hit furthest in that direction, or just before (after) the playhead.
+        double fromTime = playhead;
+        int fromRow = direction > 0 ? -1 : int.MaxValue;
+        if (Selected.Count > 0)
+        {
+            var anchor = Selected.Aggregate((a, b) => Compare(a.Time, Row(a), b.Time, Row(b)) * direction >= 0 ? a : b);
+            (fromTime, fromRow) = (anchor.Time, Row(anchor));
+        }
+
+        EditHit? next = null;
+        foreach (var hit in session.State.Hits)
+        {
+            if (!rowOf.ContainsKey(hit.Lane)) continue; // hidden or collapsed lanes are skipped
+            if (Compare(hit.Time, Row(hit), fromTime, fromRow) * direction <= 0) continue;
+            if (next is null || Compare(hit.Time, Row(hit), next.Time, Row(next)) * direction < 0) next = hit;
+        }
         if (next is null) return;
         Select(extend ? Selected.Append(next) : [next]);
     }
 
     /// <summary>
-    /// Up/Down (Shift adds), as Cubase's Navigate: the hit nearest in time in the next lane above or below that has one
+    /// Shift+Up/Down: adds the hit nearest in time in the next lane above or below that has one
     /// within <paramref name="maxDistance"/> ms (lanes with nothing that close are skipped).
     /// </summary>
     public void SelectAcross(int direction, bool extend, double maxDistance)

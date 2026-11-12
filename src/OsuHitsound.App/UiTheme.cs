@@ -79,6 +79,10 @@ internal sealed class UiTheme
         new("header", "Grid", "Header and ruler", [
             C("header.bg", "Background", "#2e2e2e"), C("ruler.bar", "Bar numbers", "#edf0f1"), C("ruler.beat", "Beat numbers", "#bdbdbd"),
             N("ruler.fontSize", "Font size", 12, 8, 20), N("header.sections", "Sections row height", 18, 0, 40)]),
+        new("cycle", "Grid", "Cycle range", [
+            C("cycle.active", "Ruler band, cycling", "#2f6fd0"), C("cycle.inactive", "Ruler band, cycle off", "#8e8e93"),
+            C("cycle.reverse", "Ruler band, R before L (skips)", "#ff453a"),
+            C("cycle.grid", "Grid between L and R (transparent: none)", "#00000000")]),
         new("sections", "Grid", "Song sections", [C("section.fill", "Fill", "#8a6d1e"), N("section.opacity", "Opacity", 0.55, 0, 1)]),
         new("waveform", "Grid", "Song waveform", [
             C("wave.base", "Loudness", "#8fb7e8"), C("wave.low", "Low: kicks, bass", "#4f8dff"), C("wave.mid", "Mid: snares, vocals", "#c27bff"),
@@ -145,18 +149,64 @@ internal sealed class UiTheme
         ["volume.bg"] = "#111113", ["volume.side"] = "#1b1b1e", ["roll.white"] = "#1b1b1e", ["roll.black"] = "#111113",
     };
 
-    public bool DarkMode { get; private set; }
+    /// <summary>The colour scheme (Preferences, Colours): 0 grey, 1 dark, 2 blue-grey dark, 3 teal dark.</summary>
+    public int Scheme { get; private set; }
 
-    public void SetDarkMode(bool dark)
+    public const int SchemeCount = 4;
+
+    public bool DarkMode => Scheme != 0;
+
+    public void SetDarkMode(bool dark) => SetScheme(dark ? 1 : 0);
+
+    public void SetScheme(int scheme)
     {
-        if (DarkMode == dark) return;
-        DarkMode = dark;
+        scheme = Math.Clamp(scheme, 0, SchemeCount - 1);
+        if (Scheme == scheme) return;
+        Scheme = scheme;
         cache.Clear();
         Changed?.Invoke();
     }
 
-    public string Get(string key) => values.TryGetValue(key, out var v) ? v
-        : DarkMode && DarkPalette.TryGetValue(key, out var dark) ? dark : ByKey[key].Default;
+    // The two tinted dark schemes: the dark palette's greys, tinted (hue, saturation, brightness lift), so their panels
+    // match Cubase's second and fourth Default Color Schemes swatches (#273137 and #284c5a).
+    private static readonly (double Hue, double Saturation, double Lift)[] SchemeTints = [(0, 0, 0), (0, 0, 0), (202, 0.29, 0.05), (197, 0.56, 0.18)];
+    private static readonly Dictionary<int, IReadOnlyDictionary<string, string>> SchemePalettes = [];
+
+    private static IReadOnlyDictionary<string, string>? SchemePalette(int scheme)
+    {
+        if (scheme == 0) return null;
+        if (scheme == 1) return DarkPalette;
+        lock (SchemePalettes)
+        {
+            if (SchemePalettes.TryGetValue(scheme, out var made)) return made;
+            var (hue, saturation, lift) = SchemeTints[scheme];
+            // Only the greys are tinted: blue buttons, green Play and the text keep their colours.
+            var palette = DarkPalette.ToDictionary(kv => kv.Key, kv => Hsb.FromColor(Avalonia.Media.Color.Parse(kv.Value)) is var c && c.S < 0.12 && ThemeColors.ChromeKeys.Contains(kv.Key)
+                ? new Hsb(hue, saturation, Math.Min(1, c.B + lift)).ToHex() : kv.Value);
+            return SchemePalettes[scheme] = palette;
+        }
+    }
+
+    /// <summary>A scheme's panel colour, for its swatch in Preferences.</summary>
+    public static Color SchemeSwatch(int scheme) =>
+        Avalonia.Media.Color.Parse(SchemePalette(scheme) is { } p && p.TryGetValue("panel.raised", out var v) ? v : ByKey["panel.raised"].Default);
+
+    // The user's colours (Preferences, Colours), above everything else. They are not written to ui-theme.json.
+    private IReadOnlyDictionary<string, string> userColors = new Dictionary<string, string>();
+
+    /// <summary>Replaces the user's colour layer: each key's value wins over the theme file and the scheme.</summary>
+    public void SetUserColors(IReadOnlyDictionary<string, string> colors)
+    {
+        userColors = colors.Where(kv => ByKey.TryGetValue(kv.Key, out var s) && IsValid(s, kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value);
+        cache.Clear();
+        Changed?.Invoke();
+    }
+
+    public string Get(string key) => userColors.TryGetValue(key, out var user) ? user : BaseValue(key);
+
+    /// <summary>The value without the user's colour layer: the theme file, else the scheme, else the default.</summary>
+    public string BaseValue(string key) => values.TryGetValue(key, out var v) ? v
+        : SchemePalette(Scheme) is { } palette && palette.TryGetValue(key, out var schemed) ? schemed : ByKey[key].Default;
 
     public void Set(string key, string value)
     {

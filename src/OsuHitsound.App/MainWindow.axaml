@@ -201,8 +201,7 @@
           <Button Name="WorkflowStatusButton" Classes="flat icon" IsVisible="False" AutomationProperties.Name="Operation details">
             <app:AppIcon Name="WorkflowStatusIcon" Glyph="Info" />
           </Button>
-          <ToggleButton Name="ThemeToggle" Classes="flat icon" AutomationProperties.Name="Dark mode" ToolTip.Tip="Dark / Not-as-dark mode"><app:AppIcon Name="ThemeIcon" Glyph="Moon" /></ToggleButton>
-          <Button Name="PreferencesButton" Classes="flat icon" AutomationProperties.Name="Preferences" ToolTip.Tip="Preferences: Songs folder, audio output and keys (Ctrl+,)"><app:AppIcon Glyph="Settings" /></Button>
+          <Button Name="PreferencesButton" Classes="flat icon" AutomationProperties.Name="Preferences" ToolTip.Tip="Preferences: Songs folder, audio output, keys and colours (Ctrl+,)"><app:AppIcon Glyph="Settings" /></Button>
           <Button Name="HelpButton" Classes="flat icon" AutomationProperties.Name="Shortcuts and help" ToolTip.Tip="Every shortcut and mouse action, with search (F1)"><app:AppIcon Glyph="CircleHelp" /></Button>
         </StackPanel>
       </Grid>

@@ -252,7 +252,7 @@ public partial class MainWindow : Window, IMapWriteHost
         // Volume panel.
         VolumeScopeBox.ItemsSource = new[] { "All lanes", "Selected lanes" };
         VolumeScopeBox.SelectedIndex = 0;
-        VolumeScopeBox.SelectionChanged += (_, _) => { Volume.SelectedLanesOnly = VolumeScopeBox.SelectedIndex == 1; VolumeScopeHint.Text = Volume.SelectedLanesOnly ? "Selected lanes" : "All lanes"; Volume.InvalidateVisual(); };
+        VolumeScopeBox.SelectionChanged += (_, _) => { Volume.SelectedLanesOnly = VolumeScopeBox.SelectedIndex == 1; Volume.InvalidateVisual(); };
         Lanes.SampleDropped += AssignChannelFile;
         RampShapeBox.ItemsSource = new[] { "Linear", "Ease in", "Ease out", "S-curve" };
         RampShapeBox.SelectedIndex = 0;
@@ -464,6 +464,7 @@ public partial class MainWindow : Window, IMapWriteHost
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             model.Changed += Volume.InvalidateVisual;
+            model.Changed += UpdateVolumeLanesHint; // the active lane decides the bars when nothing is selected
             UpdateActiveLaneText();
             UpdateCues(); // project restoration may have changed layers and preview mutes
             model.PreviewMutesChanged += ScheduleProjectSave;
@@ -784,8 +785,8 @@ public partial class MainWindow : Window, IMapWriteHost
             case "selectNext": Lanes.Edits.SelectNeighbour(1, extend: false, Lanes.Playhead); break;
             case "addPrevious": Lanes.Edits.SelectNeighbour(-1, extend: true, Lanes.Playhead); break;
             case "addNext": Lanes.Edits.SelectNeighbour(1, extend: true, Lanes.Playhead); break;
-            case "navUp": Lanes.Edits.SelectAcross(-1, extend: false, Lanes.Axis.VisibleDuration / 2); break;
-            case "navDown": Lanes.Edits.SelectAcross(1, extend: false, Lanes.Axis.VisibleDuration / 2); break;
+            case "navUp": Lanes.Edits.ShiftLanes(-1); break; // Cubase's Drum Editor moves the event a row
+            case "navDown": Lanes.Edits.ShiftLanes(1); break;
             case "navAddUp": Lanes.Edits.SelectAcross(-1, extend: true, Lanes.Axis.VisibleDuration / 2); break;
             case "navAddDown": Lanes.Edits.SelectAcross(1, extend: true, Lanes.Axis.VisibleDuration / 2); break;
             case "rowsOut": Lanes.ZoomRows(1 / 1.15); break;
@@ -826,6 +827,21 @@ public partial class MainWindow : Window, IMapWriteHost
             var times = session.Moments.Select(m => m.Moment.Time).Concat(session.State.Hits.Select(h => h.Time)).ToList();
             Seek(times.Count == 0 ? first ? 0 : Lanes.Axis.End : first ? times.Min() : times.Max());
         }
+    }
+
+    /// <summary>The label beside the volume bars: which lanes they show (the selected hits' lanes, or the active lane).</summary>
+    private void UpdateVolumeLanesHint()
+    {
+        var model = Lanes.Model;
+        var shown = Volume.ShownLanes;
+        VolumeScopeHint.Text = shown switch
+        {
+            null => "All lanes",
+            { Count: 1 } when model is not null => model.NameOf(shown.First()),
+            _ => $"{shown.Count} lanes",
+        };
+        ToolTip.SetTip(VolumeScopeHint, shown is null || model is null ? "The bars show every lane." :
+            "The bars show and change only these lanes: " + string.Join(", ", shown.Select(model.NameOf)));
     }
 
     private void SetTool(Tool tool)
@@ -1668,6 +1684,8 @@ public partial class MainWindow : Window, IMapWriteHost
         RefreshWorkflowFeedback();
 
         Volume.SelectedMoments = Lanes.SelectedMoments;
+        Volume.SelectedHits = Lanes.Edits.Selected;
+        UpdateVolumeLanesHint();
         Volume.InvalidateVisual();
         string snap = Lanes.Edits.SnapMode == SnapMode.Objects ? "objects" : $"{Lanes.Spacing}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}";
         string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap {snap}" : ", snap off")}";
