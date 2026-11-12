@@ -107,14 +107,7 @@ public static class ProjectStore
         }
         catch (JsonException)
         {
-            try
-            {
-                File.Move(path, path + ".unreadable", overwrite: true);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-            }
-
+            SafeFile.KeepUnreadable(path); // an earlier .unreadable copy is kept too
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

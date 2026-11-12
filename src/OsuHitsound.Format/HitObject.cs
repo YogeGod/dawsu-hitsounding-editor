@@ -190,11 +190,14 @@ public sealed class HitObject(OsuLine line) : FieldLine(line)
         _ => null,
     };
 
-    // Only slider edge fields can be missing before hitSample; they need one entry per node (head, repeats, tail).
+    // Only slider edge fields can be missing before hitSample; they need one entry per node (head, repeats, tail), each
+    // playing what the missing field did: osu! gives every node the slider's own hitSound and banks (see NodeSounds,
+    // NodeSets). Writing "0" would drop the slider's whistle, finish or clap from all its nodes.
     protected override string DefaultField(int index) => (Kind, index) switch
     {
-        (HitObjectKind.Slider, EdgeSoundsField) => string.Join('|', Enumerable.Repeat("0", NodeCount)),
-        (HitObjectKind.Slider, EdgeSetsField) => string.Join('|', Enumerable.Repeat("0:0", NodeCount)),
+        (HitObjectKind.Slider, EdgeSoundsField) => string.Join('|', Enumerable.Repeat(((int)HitSound).ToString(System.Globalization.CultureInfo.InvariantCulture), NodeCount)),
+        (HitObjectKind.Slider, EdgeSetsField) => string.Join('|', Enumerable.Repeat(
+            (HitSample ?? default) is var own ? $"{(int)own.NormalSet}:{(int)own.AdditionSet}" : "0:0", NodeCount)),
         _ => throw new InvalidOperationException($"Hit object field {index} has no default: {Line.Text}"),
     };
 

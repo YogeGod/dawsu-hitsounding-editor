@@ -9,6 +9,21 @@ public class ProjectStoreTests : IDisposable
     public void Dispose() => Directory.Delete(root, recursive: true);
 
     [Fact]
+    public void An_unreadable_project_is_kept_and_an_earlier_unreadable_copy_survives()
+    {
+        const string map = @"C:\Songs\Map\b.osu";
+        var path = ProjectStore.PathFor(root, map);
+        File.WriteAllText(path, "{ broken");
+        Assert.Null(ProjectStore.Load(root, map));
+        File.WriteAllText(path, "{ broken again");
+        Assert.Null(ProjectStore.Load(root, map));
+
+        Assert.Equal("{ broken", File.ReadAllText(path + ".unreadable"));
+        Assert.Equal("{ broken again", File.ReadAllText(Assert.Single(Directory.GetFiles(root, Path.GetFileName(path) + ".*.unreadable"))));
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void A_project_saves_and_loads_by_map_path()
     {
         var data = new ProjectData

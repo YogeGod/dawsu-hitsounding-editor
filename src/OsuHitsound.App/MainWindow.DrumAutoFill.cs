@@ -63,7 +63,7 @@ public partial class MainWindow
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { flash = ex.Message; UpdateStatus(); }
             });
             audio?.StopAudition();
-            if (selected is null) { flash = "Drum auto-fill cancelled; no hits were added."; return; }
+            if (selected is null) { flash = "Drum hit detection cancelled; no hits were added."; return; }
             cancel.Token.ThrowIfCancellationRequested();
             var freshSource = await Task.Run(ReadSource, cancel.Token);
             var freshMap = await File.ReadAllBytesAsync(document.Path, cancel.Token);
@@ -78,10 +78,10 @@ public partial class MainWindow
             SavePrefs(); ScheduleProjectSave();
             flash = $"Added {selected.Length} kick/snare hits. Ctrl+Z undoes auto-fill. Save/Generate writes the result.";
         }
-        catch (OperationCanceledException) { flash = "Drum auto-fill cancelled; no hits were added."; }
+        catch (OperationCanceledException) { flash = "Drum hit detection cancelled; no hits were added."; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
         {
-            flash = $"Drum auto-fill stopped: {ex.Message}";
+            flash = $"Drum hit detection stopped: {ex.Message}";
             if (progress is not null) { progress.Closing -= PreventClose; progress.Close(); progress = null; }
             await Dialogs.Confirm(this, "Drum hit detection", flash, "OK", "Close");
         }
