@@ -1,6 +1,6 @@
 # Drum hit detection
 
-Status: **built in** from the next release after 2.2.10. **Edit → Drum hit detection…** finds kicks and snares on the user's PC and works in every install. Toms, hi-hats and cymbals are ignored.
+Status: **built in** since 2.2.11. **Edit → Drum hit detection…** finds kicks and snares on the user's PC and works in every install. Toms, hi-hats and cymbals are ignored.
 
 ## In the editor
 

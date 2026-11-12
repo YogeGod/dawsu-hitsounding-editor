@@ -2,10 +2,10 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
-## Unreleased
+## 2.2.11
 
 - **Edit → Drum hit detection…** now works in every install. It finds kicks and snares on your PC with the [ADTOF](https://github.com/MZehren/ADTOF) drum model, with no Python or extra download. Before, it only worked on a PC with a local Python detector and said "not configured" everywhere else. It is no longer labelled "test build only".
-- The installer is about 20 MB bigger, for the drum model and ONNX Runtime.
+- The installer is about 8 MB bigger, for the drum model and ONNX Runtime.
 
 ## 2.2.10
 
