@@ -39,7 +39,7 @@ public partial class MainWindow
             byte[] ReadSource() => options.Stem is { } stem ? File.ReadAllBytes(stem) : document.Folder.ReadBytes(song!);
             audio?.Pause();
             var stop = new Button { Content = "Cancel", HorizontalAlignment = HorizontalAlignment.Right };
-            var status = new TextBlock { Text = "Analysing kick and snare locally…", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+            var status = new TextBlock { Text = "Analysing kick and snare on this PC…", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
             stop.Click += (_, _) => { cancel.Cancel(); status.Text = "Cancelling…"; stop.IsEnabled = false; };
             progress = new Window { Title = "Drum hit detection", Width = 420, CanResize = false, SizeToContent = SizeToContent.Height,
                 Background = Background, RequestedThemeVariant = RequestedThemeVariant,

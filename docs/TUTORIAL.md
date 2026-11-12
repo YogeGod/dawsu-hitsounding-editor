@@ -53,6 +53,7 @@ The Draw tool uses a drumstick icon and cursor. When Audition is on, moving a hi
 - **Insert volume · %** in the toolbar presets the volume of hits you draw next. Clear the field to follow the map volume. Existing hits keep their volumes, and the choice is remembered.
 - The **Edit** menu has quantize, repeat, range and scale by volume.
 - **Protect hitnormals from deletion** (Edit menu): when it's on, deleting, cutting, erasing or clearing a range keeps base hitnormal sounds. It's off until you turn it on, and the choice is remembered.
+- **Drum hit detection…** (Edit menu) finds the kicks and snares in the song, or in a drum stem you choose, and adds them as hits. Pick a lane for kicks and one for snares (or Skip either), the sensitivity, and how close a hit must be to a circle or slider node to snap to it. Use the Range tool first to analyse only part of the song. The review window lists every proposed hit: uncheck any you don't want, and **Listen** plays the song on the left with short cues on the right. Apply is one Undo step and doesn't save. It runs on your PC with the [ADTOF](https://github.com/MZehren/ADTOF) drum model, and no audio is uploaded.
 - **Undo and redo** (Ctrl+Z, Ctrl+Y). The optional History panel in the inspector lists edits by name.
 
 ## Hitsound – Timeline navigation

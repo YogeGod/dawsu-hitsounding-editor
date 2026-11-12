@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
-using System.Text.Json;
 using OsuHitsound.Audio;
 using OsuHitsound.Lanes;
 
@@ -48,26 +45,13 @@ internal sealed record DrumDetectionResult(IReadOnlyList<DrumHitCandidate> Event
 
 internal static class DrumAutoFillDetector
 {
-    private sealed record Configuration(string Python, string Script);
-    private sealed record Detection(int SchemaVersion, DrumHitCandidate[] Events);
-    private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
-
     public static async Task<DrumDetectionResult> Detect(byte[] source, double offset, double? from, double? to,
         double thresholdScale, CancellationToken token)
     {
-        var configPath = Path.Combine(AppContext.BaseDirectory, "drum-autofill.json");
-        if (!File.Exists(configPath)) throw new IOException("The local drum detector is not configured in this build. Use the Drum Auto-fill test copy.");
-        var config = JsonSerializer.Deserialize<Configuration>(await File.ReadAllTextAsync(configPath, token), Json)
-            ?? throw new IOException("The drum detector configuration could not be read.");
-        if (string.IsNullOrWhiteSpace(config.Python) || string.IsNullOrWhiteSpace(config.Script) ||
-            !Path.IsPathFullyQualified(config.Python) || !Path.IsPathFullyQualified(config.Script) ||
-            !File.Exists(config.Python) || !File.Exists(config.Script))
-            throw new IOException("The local drum detector could not be found. Rebuild the test copy.");
         string job = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "OsuHitsoundEditor", "DrumAutoFill", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(job);
-        string wav = Path.Combine(job, "excerpt.wav"), output = Path.Combine(job, "result");
-        double start = await Task.Run(() =>
+        return await Task.Run(() =>
         {
             token.ThrowIfCancellationRequested();
             if (!ManagedBass.Bass.Init(0) && ManagedBass.Bass.LastError != ManagedBass.Errors.Already)
@@ -77,40 +61,15 @@ internal static class DrumAutoFillDetector
             int a = (int)Math.Clamp(Math.Ceiling(((from ?? offset) - offset) * SampleMixer.Rate / 1000), 0, frames);
             int b = (int)Math.Clamp(Math.Ceiling(((to ?? (frames * 1000.0 / SampleMixer.Rate + offset)) - offset) * SampleMixer.Rate / 1000), 0, frames);
             if (b <= a) throw new IOException("The selected range contains no song audio.");
-            token.ThrowIfCancellationRequested();
-            using var writer = new BinaryWriter(File.Create(wav));
-            int size = checked((b - a) * 2);
-            writer.Write("RIFF"u8); writer.Write(36 + size); writer.Write("WAVEfmt "u8);
-            writer.Write(16); writer.Write((short)1); writer.Write((short)1); writer.Write(SampleMixer.Rate);
-            writer.Write(SampleMixer.Rate * 2); writer.Write((short)2); writer.Write((short)16);
-            writer.Write("data"u8); writer.Write(size);
+            // Mono 16-bit, the input ADTOF was trained on (madmom reads 16-bit wav files).
+            var mono = new short[b - a];
             for (int frame = a; frame < b; frame++)
-            {
-                if (frame % 44100 == 0) token.ThrowIfCancellationRequested();
-                writer.Write((short)Math.Clamp(Math.Round((stereo[frame * 2] + stereo[frame * 2 + 1]) * .5 * 32767), -32768, 32767));
-            }
-            return a * 1000.0 / SampleMixer.Rate;
+                mono[frame - a] = (short)Math.Clamp(Math.Round((stereo[frame * 2] + stereo[frame * 2 + 1]) * .5 * 32767), -32768, 32767);
+            var found = DrumDetection.Detect(mono, thresholdScale, token);
+            string audition = Path.Combine(job, "audition.wav");
+            File.WriteAllBytes(audition, DrumDetection.Audition(mono, found));
+            double start = a * 1000.0 / SampleMixer.Rate + offset;
+            return new DrumDetectionResult(found.Select(e => e with { TimeMs = Math.Round(e.TimeMs + start, 4) }).ToArray(), audition);
         }, token);
-        var info = new ProcessStartInfo(config.Python)
-        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = job };
-        foreach (string arg in new[] { config.Script, "--audio", wav, "--output", output,
-            "--audio-start-ms", start.ToString("R", CultureInfo.InvariantCulture),
-            "--song-offset-ms", offset.ToString("R", CultureInfo.InvariantCulture),
-            "--threshold-scale", thresholdScale.ToString("R", CultureInfo.InvariantCulture) }) info.ArgumentList.Add(arg);
-        using var process = Process.Start(info) ?? throw new IOException("The local drum detector could not start.");
-        try
-        {
-            var stdout = process.StandardOutput.ReadToEndAsync(token);
-            var stderr = process.StandardError.ReadToEndAsync(token);
-            await process.WaitForExitAsync(token);
-            string log = await stdout + "\n" + await stderr;
-            await File.WriteAllTextAsync(Path.Combine(job, "detector.log"), log, token);
-            if (process.ExitCode != 0) throw new IOException($"Drum analysis failed. Details: {Path.Combine(job, "detector.log")}");
-        }
-        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-        var result = JsonSerializer.Deserialize<Detection>(await File.ReadAllTextAsync(Path.Combine(output, "candidates.json"), token), Json);
-        if (result is not { SchemaVersion: 2, Events: not null } || result.Events.Any(e => e.Drum is not ("kick" or "snare")))
-            throw new IOException("The detector returned an incompatible result; no hits were applied.");
-        return new(result.Events, Path.Combine(output, "audition.wav"));
     }
 }

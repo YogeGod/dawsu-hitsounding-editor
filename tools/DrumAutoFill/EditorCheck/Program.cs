@@ -10,9 +10,7 @@ using OsuHitsound.App;
 
 string root = Path.GetFullPath(args[0]);
 Directory.CreateDirectory(root);
-File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "drum-autofill.json"), JsonSerializer.Serialize(new
-{ Python = Path.GetFullPath(args[1]), Script = Path.GetFullPath(args[2]) }));
-File.Copy(Path.GetFullPath(args[3]), Path.Combine(root, "song.wav"), overwrite: true);
+File.Copy(Path.GetFullPath(args[1]), Path.Combine(root, "song.wav"), overwrite: true);
 string map = Path.Combine(root, "editor-check.osu");
 File.WriteAllText(map, """
     osu file format v14
@@ -50,7 +48,7 @@ Click(options, "Analyse");
 Wait(() => w.OwnedWindows.Any(p => p.Title == "Review Drum hit detection" || p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")) || task.IsCompleted);
 if (w.OwnedWindows.Any(p => p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")))
     throw new Exception(string.Join(" ", w.OwnedWindows.Last().GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text)));
-Check(!task.IsCompleted, "actual Python detector reaches preview");
+Check(!task.IsCompleted, "in-app detector reaches preview");
 var preview = w.OwnedWindows.Last(p => p.Title == "Review Drum hit detection");
 preview.CaptureRenderedFrame()!.Save(Path.Combine(root, "preview.png"));
 Check(preview.GetLogicalDescendants().OfType<CheckBox>().Any(), "preview contains selectable proposed hits");
