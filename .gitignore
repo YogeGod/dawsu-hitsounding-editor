@@ -19,3 +19,13 @@ keysounding-docs/rea/cubase/srf/
 # Release packages
 artifacts/
 TASKS.md
+
+# Local editor, agent and design-tool files
+.idea/
+.superdesign/
+.handoff.md
+CLAUDE-START.md
+
+# Cubase reverse-engineering scratch scripts and dumps (keep only the write-up)
+keysounding-docs/rea/cubase/*
+!keysounding-docs/rea/cubase/cubase15-feature-analysis.md
