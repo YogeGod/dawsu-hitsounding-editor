@@ -29,6 +29,19 @@ public class DrumAutoFillTests
     }
 
     [Fact]
+    public void Review_times_use_a_decimal_point_under_a_comma_locale()
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            Assert.Equal("0.543 s", Dialogs.DrumHitLabel(543));
+            Assert.Equal("Selected range: 1.50–12.25 seconds", Dialogs.DrumRangeLabel(new TimeRange(1500, 12250, new HashSet<Lane>())));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = saved; }
+    }
+
+    [Fact]
     public void Applying_both_drums_is_one_undo_step_and_keeps_existing_hits_and_volume()
     {
         var session = Session();
