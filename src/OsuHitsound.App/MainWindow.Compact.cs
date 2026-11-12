@@ -38,16 +38,8 @@ public partial class MainWindow
             (RightLocatorBox, "Right loop locator in milliseconds"),
         }) AutomationProperties.SetName(control, name);
 
-        ThemeToggle.IsChecked = prefs.DarkMode;
-        UiTheme.Current.SetDarkMode(prefs.DarkMode);
-        UpdateThemeToggle();
-        ThemeToggle.IsCheckedChanged += (_, _) =>
-        {
-            prefs = prefs with { DarkMode = ThemeToggle.IsChecked == true };
-            UiTheme.Current.SetDarkMode(prefs.DarkMode);
-            UpdateThemeToggle();
-            SavePrefs();
-        };
+        // The colour scheme and the user's colours (Preferences, Colours); the old dark-mode switch picks the scheme until then.
+        ThemeColors.Apply(UiTheme.Current, prefs.Colors, prefs.DarkMode);
         SelectionDisclosure.Click += (_, _) => SetSelectionCollapsed(!SelectionBarCollapsed);
         Keys.SelectionCollapsed = SelectionBarCollapsed;
         Keys.SelectionCollapseRequested += SetSelectionCollapsed;
@@ -83,14 +75,6 @@ public partial class MainWindow
         ShowSelectionDetails();
         Keys.SelectionCollapsed = collapsed;
         SavePrefs();
-    }
-
-    private void UpdateThemeToggle()
-    {
-        ThemeIcon.Glyph = prefs.DarkMode ? "Moon" : "Sun";
-        var name = prefs.DarkMode ? "Dark mode · switch to Not-as-dark" : "Not-as-dark mode · switch to Dark";
-        ToolTip.SetTip(ThemeToggle, name);
-        AutomationProperties.SetName(ThemeToggle, name);
     }
 
     private void ShowSelectionDetails()

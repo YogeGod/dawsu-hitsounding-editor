@@ -385,7 +385,8 @@ internal static partial class Dialogs
         });
 
     /// <summary>The preferences form; the edited copy on OK, null on Cancel.</summary>
-    public static async Task<Preferences?> EditPreferences(Window owner, Preferences prefs, Func<OutputKind, IReadOnlyList<(string Id, string Name)>> devices, Func<bool> showAsioPanel) =>
+    public static async Task<Preferences?> EditPreferences(Window owner, Preferences prefs, Func<OutputKind, IReadOnlyList<(string Id, string Name)>> devices, Func<bool> showAsioPanel,
+        Action<UserColors>? previewColours = null, Action<UserColors>? applyColours = null) =>
         await Show<Preferences>(owner, "Preferences", (body, close) =>
         {
             var general = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
@@ -464,13 +465,22 @@ internal static partial class Dialogs
             var keys = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
             var editedKeys = KeysPage(keys, prefs, body, PathRow);
 
+            var colours = new StackPanel { Spacing = 6, Margin = new Thickness(0, 8, 0, 0) };
+            colours.Children.Add(new TextBlock { Text = "User Interface – General Colors", FontWeight = FontWeight.Bold, FontSize = 15 });
+            var editedColours = ColoursPage(colours, prefs.Colors, prefs.DarkMode, previewColours ?? (_ => { }), applyColours ?? (_ => { }));
+
             body.Children.Add(new TabControl
             {
-                ItemsSource = new[] { new TabItem { Header = "General", Content = general }, new TabItem { Header = "Keys", Content = keys } },
+                ItemsSource = new[]
+                {
+                    new TabItem { Header = "General", Content = general }, new TabItem { Header = "Keys", Content = keys },
+                    new TabItem { Header = "Colours", Content = colours },
+                },
             });
 
             return (() => close(editedKeys() with
             {
+                Colors = editedColours(),
                 SongsFolder = Blank(songs.Text),
                 HitsoundFolder = Blank(hitsounds.Text),
                 ClassicBrowser = browserStyle.SelectedIndex == 1,
