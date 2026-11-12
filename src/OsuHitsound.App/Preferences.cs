@@ -108,7 +108,11 @@ internal sealed record Preferences
     public bool LaneNamesCollapsed { get; init; }
     public double? LaneListWidth { get; init; }
     public bool SelectionBarCollapsed { get; init; }
+    /// <summary>The old light/dark switch: decides the colour scheme until one is picked in Preferences, Colours.</summary>
     public bool DarkMode { get; init; } = true;
+
+    /// <summary>Preferences, Colours: the scheme and the ticked colour rows.</summary>
+    public UserColors Colors { get; init; } = new();
 
     public double? WindowX { get; init; }
 

@@ -272,6 +272,12 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             ctx.FillRectangle(IsBlack(p) ? black : white, new Rect(grid.Left, y, grid.Width, rowHeight));
             ctx.DrawLine(p % 12 == 0 ? OctaveLine : RowLine, new Point(grid.Left, y + rowHeight - 0.5), new Point(grid.Right, y + rowHeight - 0.5));
         }
+        // Grid Colors, Cycle Region, as in the Hitsound grid.
+        if (Cycle && Paint.GridCycle is { } shade && LocatorLeft is { } l && LocatorRight is { } r && r > l)
+        {
+            double x0 = Math.Max(grid.Left, XOfTime(l)), x1 = Math.Min(grid.Right, XOfTime(r));
+            if (x1 > x0) ctx.FillRectangle(shade, new Rect(x0, grid.Top, x1 - x0, grid.Height));
+        }
     }
 
     private void DrawKeyboard(DrawingContext ctx, Rect grid)
@@ -397,8 +403,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     }
 
     // The waveform only changes on scroll, zoom or resize: playback redraws reuse the geometry.
-    private static readonly IBrush CycleFill = Paint.Brush(Color.Parse("#2d7ff9"), 0.35), RangeFill = Paint.Brush(Colors.White, 0.08);
-    private static readonly IPen LocatorPen = new ImmutablePen(Paint.Brush("#2d7ff9"), 1.5);
+    // From the theme (Preferences, Colours, Ruler Colors), as the Hitsound ruler.
+    private static IBrush CycleFill => Paint.TokenAt("cycle.active", 0.45);
+    private static IBrush RangeFill => Paint.TokenAt("cycle.inactive", 0.2);
+    private static IPen LocatorPen => UiTheme.Current.Cached("pen:locator", () => (IPen)new ImmutablePen((IImmutableBrush)Paint.Brush(UiTheme.Current.Color("cycle.active")), 1.5));
 
     // The L/R locators in the ruler: their range shaded (blue while Cycle is on) and a line at each.
     private void DrawLocators(DrawingContext ctx, double width)

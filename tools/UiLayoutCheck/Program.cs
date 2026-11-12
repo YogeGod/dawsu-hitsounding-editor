@@ -86,12 +86,19 @@ foreach (var (width, height) in new[] { (1600, 900), (1040, 720), (900, 600) })
     var positions = new[] { "StartButton", "StopButton", "PlayButton", "LoopButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "Lcd", "MixControls" }.Select(id => Rect(Find<Control>(id))).ToArray();
     for (var i = 1; i < positions.Length; i++) Check(positions[i - 1].Right <= positions[i].Left + 1, $"{width}: transport controls {i - 1} and {i} do not overlap");
     Save($"editor-dark-{width}x{height}.png");
-    Click("ThemeToggle");
-    Check(!UiTheme.Current.DarkMode && UiTheme.Current.Get("title.bg") == "#555555", $"{width}: Not-as-dark mode restores original chrome colours");
-    Check(ReferenceEquals(state, w.ArrangeArea.Model!.Session.State), $"{width}: theme switch preserves editor state");
-    Save($"editor-not-as-dark-{width}x{height}.png");
-    Click("ThemeToggle");
-    Check(UiTheme.Current.DarkMode && UiTheme.Current.Get("title.bg") == "#1b1b1e", $"{width}: Dark mode restores Studio colours");
+    // The four Default Color Schemes (Preferences, Colours) replace the old dark-mode button.
+    Check(w.FindControl<Control>("ThemeToggle") is null, $"{width}: the dark-mode button is gone (schemes are in Preferences, Colours)");
+    string[] schemeFiles = ["grey", "dark", "blue-grey", "teal"];
+    for (int scheme = 0; scheme < UiTheme.SchemeCount; scheme++)
+    {
+        ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = scheme }, darkModeFallback: true); Pump();
+        Save($"editor-scheme-{schemeFiles[scheme]}-{width}x{height}.png");
+    }
+    ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = 0 }, darkModeFallback: true); Pump();
+    Check(!UiTheme.Current.DarkMode && UiTheme.Current.Get("title.bg") == "#555555", $"{width}: the Grey scheme restores the original chrome colours");
+    Check(ReferenceEquals(state, w.ArrangeArea.Model!.Session.State), $"{width}: switching schemes preserves editor state");
+    ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = 1 }, darkModeFallback: true); Pump();
+    Check(UiTheme.Current.DarkMode && UiTheme.Current.Get("title.bg") == "#1b1b1e", $"{width}: the Dark scheme restores Studio colours");
     var expanded = Find<Control>("EditBar").Bounds.Height;
     Click("SelectionDisclosure");
     Check(Find<AppIcon>("SelectionDisclosureIcon").Glyph == "ChevronDown", $"{width}: collapsed disclosure points down to expand");
@@ -151,6 +158,55 @@ customized.SetDarkMode(true);
 Check(customized.Get("panel.bg") == "#121314" && customized.Number("row.height") == 42, "Dark mode preserves custom colours and dimensions");
 customized.SetDarkMode(false);
 Check(customized.ToJson() == json, "Switching themes does not rewrite the custom theme file");
+
+// Preferences, Colours: tick a row, move a slider (the editor recolours at once), Cancel puts it back, OK keeps it.
+Window OpenColours()
+{
+    _ = typeof(MainWindow).GetMethod("ShowPreferences", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, null);
+    Pump();
+    var dialog = w.OwnedWindows.Last(x => x.Title == "Preferences");
+    dialog.GetLogicalDescendants().OfType<TabControl>().First().SelectedIndex = 2; Pump();
+    return dialog;
+}
+T Named<T>(Window window, string name) where T : Control =>
+    window.GetLogicalDescendants().OfType<T>().FirstOrDefault(c => AutomationProperties.GetName(c) == name) ?? throw new Exception("Missing " + name);
+string accentBefore = UiTheme.Current.Get("button.active"), barBefore = UiTheme.Current.Get("line.bar");
+var colourDialog = OpenColours();
+Check(Named<CheckBox>(colourDialog, "Grid Colors Grid Lines").IsEnabled == false, "Grid Lines stays greyed out until Grid Background is ticked");
+var accentCheck = Named<CheckBox>(colourDialog, "Custom Colors Accent Color");
+accentCheck.IsChecked = true; Pump();
+Check(UiTheme.Current.Get("button.active") == accentBefore, "ticking Accent Color starts from the colour already shown");
+var accentSwatch = Named<Button>(colourDialog, "Custom Colors Accent Color colour");
+var accentFlyout = (Flyout)accentSwatch.Flyout!;
+accentFlyout.ShowAt(accentSwatch); Pump();
+var accentSliders = ((Control)accentFlyout.Content!).GetLogicalDescendants().OfType<ColorSlider>().ToList();
+Check(accentSliders.Select(AutomationProperties.GetName).SequenceEqual(["Hue", "Saturation", "Brightness"]), "Accent Color opens hue, saturation and brightness sliders");
+accentSliders[0].Value = 30; Pump();
+Check(UiTheme.Current.Get("button.active") != accentBefore && Hsb.FromColor(UiTheme.Current.Color("button.active")).H is > 25 and < 35, "moving the hue slider recolours the editor at once");
+colourDialog.CaptureRenderedFrame()?.Save(Path.Combine(output, "preferences-colours.png"));
+Named<CheckBox>(colourDialog, "Grid Colors Background").IsChecked = true; Pump();
+var gridFlyout = (Flyout)Named<Button>(colourDialog, "Grid Colors Background colour").Flyout!;
+accentFlyout.Hide(); gridFlyout.ShowAt(Named<Button>(colourDialog, "Grid Colors Background colour")); Pump();
+Check(((Control)gridFlyout.Content!).GetLogicalDescendants().OfType<ColorSlider>().Select(AutomationProperties.GetName).SequenceEqual(["Saturation", "Brightness"]),
+    "Grid Background opens saturation and brightness only, as Cubase's two-slider rows");
+Check(Named<CheckBox>(colourDialog, "Grid Colors Grid Lines").IsEnabled, "ticking Grid Background enables Grid Lines");
+gridFlyout.Hide(); Pump();
+colourDialog.GetLogicalDescendants().OfType<Button>().First(b => Equals(b.Content, "Cancel")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+Check(UiTheme.Current.Get("button.active") == accentBefore && UiTheme.Current.Get("line.bar") == barBefore, "Cancel puts the previous colours back");
+colourDialog = OpenColours();
+Named<Button>(colourDialog, "Teal dark colour scheme").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+Named<CheckBox>(colourDialog, "Ruler Colors Active Cycle").IsChecked = true; Pump();
+var rulerFlyout = (Flyout)Named<Button>(colourDialog, "Ruler Colors Active Cycle colour").Flyout!;
+rulerFlyout.ShowAt(Named<Button>(colourDialog, "Ruler Colors Active Cycle colour")); Pump();
+((Control)rulerFlyout.Content!).GetLogicalDescendants().OfType<ColorSlider>().First().Value = 263; Pump();
+rulerFlyout.Hide(); Pump();
+Check(UiTheme.Current.Scheme == 3, "a Default Color Scheme swatch switches the scheme at once");
+colourDialog.GetLogicalDescendants().OfType<Button>().First(b => Equals(b.Content, "OK")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+var keptPrefs = (Preferences)typeof(MainWindow).GetField("prefs", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+Check(keptPrefs.Colors.Scheme == 3 && keptPrefs.Colors.Rows.ContainsKey(ThemeColors.RulerActive) && UiTheme.Current.Scheme == 3
+    && Hsb.FromColor(UiTheme.Current.Color("cycle.active")).H is > 258 and < 268, "OK keeps the scheme and the Active Cycle colour");
+Save("editor-after-colours.png");
+ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = 1 }, darkModeFallback: true); Pump();
 w.Close();
 log.WriteLine($"PASS: {checks} UI checks");
 Console.WriteLine($"PASS: {checks} UI checks; screenshots in {output}");

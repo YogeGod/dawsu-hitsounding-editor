@@ -486,6 +486,9 @@ internal sealed class ArrangeView : Control
 
             using (ctx.PushClip(new Rect(GridLeft, HeaderHeight, gridWidth, size.Height - HeaderHeight)))
             {
+                // Grid Colors, Cycle Region: the grid between L and R shaded while cycling (none unless the user sets it).
+                if (Cycle && Paint.GridCycle is { } cycleShade && LocatorLeft is { } cl && LocatorRight is { } cr && cr > cl)
+                    ctx.FillRectangle(cycleShade, new Rect(GridLeft + Axis.X(cl), HeaderHeight, Axis.X(cr) - Axis.X(cl), size.Height - HeaderHeight));
                 DrawGridLines(ctx, model, lines, from, to, HeaderHeight, size.Height);
                 if (ShowObjectLines) DrawObjectLines(ctx, model, from, to, HeaderHeight, size.Height);
 
@@ -681,8 +684,10 @@ internal sealed class ArrangeView : Control
         }
     }
 
-    private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
-        SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
+    // The cycle band's colours come from the theme (Preferences, Colours, Ruler Colors), each at its own opacity.
+    private static IBrush CycleOn => Paint.TokenAt("cycle.active", 0.55);
+    private static IBrush CycleOff => Paint.TokenAt("cycle.inactive", 0.35);
+    private static IBrush SkipOn => Paint.TokenAt("cycle.reverse", 0.45);
 
     private static readonly IBrush StripBg = Paint.Brush("#1f1f21"),
         SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.75), BookmarkFill = Paint.Brush("#4cc3d1");
