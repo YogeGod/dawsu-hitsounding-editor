@@ -442,6 +442,7 @@ public partial class MainWindow : Window, IMapWriteHost
             mapSongOffset = 0; // a map without a project has none of its own
             ApplyOffsets();
             string? projectWarning = RestoreProject(restoreUnanchored, hsOverride);
+            model.HideGenerated(GeneratedMixFiles(opened));
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             model.Changed += Volume.InvalidateVisual;
