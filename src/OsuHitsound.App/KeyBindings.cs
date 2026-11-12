@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -238,6 +239,13 @@ internal static class Keymap
         return keys;
     }
 
+    /// <summary>
+    /// A customized command: its keys differ from what the key preset alone gives it, whoever caused that. A command that
+    /// lost a key to another one counts; one whose key change puts back the preset's keys doesn't. Key order is ignored.
+    /// </summary>
+    public static bool IsCustomized(IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> keys, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> presetKeys, string id) =>
+        !keys.GetValueOrDefault(id, []).ToHashSet().SetEquals(presetKeys.GetValueOrDefault(id, []));
+
     /// <summary>The command other than <paramref name="id"/> that has this key, if any.</summary>
     public static string? Owner(IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> keys, KeyGesture gesture, string id) =>
         keys.FirstOrDefault(k => k.Key != id && k.Value.Contains(gesture)).Key;
@@ -271,7 +279,8 @@ internal static class Keymap
     public const string NoCubaseFile = "No Cubase key file found; using the built-in keys.";
 
     /// <summary>The keys for these preferences, with a note when the Cubase file couldn't be read (the built-in keys are used then).</summary>
-    public static (Dictionary<string, IReadOnlyList<KeyGesture>> Keys, string? Problem) For(Preferences prefs)
+    /// <param name="withChanges">False: the key preset alone, without the user's key changes.</param>
+    public static (Dictionary<string, IReadOnlyList<KeyGesture>> Keys, string? Problem) For(Preferences prefs, bool withChanges = true)
     {
         IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>>? cubase = null;
         string? problem = null;
@@ -292,6 +301,92 @@ internal static class Keymap
             }
         }
 
-        return (Build(prefs.KeyPreset, cubase, ParseOverrides(prefs.KeyOverrides.GetValueOrDefault(prefs.KeyPreset.ToString()))), problem);
+        var changes = withChanges ? ParseOverrides(prefs.KeyOverrides.GetValueOrDefault(prefs.KeyPreset.ToString())) : ParseOverrides(null);
+        return (Build(prefs.KeyPreset, cubase, changes), problem);
+    }
+}
+
+/// <summary>
+/// A .dawsukeys file: every command's final keys in one key preset, so it gives the same keys on any machine, with or
+/// without Cubase (see docs/adr/0001-key-files-hold-full-keys.md). Keys use <see cref="Keymap.Format"/>'s text.
+/// </summary>
+internal static class KeyFile
+{
+    public const string Extension = "dawsukeys";
+    private const int Version = 1;
+
+    /// <param name="Changes">The active key preset's new key changes, as stored in preferences.</param>
+    /// <param name="Imported">Commands the file named that this version has.</param>
+    public sealed record ImportResult(Dictionary<string, List<string>> Changes, int Imported, int UnknownCommands, int DuplicateKeys, int UnreadableKeys)
+    {
+        public string Summary()
+        {
+            var skipped = new List<string>();
+            void Add(int n, string what) { if (n > 0) skipped.Add($"{n} {what}{(n == 1 ? "" : "s")}"); }
+            Add(UnknownCommands, "unknown command");
+            Add(DuplicateKeys, "duplicate key");
+            Add(UnreadableKeys, "unreadable key");
+            return $"Imported {Imported} command{(Imported == 1 ? "" : "s")}" + (skipped.Count > 0 ? $"; {string.Join(", ", skipped)} skipped." : ".");
+        }
+    }
+
+    public static string Write(string presetName, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> keys)
+    {
+        var file = new Dictionary<string, object>
+        {
+            ["version"] = Version,
+            ["preset"] = presetName, // for information only: importing applies to the active preset
+            ["keys"] = EditorCommands.Defaults.ToDictionary(c => c.Id, c => keys.GetValueOrDefault(c.Id, []).Select(Keymap.Format).ToList()),
+        };
+        return JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// The key changes that make the active preset match the file. Commands the file leaves out keep their preset keys,
+    /// unless the file gives those keys to another command. A key the file gives twice stays with the first command.
+    /// </summary>
+    /// <exception cref="FormatException">Not a key file this version can read.</exception>
+    public static ImportResult Read(string json, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>> presetKeys)
+    {
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(json); }
+        catch (JsonException ex) { throw new FormatException("This isn't a key file.", ex); }
+        using var _ = doc;
+        var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number)
+            throw new FormatException("This isn't a key file.");
+        if (!version.TryGetInt32(out int v) || v != Version)
+            throw new FormatException("This key file is from a newer version of the editor.");
+        if (!root.TryGetProperty("keys", out var keysElement) || keysElement.ValueKind != JsonValueKind.Object)
+            throw new FormatException("This key file has no keys.");
+
+        var known = EditorCommands.Defaults.Select(c => c.Id).ToHashSet();
+        var final = new Dictionary<string, IReadOnlyList<KeyGesture>>();
+        var used = new HashSet<KeyGesture>();
+        int imported = 0, unknown = 0, duplicates = 0, unreadable = 0;
+        foreach (var command in keysElement.EnumerateObject())
+        {
+            if (!known.Contains(command.Name) || final.ContainsKey(command.Name)) { unknown++; continue; }
+            imported++;
+            var gestures = new List<KeyGesture>();
+            if (command.Value.ValueKind == JsonValueKind.Array)
+                foreach (var item in command.Value.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.String || Keymap.ParseStored(item.GetString()!) is not { } g) unreadable++;
+                    else if (!used.Add(g)) { if (!gestures.Contains(g)) duplicates++; }
+                    else gestures.Add(g);
+                }
+            final[command.Name] = gestures;
+        }
+
+        foreach (var id in known.Where(id => !final.ContainsKey(id)))
+            final[id] = [.. presetKeys.GetValueOrDefault(id, []).Where(g => !used.Contains(g))];
+
+        // Key changes only where the result differs from the preset. The final keys never overlap, so building the preset
+        // with these changes gives exactly the file's keys.
+        var changes = EditorCommands.Defaults
+            .Where(c => Keymap.IsCustomized(final, presetKeys, c.Id))
+            .ToDictionary(c => c.Id, c => final[c.Id].Select(Keymap.Format).ToList());
+        return new ImportResult(changes, imported, unknown, duplicates, unreadable);
     }
 }
