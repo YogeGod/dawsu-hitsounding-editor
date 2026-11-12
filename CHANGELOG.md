@@ -2,6 +2,15 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## Unreleased
+
+- **F1** and **Preferences → Keys** group commands by feature area, such as "Hitsound – Hit editing" and "Keysound – Note editing". A command both editors run (Undo, Play, zoom…) is listed under each mode's area.
+- Menu renames:
+  - **File → Open…** is now **Open map…**.
+  - **File → Save** is now **Save .osu**.
+  - **Edit → Drum Hits auto-fill (test build only)…** is now **Drum hit detection (test build only)…**.
+- The README and the tutorial are organised by the same feature areas.
+
 ## 2.2.8
 
 - **Preferences → Keys** has a filter next to search: All, Assigned, Customized or Unassigned, with counts. Commands whose keys differ from the preset are marked, and hovering one shows the preset's key.

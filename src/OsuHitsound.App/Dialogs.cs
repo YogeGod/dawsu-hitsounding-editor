@@ -568,7 +568,7 @@ internal static partial class Dialogs
 
             var command = EditorCommands.Get(id);
             name.Text = command.Description;
-            description.Text = $"{command.Group}{(Customized(id) ? $" · customized (preset: {PresetKeysOf(id)})" : "")}";
+            description.Text = $"{command.Group}{(command.KeysoundGroup is { } ks ? $" · {ks}" : "")}{(Customized(id) ? $" · customized (preset: {PresetKeysOf(id)})" : "")}";
             keyList.ItemsSource = current.GetValueOrDefault(id, []).Select(EditorCommand.Name).ToList();
             resetCommand.IsEnabled = Overrides().ContainsKey(id);
         }
@@ -598,6 +598,7 @@ internal static partial class Dialogs
             shown = [.. commands.Select(c => c.Id)];
             tree.ItemsSource = commands
                 .GroupBy(c => c.Group)
+                .OrderBy(g => Areas.Order(g.Key))
                 .Select(g => new TreeViewItem
                 {
                     Header = g.Key,
