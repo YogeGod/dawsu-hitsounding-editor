@@ -44,6 +44,18 @@ public sealed record CompileResult(IReadOnlyList<Conflict> Conflicts, IReadOnlyL
 /// </summary>
 public static partial class Compiler
 {
+    /// <summary>
+    /// A new green line at <paramref name="at"/> that sets these sounds and keeps the slider velocity, kiai and red-line
+    /// meter in force. Callers pass a resolved <paramref name="set"/>: a line with no set field plays the map default, so
+    /// writing it as 0 would play Soft. "Omit first bar line" (effects bit 8) is dropped: it belongs to red lines only.
+    /// </summary>
+    internal static string GreenLineLike(TimingPoint inForce, TimingPointIndex timing, double at, SampleSet set, int index, int volume) =>
+        TimingPoint.FormatLine(at,
+            beatLength: inForce.Uninherited ? "-100" : inForce.BeatLengthText,
+            meter: timing.RedLineAt(at)?.Meter ?? 4,
+            sampleSet: set, index, volume, uninherited: false,
+            effects: inForce.Effects & ~8);
+
     private static readonly (HitSound Flag, string Sound)[] Additions =
         [(HitSound.Whistle, "hitwhistle"), (HitSound.Finish, "hitfinish"), (HitSound.Clap, "hitclap")];
 
@@ -306,12 +318,7 @@ public static partial class Compiler
             }
             else
             {
-                file.InsertTimingPoint(TimingPoint.FormatLine(at,
-                    beatLength: inForce.Uninherited ? "-100" : inForce.BeatLengthText,
-                    meter: timing.RedLineAt(at)?.Meter ?? 4,
-                    // A line with no set field plays the map default; written as 0 it would play Soft.
-                    sampleSet: inForce.SampleSet ?? settings.DefaultSampleSet, index, volume, uninherited: false,
-                    effects: inForce.Effects & ~8)); // "omit first bar line" belongs to red lines only
+                file.InsertTimingPoint(GreenLineLike(inForce, timing, at, inForce.SampleSet ?? settings.DefaultSampleSet, index, volume));
                 added++;
             }
 

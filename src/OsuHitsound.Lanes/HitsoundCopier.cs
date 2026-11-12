@@ -100,14 +100,17 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
     {
         foreach (var (index, sound, normal, addition) in Bodies)
             SetBody(file.HitObjects[index], s => s with { NormalSet = normal, AdditionSet = addition }, sound);
+        var defaultSet = MapSettings.Read(file).DefaultSampleSet;
         foreach (var (time, set, index, volume, revert) in GreenLines.OrderBy(l => l.Time))
         {
             var timing = new TimingPointIndex(file.TimingPoints);
             // Tick switches cover their +5 ms lookup for one millisecond, including exact lookup boundaries.
             double restore = time + 1;
-            string? back = revert && timing.PointAt(restore) is { } after ? LineLike(after, restore, after.SampleSet ?? SampleSet.None, after.SampleIndex ?? 0, after.Volume ?? 100) : null;
+            string? back = revert && timing.PointAt(restore) is { } after
+                ? Compiler.GreenLineLike(after, timing, restore, after.SampleSet ?? defaultSet, after.SampleIndex ?? 0, after.Volume ?? 100)
+                : null;
             if ((timing.PointAt(time) ?? file.TimingPoints.FirstOrDefault()) is not { } now) continue;
-            file.InsertTimingPoint(LineLike(now, time, set, index, volume));
+            file.InsertTimingPoint(Compiler.GreenLineLike(now, timing, time, set, index, volume));
             if (back is not null) file.InsertTimingPoint(back);
         }
 
@@ -115,10 +118,6 @@ public sealed record HitsoundCopyPlan(IReadOnlyDictionary<MomentKey, WantedSound
             foreach (var sample in Storyboard.SampleLines(file).ToList()) file.RemoveLine(sample.Line);
         foreach (var (text, time) in SamplesToAdd) file.InsertStoryboardSample(text, time);
     }
-
-    // A green line at `time` with these sounds, keeping the slider velocity, meter and effects of `like`.
-    private static string LineLike(TimingPoint like, double time, SampleSet set, int index, int volume) =>
-        TimingPoint.FormatLine(time, like.Uninherited ? "-100" : like.BeatLengthText, like.Meter, set, index, volume, false, like.Effects);
 
     // A slider's own sound flags and sets, with its node sounds written out first (a slider without edge fields plays its
     // own on the nodes). A line that can't be rewritten safely is left as it is.
