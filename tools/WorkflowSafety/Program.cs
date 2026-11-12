@@ -111,8 +111,9 @@ foreach (var size in new[] { (900, 500), (1366, 768), (1600, 900) })
     Check(Buttons(details).Any(b => Equals(b.Content, "Next problem")), $"Next problem available in details at {size}");
     details.Close(); Pump();
     Check(w.FindControl<Control>("WorkflowFooter") is null, $"persistent banner removed at {size}");
-    Check(w.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Volume · %" && t.IsEffectivelyVisible), $"shared volume scope visible at {size}");
-    foreach (string id in new[] { "SnapModeBox", "TripletSnapToggle", "ToolbarEnd", "SongControls", "PlaybackDetailsPanel" })
+    Check(w.FindControl<InspectorPanel>("Inspector")!.GetLogicalDescendants().Contains(w.FindControl<Control>("VolumeScopeBox")), $"shared volume scope in the inspector's Selection card at {size}");
+    // The L/R locator button needs 1000 px; narrower windows set the locators on the ruler.
+    foreach (string id in new[] { "SnapModeBox", "TripletSnapToggle", "InspectorToggle", "LaneDetailsToggle", "UsedLanesToggle", "ObjectLinesToggle", "VolumeToggle", "SongControls" }.Concat(size.Item1 >= MainWindow.LocatorsMinWidth ? ["LocatorsButton"] : []))
         Check(w.FindControl<Control>(id)!.IsEffectivelyVisible, $"{id} directly available at {size}");
     w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, $"safety-{size.Item1}x{size.Item2}.png"));
 }
@@ -151,7 +152,8 @@ var area = w.ArrangeArea; var scopedModel = area.Model!;
 Check(w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex == 0, "volume scope defaults to All lanes");
 Check(w.FindControl<Button>("GenerateButton") is null && w.FindControl<MenuItem>("GenerateItem") is not null, "Generate lives in menus");
 var inspector = w.GetLogicalDescendants().OfType<InspectorPanel>().Single();
-Check(!inspector.Order.Contains("selection") && !inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree browser stays outside the inspector");
+Check(!inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree browser stays outside the inspector");
+Check(inspector.Order.FirstOrDefault() == InspectorPanel.SelectionCard, "the Selection card (D2) starts at the top of the inspector");
 Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
 var browserHost = w.FindControl<Border>("BrowserHost")!;
 Check(Grid.GetColumn(browserHost) == 4 && browserHost.Bounds.Height > 400, "browser fills right sidebar");

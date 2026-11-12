@@ -64,13 +64,15 @@ The Draw tool uses a drumstick icon and cursor. When Audition is on, moving a hi
   - Grid relative moves them by whole steps and keeps their offset.
   - **Objects** aligns hits with circles, slider nodes and spinner ends, including ones off the beat grid.
 - **Beat division:** 1/4, 1/8… or 2/1, 3/1, 4/1 (every 2, 3 or 4 beats from each red timing point). Shift+1–9 still selects 1/n.
-- **View toggles:** toolbar icons show or hide the inspector, sample indexes, unused lanes, gameplay-object lines and the volume controller. Hover an icon for its name.
-- **Zoom and Fit:** zoom in time (also Ctrl+wheel with DAW-like keys). Fit shows the whole map.
+- **View toggles** sit directly on the ribbon: Object lines beside the snap controls, Controller before Drums, and Inspector, Lane info and Used lanes in the View group.
+- **Zoom and Fit:** like Cubase, each scrollbar ends in − slider +. The horizontal one zooms in time (also Ctrl+wheel with DAW-like keys); the vertical one sets the lane height (also Ctrl+Up/Down or Ctrl+Shift+wheel). Fit shows the whole map.
+- **Menus:** every item shows an icon and its shortcut. On/off settings are switches, and Export style, Start playing from and Speed are rows of buttons inside the menu, with no submenus.
+- **The ribbon** groups the buttons as Map, History, Tool, Grid, Drums and View, each with a label. In narrower windows the group names go first, then the less-used labels, then all labels except Save's.
 - **Bookmarks:**
   - Labels show in the inspector's list and next to their flags on the ruler. A label that runs into the next flag ends with "…".
   - Bookmarks without a label stay plain flags.
 - **Locators:**
-  - L ◀ and R ◀ jump to the L and R markers. Type a time in ms in their boxes to move them.
+  - **L/R** beside Cycle opens the locators: L and R jump to the markers, and you can type a time in ms in their boxes. It shows in windows 1000 px wide or more.
   - Ctrl+click the ruler to set L, and Alt+click to set R.
   - Cycle (L) loops between them.
 - **Position:** time, bar.beat.tick, tempo, and the time signature with the snap divisor.
@@ -81,14 +83,15 @@ The Draw tool uses a drumstick icon and cursor. When Audition is on, moving a hi
   - Drag a bar to change its volume, Alt-drag to paint, and Shift-drag for a ramp.
   - osu! has one volume per object, so every lane on that object shares it.
 - **Colour:** hits and volume bars show volume from blue through purple to red.
-- **Selection bar:**
+- **Selection card** (at the top of the inspector):
   - It shows how many hits are selected, where they start, and which circle or slider end they play on.
-  - Type a volume and press the checkmark. Relative adds to each hit, and Set all gives them that value.
-  - The up arrow collapses these details and gives the space back, leaving a small expand handle. The same collapse is shared with the Keysound editor.
+  - Type a start time and press Enter to move them, or type a volume and press Apply. Relative adds to each hit, and Set all gives them that value. Applies to chooses all lanes or only the selected ones.
+  - Quantize…, Duplicate and Delete act on the selection. **New hits** sets the volume of hits you draw (empty follows the map).
 
 ## Hitsound – Map output
 
 - **Save .osu** (Ctrl+S): writes hitsounds into the open difficulty. Only changed lines are rewritten, and a backup is kept outside the mapset.
+  - A warning badge on the Save button counts hits with no gameplay object and moments that can't be saved as drawn. With problems, clicking Save lists them first: **Show first problem** jumps there, and **Continue to Save** runs the normal save. Ctrl+S and File → Save skip the list.
 - **Generate hitsound diff…**: makes a separate hitsound difficulty from your hits, adding circles where a sound has no object.
 - **Map → Copy hitsounds…** copies a difficulty into the others, like Mapping Tools' Hitsound Copier.
 

@@ -2,6 +2,17 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## Unreleased
+
+A friendlier editor window (layout "D2"):
+
+- **A labelled ribbon** replaces the icon toolbar: Map (Open, HS mode), History, Tool, Grid, Drums (Detect hits, VST) and View, each button with its name. In narrower windows the labels shrink step by step.
+- **The selection bar moved into the inspector** as its Selection card: start time, volume, Applies to, Quantize, Duplicate, Delete and the volume for new hits. The editing area gets that row back.
+- **Save shows a warning badge** when hits have no gameplay object or can't be saved as drawn. Clicking Save then lists the problems first; Ctrl+S still saves directly.
+- **View toggles** sit directly on the ribbon, and **L/R** beside Cycle holds the locator boxes.
+- **Clearer menus:** every item in File, Edit, Playback, Map and View has an icon and a shortcut chip. On/off settings are switches, and Export style, Start playing from and Speed are rows of buttons instead of submenus.
+- **Zoom at the scrollbars**, as in Cubase: − slider + for time at the end of the horizontal scrollbar, and for lane height at the bottom of the vertical one.
+
 ## 2.2.12
 
 Saving is safer: dawsu! never changes a line of your .osu that you didn't edit, and it shows you what a write will change before it happens.

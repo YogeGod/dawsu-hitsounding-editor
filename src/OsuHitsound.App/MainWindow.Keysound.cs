@@ -14,11 +14,9 @@ namespace OsuHitsound.App;
 public partial class MainWindow
 {
     private string? hsMapBeforeKeysound;
-    private (object? Content, object? Tip) hsSaveButton;
 
     private void SetupKeysound()
     {
-        hsSaveButton = (SaveButton.Content, ToolTip.GetTip(SaveButton));
         Keys.CloseRequested += async () => { if (await MayLeaveKeysound()) await CloseKeysound(); };
         SetupKeysoundMenu();
         // One global volume for both modes: Keysound's slider drives Hitsound mode's (which saves it in the preferences).
@@ -189,16 +187,14 @@ public partial class MainWindow
         Title = mapPath is not null ? $"{Path.GetFileNameWithoutExtension(mapPath)} — dawsu! Hitsound" : "dawsu! Hitsound";
     }
 
-    /// <summary>The title bar in Keysound mode: Save project instead of Save .osu, no hitsound-only commands.</summary>
+    /// <summary>
+    /// The title bar in Keysound mode: the key editor covers the ribbon, so Open and Save project show in the title bar,
+    /// with Keysound's menus instead of the hitsound ones.
+    /// </summary>
     private void ShowKeysoundChrome(bool on)
     {
-        SaveButton.Content = on ? new AppIcon { Glyph = "Save" } : hsSaveButton.Content;
-        Avalonia.Automation.AutomationProperties.SetName(SaveButton, on ? "Save project" : "Save .osu");
-        ToolTip.SetTip(SaveButton, on
-            ? "Save the Keysound project (Ctrl+S): tracks, notes and instrument settings. The reference beatmap is never changed."
-            : hsSaveButton.Tip);
-        HsModeButton.IsVisible = HeaderMenu.IsVisible = !on;
-        KeysoundMenu.IsVisible = on;
+        KsFileButtons.IsVisible = KeysoundMenu.IsVisible = on;
+        HeaderMenu.IsVisible = !on;
     }
 
     /// <summary>

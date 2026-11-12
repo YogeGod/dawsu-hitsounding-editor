@@ -12,8 +12,8 @@ public partial class MainWindow
     private void SetupOutput()
     {
         exportSettings.Style = Enum.IsDefined(prefs.ExportStyle) ? prefs.ExportStyle : ExportStyle.GreenLines;
-        GreenLinesItem.Click += (_, _) => SetOutputStyle(ExportStyle.GreenLines);
-        PerObjectItem.Click += (_, _) => SetOutputStyle(ExportStyle.PerObject);
+        GreenLinesChoice.Click += (_, _) => SetOutputStyle(ExportStyle.GreenLines);
+        PerObjectChoice.Click += (_, _) => SetOutputStyle(ExportStyle.PerObject);
         MissingWarningsItem.Click += (_, _) =>
         {
             prefs = prefs with { ShowMissingObjectWarnings = MissingWarningsItem.IsChecked };
@@ -43,8 +43,8 @@ public partial class MainWindow
 
     private void RefreshOutputSettings()
     {
-        GreenLinesItem.IsChecked = exportSettings.Style == ExportStyle.GreenLines;
-        PerObjectItem.IsChecked = exportSettings.Style == ExportStyle.PerObject;
+        GreenLinesChoice.IsChecked = exportSettings.Style == ExportStyle.GreenLines;
+        PerObjectChoice.IsChecked = exportSettings.Style == ExportStyle.PerObject;
         MissingWarningsItem.IsChecked = prefs.ShowMissingObjectWarnings;
         ConflictWarningsItem.IsChecked = prefs.ShowExportWarnings;
         ReloadOsuItem.IsChecked = prefs.ReloadOsuAfterSave;

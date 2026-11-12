@@ -116,7 +116,11 @@ public partial class MainWindow
             }
         }
 
-        foreach (var (item, id) in menuCommands) item.InputGesture = EditorCommands.Get(id).Keys.FirstOrDefault();
+        foreach (var (item, id) in menuCommands)
+        {
+            item.InputGesture = EditorCommands.Get(id).Keys.FirstOrDefault();
+            item.Classes.Set("hasKey", item.InputGesture is not null); // only these draw the shortcut chip
+        }
         help?.Close();
     }
 
