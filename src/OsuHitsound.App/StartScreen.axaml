@@ -150,11 +150,8 @@
       <TextBlock Name="Message" TextWrapping="Wrap" Foreground="{DynamicResource ButtonText}" AutomationProperties.Name="Start screen status" />
     </Border>
     <Border Grid.Row="5" BorderBrush="{DynamicResource LineDivider}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
-      <DockPanel>
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Text="Songs folder" FontSize="11" Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" />
-          <TextBlock Name="SongsFolder" Classes="mono" FontSize="11" Foreground="{DynamicResource LcdCaption}" MaxWidth="170" TextTrimming="PrefixCharacterEllipsis" VerticalAlignment="Center" Text="not set" />
-        </StackPanel>
+      <!-- The links fill the row, so the Songs folder gets a line of its own (side by side they overlapped). -->
+      <StackPanel Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="2" Margin="-10,0,0,0">
           <Button Name="OpenFromOsuLink" Classes="footLink" Content="Open map from osu!" ToolTip.Tip="Open the map osu!stable has open, or the one osu!lazer is editing externally. It reloads whenever osu! saves it." />
           <Button Name="PreferencesLink" Classes="footLink" Content="Preferences…" />
@@ -163,7 +160,11 @@
             <TextBlock><Run Text="Shortcuts " /><Run FontFamily="{StaticResource StartMono}" FontSize="11" Text="F1" Foreground="{DynamicResource LcdCaption}" /></TextBlock>
           </Button>
         </StackPanel>
-      </DockPanel>
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Left" Text="Songs folder" FontSize="11" Foreground="{DynamicResource TextDim}" Margin="0,0,6,0" VerticalAlignment="Center" />
+          <TextBlock Name="SongsFolder" Classes="mono" FontSize="11" Foreground="{DynamicResource LcdCaption}" TextTrimming="PrefixCharacterEllipsis" VerticalAlignment="Center" Text="not set" />
+        </DockPanel>
+      </StackPanel>
     </Border>
   </Grid>
   </Border>
