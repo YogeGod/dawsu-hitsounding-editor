@@ -2,6 +2,10 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 2.2.10
+
+- **Drum hit detection** shows times with a decimal point (`0.543 s`) on every PC. Before, PCs set to a comma locale showed `0,543 s` in the review list and the selected-range label.
+
 ## 2.2.9
 
 - **F1** and **Preferences → Keys** group commands by feature area, such as "Hitsound – Hit editing" and "Keysound – Note editing". In F1, a command both editors run (Undo, Play, zoom…) is listed under each mode's area. In Preferences → Keys it is listed once, its details name the Keysound area too, and searching for that area finds it.
