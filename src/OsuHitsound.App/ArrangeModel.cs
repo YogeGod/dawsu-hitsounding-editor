@@ -689,6 +689,22 @@ internal sealed partial class ArrangeModel
         if (ActiveLane == lane) ActiveLane = null;
     });
 
+    /// <summary>
+    /// Hides the lanes of mix files dawsu! wrote itself (Save's and Generate's): the hits they combine stay on their own
+    /// lanes, so these never get notes. A hit on one, or adding it with Add lane, still shows it.
+    /// </summary>
+    public void HideGenerated(IEnumerable<string> fileNames)
+    {
+        var generated = fileNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (generated.Count == 0) return;
+        Relayout(() =>
+        {
+            foreach (var row in laneRows.Where(r => r.Lane.Source == LaneSource.BeatmapFile && generated.Contains(r.Lane.Name)))
+                hidden.Add(row.Lane);
+            if (ActiveLane is { } active && hidden.Contains(active) && !Session.State.Hits.Any(h => h.Lane == active)) ActiveLane = null;
+        });
+    }
+
     /// <summary>Whether any lane is hidden: only then can an edit (undo) make a lane reappear.</summary>
     public bool HasHiddenLanes => hidden.Count > 0;
 

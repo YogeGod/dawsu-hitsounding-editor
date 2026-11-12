@@ -375,6 +375,30 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Mix files this map's Save or its [Hitsounds] diff's Generate wrote, still as written: a file replaced since is the
+    /// mapper's own and keeps its lane.
+    /// </summary>
+    internal static IReadOnlyList<string> GeneratedMixFiles(MapDocument document, string? manifestRoot = null)
+    {
+        var root = manifestRoot ?? GenerateManifest.DefaultRoot();
+        var dir = Path.GetDirectoryName(document.Path)!;
+        var manifests = new[] { document.Path, Path.Combine(dir, HitsoundDiff.FileNameFor(document.File, document.Path)) }
+            .Select(p => GenerateManifest.Load(root, p)).OfType<GenerateManifest>();
+        var files = new List<string>();
+        foreach (var mix in manifests.SelectMany(m => m.Mixes))
+        {
+            try
+            {
+                if (document.Folder.Find(mix.FileName) is { } file && GenerateManifest.Hash(document.Folder.ReadBytes(file)) == mix.Sha256)
+                    files.Add(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // unreadable: keep its lane
+        }
+
+        return files;
+    }
+
+    /// <summary>
     /// Puts back what the project file kept for this map (see <see cref="EditorProject"/>), then its lanes' audio and
     /// drum maps. Returns a warning for the status bar, or null.
     /// </summary>
