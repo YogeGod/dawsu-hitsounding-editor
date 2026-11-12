@@ -46,7 +46,7 @@ The Draw tool uses a drumstick icon and cursor. When Audition is on, moving a hi
 | Select | 1 | Click a hit to select it, Ctrl/Shift+click to add more, drag a box around several, drag selected hits to move them. |
 | Grab | 2 | Drag the canvas to pan time and lane rows. Space still plays or stops. View → Range selection tool keeps range editing available. |
 | Draw | 3 | Click or drag along a lane to place hits. Starting on a hit erases instead. Holding Alt draws with any tool. |
-| Erase | 4 | Drag across hits to remove them. Right-click deletes a hit with any tool. |
+| Erase | 4 | Drag across hits to remove them. |
 | Mute | 5 | Click a hit to silence it while you listen. osu! can't store a muted sound, so it is never saved. |
 | Ramp | 6 | Drag in the volume controller to draw a smooth volume ramp. |
 
