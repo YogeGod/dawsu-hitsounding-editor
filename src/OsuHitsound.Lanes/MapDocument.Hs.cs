@@ -72,9 +72,17 @@ public sealed partial class MapDocument
         var allNames = pairing is not null ? pairing.Files.Select(m => m.FileName).Concat(pairing.Reused.Select(m => m.FileName)) : mixer.All.Select(m => m.FileName);
         var result = Compiler.Apply(projection.File, folder.With(allNames), wishes, settings?.Style ?? ExportStyle.PerObject);
         if (pairing is not null) result = result with { Conflicts = pairing.Conflicts.Concat(result.Conflicts).DistinctBy(c => c.Moment).ToList() };
+        // Earlier mixes nothing uses any more are removed, paired ones too (issue #38), but never one at an index this
+        // save still writes (an object it leaves alone can keep pointing at an older kit).
+        string fileName = System.IO.Path.GetFileName(Path);
+        var stillPlayed = HitsoundDiff.IndexesUsed(new MapFolder([fileName], _ => projection.File.ToBytes()), except: null);
+        var removes = (pairing is null ? (IEnumerable<string>)mixer.Removes
+                : MixPlanner.Unused(folder, previous, pairing.Files.Select(m => m.FileName).Concat(pairing.Reused.Select(m => m.FileName)),
+                    state.Hits.Select(h => h.Lane).Concat(Map.Passive.Select(p => p.Lane)), fileName))
+            .Where(f => !(HitsoundDiff.IndexOf(f) is { } n && stillPlayed.Contains(n))).Order(StringComparer.OrdinalIgnoreCase).ToList();
         var storage = new GeneratePlan(Path, projection.File, outputFiles, state.HsCircles.Count, result.Conflicts)
         {
-            Reused = pairing?.Reused ?? mixer.Reused, Removes = pairing is null ? mixer.Removes : [], InputHashes = pairing?.InputHashes ?? mixer.InputHashes, LastMixIndex = pairing?.LastIndex ?? mixer.LastIndex,
+            Reused = pairing?.Reused ?? mixer.Reused, Removes = removes, InputHashes = pairing?.InputHashes ?? mixer.InputHashes, LastMixIndex = pairing?.LastIndex ?? mixer.LastIndex,
             MergeCombinations = pairing?.Combinations ?? candidates.Select(k => combinations[k]).DistinctBy(c => c.Key).ToList(),
             InputFiles = audio.FilesRead, Notes = result.Notes,
         };

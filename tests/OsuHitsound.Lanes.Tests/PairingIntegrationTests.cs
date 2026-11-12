@@ -175,4 +175,58 @@ public sealed class PairingIntegrationTests : IDisposable
         Assert.Contains(output.Hits, h => h.Lane.Sample?.Sound == "hitwhistle");
         Assert.Equal(30, output.Object.X);
     }
+
+    // ---- Unused mixes are removed on Save, paired too (issue #38) ----
+
+    // Saves the fixture (two finishes at 1000 ms: a paired mix kit), then reopens it with the second finish removed, so
+    // the next save no longer needs the kit. Returns the reopened map and the kit's files.
+    private (MapDocument Reopened, IReadOnlyList<string> Kit) SaveKitThenDropTheSecondFinish()
+    {
+        var doc = Fixture();
+        var (plan, _) = doc.PlanHsSave(Manifests, settings: Settings());
+        doc.WriteHsSave(plan, Render, Backups, Manifests);
+        var kit = plan.Storage.Mixes.Select(m => m.FileName).ToList();
+        Assert.All(kit, f => Assert.True(File.Exists(Path.Combine(root, f))));
+
+        var reopened = MapDocument.Load(doc.Path);
+        reopened.RestoreHsProject(doc.HsProject);
+        reopened.Session.Remove(reopened.Session.State.Hits.Where(h => h.Lane.Name == "normal-hitfinish2.ogg").ToList());
+        return (reopened, kit);
+    }
+
+    [Fact]
+    public void A_paired_save_removes_its_old_mixes_once_nothing_uses_them()
+    {
+        var (reopened, kit) = SaveKitThenDropTheSecondFinish();
+
+        var (plan, _) = reopened.PlanHsSave(Manifests, settings: Settings());
+        Assert.Equal(kit.Order(), plan.Storage.Removes.Order());
+        reopened.WriteHsSave(plan, Render, Backups, Manifests);
+
+        Assert.All(kit, f => Assert.False(File.Exists(Path.Combine(root, f))));
+    }
+
+    [Fact]
+    public void A_mix_another_difficulty_uses_is_kept()
+    {
+        var (reopened, kit) = SaveKitThenDropTheSecondFinish();
+        // Another difficulty plays the kit's index (as Copy hitsounds can make it).
+        int index = HitsoundDiff.IndexOf(kit[0])!.Value;
+        File.WriteAllText(Path.Combine(root, "other.osu"), Header + $"10,20,1000,1,0,0:0:{index}:0:\n");
+
+        var (plan, _) = reopened.PlanHsSave(Manifests, settings: Settings());
+
+        Assert.Empty(plan.Storage.Removes);
+    }
+
+    [Fact]
+    public void A_mix_changed_since_dawsu_wrote_it_is_kept()
+    {
+        var (reopened, kit) = SaveKitThenDropTheSecondFinish();
+        File.WriteAllBytes(Path.Combine(root, kit[0]), [7, 7, 7]); // the mapper replaced it
+
+        var (plan, _) = reopened.PlanHsSave(Manifests, settings: Settings());
+
+        Assert.DoesNotContain(kit[0], plan.Storage.Removes);
+    }
 }
