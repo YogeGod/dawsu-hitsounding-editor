@@ -70,10 +70,42 @@ public sealed class OsuFile
     }
 
     public byte[] ToBytes()
+        => ToBytesExcept(_ => false);
+
+    /// <summary>Writes the original bytes, omitting lines selected by the caller.</summary>
+    public byte[] ToBytesExcept(Func<OsuLine, bool> omit)
     {
         using var ms = new MemoryStream();
         if (HasBom) ms.Write(Encoding.UTF8.Preamble);
-        foreach (var line in Lines) line.WriteTo(ms);
+        foreach (var line in Lines)
+            if (!omit(line)) line.WriteTo(ms);
+        return ms.ToArray();
+    }
+
+    /// <summary>Replace data lines in the named sections while retaining all other original bytes.</summary>
+    public byte[] WithSectionData(IReadOnlyDictionary<string, IReadOnlyList<string>> replacements)
+    {
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        using var ms = new MemoryStream();
+        if (HasBom) ms.Write(Encoding.UTF8.Preamble);
+        foreach (var line in Lines)
+        {
+            var header = SectionName(line.Text);
+            if (header is not null && replacements.TryGetValue(header, out var data))
+            {
+                if (!found.Add(header)) throw new InvalidDataException($"The map has more than one [{header}] section.");
+                if (line.Terminator.Length == 0 && data.Count > 0) throw new InvalidDataException($"The [{header}] header has no line ending.");
+                line.WriteTo(ms);
+                foreach (var text in data)
+                {
+                    ms.Write(Encoding.UTF8.GetBytes(text));
+                    ms.Write(line.Terminator);
+                }
+            }
+            else if (header is not null || !replacements.ContainsKey(line.Section) || !IsData(line.Text))
+                line.WriteTo(ms);
+        }
+        if (found.Count != replacements.Count) throw new InvalidDataException("The map is missing a section needed for generation.");
         return ms.ToArray();
     }
 

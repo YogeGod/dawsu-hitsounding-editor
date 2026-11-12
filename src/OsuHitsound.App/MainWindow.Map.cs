@@ -72,7 +72,7 @@ public partial class MainWindow
                 new Separator(),
                 Item("Delete lane (removes its hits)", () =>
                 {
-                    session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList());
+                    session.Remove(session.State.Hits.Where(h => h.Lane == lane).ToList(), "Delete lane");
                     model.HideLane(lane);
                     ScheduleProjectSave();
                 }),
@@ -146,6 +146,10 @@ public partial class MainWindow
             Cycle = Lanes.Cycle,
             PreviewMuted = [.. model.PreviewMutedHits.Select(h => new ProjectHit(ProjectStore.KeyOf(h.Lane), h.Time))],
             SongOffset = audio?.SongOffset ?? 0,
+            TimeSignatures = [.. model.TimeSignatures],
+            MidiHits = [.. session.State.MidiHits.Select(kv => new ProjectMidiHit(ProjectStore.KeyOf(kv.Key.Lane), kv.Key.Time, kv.Value))],
+            MidiLanes = session.State.MidiLanes.ToDictionary(kv => ProjectStore.KeyOf(kv.Key), kv => kv.Value),
+            MidiSource = session.State.MidiSource,
         };
         try
         {
@@ -174,10 +178,18 @@ public partial class MainWindow
             .OfType<EditHit>()
             .Where(h => h.Anchor is null));
 
+        var restoredMidiHits = MatchMidiHits(project.MidiHits, session.State.Hits);
+        var knownLanes = model.LaneRows.Select(r => r.Lane).Concat(session.Lanes).Distinct().ToLookup(ProjectStore.KeyOf);
+        var restoredMidiLanes = project.MidiLanes.Select(kv => (Lane: knownLanes[kv.Key].FirstOrDefault() ?? ProjectStore.LaneOf(kv.Key), Mapping: kv.Value))
+            .Where(x => x.Lane is not null && x.Mapping.Note is >= 0 and <= 127 && x.Mapping.Channel is >= 1 and <= 16)
+            .Select(x => (x.Lane!, x.Mapping));
+        session.RestoreMidi(restoredMidiHits, restoredMidiLanes, project.MidiSource);
+
         foreach (var muted in project.PreviewMuted)
             if (session.State.Hits.FirstOrDefault(h => ProjectStore.KeyOf(h.Lane) == muted.Lane && Math.Abs(h.Time - muted.Time) < 0.5) is { } hit)
                 model.TogglePreviewMute(hit);
 
+        if (project.TimeSignatures.Count > 0) model.SetTimeSignatures(project.TimeSignatures);
         if (project.LocatorLeft is { } l && project.LocatorRight is { } r) Lanes.SetLocators(l, r);
         Lanes.Cycle = project.Cycle;
         if (audio is not null && project.SongOffset != 0)
@@ -188,6 +200,33 @@ public partial class MainWindow
         }
 
         SyncScrollBars();
+    }
+
+    /// <summary>Restore exact saved times first, then use each nearby hit at most once for rounded map times.</summary>
+    internal static List<(EditHit Hit, MidiHitData Midi)> MatchMidiHits(IEnumerable<ProjectMidiHit> savedHits, IEnumerable<EditHit> currentHits)
+    {
+        var remaining = savedHits.ToList();
+        var available = currentHits.ToHashSet();
+        var byExactTime = available.ToLookup(h => (ProjectStore.KeyOf(h.Lane), h.Time));
+        var result = new List<(EditHit, MidiHitData)>();
+        for (int i = remaining.Count - 1; i >= 0; i--)
+        {
+            var saved = remaining[i];
+            var hit = byExactTime[(saved.Lane, saved.Time)].FirstOrDefault(available.Contains);
+            if (hit is null) continue;
+            result.Add((hit, saved.Midi));
+            available.Remove(hit);
+            remaining.RemoveAt(i);
+        }
+        foreach (var saved in remaining)
+        {
+            var hit = available.Where(h => ProjectStore.KeyOf(h.Lane) == saved.Lane && Math.Abs(h.Time - saved.Time) < 0.5)
+                .MinBy(h => Math.Abs(h.Time - saved.Time));
+            if (hit is null) continue;
+            result.Add((hit, saved.Midi));
+            available.Remove(hit);
+        }
+        return result;
     }
 
     // ---------------------------------------------------------------- Generate mode
@@ -223,11 +262,22 @@ public partial class MainWindow
             return;
         }
 
-        if (string.Equals(Path.GetFullPath(plan.OsuPath), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+        bool replacesOpenMap = string.Equals(Path.GetFullPath(plan.OsuPath), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase);
+        if (replacesOpenMap)
         {
-            flash = "This map is the [Hitsounds] diff itself: open the difficulty you hitsound in, then Generate.";
-            UpdateStatus();
-            return;
+            try
+            {
+                var current = OsuFile.Parse(document.Opened);
+                if (!current.Bookmarks.Order().SequenceEqual(session.State.Bookmarks.Order()))
+                    current.SetBookmarks([.. session.State.Bookmarks.Order()]);
+                plan = HitsoundDiff.ForCurrentDiff(plan, current, path);
+            }
+            catch (InvalidDataException ex)
+            {
+                flash = $"Generate stopped: {ex.Message}";
+                UpdateStatus();
+                return;
+            }
         }
 
         bool exists = File.Exists(plan.OsuPath);
@@ -243,7 +293,7 @@ public partial class MainWindow
                 ? $"{plan.Removes.Count} mix(es) from the last Generate that nothing uses any more will be removed ({string.Join(", ", plan.Removes.Take(4))}{(plan.Removes.Count > 4 ? ", …" : "")}).\n\n"
                 : "") +
             (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
-            "Your opened map is not changed.";
+            (replacesOpenMap ? "The open difficulty will be updated and reloaded; its previous file is backed up." : "Your opened map is not changed.");
         if (!await Dialogs.Confirm(this, "Generate hitsound diff", summary, "Generate")) return;
 
         var skinSounds = skin.Value;
@@ -269,7 +319,7 @@ public partial class MainWindow
                     return layers.Count == 0 ? null : SampleMixer.Mix(layers);
                 }
 
-                var written = GenerateWriter.Write(plan, Render, MapSaver.DefaultBackupRoot());
+                var written = GenerateWriter.Write(plan, Render, MapSaver.DefaultBackupRoot(), replacesOpenMap ? document.Opened : null);
                 try
                 {
                     written.Manifest.Save(GenerateManifest.DefaultRoot(), plan.OsuPath);
@@ -280,6 +330,7 @@ public partial class MainWindow
                     note = $" (Couldn't record its mixes for next time: {ex.Message})";
                 }
             });
+            if (replacesOpenMap) await Open(path);
             flash = $"Generated {Path.GetFileName(plan.OsuPath)}: {plan.Circles} circles, {plan.Mixes.Count} new and {plan.Reused.Count} reused mixed sample(s)." +
                     (plan.Conflicts.Count > 0 ? $" {plan.Conflicts.Count} moment(s) couldn't be written." : "") + note;
         }

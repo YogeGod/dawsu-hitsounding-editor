@@ -10,6 +10,13 @@ internal enum VolumeScope
     All,
 }
 
+/// <summary>How dragging snaps: to grid lines, or by whole grid steps keeping each hit's offset from its line.</summary>
+internal enum SnapMode
+{
+    Grid,
+    GridRelative,
+}
+
 /// <summary>A time range (start before end, the end excluded) over some lanes, marked with the Range tool.</summary>
 internal sealed record TimeRange(double Start, double End, IReadOnlySet<Lane> Lanes);
 
@@ -20,7 +27,7 @@ internal sealed record TimeRange(double Start, double End, IReadOnlySet<Lane> La
 internal sealed class HitEditor
 {
     private ArrangeModel? model;
-    private List<(Lane Lane, double Offset)> clipboard = [];
+    private List<(Lane Lane, double Offset, MidiHitData? Midi)> clipboard = [];
 
     /// <summary>The selected hits. Mouse gestures change it directly while dragging and call <see cref="Notify"/> after.</summary>
     public HashSet<EditHit> Selected { get; } = [];
@@ -45,9 +52,26 @@ internal sealed class HitEditor
 
     public bool SnapOn { get; set; } = true;
 
+    public SnapMode SnapMode { get; set; } = SnapMode.Grid;
+
+    /// <summary>Quantize's strength in % (Q uses the last one).</summary>
+    public double QuantizeStrength { get; set; } = 100;
+
     private EditSession? Session => model?.Session;
 
     public double SnapTime(double time) => SnapOn && model is { } m ? m.Snap(time, Divisor) : time;
+
+    /// <summary>Resize each selected MIDI end by the same pointer delta, snapping each end independently.</summary>
+    public bool ResizeMidi(IReadOnlyDictionary<EditHit, double> originalLengths, double delta) => Session is { } session &&
+        session.SetMidiDurations(originalLengths.ToDictionary(kv => kv.Key, kv => Math.Max(0, SnapTime(kv.Key.Time + kv.Value + delta) - kv.Key.Time)));
+
+    /// <summary>
+    /// The snapped offset for dragging a hit at <paramref name="time"/> by <paramref name="raw"/> ms: to a grid line, or with
+    /// Grid relative by whole grid steps, so the hit keeps its offset from its own line.
+    /// </summary>
+    public double SnapOffset(double time, double raw) => SnapOn && SnapMode == SnapMode.GridRelative && model is { } m
+        ? m.Snap(time + raw, Divisor) - m.Snap(time, Divisor)
+        : SnapTime(time + raw) - time;
 
     /// <summary>The moments the selected hits play on.</summary>
     public IReadOnlySet<MomentKey> SelectedMoments => Selected.Where(h => h.Anchor is not null).Select(h => h.Anchor!.Value).ToHashSet();
@@ -77,22 +101,22 @@ internal sealed class HitEditor
     /// <summary>Removes one hit and drops it from the selection (right-click, Draw strokes that start on a hit, Erase).</summary>
     public void Erase(EditHit hit)
     {
-        Session?.Remove([hit]);
+        Session?.Remove([hit], "Erase");
         Selected.Remove(hit);
     }
 
-    public void DeleteSelection()
+    public void DeleteSelection(string label = "Delete")
     {
         if (Session is not { } session || Selected.Count == 0) return;
-        session.Remove(Selected.ToList());
+        session.Remove(Selected.ToList(), label);
         Clear();
     }
 
     /// <summary>Moves the selected hits and keeps them selected.</summary>
-    public void Move(double offset, Func<EditHit, Lane> laneOf)
+    public void Move(double offset, Func<EditHit, Lane> laneOf, string label = "Move")
     {
         if (Session is not { } session || Selected.Count == 0) return;
-        Select(session.Move(Selected.ToList(), offset, laneOf));
+        Select(session.Move(Selected.ToList(), offset, laneOf, label));
     }
 
     /// <summary>By one snap step, keeping offsets (fine: 1 ms; toGrid: to the previous or next grid line).</summary>
@@ -105,30 +129,32 @@ internal sealed class HitEditor
         else
         {
             double step = StepAt(anchor.Time);
-            offset = toGrid ? model.Snap(anchor.Time + direction * step * 0.51, Divisor) - anchor.Time : direction * step;
+            offset = SnapMode == SnapMode.GridRelative
+                ? model.StepsAfter(anchor.Time, direction, Divisor) - anchor.Time
+                : toGrid ? model.Snap(anchor.Time + direction * step * 0.51, Divisor) - anchor.Time : direction * step;
             if (toGrid && Math.Abs(offset) < 1e-6) offset = direction * step;
         }
 
-        Move(offset, h => h.Lane);
+        Move(offset, h => h.Lane, "Nudge");
     }
 
     /// <summary>Moves the selection to the adjacent visible lane.</summary>
     public void ShiftLanes(int direction)
     {
-        if (model is { } m) Move(0, h => ShiftLane(m, h.Lane, direction));
+        if (model is { } m) Move(0, h => ShiftLane(m, h.Lane, direction), "Move to lane");
     }
 
     public void Copy()
     {
         if (Selected.Count == 0) return;
         double start = Selected.Min(h => h.Time);
-        clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start))];
+        clipboard = [.. Selected.Select(h => (h.Lane, h.Time - start, Session?.MidiOf(h)))];
     }
 
     public void Cut()
     {
         Copy();
-        DeleteSelection();
+        DeleteSelection("Cut");
     }
 
     /// <summary>Pastes at <paramref name="time"/> (snapped), selecting the pasted hits.</summary>
@@ -136,9 +162,9 @@ internal sealed class HitEditor
     {
         if (Session is not { } session || clipboard.Count == 0) return;
         double at = SnapTime(time);
-        var hits = clipboard.Select(c => session.HitAt(c.Lane, at + c.Offset)).Distinct().ToList();
-        session.Add(hits);
-        Select(hits);
+        var hits = clipboard.Select(c => (Hit: session.HitAt(c.Lane, at + c.Offset), c.Midi)).ToList();
+        session.AddWithMidi(hits, "Paste");
+        Select(hits.Select(h => h.Hit));
     }
 
     /// <summary>Copies the selection right after itself (its length rounded up to a snap step). The clipboard is kept.</summary>
@@ -148,7 +174,7 @@ internal sealed class HitEditor
         double start = Selected.Min(h => h.Time), end = Selected.Max(h => h.Time);
         double step = StepAt(start);
         double shift = Math.Max(step, Math.Ceiling((end - start + step / 2) / step) * step);
-        Select(session.Copy(Selected, shift));
+        Select(session.Copy(Selected, shift, "Duplicate"));
     }
 
     /// <summary>The range marked with the Range tool, kept apart from the selection and the locators; null when none.</summary>
@@ -211,7 +237,42 @@ internal sealed class HitEditor
     /// <summary>Scales the volume of the circles and slider ends <see cref="MomentsToScale"/> finds. One undo step.</summary>
     public void ScaleByVolume(VolumeScope scope, int from, int to, double percent)
     {
-        if (Session is { } session) session.SetVolumes(VolumeRamp.Scale(session.State.Volumes, MomentsToScale(scope, from, to), percent));
+        if (Session is { } session) session.SetVolumes(VolumeRamp.Scale(session.State.Volumes, MomentsToScale(scope, from, to), percent), "Scale by volume");
+    }
+
+    /// <summary>
+    /// Q: moves the selected hits that have no object part of the way to the nearest grid line (strength in %, also kept
+    /// as the next default). Hits on a circle or slider end stay, since objects never move. Returns how many moved.
+    /// </summary>
+    public int Quantize(double strength)
+    {
+        QuantizeStrength = Math.Clamp(strength, 1, 100);
+        if (Session is not { } session || model is not { } m) return 0;
+        var loose = Selected.Where(h => h.Anchor is null).ToList();
+        if (loose.Count == 0) return 0;
+        var moved = session.MoveEach([.. loose.Select(h => (h, h.Lane, h.Time + QuantizeStrength / 100 * (m.Snap(h.Time, Divisor) - h.Time)))], "Quantize");
+        Select(Selected.Except(loose).Concat(moved));
+        return loose.Count;
+    }
+
+    /// <summary>Repeat's default gap in snap steps: the selection's length rounded up, as Duplicate.</summary>
+    public int DefaultRepeatGap()
+    {
+        if (Selected.Count == 0) return 1;
+        double start = Selected.Min(h => h.Time), step = StepAt(start);
+        return Math.Max(1, (int)Math.Ceiling((Selected.Max(h => h.Time) - start + step / 2) / step));
+    }
+
+    /// <summary>Ctrl+R: <paramref name="copies"/> copies of the selection, each <paramref name="gap"/> snap steps after the last, as one step.</summary>
+    public void Repeat(int copies, int gap)
+    {
+        if (Session is not { } session || model is not { } m || Selected.Count == 0 || copies < 1 || gap < 1) return;
+        double start = Selected.Min(h => h.Time);
+        var hits = Enumerable.Range(1, copies)
+            .SelectMany(n => Selected.Select(h => (Hit: session.HitAt(h.Lane, h.Time + m.StepsAfter(start, n * gap, Divisor) - start), Midi: session.MidiOf(h))))
+            .ToList();
+        session.AddWithMidi(hits, "Repeat");
+        Select(hits.Select(h => h.Hit));
     }
 
     /// <summary>Drops selected hits that no longer exist (after undo or redo).</summary>

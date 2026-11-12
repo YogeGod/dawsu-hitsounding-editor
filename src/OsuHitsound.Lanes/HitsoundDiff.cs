@@ -36,6 +36,68 @@ public static class HitsoundDiff
 {
     public const string Version = "Hitsounds";
 
+    /// <summary>Retargets a generated plan to a newly created open diff, preserving its unrelated original bytes.</summary>
+    public static GeneratePlan ForCurrentDiff(GeneratePlan plan, OsuFile source, string sourcePath)
+    {
+        var replacements = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["TimingPoints"] = [.. plan.Diff.TimingPoints.Select(p => p.Line.Text)],
+            ["HitObjects"] = [.. plan.Diff.HitObjects.Select(o => o.Line.Text)],
+        };
+        return plan with { OsuPath = Path.GetFullPath(sourcePath), Diff = OsuFile.Parse(source.WithSectionData(replacements)) };
+    }
+
+    /// <summary>Creates a new empty difficulty without changing the source or replacing an existing file.</summary>
+    public static string CreateEmpty(OsuFile source, string sourcePath, string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0 || name.Contains('\r') || name.Contains('\n'))
+            throw new ArgumentException("Enter a difficulty name on one line.", nameof(name));
+
+        var folder = Path.GetDirectoryName(Path.GetFullPath(sourcePath))!;
+        string? Metadata(OsuFile file, string key) => file.Lines
+            .Where(l => l.Section == "Metadata")
+            .Select(l => l.Text.TrimStart())
+            .FirstOrDefault(t => t.StartsWith(key + ":", StringComparison.Ordinal))?[(key.Length + 1)..].Trim();
+
+        foreach (var existing in Directory.EnumerateFiles(folder).Where(p => p.EndsWith(".osu", StringComparison.OrdinalIgnoreCase)))
+            if (string.Equals(Metadata(OsuFile.Read(existing), "Version"), name, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("A difficulty with that name already exists.");
+
+        var artist = Metadata(source, "Artist");
+        var title = Metadata(source, "Title");
+        var creator = Metadata(source, "Creator");
+        if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title) || creator is null)
+            throw new InvalidDataException("The map needs Artist, Title and Creator metadata to name the new difficulty.");
+        var fileName = SafeFile.Name($"{artist} - {title} ({creator}) [{name}].osu");
+        if (Directory.EnumerateFileSystemEntries(folder).Any(p => string.Equals(Path.GetFileName(p), fileName, StringComparison.OrdinalIgnoreCase)))
+            throw new IOException("A file with that name already exists.");
+        var path = Path.Combine(folder, fileName);
+
+        var copy = OsuFile.Parse(source.ToBytes());
+        var versionLine = copy.Lines.FirstOrDefault(l => l.Section == "Metadata" && l.Text.TrimStart().StartsWith("Version:", StringComparison.Ordinal));
+        var idLine = copy.Lines.FirstOrDefault(l => l.Section == "Metadata" && l.Text.TrimStart().StartsWith("BeatmapID:", StringComparison.Ordinal));
+        if (versionLine is null || idLine is null)
+            throw new InvalidDataException("The map needs Version and BeatmapID metadata to create a difficulty.");
+        versionLine.Text = versionLine.Text[..(versionLine.Text.IndexOf(':') + 1)] + name;
+        idLine.Text = idLine.Text[..(idLine.Text.IndexOf(':') + 1)] + "0";
+        var remove = copy.HitObjects.Select(o => o.Line).ToHashSet();
+        foreach (var point in copy.TimingPoints)
+            if (!point.Uninherited) remove.Add(point.Line);
+        var bytes = copy.ToBytesExcept(remove.Contains);
+
+        // CreateNew refuses a file that appeared after the collision check, too.
+        using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        try { output.Write(bytes); }
+        catch
+        {
+            output.Dispose();
+            File.Delete(path);
+            throw;
+        }
+        return path;
+    }
+
     public static GeneratePlan Plan(OsuFile source, string sourcePath, MapFolder folder, EditSession session, GenerateManifest? previous = null)
     {
         double offset = session.Map.Settings.TimeOffset;

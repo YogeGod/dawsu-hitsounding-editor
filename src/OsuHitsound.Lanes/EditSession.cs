@@ -14,7 +14,21 @@ public sealed record EditHit(Lane Lane, double Time, MomentKey? Anchor);
 /// The editable state: every placed hit, the volume of each moment (one per object or node in osu!), and the editor
 /// bookmarks (ms as written in the .osu, sorted).
 /// </summary>
-public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks);
+public sealed record MidiHitData(int Track, int Channel, int Note, int Velocity, int ReleaseVelocity, double Duration)
+{
+    public int? StartOrder { get; init; }
+    public int? EndOrder { get; init; }
+}
+
+/// <summary>Editor-only default MIDI pitch and channel for a lane.</summary>
+public sealed record MidiLaneMapping(int Note, int Channel);
+
+public sealed record EditState(ImmutableList<EditHit> Hits, ImmutableDictionary<MomentKey, int> Volumes, ImmutableList<int> Bookmarks)
+{
+    public ImmutableDictionary<EditHit, MidiHitData> MidiHits { get; init; } = ImmutableDictionary<EditHit, MidiHitData>.Empty;
+    public ImmutableDictionary<Lane, MidiLaneMapping> MidiLanes { get; init; } = ImmutableDictionary<Lane, MidiLaneMapping>.Empty;
+    public MidiDocument? MidiSource { get; init; }
+}
 
 /// <summary>What a range edit does with the hits in a time range.</summary>
 public enum RangeOperation
@@ -34,9 +48,11 @@ public sealed class EditSession
     /// <summary>How close (ms) a hit must be to a moment to play on it. Slider nodes land on fractional times.</summary>
     public const double AnchorTolerance = 2;
 
-    private readonly List<EditState> undo = [];
-    private readonly List<EditState> redo = [];
+    // Each entry is the state on one side of a step and the step's name: undo holds the state before it, redo the state after.
+    private readonly List<(EditState State, string Label)> undo = [];
+    private readonly List<(EditState State, string Label)> redo = [];
     private EditState? gestureStart;
+    private string gestureLabel = "Edit";
     private readonly double timeOffset; // v3/v4 maps show 24 ms later than written; bookmarks are stored as written
 
     public EditSession(OsuFile file, MapFolder folder, DecompiledMap map)
@@ -72,6 +88,20 @@ public sealed class EditSession
 
     public bool IsEdited => undo.Count > 0 || gestureStart is not null;
 
+    /// <summary>The name of every undo step, oldest first: those done, then those undone (Recent edits).</summary>
+    public IReadOnlyList<string> Steps => [.. undo.Select(u => u.Label), .. redo.AsEnumerable().Reverse().Select(r => r.Label)];
+
+    /// <summary>How many of <see cref="Steps"/> are done: the state is just after step <c>Position</c> (0 = as loaded).</summary>
+    public int Position => undo.Count;
+
+    /// <summary>Undoes or redoes until <paramref name="position"/> steps are done (clamped). Ignored during a drag.</summary>
+    public void GoTo(int position)
+    {
+        position = Math.Clamp(position, 0, undo.Count + redo.Count);
+        while (gestureStart is null && undo.Count > position) Undo();
+        while (gestureStart is null && undo.Count < position) Redo();
+    }
+
     public event Action? Changed;
 
     /// <summary>The moment a hit at <paramref name="time"/> plays on, or null when no object is that close.</summary>
@@ -83,37 +113,94 @@ public sealed class EditSession
         ? new EditHit(lane, MomentByKey[key].Time, key)
         : new EditHit(lane, time, null);
 
-    /// <summary>Volume of a moment, or of a hit with no object (100).</summary>
-    public int VolumeOf(EditHit hit) => hit.Anchor is { } key ? State.Volumes[key] : 100;
+    private EditState? volumeCacheState;
+    private Dictionary<double, int> looseMidiVolumes = [];
+
+    /// <summary>Volume of a moment, or the loudest MIDI velocity at a loose hit's generated osu! millisecond.
+    /// Loose hits without MIDI notes at that time retain the default 100%.</summary>
+    public int VolumeOf(EditHit hit)
+    {
+        if (hit.Anchor is { } key) return State.Volumes[key];
+        if (!ReferenceEquals(volumeCacheState, State))
+        {
+            looseMidiVolumes = State.MidiHits.Where(kv => kv.Key.Anchor is null)
+                .GroupBy(kv => Math.Round(kv.Key.Time - timeOffset))
+                .ToDictionary(g => g.Key, g => (int)Math.Round(g.Max(kv => kv.Value.Velocity) * 100.0 / 127));
+            volumeCacheState = State;
+        }
+        return looseMidiVolumes.GetValueOrDefault(Math.Round(hit.Time - timeOffset), 100);
+    }
+
+    public MidiHitData? MidiOf(EditHit hit) => State.MidiHits.GetValueOrDefault(hit);
+
+    /// <summary>Sets selected MIDI note lengths in milliseconds as one undo step. Hits without MIDI metadata are unchanged.
+    /// Returns false for invalid values or lengths that exceed the MIDI export time limit.</summary>
+    public bool SetMidiDuration(IEnumerable<EditHit> hits, double duration)
+    {
+        if (!double.IsFinite(duration) || duration < 0) return false;
+        return SetMidiDurations(hits.Distinct().ToDictionary(h => h, _ => duration));
+    }
+
+    /// <summary>Sets each MIDI note's length as one undo step. Missing MIDI metadata is ignored.</summary>
+    public bool SetMidiDurations(IReadOnlyDictionary<EditHit, double> durations)
+    {
+        var selected = durations.Where(kv => State.MidiHits.ContainsKey(kv.Key)).ToList();
+        if (selected.Any(kv => !double.IsFinite(kv.Value) || kv.Value < 0 || kv.Key.Time + kv.Value > int.MaxValue / 2.0)) return false;
+        Change("MIDI length", s =>
+        {
+            var changed = selected.Where(kv => s.MidiHits[kv.Key].Duration != kv.Value)
+                .Select(kv => KeyValuePair.Create(kv.Key, s.MidiHits[kv.Key] with { Duration = kv.Value })).ToList();
+            return changed.Count == 0 ? s : s with { MidiHits = s.MidiHits.SetItems(changed) };
+        });
+        return true;
+    }
 
     // ---- edits; each call outside a gesture is one undo step ----
 
-    public void Add(IEnumerable<EditHit> hits) => Change(s =>
+    public void Add(IEnumerable<EditHit> hits, string label = "Add") => Change(label, s =>
     {
         var existing = s.Hits.ToHashSet();
         var added = hits.Where(existing.Add).ToList();
         return added.Count == 0 ? s : s with { Hits = s.Hits.AddRange(added) };
     });
 
-    public void Remove(IEnumerable<EditHit> hits) => Change(s =>
+    public void Remove(IEnumerable<EditHit> hits, string label = "Delete") => Change(label, s =>
     {
         var gone = hits.ToHashSet();
-        return s with { Hits = s.Hits.RemoveAll(gone.Contains) };
+        var kept = s.Hits.RemoveAll(gone.Contains);
+        return kept.Count == s.Hits.Count ? s : s with { Hits = kept, MidiHits = s.MidiHits.RemoveRange(gone) };
     });
 
     /// <summary>
     /// Moves hits by a time offset and to other lanes (laneOf maps each hit to its new lane). Each lands on the moment
     /// at its new time, or becomes a hit with no object. Returns the moved hits, to keep them selected.
     /// </summary>
-    public IReadOnlyList<EditHit> Move(IReadOnlyCollection<EditHit> hits, double offset, Func<EditHit, Lane> laneOf)
+    public IReadOnlyList<EditHit> Move(IReadOnlyCollection<EditHit> hits, double offset, Func<EditHit, Lane> laneOf, string label = "Move") =>
+        MoveEach([.. hits.Select(h => (h, laneOf(h), h.Time + offset))], label);
+
+    /// <summary>Moves each hit to its own lane and time (Quantize), as one undo step. Returns the moved hits.</summary>
+    public IReadOnlyList<EditHit> MoveEach(IReadOnlyList<(EditHit Hit, Lane Lane, double Time)> moves, string label)
     {
-        var moved = hits.Select(h => HitAt(laneOf(h), h.Time + offset)).ToList();
-        Change(s =>
+        moves = [.. moves.OrderBy(m => m.Hit.Time).ThenBy(m => ProjectStore.KeyOf(m.Hit.Lane), StringComparer.Ordinal)];
+        var moved = moves.Select(m => HitAt(m.Lane, m.Time)).ToList();
+        Change(label, s =>
         {
-            var gone = hits.ToHashSet();
+            var gone = moves.Select(m => m.Hit).ToHashSet();
             var kept = s.Hits.RemoveAll(gone.Contains);
             var present = kept.ToHashSet();
-            return s with { Hits = kept.AddRange(moved.Where(present.Add)) };
+            var metadata = s.MidiHits.RemoveRange(gone);
+            var result = kept;
+            for (int i = 0; i < moves.Count; i++)
+            {
+                if (!present.Add(moved[i])) continue; // an existing destination wins
+                result = result.Add(moved[i]);
+                if (s.MidiHits.TryGetValue(moves[i].Hit, out var midi)) metadata = metadata.SetItem(moved[i], midi);
+            }
+            // Hit order has no editing meaning. A move onto the same set of hits must not
+            // create an undo step or discard redo history merely by rebuilding the list.
+            return result.Count == s.Hits.Count && present.SetEquals(s.Hits) && metadata.Count == s.MidiHits.Count
+                && metadata.All(kv => s.MidiHits.TryGetValue(kv.Key, out var old) && old == kv.Value)
+                ? s : s with { Hits = result, MidiHits = metadata };
         });
         return moved.Distinct().ToList();
     }
@@ -136,11 +223,11 @@ public sealed class EditSession
         switch (operation)
         {
             case RangeOperation.Move:
-                return Move(hits, offset, h => h.Lane);
+                return Move(hits, offset, h => h.Lane, "Range move");
             case RangeOperation.Copy:
-                return Copy(hits, offset);
+                return Copy(hits, offset, "Range copy");
             default:
-                Remove(hits);
+                Remove(hits, "Range delete");
                 return [];
         }
     }
@@ -154,17 +241,72 @@ public sealed class EditSession
             .Where(k => State.Volumes[k] is var v && v >= from && v <= to)];
 
     /// <summary>Copies hits by a time offset, in their lanes (one undo step); each lands on the moment there, if any. Returns the copies.</summary>
-    public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset)
+    public IReadOnlyList<EditHit> Copy(IEnumerable<EditHit> hits, double offset, string label = "Copy")
     {
-        var copies = hits.Select(h => HitAt(h.Lane, h.Time + offset)).Distinct().ToList();
-        Add(copies);
-        return copies;
+        var copies = hits.Select(h => (Hit: HitAt(h.Lane, h.Time + offset), Midi: MidiOf(h))).ToList();
+        AddWithMidi(copies, label);
+        return [.. copies.Select(c => c.Hit).Distinct()];
     }
 
-    public void SetVolume(IEnumerable<MomentKey> keys, int volume)
+    /// <summary>Adds hits with optional editor-only MIDI data. Existing hits win collisions.</summary>
+    public void AddWithMidi(IEnumerable<(EditHit Hit, MidiHitData? Midi)> hits, string label = "Add") => Change(label, s =>
+    {
+        var present = s.Hits.ToHashSet();
+        var result = s.Hits;
+        var metadata = s.MidiHits;
+        foreach (var (hit, midi) in hits)
+        {
+            if (!present.Add(hit)) continue;
+            result = result.Add(hit);
+            if (midi is not null) metadata = metadata.SetItem(hit, midi);
+        }
+        return result.Count == s.Hits.Count ? s : s with { Hits = result, MidiHits = metadata };
+    });
+
+    public void SetMidiLane(Lane lane, MidiLaneMapping? mapping) => Change("MIDI lane", s =>
+    {
+        if (mapping is not null && (mapping.Note is < 0 or > 127 || mapping.Channel is < 1 or > 16))
+            throw new ArgumentOutOfRangeException(nameof(mapping));
+        if (s.MidiLanes.GetValueOrDefault(lane) == mapping) return s;
+        return s with { MidiLanes = mapping is null ? s.MidiLanes.Remove(lane) : s.MidiLanes.SetItem(lane, mapping) };
+    });
+
+    /// <summary>Imports MIDI as one undo step. At a collision, the loudest incoming note is retained.
+    /// An anchored moment receives the loudest incoming velocity, converted to osu!'s shared volume.</summary>
+    public void ImportMidi(IEnumerable<(EditHit Hit, MidiHitData Midi)> hits, MidiDocument source,
+        IEnumerable<(Lane Lane, MidiLaneMapping Mapping)>? mappings = null)
+    {
+        var incoming = hits.GroupBy(x => x.Hit).Select(g => g.OrderByDescending(x => x.Midi.Velocity)
+            .ThenBy(x => x.Midi.Track).ThenBy(x => x.Midi.Channel).ThenBy(x => x.Midi.Note).First()).ToList();
+        Change("Import MIDI", s =>
+        {
+            var existing = s.Hits.ToHashSet();
+            var added = incoming.Select(x => x.Hit).Where(existing.Add);
+            var metadata = s.MidiHits.SetItems(incoming.Select(x => KeyValuePair.Create(x.Hit, x.Midi)));
+            var volumes = incoming.Where(x => x.Hit.Anchor is not null).GroupBy(x => x.Hit.Anchor!.Value)
+                .Select(g => KeyValuePair.Create(g.Key, (int)Math.Round(g.Max(x => x.Midi.Velocity) * 100.0 / 127)));
+            var laneMappings = mappings is null ? s.MidiLanes : s.MidiLanes.SetItems(mappings.Select(x => KeyValuePair.Create(x.Lane, x.Mapping)));
+            return s with { Hits = s.Hits.AddRange(added), MidiHits = metadata, Volumes = s.Volumes.SetItems(volumes), MidiSource = source, MidiLanes = laneMappings };
+        });
+    }
+
+    /// <summary>Restores editor-only MIDI data without creating an undo step.</summary>
+    public void RestoreMidi(IEnumerable<(EditHit Hit, MidiHitData Midi)> hits, IEnumerable<(Lane Lane, MidiLaneMapping Mapping)> lanes, MidiDocument? source)
+    {
+        var present = State.Hits.ToHashSet();
+        State = State with
+        {
+            MidiHits = State.MidiHits.SetItems(hits.Where(x => present.Contains(x.Hit)).Select(x => KeyValuePair.Create(x.Hit, x.Midi))),
+            MidiLanes = State.MidiLanes.SetItems(lanes.Select(x => KeyValuePair.Create(x.Lane, x.Mapping))),
+            MidiSource = source,
+        };
+        Announce();
+    }
+
+    public void SetVolume(IEnumerable<MomentKey> keys, int volume, string label = "Volume")
     {
         int v = Math.Clamp(volume, 0, 100);
-        SetVolumes(keys.Distinct().ToDictionary(k => k, _ => v));
+        SetVolumes(keys.Distinct().ToDictionary(k => k, _ => v), label);
     }
 
     /// <summary>Puts back hits from a saved project (hits with no object): not an edit, so not an undo step.</summary>
@@ -178,7 +320,7 @@ public sealed class EditSession
     }
 
     /// <summary>Sets several moments' volumes at once (ramps, paint strokes, relative edits); values are kept within 0–100.</summary>
-    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes) => Change(s =>
+    public void SetVolumes(IReadOnlyDictionary<MomentKey, int> volumes, string label = "Volume") => Change(label, s =>
     {
         // Only the values that differ: a drag that stays on the same value is not an edit (no redraw, no recompile).
         var changed = volumes.Select(kv => new KeyValuePair<MomentKey, int>(kv.Key, Math.Clamp(kv.Value, 0, 100)))
@@ -186,8 +328,13 @@ public sealed class EditSession
         return changed.Count == 0 ? s : s with { Volumes = s.Volumes.SetItems(changed) };
     });
 
-    /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step.</summary>
-    public void BeginGesture() => gestureStart ??= State;
+    /// <summary>Starts a drag or stroke: the changes until <see cref="EndGesture"/> become one undo step, named <paramref name="label"/>.</summary>
+    public void BeginGesture(string label = "Edit")
+    {
+        if (gestureStart is not null) return;
+        gestureStart = State;
+        gestureLabel = label;
+    }
 
     /// <summary>During a drag: go back to where the gesture began, so the next edit applies the drag's total offset.</summary>
     public void ResetToGestureStart()
@@ -199,7 +346,7 @@ public sealed class EditSession
     {
         if (gestureStart is { } start && !ReferenceEquals(start, State))
         {
-            undo.Add(start);
+            undo.Add((start, gestureLabel));
             redo.Clear();
         }
 
@@ -210,18 +357,20 @@ public sealed class EditSession
     public void Undo()
     {
         if (gestureStart is not null || undo.Count == 0) return;
-        redo.Add(State);
-        State = undo[^1];
+        var (before, label) = undo[^1];
         undo.RemoveAt(undo.Count - 1);
+        redo.Add((State, label));
+        State = before;
         Announce();
     }
 
     public void Redo()
     {
         if (gestureStart is not null || redo.Count == 0) return;
-        undo.Add(State);
-        State = redo[^1];
+        var (after, label) = redo[^1];
         redo.RemoveAt(redo.Count - 1);
+        undo.Add((State, label));
+        State = after;
         Announce();
     }
 
@@ -243,7 +392,7 @@ public sealed class EditSession
     public IEnumerable<double> BookmarkTimes => State.Bookmarks.Select(b => b + timeOffset);
 
     /// <summary>Adds a bookmark at a timeline time (whole ms, as osu! writes them). One undo step.</summary>
-    public void AddBookmark(double time) => Change(s =>
+    public void AddBookmark(double time) => Change("Add bookmark", s =>
     {
         int ms = (int)Math.Round(time - timeOffset);
         return s.Bookmarks.Contains(ms) ? s : s with { Bookmarks = [.. s.Bookmarks.Add(ms).Order()] };
@@ -259,19 +408,19 @@ public sealed class EditSession
         : BookmarkTimes.Where(b => b > time + 1).Cast<double?>().FirstOrDefault();
 
     /// <summary>Removes the bookmark nearest <paramref name="time"/> within <paramref name="tolerance"/> ms, if any.</summary>
-    public void RemoveBookmarkNear(double time, double tolerance) => Change(s =>
+    public void RemoveBookmarkNear(double time, double tolerance) => Change("Remove bookmark", s =>
         NearestBookmark(time, tolerance) is { } b ? s with { Bookmarks = s.Bookmarks.Remove((int)Math.Round(b - timeOffset)) } : s);
     /// <summary>Hits that have no object to play on.</summary>
     public IEnumerable<EditHit> Unanchored => State.Hits.Where(h => h.Anchor is null);
 
-    private void Change(Func<EditState, EditState> edit)
+    private void Change(string label, Func<EditState, EditState> edit)
     {
         var next = edit(State);
         if (!ReferenceEquals(next, State))
         {
             if (gestureStart is null)
             {
-                undo.Add(State);
+                undo.Add((State, label));
                 redo.Clear();
             }
 

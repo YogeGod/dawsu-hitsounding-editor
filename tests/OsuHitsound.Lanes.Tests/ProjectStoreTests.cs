@@ -19,12 +19,14 @@ public class ProjectStoreTests : IDisposable
             LocatorRight = 900,
             Cycle = true,
             SongOffset = -20,
+            TimeSignatures = [new TimeSignature(33, 7, 8)],
         };
 
         ProjectStore.Save(root, @"C:\Songs\Map\a [x].osu", data);
         var loaded = ProjectStore.Load(root, @"C:\Songs\Map\a [x].osu")!;
 
         Assert.Equal(data.Unanchored, loaded.Unanchored);
+        Assert.Equal(data.TimeSignatures, loaded.TimeSignatures);
         Assert.Equal("big clap", loaded.LaneNames["BeatmapFile|drum-hitclap2.ogg"]);
         Assert.Equal((100.0, 900.0, true, -20.0), (loaded.LocatorLeft!.Value, loaded.LocatorRight!.Value, loaded.Cycle, loaded.SongOffset));
         Assert.Null(ProjectStore.Load(root, @"C:\Songs\Other\a [x].osu")); // same name, other folder: another project

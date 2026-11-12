@@ -58,7 +58,14 @@ public partial class MainWindow
         // Kept on close, together with everything else in the preferences.
         Closed += (_, _) =>
         {
-            prefs = prefs with { WindowX = Position.X, WindowY = Position.Y, WindowWidth = Bounds.Width, WindowHeight = Bounds.Height };
+            prefs = prefs with
+            {
+                WindowX = Position.X, WindowY = Position.Y, WindowWidth = Bounds.Width, WindowHeight = Bounds.Height,
+                SnapMode = Lanes.Edits.SnapMode, QuantizeStrength = Lanes.Edits.QuantizeStrength, ColourByVolume = Lanes.ColourByVolume, ShowMidiLengths = Lanes.ShowMidiLengths,
+                InspectorOpen = InspectorToggle.IsChecked == true,
+                InspectorWidth = InspectorToggle.IsChecked == true ? Root.ColumnDefinitions[0].ActualWidth : prefs.InspectorWidth,
+                InspectorCards = [.. Inspector.Order], InspectorFolded = [.. Inspector.Folded],
+            };
             SavePrefs();
         };
     }

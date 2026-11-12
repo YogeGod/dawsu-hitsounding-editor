@@ -4,8 +4,13 @@ using System.Text.Json;
 
 namespace OsuHitsound.Lanes;
 
+/// <summary>An editor-only time signature from a bar on (never written to the .osu): e.g. bar 33 in 7/8.</summary>
+public sealed record TimeSignature(int Bar, int Numerator, int Denominator);
+
 /// <summary>A hit stored in a project: its lane and timeline time.</summary>
 public sealed record ProjectHit(string Lane, double Time);
+
+public sealed record ProjectMidiHit(string Lane, double Time, MidiHitData Midi);
 
 /// <summary>
 /// What a .osu can't hold, kept per map by the editor: hits with no object, lane names, order, added and hidden
@@ -34,6 +39,15 @@ public sealed record ProjectData
     public List<ProjectHit> PreviewMuted { get; init; } = [];
 
     public double SongOffset { get; init; }
+
+    /// <summary>Editor-only time signature changes, by bar.</summary>
+    public List<TimeSignature> TimeSignatures { get; init; } = [];
+
+    public List<ProjectMidiHit> MidiHits { get; init; } = [];
+
+    public Dictionary<string, MidiLaneMapping> MidiLanes { get; init; } = [];
+
+    public MidiDocument? MidiSource { get; init; }
 }
 
 /// <summary>

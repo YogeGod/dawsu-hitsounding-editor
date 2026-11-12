@@ -104,6 +104,17 @@ public class KeyBindingsTests : IDisposable
     }
 
     [Fact]
+    public void New_diff_uses_control_n_and_the_cubase_file_mapping()
+    {
+        Assert.Equal("Ctrl+N", Keys(Keymap.Build(KeyPreset.Osu, null, NoOverrides), "new"));
+        var cubase = new Dictionary<string, IReadOnlyList<KeyGesture>>
+        {
+            ["File|New"] = [new(Key.F2)]
+        };
+        Assert.Equal("F2", Keys(Keymap.Build(KeyPreset.Cubase, cubase, NoOverrides), "new"));
+    }
+
+    [Fact]
     public void Every_preset_gives_each_key_to_one_command_only()
     {
         foreach (var map in new[] { Keymap.Build(KeyPreset.Osu, null, NoOverrides), Keymap.Build(KeyPreset.Cubase, SampleKeys(), NoOverrides) })

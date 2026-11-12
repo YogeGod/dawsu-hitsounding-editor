@@ -62,6 +62,7 @@ internal sealed class ArrangeView : Control
         None,
         Marquee,
         Move,
+        ResizeMidi,
         Range,
         Paint,
         Wipe,
@@ -73,6 +74,7 @@ internal sealed class ArrangeView : Control
     private Point dragStart, dragNow;
     private EditHit? dragAnchor;
     private List<EditHit> dragHits = [];
+    private Dictionary<EditHit, double> dragLengths = [];
     private LaneRow? paintRow;
     private double waveHeightAtStart;
     private Lane? wipeLane; // Draw strokes erase only in their own lane; null (Erase) erases in any lane
@@ -139,6 +141,22 @@ internal sealed class ArrangeView : Control
     public int Divisor { get => Edits.Divisor; set => Edits.Divisor = value; }
 
     public bool SnapOn { get => Edits.SnapOn; set => Edits.SnapOn = value; }
+
+    /// <summary>View → Colour by Volume: notes go from dark (quiet) to bright (loud) instead of their lane's colour.</summary>
+    public bool ColourByVolume { get; set; }
+
+    public bool ShowMidiLengths { get; set; }
+
+    private static readonly IBrush[] VolumeFills = [.. Enumerable.Range(0, 101).Select(v => Paint.Brush(VolumeColor(v)))];
+
+    /// <summary>The Volume colour mode's fill: one ramp for every lane, dark blue-grey at 0 % to warm white at 100 %.</summary>
+    public static Color VolumeColor(int volume)
+    {
+        double k = Math.Clamp(volume, 0, 100) / 100.0;
+        static byte Mix(byte a, byte b, double k) => (byte)Math.Round(a + (b - a) * k);
+        Color dark = Color.Parse("#2a3442"), bright = Color.Parse("#ffe9b0");
+        return Color.FromRgb(Mix(dark.R, bright.R, k), Mix(dark.G, bright.G, k), Mix(dark.B, bright.B, k));
+    }
 
     /// <summary>The "Lane details" toggle: show each lane's file index.</summary>
     public bool ShowIndexes { get; set; } = true;
@@ -554,13 +572,24 @@ internal sealed class ArrangeView : Control
         double cy = y + RowHeight / 2;
 
         // Notes are sorted by start; slider body spans can start before the view, so look back one visible width.
-        for (int i = Sorted.LowerBound(notes, from - Axis.VisibleDuration, n => n.Time); i < notes.Count; i++)
+        double lookBack = Math.Max(Axis.VisibleDuration, ShowMidiLengths ? model.MaxMidiDuration.GetValueOrDefault(row.Lane) : 0);
+        for (int i = Sorted.LowerBound(notes, from - lookBack - NoteSize / Axis.Zoom, n => n.Time); i < notes.Count; i++)
         {
             var n = notes[i];
             if (n.Time > to + 50) break;
-            if (n.EndTime < from - 50) continue; // spans end at EndTime; one-shot notes have EndTime == Time
+            var midi = n.Hit is { } h ? Session?.MidiOf(h) : null;
+            double end = ShowMidiLengths && midi is not null ? n.Time + MidiBarWidth(midi.Duration, Axis.Zoom) / Axis.Zoom : n.EndTime;
+            if (end < from - 50) continue;
             double x = GridLeft + Axis.X(n.Time);
-            if (n.EndTime > n.Time)
+            if (ShowMidiLengths && midi is not null && n.Hit is { } midiHit)
+            {
+                var brush = selection.Contains(midiHit) || model.IsProblem(midiHit) ? Paint.White
+                    : model.IsPreviewMuted(midiHit) ? Paint.MutedFill
+                    : ColourByVolume && !greyed ? VolumeFills[Math.Clamp(Session!.VolumeOf(midiHit), 0, 100)] : fill;
+                var pen = selection.Contains(midiHit) ? Paint.SelectedRingPen : model.IsProblem(midiHit) ? ConflictRing : Paint.NoteRingPen;
+                ctx.DrawRectangle(brush, pen, new Rect(x, cy - 6, MidiBarWidth(midi.Duration, Axis.Zoom), 12));
+            }
+            else if (n.EndTime > n.Time)
                 ctx.DrawRectangle(span, null, new Rect(x, cy - 3, Math.Max(2, (n.EndTime - n.Time) * Axis.Zoom), 6), 3, 3);
             else if (n.Passive)
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize - 4, fill, Paint.NoteRingPen);
@@ -570,6 +599,8 @@ internal sealed class ArrangeView : Control
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.White, ConflictRing);
             else if (model.IsPreviewMuted(n.Hit!))
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, Paint.MutedFill, Paint.NoteRingPen);
+            else if (ColourByVolume && !greyed && Session is { } session)
+                Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, VolumeFills[Math.Clamp(session.VolumeOf(n.Hit!), 0, 100)], Paint.NoteRingPen);
             else
                 Paint.DrawDiamond(ctx, new Point(x, cy), NoteSize, fill, Paint.NoteRingPen);
         }
@@ -662,9 +693,29 @@ internal sealed class ArrangeView : Control
     private EditHit? HitUnder(LaneRow row, double gridX)
     {
         if (Model?.Notes.TryGetValue(row.Lane, out var notes) != true) return null;
+        if (ShowMidiLengths && Session is { } session)
+        {
+            double time = Axis.Time(gridX), tolerance = NoteSize / Axis.Zoom;
+            double lookBack = Model.MaxMidiDuration.GetValueOrDefault(row.Lane) + Math.Max(tolerance, 7 / Axis.Zoom);
+            EditHit? nearest = null;
+            double distance = double.PositiveInfinity;
+            for (int j = Sorted.LowerBound(notes!, time - lookBack, n => n.Time); j < notes!.Count && notes[j].Time <= time + tolerance; j++)
+            {
+                if (notes[j].Hit is not { } hit) continue;
+                var midi = session.MidiOf(hit);
+                bool contains = midi is null ? Math.Abs(time - hit.Time) <= tolerance
+                    : MidiBarContains(Axis.X(hit.Time), midi.Duration, Axis.Zoom, gridX);
+                if (contains && Math.Abs(time - hit.Time) < distance) { nearest = hit; distance = Math.Abs(time - hit.Time); }
+            }
+            return nearest;
+        }
         int i = Sorted.Nearest(notes!, Axis.Time(gridX), NoteSize / Axis.Zoom, n => n.Time, n => n.Hit is not null);
         return i >= 0 ? notes![i].Hit : null;
     }
+
+    internal static double MidiBarWidth(double duration, double zoom) => Math.Max(7, duration * zoom);
+    internal static bool MidiBarContains(double startX, double duration, double zoom, double x) => x >= startX - 6 && x <= startX + MidiBarWidth(duration, zoom);
+    internal static bool MidiBarEndHit(double startX, double duration, double zoom, double x) => Math.Abs(x - (startX + MidiBarWidth(duration, zoom))) < 7;
 
     private double SnapTime(double time) => Edits.SnapTime(time);
 
@@ -803,7 +854,7 @@ internal sealed class ArrangeView : Control
                 break;
 
             case Tool.Draw when row is LaneRow lane && under is null:
-                session.BeginGesture();
+                session.BeginGesture("Draw");
                 drag = Drag.Paint;
                 paintRow = lane;
                 session.Add([session.HitAt(lane.Lane, SnapTime(Axis.Time(gridX)))]);
@@ -812,7 +863,7 @@ internal sealed class ArrangeView : Control
 
             case Tool.Draw or Tool.Erase:
                 // Erase strokes, and Draw strokes that start on a hit: Draw erases only in its own lane, Erase in any lane.
-                session.BeginGesture();
+                session.BeginGesture("Erase");
                 drag = Drag.Wipe;
                 wipeLane = tool == Tool.Draw ? (row as LaneRow)?.Lane : null;
                 if (under is not null) EraseHit(under);
@@ -844,10 +895,13 @@ internal sealed class ArrangeView : Control
 
                 if (selection.Contains(under))
                 {
-                    drag = Drag.Move;
+                    var midi = session.MidiOf(under);
+                    bool resize = ShowMidiLengths && midi is not null && MidiBarEndHit(Axis.X(under.Time), midi.Duration, Axis.Zoom, gridX);
+                    drag = resize ? Drag.ResizeMidi : Drag.Move;
                     dragAnchor = under;
                     dragHits = [.. selection];
-                    session.BeginGesture();
+                    dragLengths = resize ? selection.Where(h => session.MidiOf(h) is not null).ToDictionary(h => h, h => session.MidiOf(h)!.Duration) : [];
+                    session.BeginGesture(resize ? "Resize MIDI lengths" : "Move");
                 }
 
                 SelectionChanged?.Invoke();
@@ -891,13 +945,22 @@ internal sealed class ArrangeView : Control
             case Drag.Move when dragAnchor is not null:
             {
                 // The grabbed hit snaps; the others keep their offsets to it. Rows move by whole visible lanes.
-                double offset = SnapTime(dragAnchor.Time + Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft)) - dragAnchor.Time;
+                double offset = Edits.SnapOffset(dragAnchor.Time, Axis.Time(gridX) - Axis.Time(dragStart.X - GridLeft));
                 int rowShift = RowIndexAt(p.Y) - RowIndexAt(dragStart.Y);
                 session.ResetToGestureStart();
                 selection.Clear();
                 selection.UnionWith(session.Move(dragHits, offset, h => HitEditor.ShiftLane(model, h.Lane, rowShift)));
                 break;
             }
+
+            case Drag.ResizeMidi:
+                session.ResetToGestureStart();
+                if (Math.Abs(p.X - dragStart.X) >= DragThreshold)
+                {
+                    if (!Edits.ResizeMidi(dragLengths, (p.X - dragStart.X) / Axis.Zoom)) session.SetMidiDurations(dragLengths);
+                }
+                else session.SetMidiDurations(dragLengths);
+                break;
 
             case Drag.Range when Math.Abs(p.X - dragStart.X) >= DragThreshold:
                 Edits.MarkRange(Axis.Time(dragStart.X - GridLeft), Axis.Time(gridX), RowIndexAt(dragStart.Y), RowIndexAt(p.Y));

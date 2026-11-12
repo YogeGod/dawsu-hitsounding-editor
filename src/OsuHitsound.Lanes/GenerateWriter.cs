@@ -13,8 +13,14 @@ public static class GenerateWriter
 {
     /// <param name="render">Renders a mix to WAV bytes; null when none of its sounds can be read.</param>
     /// <exception cref="IOException">Nothing (or nothing lasting) was written.</exception>
-    public static GenerateResult Write(GeneratePlan plan, Func<MixFile, byte[]?> render, string backupRoot)
+    public static GenerateResult Write(GeneratePlan plan, Func<MixFile, byte[]?> render, string backupRoot, byte[]? expectedOriginalBytes = null)
     {
+        void CheckOriginal()
+        {
+            if (expectedOriginalBytes is not null && (!File.Exists(plan.OsuPath) || !File.ReadAllBytes(plan.OsuPath).AsSpan().SequenceEqual(expectedOriginalBytes)))
+                throw new IOException("The open difficulty changed on disk. Reopen it before generating.");
+        }
+        CheckOriginal();
         var dir = Path.GetDirectoryName(plan.OsuPath)!;
         var removable = plan.Removes.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var mixes = plan.Mixes.Select(m => (Mix: m, Path: Path.Combine(dir, m.FileName),
@@ -32,6 +38,7 @@ public static class GenerateWriter
                 written.Add((path, before));
             }
 
+            CheckOriginal();
             string? backup = File.Exists(plan.OsuPath) ? SafeFile.Backup(backupRoot, plan.OsuPath, File.ReadAllBytes(plan.OsuPath)) : null;
             SafeFile.WriteAllBytes(plan.OsuPath, plan.Diff.ToBytes());
 

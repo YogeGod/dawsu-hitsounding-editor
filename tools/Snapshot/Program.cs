@@ -31,6 +31,8 @@ window.Show();
 while (!window.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
 Pump();
 Save("01-open.png");
+using (var editorImage = window.CaptureEditorImage())
+    editorImage.Save(Path.Combine(outDir, "01-editor-image.png"));
 
 var view = window.ArrangeArea;
 view.Axis.ZoomAt(0.4, 0);

@@ -34,6 +34,51 @@ public class GenerateWriterTests : IDisposable
     }
 
     [Fact]
+    public void Generating_into_the_open_diff_refuses_a_file_changed_on_disk()
+    {
+        var plan = Plan("soft-hitnormal4.wav");
+        File.WriteAllText(plan.OsuPath, "external change");
+        var before = Encoding.UTF8.GetBytes("opened bytes");
+        Assert.Throws<IOException>(() => GenerateWriter.Write(plan, _ => [1], Path.Combine(dir, "backups"), before));
+        Assert.Equal("external change", File.ReadAllText(plan.OsuPath));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(plan.OsuPath)!, "soft-hitnormal4.wav")));
+    }
+
+    [Fact]
+    public void Generating_into_the_open_diff_rechecks_after_rendering_and_rolls_back_mixes()
+    {
+        var plan = Plan("soft-hitnormal4.wav");
+        var before = Encoding.UTF8.GetBytes("opened bytes");
+        File.WriteAllBytes(plan.OsuPath, before);
+        Assert.Throws<IOException>(() => GenerateWriter.Write(plan, _ =>
+        {
+            File.WriteAllText(plan.OsuPath, "external change");
+            return [1];
+        }, Path.Combine(dir, "backups"), before));
+        Assert.Equal("external change", File.ReadAllText(plan.OsuPath));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(plan.OsuPath)!, "soft-hitnormal4.wav")));
+    }
+
+    [Fact]
+    public void A_current_diff_plan_keeps_its_name_events_encoding_and_line_endings()
+    {
+        var plan = Plan();
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(
+            "osu file format v14\n[Metadata]\nVersion:My Diff\nBeatmapID:0\n[Events]\n0,0,\"bgXjpg\",0,0\n" +
+            "[TimingPoints]\n0,500,4,2,0,100,1,0\n[HitObjects]\n")).ToArray();
+        bytes[Array.IndexOf(bytes, (byte)'X')] = 0xff;
+        var source = OsuFile.Parse(bytes);
+        var generated = OsuFile.Parse(Encoding.UTF8.GetBytes("[TimingPoints]\r\n0,400,4,2,0,100,1,0\r\n500,-100,4,2,1,50,0,0\r\n[HitObjects]\r\n256,192,1000,1,0,0:0:0:0:\r\n"));
+        var target = Path.Combine(dir, "my diff.osu");
+
+        var result = HitsoundDiff.ForCurrentDiff(plan with { Diff = generated }, source, target);
+        var expected = Encoding.Latin1.GetString(bytes).Replace("0,500,4,2,0,100,1,0\n", "0,400,4,2,0,100,1,0\n500,-100,4,2,1,50,0,0\n")
+            .Replace("[HitObjects]\n", "[HitObjects]\n256,192,1000,1,0,0:0:0:0:\n");
+        Assert.Equal(target, result.OsuPath);
+        Assert.Equal(Encoding.Latin1.GetBytes(expected), result.Diff.ToBytes());
+    }
+
+    [Fact]
     public void A_mix_that_cannot_be_rendered_stops_everything_before_any_file_is_written()
     {
         var plan = Plan("soft-hitnormal4.wav", "soft-hitnormal5.wav");

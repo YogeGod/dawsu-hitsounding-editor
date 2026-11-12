@@ -65,7 +65,8 @@ internal sealed partial class ArrangeModel
         }
 
         double offset = Map.Settings.TimeOffset;
-        segments = BuildSegments(file, offset);
+        (this.file, timeOffset) = (file, offset);
+        segments = BuildSegments(file, offset, []);
         Sections = KiaiSections(file, offset);
         LastTime = Math.Max(Map.Moments.Count > 0 ? Map.Moments[^1].Time : 0, Map.Passive.Count > 0 ? Map.Passive.Max(p => p.EndTime) : 0);
         Rows = BuildRows();
@@ -85,6 +86,9 @@ internal sealed partial class ArrangeModel
     public IReadOnlySet<Lane> Silent { get; set; }
 
     public IReadOnlyDictionary<Lane, List<Note>> Notes { get; private set; } = new Dictionary<Lane, List<Note>>();
+
+    /// <summary>Longest MIDI note in each lane, for drawing and picking bars that start offscreen.</summary>
+    public IReadOnlyDictionary<Lane, double> MaxMidiDuration { get; private set; } = new Dictionary<Lane, double>();
 
     /// <summary>Moments that won't save as wanted, from the last background compile.</summary>
     public IReadOnlySet<MomentKey> Conflicted { get; private set; } = new HashSet<MomentKey>();
@@ -128,6 +132,8 @@ internal sealed partial class ArrangeModel
         }
 
         foreach (var list in notes.Values) list.Sort((a, b) => a.Time.CompareTo(b.Time));
+        MaxMidiDuration = Session.State.MidiHits.GroupBy(kv => kv.Key.Lane)
+            .ToDictionary(g => g.Key, g => g.Max(kv => kv.Value.Duration));
         previewMuted.IntersectWith(Session.State.Hits); // forget mutes of hits that were moved or removed
         (Notes, MomentGroups) = (notes, groups);
         UpdateProblemTimes();
@@ -153,10 +159,58 @@ internal sealed partial class ArrangeModel
     {
         if (SegmentAt(time) is not { } s) return time;
         double step = s.BeatLength / divisor;
-        return s.Start + Math.Round((time - s.Start) / step) * step;
+        double snapped = s.GridOrigin + Math.Round((time - s.GridOrigin) / step) * step;
+        // A red line can interrupt a step. It is itself a grid line, and the old
+        // grid must not be extended past it when looking for the nearest line.
+        for (int i = Math.Max(0, SegmentIndex(time)) + 1; i < segments.Length; i++)
+            if (segments[i].GridOrigin != s.GridOrigin)
+            {
+                double boundary = segments[i].Start;
+                if (snapped > boundary)
+                    snapped = s.GridOrigin + Math.Floor((time - s.GridOrigin) / step) * step;
+                if (Math.Abs(boundary - time) < Math.Abs(snapped - time)) snapped = boundary;
+                break;
+            }
+        return snapped;
     }
 
-    /// <summary>Snap lines between beats (beat / divisor), for drawing when zoomed in enough.</summary>
+    /// <summary>The time <paramref name="steps"/> snap steps (beat / divisor) after <paramref name="time"/>, each step as long as the red line in force there says.</summary>
+    public double StepsAfter(double time, int steps, int divisor)
+    {
+        if (segments.Length == 0) return time + steps * 500.0 / divisor;
+        double grid = Snap(time, divisor), offset = time - grid;
+        for (int i = 0; i < Math.Abs(steps); i++)
+        {
+            var s = SegmentAt(grid)!.Value;
+            if (steps < 0)
+            {
+                // At a red line, the preceding step comes from the previous grid,
+                // which may have been cut short by this red line.
+                int previous = SegmentIndex(grid) - 1;
+                while (previous >= 0 && segments[previous].GridOrigin == s.GridOrigin) previous--;
+                if (previous >= 0 && Math.Abs(grid - s.GridOrigin) < 1e-7)
+                {
+                    var p = segments[previous];
+                    double previousStep = p.BeatLength / divisor;
+                    grid = p.GridOrigin + (Math.Ceiling((grid - p.GridOrigin) / previousStep - 1e-9) - 1) * previousStep;
+                }
+                else grid -= s.BeatLength / divisor;
+                continue;
+            }
+            double next = grid + s.BeatLength / divisor;
+            // A red line starts a new grid even if it interrupts the previous step. Signature-only
+            // splits retain the same grid origin and must not introduce extra snap steps.
+            for (int j = Math.Max(0, SegmentIndex(grid)) + 1; j < segments.Length && segments[j].Start <= next + 1e-7; j++)
+                if (segments[j].GridOrigin != s.GridOrigin)
+                {
+                    next = segments[j].Start;
+                    break;
+                }
+            grid = next;
+        }
+        return grid + offset;
+    }
+
     /// <summary>
     /// The snap lines between beats, each with the beat fraction it falls on in lowest terms: with 1/4 snap, the line
     /// halfway is a 1/2 (Fraction 2) and the others are 1/4 (Fraction 4), as osu!'s editor colours them.
@@ -165,16 +219,45 @@ internal sealed partial class ArrangeModel
     {
         if (divisor <= 1) yield break;
         // From one beat earlier, so a beat that starts before the view still gets its subdivisions.
-        double back = SegmentAt(from)?.BeatLength ?? 0;
-        foreach (var line in GridLines(from - back, to))
-            for (int k = 1; k < divisor; k++)
+        // The map's beats from each stretch's start, whatever the time signature: snapping follows them too.
+        for (int i = Math.Max(0, SegmentIndex(from)); i < segments.Length; i++)
+        {
+            var s = segments[i];
+            if (s.Start > to) yield break;
+            for (long b = (long)Math.Floor((Math.Max(from, s.Start) - s.GridOrigin) / s.BeatLength); ; b++)
             {
-                double t = line.Time + k * line.BeatLength / divisor;
-                if (t >= from && t <= to) yield return (t, divisor / (int)System.Numerics.BigInteger.GreatestCommonDivisor(k, divisor));
+                double beat = s.GridOrigin + b * s.BeatLength;
+                if (beat >= s.End || beat > to) break;
+                for (int k = 1; k < divisor; k++)
+                {
+                    double t = beat + k * s.BeatLength / divisor;
+                    if (t >= s.End) break;
+                    if (t >= s.Start && t >= from && t <= to) yield return (t, divisor / (int)System.Numerics.BigInteger.GreatestCommonDivisor(k, divisor));
+                }
             }
+        }
     }
 
-    private readonly Segment[] segments;
+    private Segment[] segments;
+    private readonly OsuFile file;
+    private readonly double timeOffset;
+
+    /// <summary>Editor-only time signature changes (saved in the project, never in the .osu), sorted by bar.</summary>
+    public IReadOnlyList<TimeSignature> TimeSignatures { get; private set; } = [];
+
+    /// <summary>Replaces the time signature changes and redraws. Invalid entries are left out; one per bar, the last wins.</summary>
+    public void SetTimeSignatures(IEnumerable<TimeSignature> changes)
+    {
+        TimeSignatures = [.. changes.Where(IsValid).GroupBy(t => t.Bar).Select(g => g.Last()).OrderBy(t => t.Bar)];
+        segments = BuildSegments(file, timeOffset, TimeSignatures);
+        Changed?.Invoke();
+    }
+
+    public static bool IsValid(TimeSignature t) => t.Bar >= 1 && t.Numerator is >= 1 and <= 32 && t.Denominator is 1 or 2 or 4 or 8 or 16;
+
+    /// <summary>The time signature in force at a time: a change's, or the red line's meter over 4.</summary>
+    public (int Numerator, int Denominator) SignatureAt(double time) =>
+        SegmentAt(time) is { } s ? (s.Meter, s.Denominator) : (4, 4);
 
     public IReadOnlyList<Section> Sections { get; }
 
@@ -292,9 +375,10 @@ internal sealed partial class ArrangeModel
         {
             var s = segments[i];
             if (s.Start > to) yield break;
-            for (long b = Math.Max(0, (long)Math.Floor((from - s.Start) / s.BeatLength)); ; b++)
+            // Beats in the time signature's unit (eighths in 7/8); the line keeps the map's beat for snap spacing.
+            for (long b = Math.Max(0, (long)Math.Floor((from - s.Start) / s.Unit)); ; b++)
             {
-                double t = s.Start + b * s.BeatLength;
+                double t = s.Start + b * s.Unit;
                 if (t >= s.End || t > to) break;
                 if (t >= from) yield return new GridLine(t, b % s.Meter == 0, s.FirstBar + (int)(b / s.Meter), (int)(b % s.Meter) + 1, s.BeatLength);
             }
@@ -305,16 +389,17 @@ internal sealed partial class ArrangeModel
     public (int Bar, int Beat, int Tick) BarBeatTick(double time)
     {
         if (SegmentAt(time) is not { } s) return (1, 1, 1);
-        double beats = Math.Max(0, (time - s.Start) / s.BeatLength);
+        double beats = Math.Max(0, (time - s.Start) / s.Unit);
         long whole = (long)Math.Floor(beats);
         return (s.FirstBar + (int)(whole / s.Meter), (int)(whole % s.Meter) + 1, (int)Math.Floor((beats - whole) * 16) + 1);
     }
 
     /// <summary>
-    /// One stretch per red line, with the number of its first bar. The first starts on a whole bar at or before 0, so
-    /// bars before the first red line are counted too.
+    /// One stretch per red line, split where a time signature changes, with the number of its first bar. The first starts
+    /// on a whole bar at or before 0, so bars before the first red line are counted too. BeatLength is the map's beat
+    /// (snapping); Unit is the time signature's beat (Meter of them make a bar).
     /// </summary>
-    private readonly record struct Segment(double Start, double End, double BeatLength, int Meter, int FirstBar);
+    private readonly record struct Segment(double Start, double End, double BeatLength, int Meter, double Unit, int Denominator, int FirstBar, double GridOrigin);
 
     private Segment? SegmentAt(double time) => segments.Length == 0 ? null : segments[Math.Max(0, SegmentIndex(time))];
 
@@ -332,7 +417,7 @@ internal sealed partial class ArrangeModel
         return lo - 1;
     }
 
-    private static Segment[] BuildSegments(OsuFile file, double offset)
+    private static Segment[] BuildSegments(OsuFile file, double offset, IReadOnlyList<TimeSignature> signatures)
     {
         var reds = new List<(double Time, double BeatLength, int Meter)>();
         foreach (var p in file.TimingPoints)
@@ -348,18 +433,35 @@ internal sealed partial class ArrangeModel
         }
 
         reds.Sort((a, b) => a.Time.CompareTo(b.Time));
-        var segments = new Segment[reds.Count];
+        var segments = new List<Segment>();
         int bar = 1;
         for (int i = 0; i < reds.Count; i++)
         {
             var (start, beatLength, meter) = reds[i];
             if (i == 0) start -= Math.Ceiling(start / (beatLength * meter)) * beatLength * meter;
+            double gridOrigin = start;
             double end = i + 1 < reds.Count ? reds[i + 1].Time : double.PositiveInfinity;
-            segments[i] = new Segment(start, end, beatLength, meter, bar);
-            if (!double.IsInfinity(end)) bar += (int)Math.Ceiling((end - start) / (beatLength * meter) - 1e-6);
+            // A time signature change splits the stretch at its bar and lasts until the next change, past red lines too.
+            while (true)
+            {
+                var (n, d) = signatures.LastOrDefault(t => t.Bar <= bar) is { } sig ? (sig.Numerator, sig.Denominator) : (meter, 4);
+                double unit = beatLength * 4 / d, barLength = n * unit;
+                int next = signatures.FirstOrDefault(t => t.Bar > bar)?.Bar ?? 0;
+                double split = next > 0 ? start + (next - bar) * barLength : double.PositiveInfinity;
+                if (split < end - 1e-6)
+                {
+                    segments.Add(new Segment(start, split, beatLength, n, unit, d, bar, gridOrigin));
+                    (start, bar) = (split, next);
+                    continue;
+                }
+
+                segments.Add(new Segment(start, end, beatLength, n, unit, d, bar, gridOrigin));
+                if (!double.IsInfinity(end)) bar += (int)Math.Ceiling((end - start) / barLength - 1e-6);
+                break;
+            }
         }
 
-        return segments;
+        return [.. segments];
     }
 
     private IEnumerable<Lane> LanesIn(LaneGroup group) => laneRows.Where(r => r.Group == group).Select(r => r.Lane);
