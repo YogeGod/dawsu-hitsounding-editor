@@ -2,6 +2,12 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 2.2.8
+
+- **Preferences → Keys** has a filter next to search: All, Assigned, Customized or Unassigned, with counts. Commands whose keys differ from the preset are marked, and hovering one shows the preset's key.
+- **Import…** and **Export…** in **Preferences → Keys** save a preset's keys to a `.dawsukeys` file and load them back, on any PC, with or without Cubase.
+- **Edit → Drum Hits auto-fill (test build only)…** is a kick and snare detection prototype. It needs a local detector and does not work in this release.
+
 ## 2.2.7
 
 - Save and Generate check all sample files used in their plan before writing, so changed files are caught.
