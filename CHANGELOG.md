@@ -4,7 +4,7 @@ Public releases of the C# dawsu! editor, newest first. Each version's notes are 
 
 ## Unreleased
 
-- **F1** and **Preferences → Keys** group commands by feature area, such as "Hitsound – Hit editing" and "Keysound – Note editing". A command both editors run (Undo, Play, zoom…) is listed under each mode's area.
+- **F1** and **Preferences → Keys** group commands by feature area, such as "Hitsound – Hit editing" and "Keysound – Note editing". In F1, a command both editors run (Undo, Play, zoom…) is listed under each mode's area. In Preferences → Keys it is listed once, its details name the Keysound area too, and searching for that area finds it.
 - Menu renames:
   - **File → Open…** is now **Open map…**.
   - **File → Save** is now **Save .osu**.

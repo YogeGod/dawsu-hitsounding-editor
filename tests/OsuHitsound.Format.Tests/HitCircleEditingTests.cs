@@ -32,6 +32,30 @@ public class HitCircleEditingTests
         Assert.True(map.IsEdited);
     }
 
+    // Appending (the fast path) and inserting between objects must agree after the latest time moves or the latest is removed.
+    [Fact]
+    public void Circles_go_before_the_first_later_object_whatever_order_they_are_added_in()
+    {
+        var map = OsuFile.Parse(Encoding.UTF8.GetBytes("osu file format v14\r\n[HitObjects]\r\n256,192,3000,1,0,0:0:0:0:\r\n1,2,1000\r\n"));
+        map.InsertHitCircle(4000); // after everything: appended
+        map.InsertHitCircle(2000); // before 3000 (the file isn't sorted: 1000 comes after it)
+        var latest = map.InsertHitCircle(5000);
+        map.RemoveHitObject(latest);
+        map.InsertHitCircle(4500); // the latest is 4000 again
+        Assert.Equal([2000, 3000, 1000, 4000, 4500], map.HitObjects.Select(o => o.Time));
+        Assert.Equal(map.HitObjects.Select(o => o.Line), map.Lines.Where(l => l.Section == "HitObjects" && l.Text.Contains(',')));
+    }
+
+    [Fact]
+    public void Adding_thousands_of_circles_in_time_order_stays_fast()
+    {
+        var map = OsuFile.Parse(Encoding.UTF8.GetBytes("osu file format v14\r\n[HitObjects]\r\n"));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 20000; i++) map.InsertHitCircle(i * 10);
+        Assert.True(watch.ElapsedMilliseconds < 2000, $"20000 circles took {watch.ElapsedMilliseconds} ms");
+        Assert.Equal(20000, map.HitObjects.Count);
+    }
+
     [Fact]
     public void An_unreadable_object_line_does_not_stop_a_circle_being_added()
     {

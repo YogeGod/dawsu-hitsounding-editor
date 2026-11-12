@@ -14,9 +14,7 @@ internal sealed class HelpWindow : Window
     /// </summary>
     public static IEnumerable<(string Group, string Keys, string Description)> Rows(string search) =>
         EditorCommands.All
-            .SelectMany(c => c.KeysoundGroup is { } ks
-                ? new[] { (c.Group, c.KeysText, c.Description), (ks, c.KeysText, c.Description) }
-                : [(c.Group, c.KeysText, c.Description)])
+            .SelectMany(c => new[] { c.Group, c.KeysoundGroup }.OfType<string>().Select(g => (g, c.KeysText, c.Description)))
             .Concat(EditorCommands.Mouse)
             .Where(r => string.IsNullOrWhiteSpace(search) || $"{r.Item1} {r.Item2} {r.Item3}".Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
             .OrderBy(r => Areas.Order(r.Item1));

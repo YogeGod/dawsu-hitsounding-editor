@@ -19,6 +19,21 @@ public class PreferencesAndHelpTests : IDisposable
     }
 
     [Fact]
+    public void Unreadable_preferences_are_kept_aside_instead_of_overwritten()
+    {
+        var path = Path.Combine(dir, "broken.json");
+        File.WriteAllText(path, "{ \"BufferMs\": ");
+        Assert.Equal(new Preferences().BufferMs, Preferences.Load(path).BufferMs);
+        Assert.False(File.Exists(path));
+        Assert.Equal("{ \"BufferMs\": ", File.ReadAllText(path + ".unreadable"));
+
+        File.WriteAllText(path, "not json either");
+        Preferences.Load(path);
+        Assert.Equal("{ \"BufferMs\": ", File.ReadAllText(path + ".unreadable")); // the first copy stays
+        Assert.Single(Directory.GetFiles(dir, "broken.json.*.unreadable"));
+    }
+
+    [Fact]
     public void Objects_snap_mode_is_remembered()
     {
         var path = Path.Combine(dir, "objects-snap.json");
@@ -133,12 +148,19 @@ public class PreferencesAndHelpTests : IDisposable
     {
         var groups = HelpWindow.Rows("").Select(r => r.Group).ToList();
         Assert.All(groups, g => Assert.True(Areas.Order(g) < Areas.Order("not an area"), $"'{g}' is not a feature area"));
-        Assert.Equal(groups.OrderBy(Areas.Order), groups);
+        // Specific positions (sorting Rows' output by the key it already sorts by would always pass).
+        Assert.Equal(Areas.HsMapFiles, groups.First());
+        int hitEditing = groups.IndexOf(Areas.HsHitEditing);
+        Assert.Equal(Areas.Mouse(Areas.HsHitEditing), groups.Skip(hitEditing).First(g => g != Areas.HsHitEditing)); // its mouse group comes right after it
+        Assert.True(groups.LastIndexOf(Areas.HsPlayback) < groups.IndexOf(Areas.KsNoteEditing), "Hitsound areas come before Keysound ones");
+        Assert.Equal(Areas.Help, groups.Last());
         // A command both editors run is listed under each mode's area, the key editor's own only under Keysound.
         Assert.Equal(Areas.HsHitEditing, EditorCommands.Get("undo").Group);
         Assert.Equal(Areas.KsNoteEditing, EditorCommands.Get("undo").KeysoundGroup);
         Assert.Equal(Areas.KsPlayback, EditorCommands.Get("play").KeysoundGroup);
+        Assert.Equal(Areas.KsNoteEditing, EditorCommands.Get("snap3").KeysoundGroup);
         Assert.Null(EditorCommands.Get("ks.sync").KeysoundGroup);
+        Assert.Null(EditorCommands.Get("gridLeft").KeysoundGroup); // the key editor has no grid move
         Assert.Null(EditorCommands.Get("save").KeysoundGroup);
     }
 }

@@ -129,7 +129,13 @@ internal sealed record Preferences
         {
             return File.Exists(path) ? JsonSerializer.Deserialize<Preferences>(File.ReadAllText(path), Json) ?? new() : new();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (JsonException)
+        {
+            // Kept as preferences.json.unreadable: the next save would otherwise replace every key change and setting with defaults.
+            SafeFile.KeepUnreadable(path);
+            return new();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new();
         }

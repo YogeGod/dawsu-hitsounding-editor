@@ -356,7 +356,7 @@ internal static class KeyFile
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number)
             throw new FormatException("This isn't a key file.");
         if (!version.TryGetInt32(out int v) || v != Version)
-            throw new FormatException("This key file is from a newer version of the editor.");
+            throw new FormatException(v > Version ? "This key file is from a newer version of the editor." : $"This key file has an unknown version ({v}).");
         if (!root.TryGetProperty("keys", out var keysElement) || keysElement.ValueKind != JsonValueKind.Object)
             throw new FormatException("This key file has no keys.");
 

@@ -13,7 +13,14 @@ public readonly record struct MomentKey(int ObjectIndex, int Node);
 public sealed record WantedSound(IReadOnlyList<Lane> Lanes, int Volume);
 
 /// <summary>A moment that can't be saved as wanted. It keeps what it played before.</summary>
-public sealed record Conflict(double Time, MomentKey Moment, string Reason);
+public sealed record Conflict(double Time, MomentKey Moment, string Reason)
+{
+    /// <summary>
+    /// The compiled map plays something that wasn't wanted (the check by decompiling failed): unlike other conflicts, the
+    /// moment does not keep its old sounds, so the compiled map must not be written.
+    /// </summary>
+    public bool Unverified { get; init; }
+}
 
 /// <summary>
 /// The outcome of <see cref="Compiler.Apply"/>: conflicts, notes about side effects (slider bodies and ticks that
@@ -132,7 +139,7 @@ public static partial class Compiler
             {
                 var key = Key(m);
                 if (conflicted.Contains(key) || Same(m, wish[key])) continue;
-                conflicts.Add(new Conflict(m.Time, key, $"Came out as {Describe(m)} instead of what was wanted; please report this."));
+                conflicts.Add(new Conflict(m.Time, key, $"Came out as {Describe(m)} instead of what was wanted; please report this.") { Unverified = true });
             }
 
             var notes = new List<string>();
