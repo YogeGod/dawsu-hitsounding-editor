@@ -19,6 +19,7 @@ public partial class MainWindow
         DrumAutoFillItem.Click += async (_, _) => await ShowDrumAutoFill();
         Lanes.LaneLayoutChanged += ScheduleProjectSave;
         Lanes.LaneMenuRequested += ShowLaneMenu;
+        Lanes.ToolPickerRequested += ShowToolPicker;
         Lanes.SliderMenuRequested += ShowSliderMenu;
         // Standard families add a numbered default immediately, like Electron V6.39.
         Lanes.AddLaneRequested += async lane => await AddExtraLane(lane);

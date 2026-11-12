@@ -73,7 +73,18 @@ internal sealed class VolumeLane : Control
 
     /// <summary>The Ramp tool (6) is active: every drag draws a ramp.</summary>
     public bool RampTool { get; set; }
+    /// <summary>The scope box says "Selected lanes": the Value box and Alt+Up/Down change only those lanes' sounds.</summary>
     public bool SelectedLanesOnly { get; set; }
+
+    /// <summary>The selected hits (the window keeps it current); their lanes decide which volumes the bars show.</summary>
+    public IReadOnlyCollection<EditHit> SelectedHits { get; set; } = [];
+
+    /// <summary>
+    /// The lanes whose volumes the bars show and edit: the lanes of the selected hits, or the active lane when nothing is
+    /// selected (as Cubase's drum editor shows one drum's velocities). Null (every lane) only before any lane is active.
+    /// </summary>
+    internal IReadOnlySet<Lane>? ShownLanes => SelectedHits.Count > 0 ? SelectedHits.Select(h => h.Lane).ToHashSet()
+        : model?.ActiveLane is { } active ? new HashSet<Lane> { active } : null;
 
     /// <summary>The editing tool, for the cursor over the bars (V6.39 shows the same cursors there as over the grid).</summary>
     public Tool Tool { get; set; } = Tool.Select;
@@ -142,7 +153,8 @@ internal sealed class VolumeLane : Control
         if (model is null || axis is null) return;
 
         var (top, bottom) = Range;
-        var scoped = model.Session.State.Hits.Where(h => h.Anchor is not null && (!SelectedLanesOnly || model.SelectedLanes.Contains(h.Lane))).ToLookup(h => h.Anchor!.Value);
+        var shown = ShownLanes;
+        var scoped = model.Session.State.Hits.Where(h => h.Anchor is not null && (shown is null || shown.Contains(h.Lane))).ToLookup(h => h.Anchor!.Value);
         double height = bottom - top;
         double from = axis.Left - 50, to = axis.Time(size.Width - ArrangeView.GridLeft) + 50;
         using (ctx.PushClip(new Rect(ArrangeView.GridLeft, 0, size.Width - ArrangeView.GridLeft, size.Height)))
@@ -202,17 +214,24 @@ internal sealed class VolumeLane : Control
 
     private double TimeAt(double x) => axis!.Time(x - ArrangeView.GridLeft);
 
-    private HashSet<MomentKey>? ScopedMoments() => SelectedLanesOnly && model is not null
-        ? model.Session.State.Hits.Where(h => h.Anchor is not null && model.SelectedLanes.Contains(h.Lane)).Select(h => h.Anchor!.Value).ToHashSet()
+    private HashSet<MomentKey>? ScopedMoments() => ShownLanes is { } shown && model is not null
+        ? model.Session.State.Hits.Where(h => h.Anchor is not null && shown.Contains(h.Lane)).Select(h => h.Anchor!.Value).ToHashSet()
         : null;
 
+    /// <summary>
+    /// Sets these moments' volumes for the shown lanes only. A moment whose sounds are all in shown lanes keeps one object
+    /// volume; where other lanes also play, only the shown lanes' sounds change.
+    /// </summary>
     internal void ApplyVolumes(IReadOnlyDictionary<MomentKey, int> values)
     {
         if (model is null) return;
-        if (!SelectedLanesOnly) { model.Session.SetVolumes(values); return; }
-        model.Session.SetLayerVolumes(model.Session.State.Hits
-            .Where(h => model.SelectedLanes.Contains(h.Lane) && h.Anchor is { } key && values.ContainsKey(key))
-            .ToDictionary(h => h, h => values[h.Anchor!.Value]));
+        if (ShownLanes is not { } shown) { model.Session.SetVolumes(values); return; }
+        var atMoments = model.Session.State.Hits.Where(h => h.Anchor is { } key && values.ContainsKey(key)).GroupBy(h => h.Anchor!.Value).ToList();
+        var whole = atMoments.Where(g => g.All(h => shown.Contains(h.Lane))).ToDictionary(g => g.Key, g => values[g.Key]);
+        var layers = atMoments.Where(g => !whole.ContainsKey(g.Key)).SelectMany(g => g.Where(h => shown.Contains(h.Lane)))
+            .ToDictionary(h => h, h => values[h.Anchor!.Value]);
+        if (whole.Count > 0) model.Session.SetVolumes(whole);
+        if (layers.Count > 0) model.Session.SetLayerVolumes(layers);
     }
 
     /// <summary>
@@ -235,9 +254,11 @@ internal sealed class VolumeLane : Control
     private void ApplyTargets(Dictionary<EditHit, int>? target)
     {
         if (model is null || dragStart is null || target is null) return;
-        if (SelectedLanesOnly) { model.Session.SetLayerVolumes(target); return; }
+        // A moment keeps one object volume only when all its sounds are dragged (none in a hidden lane) and started equal.
+        var soundsAt = model.Session.State.Hits.Where(h => h.Anchor is not null).GroupBy(h => h.Anchor!.Value).ToDictionary(g => g.Key, g => g.Count());
         var byMoment = target.GroupBy(kv => kv.Key.Anchor!.Value).ToList();
-        var whole = byMoment.Where(g => g.Select(kv => dragStart[kv.Key]).Distinct().Count() == 1).ToDictionary(g => g.Key, g => g.First().Value);
+        var whole = byMoment.Where(g => g.Count() == soundsAt.GetValueOrDefault(g.Key) && g.Select(kv => dragStart[kv.Key]).Distinct().Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First().Value);
         var layers = byMoment.Where(g => !whole.ContainsKey(g.Key)).SelectMany(g => g).ToDictionary(kv => kv.Key, kv => kv.Value);
         if (whole.Count > 0) model.Session.SetVolumes(whole);
         if (layers.Count > 0) model.Session.SetLayerVolumes(layers);
@@ -277,8 +298,9 @@ internal sealed class VolumeLane : Control
             if (dragging.Count > 1)
             {
                 var keys = dragging.ToHashSet();
+                var shown = ShownLanes;
                 dragStart = session.State.Hits
-                    .Where(h => h.Anchor is { } a && keys.Contains(a) && (!SelectedLanesOnly || model.SelectedLanes.Contains(h.Lane)))
+                    .Where(h => h.Anchor is { } a && keys.Contains(a) && (shown is null || shown.Contains(h.Lane)))
                     .ToDictionary(h => h, session.VolumeOf);
                 grabStart = VolumeAt(p.Y); // relative to the press, so pressing anywhere on the bar doesn't jump them
                 compressing = e.KeyModifiers.HasFlag(KeyModifiers.Control);

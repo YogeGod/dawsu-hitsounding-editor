@@ -622,9 +622,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         var hit = NoteAt(p);
 
+        // Right-click edits nothing here either (it used to delete the note; the user ruled that out, 2026-11-12).
         if (point.IsRightButtonPressed)
         {
-            if (hit is not null) RemoveNote(track, hit, "Delete note");
             e.Handled = true;
             return;
         }

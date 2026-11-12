@@ -109,14 +109,15 @@ internal static class EditorCommands
         new("selectAll", Areas.HsHitEditing, "Select all hits", [K(Key.A, Ctrl)]),
         new("deselect", Areas.HsHitEditing, "Select nothing", [K(Key.A, Ctrl | Shift), K(Key.Escape)]),
         new("delete", Areas.HsHitEditing, "Delete the selection", [K(Key.Delete), K(Key.Back)]),
-        // The arrow keys as in Cubase: Left/Right select the previous/next event, Up/Down the one above/below (the key
-        // editor transposes instead), Shift adds to the selection, Ctrl+Left/Right nudges, Ctrl+Up/Down zooms rows.
-        new("selectPrevious", Areas.HsHitEditing, "Select the previous hit in its lane (key editor: the previous note)", [K(Key.Left)]),
-        new("selectNext", Areas.HsHitEditing, "Select the next hit in its lane (key editor: the next note)", [K(Key.Right)]),
+        // The arrow keys as in Cubase's Drum Editor: Left/Right select the previous/next hit in any lane, Up/Down move the
+        // selection to the lane above/below (the key editor transposes), Shift adds to the selection, Ctrl+Left/Right
+        // nudges, Ctrl+Up/Down zooms rows.
+        new("selectPrevious", Areas.HsHitEditing, "Select the previous hit in any lane (key editor: the previous note)", [K(Key.Left)]),
+        new("selectNext", Areas.HsHitEditing, "Select the next hit in any lane (key editor: the next note)", [K(Key.Right)]),
         new("addPrevious", Areas.HsHitEditing, "Add the previous hit (note) to the selection", [K(Key.Left, Shift)]),
         new("addNext", Areas.HsHitEditing, "Add the next hit (note) to the selection", [K(Key.Right, Shift)]),
-        new("navUp", Areas.HsHitEditing, "Select the hit in the lane above (key editor: transpose up a semitone)", [K(Key.Up)]),
-        new("navDown", Areas.HsHitEditing, "Select the hit in the lane below (key editor: transpose down a semitone)", [K(Key.Down)]),
+        new("navUp", Areas.HsHitEditing, "Move the selection to the lane above (key editor: transpose up a semitone)", [K(Key.Up)]),
+        new("navDown", Areas.HsHitEditing, "Move the selection to the lane below (key editor: transpose down a semitone)", [K(Key.Down)]),
         new("navAddUp", Areas.HsHitEditing, "Add the hit in the lane above (key editor: transpose up an octave)", [K(Key.Up, Shift)]),
         new("navAddDown", Areas.HsHitEditing, "Add the hit in the lane below (key editor: transpose down an octave)", [K(Key.Down, Shift)]),
         new("nudgeLeft", Areas.HsHitEditing, "Nudge left by one snap step", [K(Key.Left, Ctrl)]),
@@ -133,8 +134,8 @@ internal static class EditorCommands
         new("ks.endLeft", Areas.KsNoteEditing, "Note ends earlier by one snap step (Cubase's Nudge End Left)", [K(Key.Left, Alt | Shift)]),
         new("gridLeft", Areas.HsHitEditing, "Move to the previous grid line", [K(Key.Left, Ctrl | Alt)]),
         new("gridRight", Areas.HsHitEditing, "Move to the next grid line", [K(Key.Right, Ctrl | Alt)]),
-        new("laneUp", Areas.HsHitEditing, "Move the selection to the lane above", [K(Key.Up, Ctrl | Alt)]),
-        new("laneDown", Areas.HsHitEditing, "Move the selection to the lane below", [K(Key.Down, Ctrl | Alt)]),
+        new("laneUp", Areas.HsHitEditing, "Move the selection to the lane above (as Up)", [K(Key.Up, Ctrl | Alt)]),
+        new("laneDown", Areas.HsHitEditing, "Move the selection to the lane below (as Down)", [K(Key.Down, Ctrl | Alt)]),
         new("quantize", Areas.HsHitEditing, "Quantize: move the selected loose hits toward the grid (last strength)", [K(Key.Q)]),
         new("quantizeDialog", Areas.HsHitEditing, "Quantize with a chosen strength", []),
         new("repeat", Areas.HsHitEditing, "Repeat: copies of the selection, a number of snap steps apart", [K(Key.R, Ctrl)]),
@@ -166,7 +167,6 @@ internal static class EditorCommands
         (Areas.Mouse(Areas.HsHitEditing), "Ctrl+click / Shift+click", "Toggle / add a hit to the selection"),
         (Areas.Mouse(Areas.HsHitEditing), "Drag (Range)", "Mark a time range over the lanes dragged across; a click clears it"),
         (Areas.Mouse(Areas.HsHitEditing), "Click / drag (Draw)", "Paint hits; a stroke starting on a hit erases"),
-        (Areas.Mouse(Areas.HsHitEditing), "Right-click a hit", "Delete it"),
         (Areas.Mouse(Areas.HsHitEditing), "Alt+drag", "Draw with any tool"),
         (Areas.Mouse(Areas.HsTimeline), "Ctrl+wheel or Ctrl+Alt+wheel", "Zoom in time around the pointer"),
         (Areas.Mouse(Areas.HsLanes), "Ctrl+Shift+wheel", "Zoom rows (vertical zoom)"), // with rowsIn / rowsOut
@@ -179,6 +179,8 @@ internal static class EditorCommands
         (Areas.Mouse(Areas.HsTimeline), "Drag the line under the waveform", "Resize it; double-click resets"),
         (Areas.Mouse(Areas.HsTimeline), "Click / double-click an object (over the waveform)", "Select its hits / also play them"),
         (Areas.Mouse(Areas.HsHitEditing), "Double-click a hit (Select tool)", "Move the playhead to it and hear it"),
+        (Areas.Mouse(Areas.HsHitEditing), "Double-click empty space (Select tool)", "Insert a hit in that lane, as Draw would"),
+        (Areas.Mouse(Areas.HsHitEditing), "Right-click in the grid", "Pick a tool"),
         (Areas.Mouse(Areas.HsLanes), "Click a lane name", "Hear its sample"),
         (Areas.Mouse(Areas.HsLanes), "Click / Ctrl+click / Shift+click a lane name", "Select one lane / toggle a lane / select a range; M/S applies to selected lanes"),
         (Areas.Mouse(Areas.HsLanes), "Right-click a lane name", "Rename, move, delete or add lanes"),
