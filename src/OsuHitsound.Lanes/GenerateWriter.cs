@@ -71,8 +71,14 @@ public static class GenerateWriter
             }
 
             CheckOriginal();
-            string? backup = File.Exists(plan.OsuPath) ? SafeFile.Backup(backupRoot, plan.OsuPath, File.ReadAllBytes(plan.OsuPath)) : null;
-            SafeFile.WriteAllBytes(plan.OsuPath, plan.Diff.ToBytes());
+            byte[]? current = File.Exists(plan.OsuPath) ? File.ReadAllBytes(plan.OsuPath) : null;
+            // What is replaced must be what the plan expects, not whatever arrived since CheckOriginal.
+            if ((expectedOriginal is not null && !(current ?? []).AsSpan().SequenceEqual(expectedOriginal))
+                || (plan.ExpectedOutputHash is { } outputHash && (current is null ? "missing" : GenerateManifest.Hash(current)) != outputHash))
+                throw new IOException("The .osu changed on disk while it was being written. Nothing was overwritten; review and retry.");
+            string? backup = current is not null ? SafeFile.Backup(backupRoot, plan.OsuPath, current) : null;
+            // Replaced only while it still holds the checked bytes (or still doesn't exist), so a save from osu! in between isn't lost.
+            SafeFile.ReplaceIfUnchanged(plan.OsuPath, current, plan.Diff.ToBytes(), "The .osu changed on disk while it was being written. Nothing was overwritten; review and retry.");
 
             var overwritten = mixes.Select(m => m.Mix.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var name in removable.Where(n => !overwritten.Contains(n)))

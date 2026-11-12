@@ -13,10 +13,43 @@ public static class SafeFile
         var temp = path + ".saving";
         try
         {
-            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            WriteTemp(temp, bytes);
+            File.Move(temp, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+    }
+
+    /// <summary>
+    /// Like <see cref="WriteAllBytes"/>, but only when <paramref name="path"/> still holds exactly <paramref name="expected"/>
+    /// (null: only when it doesn't exist yet). The file is checked while it is held open against other writers, and stays
+    /// held while the new bytes are prepared, so another program (osu! saving, say) can't slip a write in between the check
+    /// and the replace. That leaves only the instant between letting go and the move itself.
+    /// </summary>
+    /// <exception cref="IOException"><paramref name="changedMessage"/> when the file isn't as expected (nothing was
+    /// written), or the file couldn't be written.</exception>
+    public static void ReplaceIfUnchanged(string path, byte[]? expected, byte[] bytes, string changedMessage)
+    {
+        var temp = path + ".saving";
+        try
+        {
+            if (expected is null)
             {
-                stream.Write(bytes);
-                stream.Flush(flushToDisk: true);
+                if (File.Exists(path)) throw new IOException(changedMessage);
+                WriteTemp(temp, bytes);
+                File.Move(temp, path, overwrite: false); // created meanwhile: the move fails rather than replace it
+                return;
+            }
+
+            FileStream guard;
+            try { guard = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read); } // readers welcome, writers wait
+            catch (FileNotFoundException) { throw new IOException(changedMessage); }
+            using (guard)
+            {
+                if (!Holds(guard, expected)) throw new IOException(changedMessage);
+                WriteTemp(temp, bytes);
             }
             File.Move(temp, path, overwrite: true);
         }
@@ -24,6 +57,22 @@ public static class SafeFile
         {
             if (File.Exists(temp)) File.Delete(temp);
         }
+    }
+
+    // The data reaches the disk before the caller's move, so a crash right after can't leave an empty file.
+    private static void WriteTemp(string temp, byte[] bytes)
+    {
+        using var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None);
+        stream.Write(bytes);
+        stream.Flush(flushToDisk: true);
+    }
+
+    private static bool Holds(FileStream stream, byte[] expected)
+    {
+        if (stream.Length != expected.Length) return false;
+        var actual = new byte[expected.Length];
+        stream.ReadExactly(actual);
+        return actual.AsSpan().SequenceEqual(expected);
     }
 
     /// <summary>

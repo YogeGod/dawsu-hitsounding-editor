@@ -21,8 +21,7 @@ public static class MapSaver
     public static SaveResult Save(string osuPath, byte[] opened, MapFolder folder, IReadOnlyDictionary<MomentKey, WantedSound> wanted, string backupRoot,
         IReadOnlyList<int>? bookmarks = null, Action<OsuFile>? alsoEdit = null, ExportStyle style = ExportStyle.PerObject)
     {
-        if (!File.ReadAllBytes(osuPath).AsSpan().SequenceEqual(opened))
-            throw new IOException("The .osu changed on disk since it was opened (another program?). Reopen it to edit the new version.");
+        if (!File.ReadAllBytes(osuPath).AsSpan().SequenceEqual(opened)) throw new IOException(ChangedOnDisk);
 
         var copy = OsuFile.Parse(opened);
         var result = Compiler.Apply(copy, folder, wanted, style);
@@ -36,7 +35,9 @@ public static class MapSaver
         if (!copy.IsEdited) return new SaveResult(result, null, false);
 
         var backup = SafeFile.Backup(backupRoot, osuPath, opened);
-        SafeFile.WriteAllBytes(osuPath, copy.ToBytes());
+        SafeFile.ReplaceIfUnchanged(osuPath, opened, copy.ToBytes(), ChangedOnDisk); // checked again: compiling took a while
         return new SaveResult(result, backup, true);
     }
+
+    private const string ChangedOnDisk = "The .osu changed on disk since it was opened (another program?). Reopen it to edit the new version.";
 }

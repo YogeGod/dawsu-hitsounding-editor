@@ -60,6 +60,19 @@ public class MapSaverTests : IDisposable
     }
 
     [Fact]
+    public void A_file_changed_on_disk_while_saving_is_not_overwritten()
+    {
+        var (path, bytes, folder, session) = Setup();
+        session.Add([session.HitAt(new Lane(LaneSource.Skin, "soft-hitclap"), 1000)]);
+
+        // Another program saves after the first check, while the map is being compiled.
+        Assert.Throws<IOException>(() => MapSaver.Save(path, bytes, folder, session.Wanted(), Path.Combine(dir, "backups"),
+            alsoEdit: _ => File.AppendAllText(path, "// saved by osu!\r\n")));
+        Assert.EndsWith("// saved by osu!\r\n", File.ReadAllText(path));
+        Assert.Equal(["a.osu"], Directory.EnumerateFiles(Path.GetDirectoryName(path)!).Select(Path.GetFileName));
+    }
+
+    [Fact]
     public void Bookmarks_are_saved_into_the_osu()
     {
         var (path, bytes, folder, session) = Setup();
