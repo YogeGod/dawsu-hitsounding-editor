@@ -106,6 +106,9 @@
               <Separator />
               <MenuItem Name="GenerateItem" Header="Generate hitsound diff…" />
               <MenuItem Name="CopyHitsoundsItem" Header="Copy hitsounds…" />
+              <MenuItem Name="CleanGreenLinesItem" Header="Clean up green lines…" />
+              <Separator />
+              <MenuItem Name="OpenBackupsItem" Header="Open backups folder" />
             </MenuItem>
             <MenuItem Header="View">
               <MenuItem Name="ZoomInItem" Header="Zoom in" />

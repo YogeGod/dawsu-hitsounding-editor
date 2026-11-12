@@ -67,13 +67,54 @@ public static class SafeFile
         return string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c));
     }
 
-    /// <summary>Keeps a timestamped copy of <paramref name="bytes"/> under backupRoot/&lt;map name&gt; (outside the mapset).</summary>
+    /// <summary>How many backups each difficulty keeps (issue #29); older ones are removed as new ones are taken.</summary>
+    public const int BackupsKept = 20;
+
+    // A backup's name: its time, then a counter for backups taken in the same millisecond ("20261112-130701-123-01").
+    private static readonly System.Text.RegularExpressions.Regex BackupName = new(@"^\d{8}-\d{6}-\d{3}(-\d{2,})?$");
+
+    /// <summary>The folder a difficulty's backups go in: backupRoot/&lt;map name&gt; (outside the mapset).</summary>
+    public static string BackupFolder(string backupRoot, string osuPath) => Path.Combine(backupRoot, Name(Path.GetFileNameWithoutExtension(osuPath)));
+
+    /// <summary>
+    /// Keeps a timestamped copy of <paramref name="bytes"/> in the difficulty's backup folder, never replacing another
+    /// backup (one taken in the same millisecond gets a counter), then removes the oldest beyond <see cref="BackupsKept"/>.
+    /// Only files named like backups are ever removed.
+    /// </summary>
     public static string Backup(string backupRoot, string osuPath, byte[] bytes)
     {
-        var folder = Path.Combine(backupRoot, Name(Path.GetFileNameWithoutExtension(osuPath)));
+        var folder = BackupFolder(backupRoot, osuPath);
         Directory.CreateDirectory(folder);
-        var backup = Path.Combine(folder, $"{DateTime.Now:yyyyMMdd-HHmmss-fff}.osu");
-        File.WriteAllBytes(backup, bytes);
+        string stamp = $"{DateTime.Now:yyyyMMdd-HHmmss-fff}";
+        string backup = Path.Combine(folder, stamp + ".osu");
+        for (int n = 1; ; n++)
+        {
+            try
+            {
+                using (var stream = new FileStream(backup, FileMode.CreateNew, FileAccess.Write)) stream.Write(bytes);
+                break;
+            }
+            catch (IOException) when (File.Exists(backup))
+            {
+                backup = Path.Combine(folder, $"{stamp}-{n:00}.osu");
+            }
+        }
+
+        Prune(folder);
         return backup;
+    }
+
+    // Oldest first: by time, then counter (a name without a counter is the first of its millisecond).
+    private static void Prune(string folder)
+    {
+        var backups = Directory.EnumerateFiles(folder, "*.osu")
+            .Where(f => BackupName.IsMatch(Path.GetFileNameWithoutExtension(f)))
+            .OrderBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.Ordinal)
+            .ToList();
+        foreach (var old in backups.Take(Math.Max(0, backups.Count - BackupsKept)))
+        {
+            try { File.Delete(old); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // kept; tried again next time
+        }
     }
 }

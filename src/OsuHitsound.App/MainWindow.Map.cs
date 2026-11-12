@@ -29,6 +29,8 @@ public partial class MainWindow
         AddLaneItem.Click += async (_, _) => await AddExtraLane();
         GenerateItem.Click += async (_, _) => await Generate();
         CopyHitsoundsItem.Click += async (_, _) => await CopyHitsounds();
+        CleanGreenLinesItem.Click += async (_, _) => await CleanGreenLines();
+        OpenBackupsItem.Click += (_, _) => OpenBackupsFolder();
         LaneFilterBox.TextChanged += (_, _) =>
         {
             model?.SetFilter(LaneFilterBox.Text ?? "");
@@ -590,6 +592,91 @@ public partial class MainWindow
     private void ShowStatus(string text) { flash = text; UpdateStatus(); }
 
     /// <summary>Runs a save or Generate with the window disabled and <see cref="WriteBusy"/> on, so nothing edits the map meanwhile.</summary>
+    /// <summary>
+    /// Map → Clean up green lines… (issue #29): removes the open difficulty's green lines that change nothing, after
+    /// showing which. Works on the saved file, so unsaved edits must be saved or undone first. Keeps a backup.
+    /// </summary>
+    private async Task CleanGreenLines()
+    {
+        if (doc is not { } document || session is null || mapPath is null)
+        {
+            flash = "Open a map first.";
+            UpdateStatus();
+            return;
+        }
+
+        if (session.IsEdited)
+        {
+            flash = "Save (Ctrl+S) or undo your edits first: Clean up green lines works on the saved file.";
+            UpdateStatus();
+            return;
+        }
+
+        byte[] before;
+        try { before = File.ReadAllBytes(document.Path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { flash = $"Couldn't read the map: {ex.Message}"; UpdateStatus(); return; }
+        if (!before.AsSpan().SequenceEqual(document.Opened))
+        {
+            flash = "The .osu changed on disk since it was opened. Reopen it, then clean up.";
+            UpdateStatus();
+            return;
+        }
+
+        var cleaned = OsuFile.Parse(before);
+        int removed = GreenLineCleanup.Clean(cleaned);
+        if (removed == 0)
+        {
+            flash = "No green lines to clean up: each one changes something.";
+            UpdateStatus();
+            return;
+        }
+
+        var changes = WriteSummary.Compare(OsuFile.Parse(before), cleaned);
+        var listed = Dialogs.ChangedLines(changes).Split('\n');
+        string text = $"Remove {removed} green line(s) that change nothing (the sample set, index, volume, slider velocity and kiai already in force are the same)? " +
+                      "Nothing plays differently. A backup of the .osu is kept.\n\n" +
+                      string.Join('\n', listed.Take(30)) + (listed.Length > 30 ? $"\n… and {listed.Length - 30} more." : "");
+        if (!await Dialogs.Confirm(this, "Clean up green lines", text, "Remove")) return;
+
+        var after = cleaned.ToBytes();
+        bool done = await WhileWriting(async () =>
+        {
+            try
+            {
+                SafeFile.Backup(MapSaver.DefaultBackupRoot(), document.Path, before);
+                SafeFile.WriteAllBytes(document.Path, after);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                flash = $"Nothing was changed: {ex.Message}";
+                return false;
+            }
+
+            // Only timing lines went: the editor's layers still fit the objects, under the new file's hash.
+            var project = document.HsProject with { FileHash = GenerateManifest.Hash(after) };
+            return await ReopenKeepingView(document.Path, project);
+        });
+        if (done) flash = $"Removed {removed} green line(s) that changed nothing. Backup kept (Map → Open backups folder).";
+        UpdateStatus();
+    }
+
+    /// <summary>Map → Open backups folder: the open difficulty's backups, else the folder of all backups.</summary>
+    private void OpenBackupsFolder()
+    {
+        var root = MapSaver.DefaultBackupRoot();
+        var folder = doc is { } document && Directory.Exists(SafeFile.BackupFolder(root, document.Path)) ? SafeFile.BackupFolder(root, document.Path) : root;
+        try
+        {
+            Directory.CreateDirectory(folder);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            flash = $"Couldn't open {folder}: {ex.Message}";
+            UpdateStatus();
+        }
+    }
+
     private async Task<T> WhileWriting<T>(Func<Task<T>> write)
     {
         bool wasEnabled = Root.IsEnabled;

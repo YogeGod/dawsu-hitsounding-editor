@@ -90,6 +90,18 @@ public sealed class OsuFile
 
     private bool removedLines;
 
+    /// <summary>
+    /// Removes a green (inherited) timing point, preserving every other line and its bytes. Only a line whose inherited
+    /// field says 0 can go: red lines, and old short lines that don't say, are refused.
+    /// </summary>
+    public void RemoveGreenLine(TimingPoint point)
+    {
+        if (point.Uninherited) throw new InvalidOperationException($"Only green (inherited) lines can be removed: {point.Line.Text}");
+        if (!timingPoints.Remove(point)) return;
+        lines.Remove(point.Line);
+        removedLines = true;
+    }
+
     /// <summary>Removes a line (e.g. a storyboard Sample line). Timing points and hit objects can't be removed this way.</summary>
     public void RemoveLine(OsuLine line)
     {
