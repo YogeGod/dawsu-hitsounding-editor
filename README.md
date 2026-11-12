@@ -2,7 +2,7 @@
 
 A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you draw hits on, over the song's waveform, and the editor writes them back into the map.
 
-Current release: **2.2.12**. Changes for every version are in [CHANGELOG.md](CHANGELOG.md). A written tour of the current screen is in [docs/TUTORIAL.md](docs/TUTORIAL.md).
+Current release: **3.0.0**. Changes for every version are in [CHANGELOG.md](CHANGELOG.md). A written tour of the current screen is in [docs/TUTORIAL.md](docs/TUTORIAL.md).
 
 ## What it does
 

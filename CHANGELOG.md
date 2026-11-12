@@ -2,16 +2,25 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
-## Unreleased
+## 3.0
 
-A friendlier editor window (layout "D2"):
+A clearer Hitsound workspace, with controls on the ribbon, selection editing in the inspector, and colours you can customise.
 
-- **A labelled ribbon** replaces the icon toolbar: Map (Open, HS mode), History, Tool, Grid, Drums (Detect hits, VST) and View, each button with its name. In narrower windows the labels shrink step by step.
-- **The selection bar moved into the inspector** as its Selection card: start time, volume, Applies to, Quantize, Duplicate, Delete and the volume for new hits. The editing area gets that row back.
-- **Save shows a warning badge** when hits have no gameplay object or can't be saved as drawn. Clicking Save then lists the problems first; Ctrl+S still saves directly.
-- **View toggles** sit directly on the ribbon, and **L/R** beside Cycle holds the locator boxes.
-- **Clearer menus:** every item in File, Edit, Playback, Map and View has an icon and a shortcut chip. On/off settings are switches, and Export style, Start playing from and Speed are rows of buttons instead of submenus.
-- **Zoom at the scrollbars**, as in Cubase: − slider + for time at the end of the horizontal scrollbar, and for lane height at the bottom of the vertical one.
+- **Compact labelled ribbon:** Open, HS mode, History, tools, Grid, Drums and View stay in one row. Labels shorten as the window narrows. Inspector, Lane info, Used lanes, Object lines and Controller are directly accessible.
+- **Selection card:** edit the selected hits' start time and volume from the inspector, with Quantize, Duplicate and Delete beside them. The old selection bar gives its height back to the lanes.
+- **Clearer menus:** icons and shortcut chips, switches for on/off settings, and inline buttons for Export style, Start playing from and Speed.
+- **Scrollbar zoom:** time zoom at the end of the horizontal scrollbar, lane height at the bottom of the vertical scrollbar. L/R beside Cycle opens the locator controls in windows at least 1000 px wide.
+- **Save warning badge:** when hits have no gameplay object or cannot be saved as drawn, clicking the ribbon's Save button lists the problems first. Ctrl+S and File → Save keep saving directly through the normal checks.
+- **Preferences → Colours:** four default schemes (Grey, Dark, Blue-grey dark and Teal dark), plus accent, grid and ruler colours, with live preview, Apply, Cancel and Defaults. These replace the old dark-mode button.
+- **Cubase-style Hitsound editing:**
+  - Right-click opens a tool picker; it no longer deletes hits. Right-click deletion is also removed from the Keysound piano roll.
+  - With Select, double-click empty space to insert a hit.
+  - Up/Down moves selected hits between lanes. Shift+Up/Down still extends the selection; Left/Right selects the previous/next hit across lanes.
+  - Volume bars follow the selected hits' lanes, or the active lane when nothing is selected. The All/Selected lanes setting still controls numeric volume changes.
+- **Safer writes:** Save, Generate and green-line cleanup check that the difficulty still contains the bytes they reviewed when replacing it, protecting edits made by another program.
+- **Start screen:** the Songs folder has its own line, so the F1 button no longer covers its path.
+
+**Windows x64:** run `dawsu-win-Setup.exe` to install or update. Or extract `dawsu-win-Portable.zip` and run `dawsu!.exe`. Existing installs can use **File → Check for updates…**. Version: **3.0.0**.
 
 ## 2.2.12
 
