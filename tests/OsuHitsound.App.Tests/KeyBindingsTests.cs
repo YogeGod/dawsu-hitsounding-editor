@@ -117,6 +117,20 @@ public class KeyBindingsTests : IDisposable
     }
 
     [Fact]
+    public void Alt_space_jumps_to_the_selection_in_both_presets()
+    {
+        Assert.Equal("Alt+Space", Keys(Keymap.Build(KeyPreset.Osu, null, NoOverrides), "jumpToSelection"));
+        Assert.Equal("Alt+Space", Keys(Keymap.Build(KeyPreset.Cubase, SampleKeys(), NoOverrides), "jumpToSelection"));
+    }
+
+    [Fact]
+    public void The_jump_goes_to_the_earliest_selected_hit_or_nowhere()
+    {
+        Assert.Equal(1500, MainWindow.SelectionStart([2000, 1500, 3000]));
+        Assert.Null(MainWindow.SelectionStart([]));
+    }
+
+    [Fact]
     public void Every_preset_gives_each_key_to_one_command_only()
     {
         foreach (var map in new[] { Keymap.Build(KeyPreset.Osu, null, NoOverrides), Keymap.Build(KeyPreset.Cubase, SampleKeys(), NoOverrides) })

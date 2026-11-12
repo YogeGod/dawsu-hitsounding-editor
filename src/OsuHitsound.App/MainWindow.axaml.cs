@@ -67,6 +67,7 @@ public partial class MainWindow : Window, IMapWriteHost
     public MainWindow(string? path, bool startAudio = true, bool showInspector = false, bool usePreferences = true)
     {
         InitializeComponent();
+        KeepAltSpaceForCommands();
         SetupDrumVst();
         SetupHsMode();
 
@@ -721,6 +722,10 @@ public partial class MainWindow : Window, IMapWriteHost
             case "cycle": ToggleCycle(); break;
             case "locatorsToSelection": LocatorsToSelection(); break;
             case "playLocatorRange": PlayLocatorRange(); break;
+            case "jumpToSelection":
+                if (SelectionStart(Lanes.Selection.Select(h => h.Time)) is { } start) Seek(start);
+                else { flash = "Select a note first: Alt+Space moves the playhead to it."; UpdateStatus(); }
+                break;
             case "jumpLeft": if (Lanes.LocatorLeft is { } l) Seek(l); break;
             case "seekBack": SeekGridSteps(-1); break;
             case "seekForward": SeekGridSteps(1); break;
@@ -1152,6 +1157,30 @@ public partial class MainWindow : Window, IMapWriteHost
     /// P: the locators span the range marked with the Range tool, else the selection (its first to last hit), else the
     /// visible range.
     /// </summary>
+    /// <summary>
+    /// Windows opens the window menu on Alt+Space after the key has been handled. While a command has Alt+Space (by
+    /// default Playhead to the selection), that menu request is dropped so only the command runs.
+    /// </summary>
+    private void KeepAltSpaceForCommands()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const uint WmSysCommand = 0x0112, WmSysChar = 0x0106;
+        const int ScKeyMenu = 0xF100;
+        var altSpace = new KeyGesture(Key.Space, KeyModifiers.Alt);
+        bool Bound() => EditorCommands.All.Any(c => c.Keys.Contains(altSpace));
+        Win32Properties.AddWndProcHookCallback(this, (IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+        {
+            bool menuForSpace = (msg == WmSysChar && wParam == 0x20)
+                                || (msg == WmSysCommand && (wParam.ToInt64() & 0xFFF0) == ScKeyMenu && lParam == 0x20);
+            if (menuForSpace && Bound()) handled = true;
+            return IntPtr.Zero;
+        });
+    }
+
+    /// <summary>Where Alt+Space moves the playhead: the selected note, or the earliest of a selection; null when none is.</summary>
+    internal static double? SelectionStart(IEnumerable<double> selectedTimes) =>
+        selectedTimes.Select(t => (double?)t).DefaultIfEmpty(null).Min();
+
     private void LocatorsToSelection()
     {
         if (Lanes.Edits.Range is { } range)
