@@ -1293,9 +1293,12 @@ public partial class MainWindow : Window, IMapWriteHost
             return await WhileWriting(async () =>
             {
                 var outcome = await writes.SaveAsync(this, exportSettings, skin);
+                var edited = document.Session; // its undo history goes on in the reloaded map (issue #39)
                 // osu! is told about a written .osu even if reopening it here fails.
                 if (outcome.Reopen && !await ReopenKeepingView(document.Path, document.HsProject)) return (false, outcome.MapWritten);
-                if (outcome.Status is { } status) ShowStatus(status);
+                int dropped = outcome.Reopen && session is { } reloaded && !ReferenceEquals(reloaded, edited) ? reloaded.AdoptHistory(edited) : 0;
+                if (outcome.Status is { } status)
+                    ShowStatus(dropped > 0 ? status + $" Undo history stops at this save for {dropped} older step(s): their notes' objects aren't in the saved map." : status);
                 return (outcome.Done, outcome.MapWritten);
             });
         }
