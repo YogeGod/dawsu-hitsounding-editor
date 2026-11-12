@@ -429,6 +429,39 @@ public class HitsoundCopierTests
         }
     }
 
+    // A tick switch at 1005 ms (index 101, drum, 80 %) that reverts 1 ms later, as Plan makes for slider ticks.
+    private static OsuFile TickSwitchOnto(string timing)
+    {
+        var file = Map(timing, "256,192,0,1,0,0:0:0:0:");
+        var plan = new HitsoundCopyPlan(new Dictionary<MomentKey, WantedSound>(), 0, 0)
+        {
+            GreenLines = [(1005, SampleSet.Drum, 101, 80, true)],
+        };
+        plan.ApplyExtras(file);
+        return file;
+    }
+
+    [Fact]
+    public void A_tick_switch_after_a_line_with_no_sample_set_restores_the_map_default_not_soft()
+    {
+        // An old-format red line with no sampleSet field plays the map default (Normal here). Restored as 0 it would play Soft.
+        var file = TickSwitchOnto("0,500,4");
+
+        var restore = file.TimingPoints.Single(p => p.Time == 1006);
+        Assert.Equal(SampleSet.Normal, restore.SampleSet);
+    }
+
+    [Fact]
+    public void Tick_switch_green_lines_drop_omit_first_bar_line_but_keep_kiai()
+    {
+        // Effects 9 = kiai (1) + omit first bar line (8). Only red lines may carry the 8.
+        var file = TickSwitchOnto("0,500,4,1,0,100,1,9");
+
+        var added = file.TimingPoints.Where(p => p.Time is 1005 or 1006).ToList();
+        Assert.Equal(2, added.Count);
+        Assert.All(added, p => Assert.Equal(1, p.Effects));
+    }
+
     [Fact]
     public void A_negative_or_endless_leniency_is_refused()
     {
