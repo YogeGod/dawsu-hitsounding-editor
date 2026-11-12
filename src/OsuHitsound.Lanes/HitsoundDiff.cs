@@ -100,7 +100,7 @@ public static class HitsoundDiff
 
         // 2. Moments that need a mix: different volumes, own files, or what the compiler can't encode. Compiler.Apply
         //    changes the file it is given, so each pass compiles a fresh parse of the same diff text.
-        var diffBytes = Encoding.UTF8.GetBytes(DiffText(source, groups.Select(g => g.Time)));
+        var diffBytes = DiffBytes(source, groups.Select(g => g.Time));
         var direct = OsuFile.Parse(diffBytes);
         var first = Compiler.Apply(direct, folder, Wishes(direct, folder, groups.Select(g => Wish(g.Layers)).ToList()));
         var needsMix = first.Conflicts.Select(c => c.Moment.ObjectIndex).ToHashSet();
@@ -172,7 +172,7 @@ public static class HitsoundDiff
 
         // 4. The final diff, compiled against the folder as it will be (with the mixes in it).
         var withMixes = folder.With(mixer.All.Select(m => m.FileName)); // keeps reading the folder's files (its .osb)
-        var final = OsuFile.Parse(Encoding.UTF8.GetBytes(DiffText(source, groups.Select(g => g.Time), lastGeneratedIndex: mixer.LastIndex)));
+        var final = OsuFile.Parse(DiffBytes(source, groups.Select(g => g.Time), lastGeneratedIndex: mixer.LastIndex));
         var result = Compiler.Apply(final, withMixes, Wishes(final, withMixes, wishes));
         return new GeneratePlan(path, final, mixer.ToWrite, groups.Count, result.Conflicts) { Reused = mixer.Reused, Removes = mixer.Removes, LastMixIndex = mixer.LastIndex, InputHashes = mixer.InputHashes,
             InputFiles = audio.FilesRead,
@@ -187,49 +187,33 @@ public static class HitsoundDiff
         Decompiler.Decompile(diff, folder).Moments.ToDictionary(m => Compiler.KeyOf(diff, m), m => wishes[Compiler.KeyOf(diff, m).ObjectIndex]);
 
     /// <summary>
-    /// The diff: the source's header (Version set to "Hitsounds", BeatmapID 0), no events, its red lines, and one plain
-    /// circle per time. Line endings follow the source.
+    /// The diff: the source's bytes with only these changes (ADR 0002): Version set, BeatmapID 0, the generated-index
+    /// marker at the top of [Events], and one plain circle per time in place of the source's objects. Every other line
+    /// (green lines, events, storyboard, colours, unknown sections) keeps its bytes and line ending, and the BOM stays.
     /// </summary>
-    public static string DiffText(OsuFile source, IEnumerable<int> times, string version = Version, int? lastGeneratedIndex = null)
+    internal static byte[] DiffBytes(OsuFile source, IEnumerable<int> times, string version = Version, int? lastGeneratedIndex = null)
     {
-        var sb = new StringBuilder();
-        const string nl = "\r\n";
-        string section = "";
-        foreach (var line in source.Lines)
+        var diff = OsuFile.Parse(source.ToBytes()); // a copy: the open map is never changed
+        foreach (var line in diff.Lines.Where(l => l.Section == "Metadata"))
         {
-            var text = line.Text.Trim();
-            if (text.StartsWith('[') && text.EndsWith(']')) section = text[1..^1];
-            if (section is "Events" or "TimingPoints" or "HitObjects" or "Colours") continue;
-            if (section == "Metadata" && text.StartsWith("Version:", StringComparison.Ordinal)) text = "Version:" + version;
-            else if (section == "Metadata" && text.StartsWith("BeatmapID:", StringComparison.Ordinal)) text = "BeatmapID:0";
-            else text = line.Text;
-            sb.Append(text).Append(nl);
+            var text = line.Text.TrimStart();
+            if (text.StartsWith("Version:", StringComparison.Ordinal)) line.Text = "Version:" + version;
+            else if (text.StartsWith("BeatmapID:", StringComparison.Ordinal)) line.Text = "BeatmapID:0";
         }
 
-        sb.Append("[Events]").Append(nl);
-        if (lastGeneratedIndex is { } last) sb.Append(GeneratedIndexMarker).Append(last.ToString(CultureInfo.InvariantCulture)).Append(nl);
-        sb.Append(nl);
-        sb.Append("[TimingPoints]").Append(nl);
-        foreach (var p in source.TimingPoints)
-        {
-            try
-            {
-                if (p.Uninherited) sb.Append(p.Line.Text).Append(nl);
-            }
-            catch (FormatException)
-            {
-            }
-        }
+        foreach (var marker in diff.Lines.Where(l => l.Section == "Events" && l.Text.Trim().StartsWith(GeneratedIndexMarker, StringComparison.Ordinal)).ToList())
+            diff.RemoveLine(marker);
+        if (lastGeneratedIndex is { } last)
+            diff.InsertAfterHeader("Events", GeneratedIndexMarker + last.ToString(CultureInfo.InvariantCulture), beforeSection: "TimingPoints");
 
-        sb.Append(nl).Append("[HitObjects]").Append(nl);
-        foreach (int t in times)
-            sb.Append("256,192,").Append(t.ToString(CultureInfo.InvariantCulture)).Append(",1,0,0:0:0:0:").Append(nl);
-        return sb.ToString();
+        foreach (var obj in diff.HitObjects.ToList()) diff.RemoveHitObject(obj);
+        foreach (int t in times) diff.InsertHitCircle(t);
+        return diff.ToBytes();
     }
 
     /// <summary>
-    /// File → New hitsound diff (Ctrl+N): an empty difficulty next to the source, made like Generate's (same header with
-    /// this Version and BeatmapID 0, red lines only, no events or objects; bookmarks kept). Refuses a blank name, and a
+    /// File → New hitsound diff (Ctrl+N): an empty difficulty next to the source, made like Generate's (the source's
+    /// bytes with this Version, BeatmapID 0 and no objects; everything else kept, see DiffBytes). Refuses a blank name, and a
     /// name or file another difficulty in the folder already has (osu! compares names ignoring case). Returns its path.
     /// </summary>
     public static string CreateEmpty(OsuFile source, string sourcePath, string version)
@@ -246,7 +230,7 @@ public static class HitsoundDiff
         }
 
         // CreateNew: if another program made the file since the check above, this fails instead of replacing it.
-        var bytes = Encoding.UTF8.GetBytes(DiffText(source, [], version));
+        var bytes = DiffBytes(source, [], version);
         try
         {
             using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);

@@ -28,7 +28,7 @@ public class NewDiffAndOszTests : IDisposable
     // ---- New hitsound diff ----
 
     [Fact]
-    public void A_new_diff_has_the_name_red_lines_only_no_objects_and_the_bookmarks()
+    public void A_new_diff_has_the_name_no_objects_and_keeps_everything_else_from_the_source()
     {
         var source = WriteMap();
         var path = HitsoundDiff.CreateEmpty(OsuFile.Read(source), source, "Hitsounds");
@@ -38,12 +38,66 @@ public class NewDiffAndOszTests : IDisposable
         var text = File.ReadAllText(path);
         Assert.Contains("Version:Hitsounds\r\n", text);
         Assert.Contains("BeatmapID:0\r\n", text);
-        Assert.Equal(["0,500,4,2,0,100,1,0", "2000,400,3,2,0,100,1,0"], diff.TimingPoints.Select(p => p.Line.Text));
+        // Red and green lines (kiai, SV, sounds) as they were (ADR 0002).
+        Assert.Equal(["0,500,4,2,0,100,1,0", "1000,-100,4,2,1,60,0,0", "2000,400,3,2,0,100,1,0"], diff.TimingPoints.Select(p => p.Line.Text));
         Assert.Empty(diff.HitObjects);
         Assert.Equal([1000, 2000], diff.Bookmarks);
-        Assert.Contains("AudioFilename: song.mp3\r\n", text); // other header lines as they were
-        Assert.DoesNotContain("bg.jpg", text);                  // no [Events], as Generate's diff
+        Assert.Contains("AudioFilename: song.mp3\r\n", text);
+        Assert.Contains("0,0,\"bg.jpg\",0,0\r\n", text); // [Events] kept
         Assert.Equal(Map, File.ReadAllText(source)); // the open map is untouched
+    }
+
+    // Save pack files (tests/fixtures/save-pack): BOMs, mixed line endings, bytes that aren't UTF-8, storyboards,
+    // colours, unknown sections, and two real maps (one written by osu!lazer).
+    public static TheoryData<string> PackFiles => new(
+        "synthetic/bom-crlf-v14.osu", "synthetic/lf-no-final-newline.osu", "synthetic/mixed-line-endings.osu",
+        "synthetic/invalid-utf8-lines.osu", "synthetic/storyboard-and-colours.osu", "synthetic/unknown-sections-and-comments.osu",
+        "owner/catalyst-impetus-std.osu", "owner/mukduk-lazer-v128-bom.osu");
+
+    [Theory]
+    [MemberData(nameof(PackFiles))]
+    public void A_new_diff_keeps_every_source_line_byte_identical_except_the_name_id_and_objects(string file)
+    {
+        var original = File.ReadAllBytes(Path.Combine(CorpusFactAttribute.RepoRoot(), "tests", "fixtures", "save-pack", file));
+        var source = Path.Combine(dir, "source.osu");
+        File.WriteAllBytes(source, original);
+        var parsed = OsuFile.Parse(original);
+
+        var diff = File.ReadAllBytes(HitsoundDiff.CreateEmpty(parsed, source, "Hitsounds"));
+
+        // Every source line with its own line ending, except Version, BeatmapID and the objects, in the same order.
+        var objects = parsed.HitObjects.Select(o => o.Line).ToHashSet();
+        var kept = parsed.Lines.Zip(Lines(original))
+            .Where(p => !objects.Contains(p.First) && !(p.First.Section == "Metadata" && IsNameOrId(p.First.Text)))
+            .Select(p => p.Second).ToList();
+        var written = Lines(diff).Where(l => !IsNameOrId(Encoding.UTF8.GetString(l))).ToList();
+        Assert.Equal(kept.Count, written.Count);
+        for (int i = 0; i < kept.Count; i++) Assert.True(kept[i].SequenceEqual(written[i]), $"line {i} differs: {Encoding.UTF8.GetString(written[i])}");
+
+        var reread = OsuFile.Parse(diff);
+        Assert.Equal(parsed.HasBom, reread.HasBom);
+        Assert.Empty(reread.HitObjects);
+        Assert.Contains(reread.Lines, l => l.Section == "Metadata" && l.Text == "Version:Hitsounds");
+    }
+
+    private static bool IsNameOrId(string text) =>
+        text.StartsWith("Version:", StringComparison.Ordinal) || text.StartsWith("BeatmapID:", StringComparison.Ordinal);
+
+    // Each line with its own terminator (CRLF, LF or CR). A BOM is not part of the first line.
+    private static List<byte[]> Lines(byte[] bytes)
+    {
+        int start = bytes.AsSpan().StartsWith((byte[])[0xEF, 0xBB, 0xBF]) ? 3 : 0;
+        var lines = new List<byte[]>();
+        for (int i = start; i < bytes.Length; i++)
+        {
+            if (bytes[i] == (byte)'\r' && i + 1 < bytes.Length && bytes[i + 1] == (byte)'\n') i++;
+            else if (bytes[i] != (byte)'\r' && bytes[i] != (byte)'\n') continue;
+            lines.Add(bytes[start..(i + 1)]);
+            start = i + 1;
+        }
+
+        if (start < bytes.Length) lines.Add(bytes[start..]);
+        return lines;
     }
 
     [Fact]

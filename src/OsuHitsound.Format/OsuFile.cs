@@ -98,6 +98,33 @@ public sealed class OsuFile
     }
 
     /// <summary>
+    /// Adds a line right after a section's header, using the header's line ending. When the map has no such section, adds
+    /// it (header, the line and a blank line) before the <paramref name="beforeSection"/> header, or at the end.
+    /// </summary>
+    public OsuLine InsertAfterHeader(string section, string text, string beforeSection)
+    {
+        var newline = Newline();
+        int header = lines.FindIndex(l => l.Section == section && l.Text.Trim() == $"[{section}]");
+        if (header >= 0)
+        {
+            EnsureNewlineBefore(header + 1, newline);
+            return InsertLine(header + 1, text, section, lines[header].Terminator);
+        }
+
+        int at = lines.FindIndex(l => l.Text.Trim() == $"[{beforeSection}]");
+        if (at < 0)
+        {
+            EnsureNewlineBefore(lines.Count, newline);
+            at = lines.Count;
+        }
+
+        InsertLine(at, $"[{section}]", section, newline);
+        var line = InsertLine(at + 1, text, section, newline);
+        InsertLine(at + 2, "", section, newline);
+        return line;
+    }
+
+    /// <summary>
     /// Adds a storyboard sample line (<c>Sample,time,layer,"path",volume</c>) to [Events]: after the last sample line at
     /// or before its time, else after the "//Storyboard Sound Samples" comment, else at the end of [Events].
     /// </summary>
