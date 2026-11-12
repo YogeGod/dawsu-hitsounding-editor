@@ -446,21 +446,23 @@ public partial class MainWindow
         bool fromOpen = string.Equals(sourcePath, document.Path, StringComparison.OrdinalIgnoreCase);
         var state = session.State;
         var skinSounds = skin.Value;
-        flash = "Copying hitsounds…";
+        flash = "Planning the copy…";
         UpdateStatus();
-        IReadOnlyList<HitsoundCopyTarget> results;
+        // 1. Plan every target (nothing is written), 2. show what changes in each, 3. write the ticked ones together.
+        CopyBatch batch;
+        LaneMixer mixer;
+        GeneratePlan? sourcePlan = null;
+        var sourceSamples = new List<MixFile>();
         bool wasEnabled = Root.IsEnabled;
         Root.IsEnabled = false;
         try
         {
-            results = await Task.Run(() =>
+            (batch, mixer) = await Task.Run(() =>
             {
                 // The open map's source is what you see, unsaved edits included.
                 var (source, folder) = fromOpen
                     ? (document.Compile(state).File, document.Folder)
                     : (OsuFile.Read(sourcePath), MapFolder.FromDirectory(Path.GetDirectoryName(sourcePath)!));
-                var sourceSamples = new List<MixFile>();
-                GeneratePlan? sourcePlan = null;
                 if (fromOpen)
                 {
                     (GeneratePlan Plan, LaneAudio Audio) planned;
@@ -483,8 +485,35 @@ public partial class MainWindow
                     source = sourcePlan.Diff;
                 }
                 // New tick and slide samples are mixed from the source's files (its new samples included) and the default sounds, as Generate mixes.
-                var mixer = new LaneMixer(new LaneAudio(folder, skinSounds));
-                var copied = HitsoundCopier.CopyTo(source, folder, targets, options, MapSaver.DefaultBackupRoot(), mixer.Mix, exportSettings, skinSounds, sourceSamples, sourcePlan?.InputFiles);
+                var sourceMixes = new LaneMixer(new LaneAudio(folder, skinSounds));
+                var copyOptions = options.NeverSilentHitnormals ? options with { IsSilent = SilentSamples.Check(folder, document.Folder) } : options;
+                return (HitsoundCopier.PlanCopy(source, folder, targets, copyOptions, canRender: true, exportSettings, skinSounds, sourceSamples, sourcePlan?.InputFiles), sourceMixes);
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException or OverflowException)
+        {
+            flash = $"Couldn't read the source: {ex.Message}";
+            UpdateStatus();
+            return;
+        }
+        finally { Root.IsEnabled = wasEnabled; }
+
+        if (await Dialogs.CopySummary(this, batch) is not { } ticked)
+        {
+            flash = "Copy hitsounds cancelled; nothing was written.";
+            UpdateStatus();
+            return;
+        }
+
+        flash = "Copying hitsounds…";
+        UpdateStatus();
+        IReadOnlyList<HitsoundCopyTarget> results;
+        Root.IsEnabled = false;
+        try
+        {
+            results = await Task.Run(() =>
+            {
+                var copied = HitsoundCopier.WriteCopy(batch, ticked, MapSaver.DefaultBackupRoot(), mixer.Mix);
                 if (sourcePlan is not null && copied.Any(r => r.Error is null))
                 {
                     // Reuse these generated assets next time even though Copy did not save the source difficulty.
@@ -496,16 +525,10 @@ public partial class MainWindow
                 return copied;
             });
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or InvalidOperationException or ArgumentException or OverflowException)
-        {
-            flash = $"Couldn't read the source: {ex.Message}";
-            UpdateStatus();
-            return;
-        }
         finally { Root.IsEnabled = wasEnabled; }
 
         if (openIsTarget) await Open(mapPath); // show what was written
-        int written = results.Count(r => r.Error is null), conflicts = results.Sum(r => r.Conflicts);
+        int written = results.Count(r => r.Error is null), conflicts = results.Where(r => r.Error is null).Sum(r => r.Conflicts);
         var failed = results.Where(r => r.Error is not null).ToList();
         flash = $"Copied hitsounds into {written} of {results.Count} difficult{(results.Count == 1 ? "y" : "ies")} " +
                 $"— {failed.Count} not written.\n" +
@@ -513,6 +536,7 @@ public partial class MainWindow
                 (results.Sum(r => r.Muted) is > 0 and var mutedEnds ? $" {mutedEnds} slider ends muted." : "") +
                 (results.Sum(r => r.OnTicksAndSlides) is > 0 and var onSliders ? $" {onSliders} hits put on slider ticks and slides ({results.Sum(r => r.Generated)} new samples)." : "") +
                 (conflicts > 0 ? $" {conflicts} couldn't be saved as copied and kept their old sounds." : "") +
+                (results.Where(r => r.Error is null).Sum(r => r.KeptFromSilent) is > 0 and var keptOwn ? $" {keptOwn} kept their own sound instead of a silent hitnormal." : "") +
                 (failed.Count > 0 ? $" Not written: {string.Join("; ", failed.Select(f => $"{Path.GetFileName(f.Path)} ({f.Error})"))}." : "") +
                 " Backups are in the editor's backups folder.\n" +
                 string.Join("\n", results.Select(r => $"{Path.GetFileName(r.Path)}: " +

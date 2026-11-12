@@ -211,6 +211,9 @@ internal static partial class Dialogs
             var sets = Option("Copy sample sets and indexes", defaults.CopySampleSets, "Off: the targets keep their own sample sets and custom indexes.");
             var volumes = Option("Copy volumes", defaults.CopyVolumes, "Off: the targets keep their own volumes.");
             var keep5 = Option("Always keep 5 % volumes", defaults.AlwaysPreserve5Volume, "Hit points the target has at 5 % (muted on purpose) stay at 5 %.");
+            var noSilent = Option("Never create silent hitnormals", defaults.NeverSilentHitnormals,
+                "A target hit point keeps its own sound instead of a silent custom hitnormal (or a mix of only silent samples), " +
+                "including points the source has nothing for. 5 % muted ends are a separate setting.");
 
             // Storyboard samples: copied from the source's [Events], skipped where a hit already plays them (or any hit).
             var storyboard = Option("Copy storyboarded samples", defaults.CopyStoryboardedSamples, "The source's own storyboard Sample lines go into the targets (Overwrite everything replaces theirs).");
@@ -287,9 +290,9 @@ internal static partial class Dialogs
                 new TextBlock { Text = "Mode", FontWeight = FontWeight.SemiBold }, mode,
                 new TextBlock { Text = "Everything: the targets' hitsounds are cleared first. Only defined: only the hit points the source has a hit for change.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 scope,
-                hitsounds, sets, volumes, keep5,
+                hitsounds, sets, volumes, keep5, noSilent,
                 new Expander { Header = "Advanced: timing, sliders and storyboard", Content = advanced, HorizontalAlignment = HorizontalAlignment.Stretch },
-                new TextBlock { Text = "Each target is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
+                new TextBlock { Text = "Nothing is written yet: the next step shows what changes in each difficulty. Each one is saved with a backup, like Save .osu. Same options as Mapping Tools' Hitsound Copier.", TextWrapping = TextWrapping.Wrap, MaxWidth = 360, Opacity = 0.7 },
                 problem,
             ]);
             return (() =>
@@ -311,6 +314,7 @@ internal static partial class Dialogs
                         CopySampleSets = sets.IsChecked == true,
                         CopyVolumes = volumes.IsChecked == true,
                         AlwaysPreserve5Volume = keep5.IsChecked == true,
+                        NeverSilentHitnormals = noSilent.IsChecked == true,
                         CopyToSliderTicks = ticks.IsChecked == true,
                         CopyToSliderSlides = slides.IsChecked == true,
                         StartIndex = start,
