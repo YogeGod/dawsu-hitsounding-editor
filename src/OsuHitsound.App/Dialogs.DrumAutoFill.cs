@@ -21,7 +21,7 @@ internal static partial class Dialogs
             }
             var kick = new ComboBox { Name = "AutoFillKick", ItemsSource = choices, SelectedIndex = Initial(lastKick, "kick", "hitnormal"), Width = 510 };
             var snare = new ComboBox { Name = "AutoFillSnare", ItemsSource = choices, SelectedIndex = Initial(lastSnare, "snare", "hitclap"), Width = 510 };
-            var selected = new CheckBox { Name = "AutoFillRange", Content = range is null ? "Selected range (use the Range tool first)" : $"Selected range: {range.Start / 1000:F2}–{range.End / 1000:F2} seconds",
+            var selected = new CheckBox { Name = "AutoFillRange", Content = range is null ? "Selected range (use the Range tool first)" : DrumRangeLabel(range),
                 IsEnabled = range is not null, IsChecked = range is not null };
             var sensitivity = new ComboBox { Name = "AutoFillSensitivity", ItemsSource = new[] { "Conservative — fewer candidates", "Normal", "Sensitive — more candidates" }, SelectedIndex = 0, Width = 510 };
             var tolerance = new NumericUpDown { Name = "AutoFillTolerance", Value = 30, Minimum = 0, Maximum = 100, Increment = 5, Width = 110 };
@@ -56,12 +56,18 @@ internal static partial class Dialogs
             }, "Analyse");
         }, scroll: true);
 
+    // Times always use a decimal point, like osu! and the rest of dawsu!, whatever the PC's locale.
+    public static string DrumRangeLabel(TimeRange range) =>
+        FormattableString.Invariant($"Selected range: {range.Start / 1000:F2}–{range.End / 1000:F2} seconds");
+
+    public static string DrumHitLabel(double timeMs) => FormattableString.Invariant($"{timeMs / 1000:F3} s");
+
     public static Task<EditHit[]?> ReviewDrumAutoFill(Window owner, DrumAutoFillPlan plan, Func<Lane, string> nameOf, Action listen) =>
         Show<EditHit[]>(owner, "Review Drum hit detection", (body, close) =>
         {
             body.Children.Add(new TextBlock { Text = $"{plan.Hits.Count} new hits · {plan.Duplicates} duplicates skipped · {plan.Unmatched} without a nearby object\nUncheck any hit to leave it out. Existing hits and volumes stay. Apply is one Undo step; Save is separate.", TextWrapping = TextWrapping.Wrap, MaxWidth = 570 });
             var checks = plan.Hits.Select(h => new CheckBox { IsChecked = true,
-                Content = $"{h.Time / 1000:F3} s · {nameOf(h.Lane)} · {(h.Anchor is null ? "no object" : "on object")}" }).ToArray();
+                Content = DrumHitLabel(h.Time) + $" · {nameOf(h.Lane)} · {(h.Anchor is null ? "no object" : "on object")}" }).ToArray();
             var list = new StackPanel { Spacing = 3 };
             foreach (var check in checks) list.Children.Add(check);
             body.Children.Add(new ScrollViewer { Content = list, Height = 270, Width = 570 });
