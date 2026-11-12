@@ -39,7 +39,8 @@ internal static partial class Dialogs
             var fileButtons = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8, Children = { browse, reset } };
             var problem = new TextBlock { Foreground = Brushes.OrangeRed };
             body.Children.AddRange([
-                new TextBlock { Text = "Detect kick and snare locally, then review before adding hits. Toms are excluded.", TextWrapping = TextWrapping.Wrap, MaxWidth = 510 },
+                new TextBlock { Text = "Detect kick and snare on this PC, then review before adding hits. Toms are excluded.", TextWrapping = TextWrapping.Wrap, MaxWidth = 510 },
+                new TextBlock { Text = "Uses the ADTOF drum model by Zehren, Alunno and Bientinesi (CC BY-NC-SA 4.0).", FontSize = 11, Opacity = .7, TextWrapping = TextWrapping.Wrap, MaxWidth = 510 },
                 new TextBlock { Text = "Kick destination" }, kick,
                 new TextBlock { Text = "Snare destination" }, snare,
                 selected, new TextBlock { Text = "Sensitivity" }, sensitivity,
