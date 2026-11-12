@@ -8,11 +8,10 @@ public class RealMapTests
 {
     private const string Catalyst = @"F:\osu!\Songs\2507351 Arch Echo - Catalyst\Arch Echo - Catalyst (Yoge God) [Impetus].osu";
 
-    [Fact]
+    [CorpusFact]
     public void Every_corpus_map_decompiles()
     {
-        var corpus = Path.Combine(RepoRoot(), "corpus");
-        Assert.True(Directory.Exists(corpus), "corpus/ is missing. Run tools/build-corpus.ps1 to copy maps from your osu!lazer library.");
+        var corpus = CorpusFactAttribute.Folder;
 
         var failures = new List<string>();
         int maps = 0;
