@@ -66,8 +66,7 @@ public sealed class MixPlanner
             }
         foreach (string signature in reused.Keys.Where(k => k.EndsWith("|silent-normal", StringComparison.Ordinal)).ToList())
             if (!reused.ContainsKey(signature[..^"|silent-normal".Length])) reused.Remove(signature);
-        removable = ours.Where(m => !reused.ContainsValue(m.FileName) && !liveFiles.Contains(m.FileName) && !(HitsoundDiff.IndexOf(m.FileName) is { } n && usedByOthers.Contains(n)))
-            .Select(m => m.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        removable = Unused(folder, previous, reused.Values, liveLanes, replacedFile);
         previousMixes = previous?.Mixes ?? [];
         LastIndex = Math.Max(previous?.LastIndex ?? 1, HitsoundDiff.MaxFileIndex(previousMixes.Select(m => m.FileName)));
         if (folder.Find(replacedFile) is { } oldDiff)
@@ -131,6 +130,24 @@ public sealed class MixPlanner
 
     /// <summary>The previous run's mixes nothing will use any more.</summary>
     public IReadOnlyList<string> Removes => [.. removable];
+
+    /// <summary>
+    /// The previous run's mixes nothing will use any more, so a write may delete them: still in the mapset exactly as
+    /// written (plain file names only; a replaced file is the mapper's), not <paramref name="kept"/> by this run, played
+    /// by no live lane, and at an index no other difficulty or storyboard of the mapset uses (Copy hitsounds can share a
+    /// kit). <paramref name="replacedFile"/> is the file being rewritten, whose own references don't count.
+    /// </summary>
+    internal static HashSet<string> Unused(MapFolder folder, GenerateManifest? previous, IEnumerable<string> kept, IEnumerable<Lane>? liveLanes, string? replacedFile)
+    {
+        var keep = kept.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ours = (previous?.Mixes ?? []).Where(m => Path.GetFileName(m.FileName) == m.FileName && HitsoundDiff.IndexOf(m.FileName) is not null
+                                                      && folder.Find(m.FileName) is { } f && GenerateManifest.Hash(folder.ReadBytes(f)) == m.Sha256);
+        var usedByOthers = HitsoundDiff.IndexesUsed(folder, except: replacedFile);
+        var liveFiles = (liveLanes ?? []).Where(l => l.Source != LaneSource.Skin)
+            .Select(l => folder.Find(l.Name) ?? l.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return ours.Where(m => !keep.Contains(m.FileName) && !liveFiles.Contains(m.FileName) && !(HitsoundDiff.IndexOf(m.FileName) is { } n && usedByOthers.Contains(n)))
+            .Select(m => m.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>Layers as a mix takes them: stable's 8 % minimum applied, sorted by lane.</summary>
     public static List<(Lane Lane, int Volume)> Normalize(IEnumerable<(Lane Lane, int Volume)> layers, bool includeMissing = false) =>

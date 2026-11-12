@@ -128,6 +128,10 @@ internal sealed class MapWrites(MapDocument document, string backupRoot, string 
                 : $"Save this difficulty? Some objects keep sounds osu! can't play together from the map's files (different indexes, sets or volumes), so Save writes {mixes.Count} new sample file(s) that combine them: "
                   + string.Join(", ", mixes.Take(6).Select(m => m.FileName)) + (mixes.Count > 6 ? ", …" : "")
                   + ". Your lanes stay as they are; existing samples are not changed.")
+            + (plan.Storage.Removes is { Count: > 0 } removes
+                ? $"\n\nSave also deletes {removes.Count} sample file(s) dawsu! made in an earlier save that nothing in the mapset uses any more: "
+                  + string.Join(", ", removes.Take(8)) + (removes.Count > 8 ? ", …" : "") + ". A file you changed, or that another difficulty uses, is kept."
+                : "")
             + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
             + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : "");
     }
