@@ -56,13 +56,13 @@ dotnet tool install vpk --version <velopack version> --tool-path "$R\tools"
 ```
 No delta packages, no code signing. Expect six files: `assets.win.json`, `dawsu-X.Y.Z-full.nupkg`, `dawsu-win-Portable.zip`, `dawsu-win-Setup.exe`, `RELEASES` and `releases.win.json`. Compare their names and rough sizes with the previous release (`gh release view V<previous> --json assets`); a big size change needs a reason.
 
-Then `SHA256SUMS.txt` over those six, in `sha256sum` format (hash, two spaces, name):
+Then `SHA256SUMS.txt` over those six, in `sha256sum` format (hash, two spaces, name). Git Bash's `sha256sum` writes `hash *name` unless given `-t`:
 ```bash
-cd "$R/out" && sha256sum assets.win.json dawsu-*-full.nupkg dawsu-win-Portable.zip dawsu-win-Setup.exe RELEASES releases.win.json > SHA256SUMS.txt
+cd "$R/out" && sha256sum -t assets.win.json dawsu-*-full.nupkg dawsu-win-Portable.zip dawsu-win-Setup.exe RELEASES releases.win.json > SHA256SUMS.txt
 ```
 
 ## 5. Smoke test
-Extract `dawsu-win-Portable.zip` into `$R\portable` and start `dawsu!.exe` from there with a **copy** of a map (never one in `F:\osu!\Songs`). Confirm it opens and shows the new version. Say plainly that sound, VST loading and updating from the previous version weren't checked unless they were.
+Extract `dawsu-win-Portable.zip` into `$R\portable` and start `dawsu!.exe` from there with a **copy** of a map (never one in `F:\osu!\Songs`). Confirm it opens and shows the new version (the start screen, with no map, shows `hitsound studio X.Y.Z`). To screenshot it, capture the window with `PrintWindow`: a screen copy catches whatever window is in front, which may be the user's own. Say plainly that sound, VST loading and updating from the previous version weren't checked unless they were.
 
 ## 6. Publish
 **Gate:** list what will go out (commit, tag, the seven files, the notes) and wait for an explicit OK to publish. Then:
