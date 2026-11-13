@@ -1,6 +1,6 @@
 # Tutorial
 
-A tour of dawsu! 3.1.1 in Hitsound mode, grouped by **feature area** (the same groups as the F1 help). **File → Full interface tour** walks through the same features in screen order. Next and Back (or the arrow keys) step through that tour, and Esc ends it.
+A tour of dawsu! 3.1.2 in Hitsound mode, grouped by **feature area** (the same groups as the F1 help). **File → Full interface tour** walks through the same features in screen order. Next and Back (or the arrow keys) step through that tour, and Esc ends it.
 
 The first launch asks whether you want **DAW-like keys** or **osu! editor controls**, then runs **Quick start** (also under **File → Quick start**). Quick start covers opening a difficulty, choosing a lane, assigning a sample, placing a hit, listening, and choosing Save, Generate or Copy. The house button next to the dawsu! name, or **File → Start screen**, goes back to the start screen and asks to save first.
 

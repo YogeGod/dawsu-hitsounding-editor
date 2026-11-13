@@ -2,6 +2,12 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## 3.1.2
+
+Menu items work with one click again.
+
+- **Menus:** one click on a menu item runs it again. Since 3.1, the first click on an item (Open map…, Preferences… and the rest) could be lost, so it took two clicks, and the window could maximise or restore as well.
+
 ## 3.1.1
 
 Switch between a mapset's difficulties from the ribbon.
