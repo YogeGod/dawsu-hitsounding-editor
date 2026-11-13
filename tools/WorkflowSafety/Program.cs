@@ -275,7 +275,97 @@ Check(afterRight.Time == 2000 && afterRight.Lane == area.Model!.Rows.OfType<Lane
 s.Undo(); Pump();
 Check(s.State.Hits.Count == hitCount && !s.State.Hits.Any(h => h.Time == 1750), "one Undo removes the double-click insertion");
 w.Close(); Pump(); Check(!w.IsVisible, "editor closes cleanly once the insertion is undone");
+// Keysound mode: the Hitsound grid's mouse actions and keys on notes (Keysound parity, 2026-11-13).
+var hsForKeys = Open(); string keysMap = MapPath(hsForKeys); hsForKeys.Close(); Pump();
+var keysProject = OsuHitsound.Lanes.Keysound.KeysoundStore.Create(keysMap, Path.Combine(Directory.CreateTempSubdirectory("dawsu-keys-check-").FullName, "Project"), []); // outside the map's folder
+w = new MainWindow(keysProject, startAudio: false, showInspector: false, usePreferences: false) { Width = 1600, Height = 900 };
+w.Show(); Wait(() => w.Loading.IsCompleted); Pump();
+var keys = w.Keys; var roll = keys.Roll; var ks = keys.Document!.Session; var track = ks.State.Tracks[0].Id;
+var keyTempo = keys.Document.Tempo;
+Check(keys.IsVisible && w.FindControl<Menu>("KeysoundMenu")!.IsVisible && !w.FindControl<Menu>("HeaderMenu")!.IsVisible, "a Keysound project opens in Keysound mode with its own menus");
+Check(keys.FindControl<StackPanel>("RibbonGroups") is { } ribbon && ribbon.Children.OfType<StackPanel>().Count(g => g.Classes.Contains("ribbonGroup")) >= 5
+    && keys.FindControl<Button>("SaveButton")!.Classes.Contains("primary"), "the key editor has the Hitsound ribbon: captioned groups and Save on the right");
+roll.Axis.Zoom = 0.5; roll.Axis.Left = 1000; roll.TopPitch = 66.5; Pump(); // 1000 to 2000 ms in 500 px; pitch 60 in view
+IReadOnlyList<OsuHitsound.Lanes.Keysound.KeyNote> Notes() => ks.State.Track(track)!.Notes;
+long Tick(double ms) => keyTempo.RoundTick(ms);
+
+int stepsKs = UndoDepth();
+var emptyPoint = RollPoint(1250, 60);
+w.MouseDown(emptyPoint, MouseButton.Left); w.MouseUp(emptyPoint, MouseButton.Left); Pump();
+Check(Notes().Count == 0, "Select single click on empty roll space adds nothing");
+DoubleClick(RollPoint(1760, 60));
+Check(Notes().Count == 1 && Notes()[0].Start == Tick(1750) && Notes()[0].Pitch == 60 && UndoDepth() == stepsKs + 1,
+    "Select double-click on empty roll space inserts one snapped note in one undo step");
+var drawn = Notes()[0];
+
+var onNote = RollPoint(1760, 60);
+w.MouseDown(onNote, MouseButton.Right); w.MouseUp(onNote, MouseButton.Right); Pump();
+Check(Notes().Count == 1 && keys.ToolPickerFlyout is { IsOpen: true }, "right-click on a note keeps it and opens the tool picker");
+var keyPickerButtons = ((StackPanel)keys.ToolPickerFlyout!.Content!).Children.OfType<ToggleButton>().ToList();
+Check(keyPickerButtons.Count == 8 && keyPickerButtons[0].IsChecked == true, "the key editor's picker shows its tools, the current one checked");
+keyPickerButtons.Single(b => AutomationProperties.GetName(b) == "Mute").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+Check(roll.Tool == KeyTool.Mute && !keys.ToolPickerFlyout.IsOpen, "picking Mute switches tool and closes the picker");
+var stateBeforeMute = ks.State;
+w.MouseDown(onNote, MouseButton.Left); w.MouseUp(onNote, MouseButton.Left); Pump();
+Check(roll.PreviewMuted.Contains(drawn.Id) && ReferenceEquals(ks.State, stateBeforeMute), "the Mute tool silences a note for listening only, with no edit");
+w.MouseDown(onNote, MouseButton.Left); w.MouseUp(onNote, MouseButton.Left); Pump();
+Check(!roll.PreviewMuted.Contains(drawn.Id), "a second Mute click restores it");
+Press(w, Key.D1);
+
+var altPoint = RollPoint(1260, 62);
+w.MouseDown(altPoint, MouseButton.Left, RawInputModifiers.Alt); w.MouseUp(altPoint, MouseButton.Left, RawInputModifiers.Alt); Pump();
+Check(roll.Tool == KeyTool.Select && Notes().Count == 2 && Notes().Any(n => n.Pitch == 62 && n.Start == Tick(1250)), "Alt+click draws a note with the Select tool, as in the Hitsound grid");
+var copyFrom = RollPoint(1810, 60); var copyTo = RollPoint(1940, 60); // the note's middle: its edges resize
+w.MouseDown(copyFrom, MouseButton.Left, RawInputModifiers.Control | RawInputModifiers.Alt);
+w.MouseMove(copyTo, RawInputModifiers.Control | RawInputModifiers.Alt);
+w.MouseUp(copyTo, MouseButton.Left, RawInputModifiers.Control | RawInputModifiers.Alt); Pump();
+Check(Notes().Count == 3 && Notes().Any(n => n.Id == drawn.Id && n.Start == drawn.Start) && Notes().Any(n => n.Pitch == 60 && n.Start == Tick(1875)),
+    "Ctrl+Alt+drag copies a note and leaves the original in place");
+
+// Keys the Hitsound editor has: Alt+Space to the selection, Ctrl+B bookmark, ] next bookmark, Ctrl+Alt+Right to the next grid line.
+roll.SelectWhere(n => n.Id == drawn.Id); Pump();
+Press(w, Key.Space, RawInputModifiers.Alt);
+Check(Math.Abs(roll.Playhead - keyTempo.TimeAt(drawn.Start)) < 1, "Alt+Space moves the playhead to the selected note");
+Press(w, Key.B, RawInputModifiers.Control);
+Check(ks.State.Bookmarks.Any(b => Math.Abs(b.Time - roll.Playhead) < 1), "Ctrl+B adds a bookmark at the playhead");
+Press(w, Key.Home); Press(w, Key.OemCloseBrackets);
+Check(Math.Abs(roll.Playhead - ks.State.Bookmarks[0].Time) < 1, "] jumps to the next bookmark");
+Press(w, Key.Right, RawInputModifiers.Control | RawInputModifiers.Alt);
+Check(Notes().Single(n => n.Id == drawn.Id).Start == Tick(1875), "Ctrl+Alt+Right moves the selection to the next grid line");
+
+// Snap mode Objects: a double-click lands on the nearest object (the circle at 1500 ms).
+keys.FindControl<ComboBox>("SnapModeBox")!.SelectedIndex = 2; Pump();
+DoubleClick(RollPoint(1560, 64));
+Check(Notes().Any(n => n.Pitch == 64 && n.Start == Tick(1500)), "snap mode Objects puts an inserted note on the nearest gameplay object");
+
+// Narrow windows close the inspector, as in Hitsound mode, and wide ones bring it back.
+w.Width = 1000; Pump();
+Check(!keys.FindControl<Control>("Side")!.IsVisible, "below 1100 px the key editor's inspector closes");
+w.Width = 1600; Pump();
+Check(keys.FindControl<Control>("Side")!.IsVisible, "a wide window shows it again");
+w.Close(); Pump(); if (w.OwnedWindows.Any()) Choose(Prompt(w), "Discard"); Pump();
+Check(!w.IsVisible, "the Keysound editor closes once its edits are discarded");
+
 Console.WriteLine($"PASS: {checks} safety checks");
+
+int UndoDepth()
+{
+    int depth = 0;
+    var session = w.Keys.Document!.Session;
+    var undo = (System.Collections.ICollection)typeof(OsuHitsound.Lanes.Keysound.KeysoundSession).GetField("undo", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(session)!;
+    depth = undo.Count;
+    return depth;
+}
+
+Point RollPoint(double time, int pitch)
+{
+    var r = w.Keys.Roll;
+    var local = new Point(PianoRollView.KeyboardWidth + r.Axis.X(time), PianoRollView.RulerHeight + PianoRollView.StripHeight + (r.TopPitch - pitch + 0.5) * r.RowHeight);
+    if (local.X <= PianoRollView.KeyboardWidth || local.X >= r.Bounds.Width || local.Y <= PianoRollView.RulerHeight + PianoRollView.StripHeight || local.Y >= r.Bounds.Height - r.VelocityLaneHeight - r.BottomReserve)
+        throw new Exception($"FAIL: {time} ms / pitch {pitch} is outside the visible roll ({local})");
+    return r.TranslatePoint(local, w)!.Value;
+}
+
 
 Point GridPoint(LaneRow row, double time)
 {

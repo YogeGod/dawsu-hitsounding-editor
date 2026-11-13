@@ -13,7 +13,7 @@ if (args.Length < 2)
     return 1;
 }
 
-string outDir = args[1];
+string outDir = args[0] == "--keysound" && args.Length > 2 ? args[2] : args[1];
 Directory.CreateDirectory(outDir);
 UiTheme.Current = UiTheme.Load(UiTheme.DefaultPath());
 
@@ -22,6 +22,9 @@ AppBuilder.Configure<App>()
     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
     .WithInterFont()
     .SetupWithoutStarting();
+
+// snapshot --keysound <map.osu> <outDir>: Keysound mode at several window widths, from a project made in a temp folder.
+if (args[0] == "--keysound") return KeysoundShots(args[1], outDir);
 
 // Before a map is opened: the default lanes in their sampleset groups.
 var empty = new MainWindow(null, startAudio: false, showInspector: false, usePreferences: false) { Width = 1920, Height = 1080 };
@@ -210,5 +213,41 @@ void SaveReadmeCrops()
         using var png = SkiaSharp.SKImage.FromBitmap(crop).Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
         File.WriteAllBytes(Path.Combine(readmeDir, name + ".png"), png.ToArray());
         Console.WriteLine($"saved readme/{name}.png ({right - left}×{bottom - top})");
+    }
+}
+
+// Keysound mode, as the Hitsound shots: a throwaway project from the map with a few notes, at three window widths.
+static int KeysoundShots(string osu, string outDir)
+{
+    var root = Path.Combine(Path.GetTempPath(), "dawsu-ks-snapshot-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var project = OsuHitsound.Lanes.Keysound.KeysoundStore.Create(osu, OsuHitsound.Lanes.Keysound.KeysoundStore.SuggestFolder(root, osu), new List<string>());
+        var doc = OsuHitsound.Lanes.Keysound.KeysoundStore.Open(project);
+        var track = doc.Session.State.Tracks.FirstOrDefault() ?? doc.Session.AddTrack("Track 1");
+        long ppq = OsuHitsound.Lanes.Keysound.TempoMap.Ppq, at = doc.Tempo.RoundTick(doc.Objects.Count > 0 ? doc.Objects[0].Start : 0);
+        int[] melody = [60, 64, 67, 72, 71, 67, 64, 62, 60, 65, 69, 72];
+        doc.Session.AddNotes(track.Id, [.. melody.Select((p, i) => new OsuHitsound.Lanes.Keysound.KeyNote(Guid.NewGuid(), at + i * ppq / 2, ppq / 2, p, 60 + i * 5))]);
+        doc.Session.AddBookmark(doc.Tempo.TimeAt(at + 4 * ppq), "Chorus");
+        OsuHitsound.Lanes.Keysound.KeysoundStore.Save(doc);
+
+        foreach (var (w, h) in new[] { (1920, 1080), (1280, 800), (1000, 700) })
+        {
+            var window = new MainWindow(project, startAudio: false, showInspector: false, usePreferences: false) { Width = w, Height = h };
+            window.Show();
+            while (!window.Loading.IsCompleted) Dispatcher.UIThread.RunJobs();
+            for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); }
+            var file = Path.Combine(outDir, $"ks-{w}.png");
+            window.CaptureRenderedFrame()?.Save(file);
+            Console.WriteLine("saved " + file);
+            window.Close();
+        }
+
+        return 0;
+    }
+    finally
+    {
+        try { Directory.Delete(root, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 }

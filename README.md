@@ -29,12 +29,12 @@ Features are grouped into **feature areas**, the same groups the F1 help uses. H
 ### Keysound mode (start screen → Keysounding)
 
 - **Keysound – Project:** a project made from a reference beatmap, with instrument tracks.
-- **Keysound – Note editing:** a piano roll with DAW-style editing.
+- **Keysound – Note editing:** a piano roll that looks and works like the Hitsound editor: the same ribbon, inspector (Selection and Bookmarks cards), scrollbars with zoom ends, overview strip and controller panel (velocity instead of volume). The tools, snap modes (Grid, Grid relative, Objects), right-click tool picker, double-click to insert, Alt to draw, Mute, Ramp, Quantize…, Repeat and the arrow and bookmark keys work as they do on hits. On top of that: resize notes by their edges, Split and Glue, Ctrl+Alt+drag to copy, and Up/Down to transpose.
 - **Keysound – Note input:** draw notes, import MIDI, or play and record from a MIDI keyboard. You can also use your computer keyboard with **musical typing** (Alt+K).
 - **Keysound – Instruments:** each track plays the bundled piano, a VST3 instrument or a SoundFont (.sf2) preset. The SoundFont's reverb and chorus can be on or off. Every plug-in runs in its own process, so a crash only silences its track.
 - **Keysound – Gameplay sync:** **Sync to gameplay objects…** moves notes onto the map's circles, slider ends and spinner ends.
 - **Keysound – Output:** **Generate keysounds…** renders every synced note to its own WAV and writes a playable `[Keysounds]` copy of the map. You can then export it as a `.osz`.
-- **Keysound – Playback:** the same transport and cycle as Hitsound mode.
+- **Keysound – Playback:** the same transport, cycle, L/R locators and Playback menu (Start playing from, Return on stop, Follow) as Hitsound mode. Bookmarks start from the reference map's; the ones you add, remove or label are kept in the project, never in the map.
 
 ### Both modes
 
