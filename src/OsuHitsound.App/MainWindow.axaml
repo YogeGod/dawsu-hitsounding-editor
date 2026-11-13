@@ -12,8 +12,8 @@
   <app:WindowTitleBar Name="WindowBar" DockPanel.Dock="Top" />
 
   <Grid Name="Root" RowDefinitions="44,Auto,20,*,160,Auto,Auto" ColumnDefinitions="208,4,*,4,224">
-    <!-- 1. Header: logo, title, menus; map name and settings on the right. Open and Save sit in the ribbon, except in
-         Keysound mode, whose editor covers the ribbon: there the title bar shows its own Open and Save. -->
+    <!-- 1. Header: logo, title, menus; map name and settings on the right. Open and Save sit in the ribbon (in Keysound
+         mode, the key editor's own ribbon). -->
     <Border Grid.Row="0" Grid.ColumnSpan="5" Name="TitleBar" Classes="header" BorderThickness="0,0,0,1">
       <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
       <Grid Name="TitleBarContent" MinWidth="1080" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
@@ -22,11 +22,6 @@
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Name="HomeButton" Classes="icon flat" AutomationProperties.Name="Start screen"
                   ToolTip.Tip="Back to the start screen (asks to save first)"><app:AppIcon Glyph="House" /></Button>
-          <StackPanel Name="KsFileButtons" Orientation="Horizontal" Spacing="2" IsVisible="False">
-            <Button Name="KsOpenButton" Classes="icon flat" AutomationProperties.Name="Open" ToolTip.Tip="Open a map or Keysound project (Ctrl+O)"><app:AppIcon Glyph="FolderOpen" /></Button>
-            <Button Name="KsSaveButton" Classes="icon flat" AutomationProperties.Name="Save project"
-                    ToolTip.Tip="Save the Keysound project (Ctrl+S): tracks, notes and instrument settings. The reference beatmap is never changed."><app:AppIcon Glyph="Save" /></Button>
-          </StackPanel>
           <!-- Hitsound menus (menu layout D, decided 2026-11-12): every item has an icon and a shortcut chip, on/off
                settings show as switches, and choices are rows of buttons instead of submenus. Icons and switches are
                applied from one table in MainWindow.MenuLook.cs. -->
@@ -144,52 +139,74 @@
               <MenuItem Name="HelpItem" Header="Shortcuts and help" />
             </MenuItem>
           </Menu>
-          <!-- Keysound mode's menus: the same places as Hitsound mode's, with the key editor's commands. -->
+          <!-- Keysound mode's menus: the Hitsound menus' places and look (icons, shortcut chips, switches, rows of choices),
+               with the key editor's commands. Each item's Tag names its command: "ks:" for the key editor's own. -->
           <Menu Name="KeysoundMenu" VerticalAlignment="Center" Margin="4,0,0,0" IsVisible="False">
             <MenuItem Header="File" Name="KsFileMenu">
-              <MenuItem Header="Start screen" Tag="startScreen" />
-              <MenuItem Header="Open…" Tag="open" />
-              <MenuItem Header="Save project" Tag="save" InputGesture="Ctrl+S" />
-              <MenuItem Header="Close project" Tag="ks:close" />
+              <MenuItem Name="KsStartScreenItem" Header="Start screen" Tag="startScreen" />
+              <MenuItem Name="KsOpenItem" Header="Open…" Tag="open" />
+              <MenuItem Name="KsSaveItem" Header="Save project" Tag="save" />
+              <MenuItem Name="KsCloseItem" Header="Close project" Tag="ks:close" />
               <Separator />
-              <MenuItem Header="Import MIDI…" Tag="ks:importMidi" />
-              <MenuItem Header="Generate keysounds…" Tag="ks:generate" />
-              <MenuItem Header="Open project folder" Tag="ks:projectFolder" />
+              <MenuItem Name="KsImportMidiItem" Header="Import MIDI…" Tag="ks:importMidi" />
+              <MenuItem Name="KsGenerateItem" Header="Generate keysounds…" Tag="ks:generate" />
+              <MenuItem Name="KsProjectFolderItem" Header="Open project folder" Tag="ks:projectFolder" />
               <Separator />
-              <MenuItem Header="Preferences…" Tag="preferences" />
+              <MenuItem Name="KsPreferencesItem" Header="Preferences…" Tag="preferences" />
+              <Separator />
+              <MenuItem Name="KsCheckUpdatesItem" Header="Check for updates…" Tag="updates" />
             </MenuItem>
             <MenuItem Header="Edit" Name="KsEditMenu">
-              <MenuItem Header="Undo" Tag="ks:undo" InputGesture="Ctrl+Z" />
-              <MenuItem Header="Redo" Tag="ks:redo" InputGesture="Ctrl+Y" />
+              <MenuItem Name="KsUndoItem" Header="Undo" Tag="ks:undo" />
+              <MenuItem Name="KsRedoItem" Header="Redo" Tag="ks:redo" />
               <Separator />
-              <MenuItem Header="Cut" Tag="ks:cut" InputGesture="Ctrl+X" />
-              <MenuItem Header="Copy" Tag="ks:copy" InputGesture="Ctrl+C" />
-              <MenuItem Header="Paste at playhead" Tag="ks:paste" InputGesture="Ctrl+V" />
-              <MenuItem Header="Duplicate" Tag="ks:duplicate" InputGesture="Ctrl+D" />
-              <MenuItem Header="Delete" Tag="ks:delete" InputGesture="Delete" />
+              <MenuItem Name="KsCutItem" Header="Cut" Tag="ks:cut" />
+              <MenuItem Name="KsCopyItem" Header="Copy" Tag="ks:copy" />
+              <MenuItem Name="KsPasteItem" Header="Paste at playhead" Tag="ks:paste" />
+              <MenuItem Name="KsDuplicateItem" Header="Duplicate" Tag="ks:duplicate" />
+              <MenuItem Name="KsDeleteItem" Header="Delete" Tag="ks:delete" />
+              <MenuItem Name="KsSelectAllItem" Header="Select all" Tag="ks:selectAll" />
               <Separator />
-              <MenuItem Header="Select all" Tag="ks:selectAll" InputGesture="Ctrl+A" />
-              <Separator />
-              <MenuItem Header="Quantize" Tag="ks:quantize" InputGesture="Q" />
-              <MenuItem Header="Sync to gameplay objects…" Tag="ks:sync" />
+              <MenuItem Name="KsQuantizeItem" Header="Quantize…" Tag="ks:quantizeDialog" />
+              <MenuItem Name="KsRepeatItem" Header="Repeat…" Tag="ks:repeat" />
+              <MenuItem Name="KsSyncItem" Header="Sync to gameplay objects…" Tag="ks:sync" />
+            </MenuItem>
+            <MenuItem Header="Playback" Name="KsPlaybackMenu">
+              <MenuItem Name="KsStartFromRow" Classes="choiceRow" StaysOpenOnClick="True">
+                <MenuItem.Header>
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Start playing from" />
+                    <StackPanel Classes="segment">
+                      <ToggleButton Name="KsStartCursorChoice" Content="Cursor" IsChecked="True" />
+                      <ToggleButton Name="KsStartLeftChoice" Content="Left locator" />
+                      <ToggleButton Name="KsStartSelectionChoice" Content="Selection" />
+                      <ToggleButton Name="KsStartSelectionOrLeftChoice" Content="Selection, else L" ToolTip.Tip="The selection's start, or the left locator when nothing is selected" />
+                    </StackPanel>
+                  </StackPanel>
+                </MenuItem.Header>
+              </MenuItem>
+              <MenuItem Name="KsReturnOnStopItem" Header="Return on stop" Tag="ks:returnOnStop" ToggleType="CheckBox" />
+              <MenuItem Name="KsFollowItem" Header="Follow playback" Tag="ks:follow" ToggleType="CheckBox" />
             </MenuItem>
             <MenuItem Header="Track" Name="KsTrackMenu">
-              <MenuItem Header="Add track" Tag="ks:addTrack" />
-              <MenuItem Header="Rename track…" Tag="ks:renameTrack" />
-              <MenuItem Header="Delete track" Tag="ks:deleteTrack" />
+              <MenuItem Name="KsAddTrackItem" Header="Add track" Tag="ks:addTrack" />
+              <MenuItem Name="KsRenameTrackItem" Header="Rename track…" Tag="ks:renameTrack" />
+              <MenuItem Name="KsDeleteTrackItem" Header="Delete track" Tag="ks:deleteTrack" />
               <Separator />
-              <MenuItem Header="Instrument…" Tag="ks:instrument" />
-              <MenuItem Header="Open instrument editor" Tag="ks:instrumentEditor" />
+              <MenuItem Name="KsInstrumentItem" Header="Instrument…" Tag="ks:instrument" />
+              <MenuItem Name="KsInstrumentEditorItem" Header="Open instrument editor" Tag="ks:instrumentEditor" />
             </MenuItem>
             <MenuItem Header="View" Name="KsViewMenu">
-              <MenuItem Header="Zoom in" Tag="ks:zoomIn" InputGesture="H" />
-              <MenuItem Header="Zoom out" Tag="ks:zoomOut" InputGesture="G" />
+              <MenuItem Name="KsZoomInItem" Header="Zoom in" Tag="ks:zoomIn" />
+              <MenuItem Name="KsZoomOutItem" Header="Zoom out" Tag="ks:zoomOut" />
               <Separator />
-              <MenuItem Name="KsGhostsItem" Header="Ghost notes" Tag="ks:ghosts" ToggleType="CheckBox" />
               <MenuItem Name="KsObjectLinesItem" Header="Object lines" Tag="ks:objectLines" ToggleType="CheckBox" />
+              <MenuItem Name="KsGhostsItem" Header="Ghost notes" Tag="ks:ghosts" ToggleType="CheckBox" />
+              <MenuItem Name="KsInspectorPanelItem" Header="Inspector panel" Tag="ks:inspector" ToggleType="CheckBox" />
+              <MenuItem Name="KsControllerItem" Header="Velocity controller" Tag="ks:controller" ToggleType="CheckBox" />
               <Separator />
-              <MenuItem Header="Shortcuts and help" Tag="help" InputGesture="F1" />
-              <MenuItem Header="Check for updates…" Tag="updates" />
+              <MenuItem Name="KsUiInspectorItem" Header="UI inspector" Tag="inspector" />
+              <MenuItem Name="KsHelpItem" Header="Shortcuts and help" Tag="help" />
             </MenuItem>
           </Menu>
         </StackPanel>

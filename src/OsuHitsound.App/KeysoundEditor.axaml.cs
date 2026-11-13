@@ -16,8 +16,6 @@ namespace OsuHitsound.App;
 /// </summary>
 public partial class KeysoundEditor : UserControl
 {
-    private static readonly (string Label, int Divisions)[] Snaps = [("1/1", 1), ("1/2", 2), ("1/3", 3), ("1/4", 4), ("1/6", 6), ("1/8", 8), ("1/12", 12), ("1/16", 16)];
-
     private readonly DispatcherTimer clock = new() { Interval = TimeSpan.FromMilliseconds(30) };
     private KeysoundDocument? doc;
     private AudioEngine? audio;
@@ -37,11 +35,6 @@ public partial class KeysoundEditor : UserControl
     public KeysoundEditor()
     {
         InitializeComponent();
-        SnapBox.ItemsSource = Snaps.Select(s => s.Label).ToList();
-        SnapBox.SelectedIndex = 3;
-        SnapBox.SelectionChanged += (_, _) => { Roll.SnapDivisions = Snaps[Math.Max(0, SnapBox.SelectedIndex)].Divisions; Roll.InvalidateVisual(); };
-        // The wheel's snap changes and playhead steps, as in the Hitsound editor.
-        Roll.DivisorWheel += step => SnapBox.SelectedIndex = Math.Clamp(SnapBox.SelectedIndex + step, 0, Snaps.Length - 1);
         Roll.PlayheadStepRequested += SeekGridSteps;
         SnapToggle.IsCheckedChanged += (_, _) => Roll.SnapOn = SnapToggle.IsChecked == true;
         GhostToggle.IsCheckedChanged += (_, _) => { Roll.ShowGhosts = GhostToggle.IsChecked == true; Roll.InvalidateVisual(); };
@@ -57,8 +50,6 @@ public partial class KeysoundEditor : UserControl
         GrabTool.Click += (_, _) => SetTool(KeyTool.Grab);
         ZoomSlider.ValueChanged += (_, e) => { if (!showingZoom) { Roll.Axis.Zoom = TimeAxis.ZoomFromSlider(e.NewValue); Roll.InvalidateVisual(); } };
         FitButton.Click += (_, _) => FitTimeline();
-        RowsInButton.Click += (_, _) => Roll.ZoomRows(1.2);
-        RowsOutButton.Click += (_, _) => Roll.ZoomRows(1 / 1.2);
         AddTrackButton.Click += (_, _) => AddTrack();
         RenameTrackButton.Click += async (_, _) => await RenameTrack();
         DeleteTrackButton.Click += (_, _) => DeleteTrack();
@@ -85,7 +76,6 @@ public partial class KeysoundEditor : UserControl
             ApplyVelocity();
             e.Handled = true;
         };
-        DismissButton.Click += (_, _) => SetStatus("");
         VolumeBox.ValueChanged += (_, _) =>
         {
             if (showingVolume || doc?.SelectedTrack is not { } id || VolumeBox.Value is not { } db) return;
@@ -99,10 +89,10 @@ public partial class KeysoundEditor : UserControl
         clock.Tick += (_, _) => Tick();
         SetupRecording();
         SetupTyping();
-        SelectionDisclosure.Click += (_, _) => SelectionCollapseRequested?.Invoke(!SelectionCollapsed);
         SetupInstruments();
         SetupTransport();
         SetupInspector();
+        SetupParity();
         RefreshShortcutTips();
     }
 
@@ -126,14 +116,17 @@ public partial class KeysoundEditor : UserControl
         LoadWaveform();
         _ = LoadPiano(doc);
         RefreshMidiInputs();
-        status = doc.Warnings.Count > 0 ? string.Join(" ", doc.Warnings) : $"Opened {doc.Name}. Save project (Ctrl+S) keeps your tracks and notes.";
+        SetStatus(doc.Warnings.Count > 0 ? string.Join(" ", doc.Warnings) : $"Opened {doc.Name}. Save project (Ctrl+S) keeps your tracks and notes.");
         // The project's own locators and Cycle, as saved.
         (locatorLeft, locatorRight) = (doc.LocatorLeft, doc.LocatorRight);
         LoopButton.IsChecked = doc.Cycle;
         ShowLocators();
         ApplyTransport();
         RefreshTracks();
+        RefreshBookmarks();
+        AttachOverview();
         UpdateTexts();
+        SyncScrollBars();
         Roll.Focus();
     }
 
@@ -150,15 +143,20 @@ public partial class KeysoundEditor : UserControl
         doc.Session.Changed -= OnSessionChanged;
         doc = null;
         Roll.Attach(null);
+        AttachOverview();
         Roll.Wave = null;
         TrackList.Children.Clear();
     }
 
+    /// <summary>A message for the title bar's details icon (empty dismisses it), as the Hitsound editor shows its messages.</summary>
     public void SetStatus(string text)
     {
         status = text;
+        StatusChanged?.Invoke(text);
         UpdateTexts();
     }
+
+    public event Action<string>? StatusChanged;
 
     private void OnSessionChanged()
     {
@@ -170,6 +168,8 @@ public partial class KeysoundEditor : UserControl
 
         SyncInstruments();
         RefreshTracks();
+        RefreshBookmarks();
+        Overview.InvalidateVisual();
         SchedulePlayback();
         UpdateTexts();
         Changed?.Invoke();
@@ -251,6 +251,7 @@ public partial class KeysoundEditor : UserControl
             var sustain = t.Controllers.Where(c => c.Kind == ControllerKind.Sustain).ToList();
             foreach (var n in t.Notes)
             {
+                if (Roll.PreviewMuted.Contains(n.Id)) continue; // the Mute tool: silent while listening only
                 var note = new PlayedNote(tempo.TimeAt(n.Start), tempo.TimeAt(sustain.Count > 0 ? KeyControllers.SustainedEnd(sustain, n.End) : n.End), n.Pitch, n.Velocity, part);
                 played.Add(note);
                 last = Math.Max(last, note.End);
@@ -294,6 +295,9 @@ public partial class KeysoundEditor : UserControl
         EraseTool.IsChecked = tool == KeyTool.Erase;
         SplitTool.IsChecked = tool == KeyTool.Split;
         GlueTool.IsChecked = tool == KeyTool.Glue;
+        MuteTool.IsChecked = tool == KeyTool.Mute;
+        RampTool.IsChecked = tool == KeyTool.Ramp;
+        Roll.InvalidateVisual();
     }
 
     // Tracks.
@@ -494,32 +498,13 @@ public partial class KeysoundEditor : UserControl
     /// <summary>The playhead by whole grid lines at the snap's spacing (the osu! editor's arrows and wheel).</summary>
     private void SeekGridSteps(int steps) => Seek(WheelMode.StepGrid(audio?.Position ?? Roll.Playhead, steps, Roll.GridStep));
 
-    /// <summary>
-    /// The selection bar's details folded away (the arrow at its left). The window owns the choice, shared with the
-    /// Hitsound editor's bar: the arrow asks for a change, and the window sets this.
-    /// </summary>
-    public bool SelectionCollapsed
-    {
-        get => !InfoBarLeft.IsVisible;
-        set
-        {
-            InfoBarLeft.IsVisible = !value;
-            SelectionBarLayout.Apply(SelectionBarContent, SelectionDisclosure, value, 36);
-            SelectionDisclosureIcon.Glyph = value ? "ChevronDown" : "ChevronUp";
-            string label = value ? "Expand selection details" : "Collapse selection details";
-            ToolTip.SetTip(SelectionDisclosure, label);
-            Avalonia.Automation.AutomationProperties.SetName(SelectionDisclosure, label);
-        }
-    }
-
-    /// <summary>The selection bar's arrow was clicked: collapse (true) or expand both editors' bars.</summary>
-    public event Action<bool>? SelectionCollapseRequested;
-
     private void Seek(double time)
     {
         if (IsRecording) return; // a take records one stretch of the timeline
         audio?.Seek(time);
         Roll.Playhead = time;
+        Overview.Playhead = time;
+        Overview.InvalidatePlayhead();
         Roll.InvalidateVisual();
         UpdateTransport();
     }
@@ -530,6 +515,15 @@ public partial class KeysoundEditor : UserControl
         if (IsRecording) { StopRecording(); return; }
         if (audio.IsPlaying) { Stop(); return; }
         if (!audio.HasSong) SetStatus("The song audio is missing from this project.");
+        double? selectionStart = Roll.Selected.Count > 0 && doc is { } d ? d.Tempo.TimeAt(Roll.Selected.Min(n => n.Start)) : null;
+        double? from = StartFrom switch
+        {
+            PlayStart.LeftLocator => locatorLeft,
+            PlayStart.Selection => selectionStart,
+            PlayStart.SelectionOrLeft => selectionStart ?? locatorLeft,
+            _ => null,
+        };
+        if (from is { } f) { Roll.Playhead = Math.Max(0, f); }
         audio.Seek(Roll.Playhead);
         playStartedAt = Roll.Playhead;
         UpdateLoop();
@@ -562,7 +556,8 @@ public partial class KeysoundEditor : UserControl
         }
 
         double now = audio.Position;
-        Roll.Playhead = now;
+        Roll.Playhead = Overview.Playhead = now;
+        Overview.InvalidatePlayhead();
         ShowRecording(now);
         // Follow playback a page at a time.
         var axis = Roll.Axis;
@@ -603,7 +598,9 @@ public partial class KeysoundEditor : UserControl
     {
         if (doc is null) return;
         var notes = Roll.Selected;
-        InfoSelection.Text = notes.Count switch { 0 => "No notes", 1 => "1 note", var n => $"{n} notes" };
+        InfoSelection.Text = notes.Count switch { 0 => "Nothing selected", 1 => "1 note", var n => $"{n} notes" };
+        SelectionFields.IsVisible = notes.Count > 0;
+        SelectionHelp.IsVisible = notes.Count == 0;
         if (notes.Count == 0)
         {
             InfoPitch.Text = InfoObject.Text = "—";
@@ -617,7 +614,7 @@ public partial class KeysoundEditor : UserControl
         double ms = doc.Tempo.TimeAt(first.Start);
         var (bar, beat, tick) = doc.Tempo.BarBeatTickAt(ms);
         if (!StartBox.IsFocused) StartBox.Text = ms.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
-        InfoStart.Text = $"{bar}.{beat}.{tick}";
+        InfoStart.Text = $"({TimeSpan.FromMilliseconds(Math.Max(0, ms)):m\\:ss\\.fff} · {bar}.{beat}.{tick})";
         var pitches = notes.Select(n => n.Pitch).Distinct().ToList();
         InfoPitch.Text = pitches.Count == 1 ? PianoRollView.PitchName(pitches[0]) : $"{PianoRollView.PitchName(pitches.Min())}–{PianoRollView.PitchName(pitches.Max())}";
         var velocities = notes.Select(n => n.Velocity).Distinct().ToList();
@@ -662,8 +659,8 @@ public partial class KeysoundEditor : UserControl
         ZoomSlider.Value = TimeAxis.SliderFromZoom(Roll.Axis.Zoom);
         showingZoom = false;
         UpdateSelectionInfo();
-        StatusText.Text = status;
-        MessageRow.IsVisible = status.Length > 0;
+        UpdateControllerText();
+        UpdateZoomEnds();
         UndoButton.IsEnabled = doc.Session.CanUndo;
         RedoButton.IsEnabled = doc.Session.CanRedo;
         ToolTip.SetTip(UndoButton, doc.Session.UndoLabel is { } u ? $"Undo {u} (Ctrl+Z)" : "Undo (Ctrl+Z)");

@@ -85,6 +85,15 @@ internal sealed record Preferences
     public List<string> KeysoundCards { get; init; } = [];
     public List<string> KeysoundFolded { get; init; } = [];
     public bool KeysoundInspectorOpen { get; init; } = true;
+    /// <summary>
+    /// Keysound mode's settings kept for all projects, as Hitsound mode keeps its own: new notes' velocity, audition, snap
+    /// mode, triplet snaps and the velocity controller.
+    /// </summary>
+    public int KeysoundInsertVelocity { get; init; } = 100;
+    public bool KeysoundAudition { get; init; } = true;
+    public SnapMode KeysoundSnapMode { get; init; } = SnapMode.Grid;
+    public bool KeysoundTriplets { get; init; }
+    public bool KeysoundController { get; init; } = true;
 
     /// <summary>Global volume in % (20–100): the song, hitsounds and previews together.</summary>
     public double GlobalVolume { get; init; } = 20;

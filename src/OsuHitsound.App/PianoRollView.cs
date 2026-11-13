@@ -10,7 +10,7 @@ using OsuHitsound.Lanes.Keysound;
 namespace OsuHitsound.App;
 
 /// <summary>The key editor's tools, numbered as Cubase's (1 Select, 3 Split, 4 Glue, 5 Erase, 8 Draw).</summary>
-internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue }
+internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue, Mute, Ramp }
 
 /// <summary>
 /// Keysound mode's key editor, after Cubase's Key Editor: a ruler, a strip with the reference's gameplay objects over the
@@ -19,7 +19,12 @@ internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue }
 /// </summary>
 internal sealed class PianoRollView : Avalonia.Controls.Control
 {
-    public const double KeyboardWidth = 64, RulerHeight = 24, StripHeight = 46, VelocityHeight = 88, MinRow = 6, MaxRow = 30;
+    public const double KeyboardWidth = 64, RulerHeight = 24, StripHeight = 46, MinRow = 6, MaxRow = 30;
+
+    /// <summary>The velocity lane at the bottom (0 while the controller is hidden), as the Hitsound editor's controller.</summary>
+    public double VelocityLaneHeight { get; set; } = 126;
+    /// <summary>The space over the velocity lane that the editor covers with the scrollbar and the controller's title row.</summary>
+    public double BottomReserve { get; set; } = 54;
     private const double EdgeGrab = 6, DragThreshold = 3;
 
     private static readonly IBrush WhiteKey = Paint.Brush("#e8e8ea"), BlackKey = Paint.Brush("#1a1a1c"), KeyText = Paint.Brush("#55565c");
@@ -53,7 +58,18 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public double Playhead { get; set; }
     public KeyTool Tool { get; set; } = KeyTool.Select;
     public bool SnapOn { get; set; } = true;
-    public int SnapDivisions { get; set; } = 4; // beats are split into this many grid steps
+    /// <summary>The snap spacing, as the Hitsound editor's: whole beats (2/1, 3/1, 4/1) or a fraction of one.</summary>
+    public SnapSpacing Spacing { get; set; } = new(1, 4);
+    /// <summary>Grid, Grid relative (moves keep their offset from the grid) or Objects (the reference's object moments).</summary>
+    public SnapMode SnapMode { get; set; } = SnapMode.Grid;
+    /// <summary>Notes silenced while listening (the Mute tool). Never saved and Generate ignores it, as in the Hitsound editor.</summary>
+    public HashSet<Guid> PreviewMuted { get; } = [];
+    /// <summary>The Mute tool silenced or restored a note.</summary>
+    public event Action? MuteChanged;
+    /// <summary>Right-click in the grid: show the tool picker at the pointer (it never edits a note).</summary>
+    public event Action? ToolPickerRequested;
+    /// <summary>The ruler's bookmarks: the editor keeps them in the project's state.</summary>
+    public IReadOnlyList<KeyBookmark> Bookmarks => doc?.Session.State.Bookmarks ?? [];
     public bool ShowGhosts { get; set; } = true;
     public bool ShowMarkers { get; set; } = true;
     /// <summary>Notes being recorded, drawn over the selected track until the take ends.</summary>
@@ -78,8 +94,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public double GridStep(double time, int direction)
     {
         if (doc is null) return time;
-        double step = doc.Tempo.SegmentAtTime(time).BeatLength / SnapDivisions;
-        double target = doc.Tempo.Snap(time + direction * step * 0.51, 1, SnapDivisions);
+        double step = Spacing.Step(doc.Tempo.SegmentAtTime(time).BeatLength);
+        double target = doc.Tempo.Snap(time + direction * step * 0.51, Spacing.Beats, Spacing.Divisions);
         return Math.Max(0, Math.Abs(target - time) < 0.5 ? time + direction * step : target);
     }
     /// <summary>Ctrl+click (left) or Alt+click (right) in the ruler, as in Hitsound mode: set that locator here.</summary>
@@ -97,25 +113,47 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public double SongOffset { get; set; }
     /// <summary>Selection, tool or view changes the editor shows (not edits: those come from the session).</summary>
     public event Action? ViewChanged;
+    /// <summary>The view scrolled or zoomed (time or key rows): the scrollbars and the overview follow.</summary>
+    public event Action? ScrollChanged;
 
     public PianoRollView()
     {
         Focusable = true;
         ClipToBounds = true;
         Axis.Changed += InvalidateVisual;
+        Axis.Changed += () => ScrollChanged?.Invoke();
     }
 
     private KeysoundSession? Session => doc?.Session;
     private KeyTrack? Track => doc?.SelectedTrack is { } id ? Session?.State.Track(id) : null;
-    private Rect Grid => new(KeyboardWidth, RulerHeight + StripHeight, Math.Max(0, Bounds.Width - KeyboardWidth), Math.Max(0, Bounds.Height - RulerHeight - StripHeight - VelocityHeight));
-    private Rect VelocityArea => new(KeyboardWidth, Bounds.Height - VelocityHeight, Math.Max(0, Bounds.Width - KeyboardWidth), VelocityHeight);
+    private Rect Grid => new(KeyboardWidth, RulerHeight + StripHeight, Math.Max(0, Bounds.Width - KeyboardWidth), Math.Max(0, Bounds.Height - RulerHeight - StripHeight - VelocityLaneHeight - BottomReserve));
+    private Rect VelocityArea => new(KeyboardWidth, Bounds.Height - VelocityLaneHeight, Math.Max(0, Bounds.Width - KeyboardWidth), VelocityLaneHeight);
+
+    /// <summary>The grid's height in px and key rows, for the vertical scrollbar.</summary>
+    public double GridHeight => Grid.Height;
+    public double RowHeight => rowHeight;
+    /// <summary>The pitch at the top edge of the grid (fractional while scrolling); the vertical scrollbar's value is 127 minus it.</summary>
+    public double TopPitch
+    {
+        get => topPitch;
+        set { topPitch = value; ScrollPitch(0); }
+    }
+
+    /// <summary>Key row height in px, for the row-height slider.</summary>
+    public void SetRowHeight(double height)
+    {
+        if (Math.Abs(height - rowHeight) < 0.01) return;
+        ZoomRows(height / rowHeight);
+    }
 
     public void Attach(KeysoundDocument? document)
     {
         if (doc is not null) doc.Session.Changed -= OnSessionChanged;
         doc = document;
         selection.Clear();
+        PreviewMuted.Clear();
         drag = null;
+        objectMoments = [];
         if (doc is not null)
         {
             doc.Session.Changed += OnSessionChanged;
@@ -123,6 +161,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             Axis.Zoom = 0.45; // about 2.2 s per 1000 px, so objects and notes are readable from the start
             Axis.Left = (doc.Objects.Count > 0 ? doc.Objects[0].Start : doc.Tempo.Segments[0].Time) - 500;
             objectLookBack = doc.Objects.Select(o => o.End - o.Start).DefaultIfEmpty(0).Max();
+            objectMoments = [.. doc.Objects.SelectMany(o => o.Nodes.Select(n => n.Time)).Order()];
             Color[] colours = doc.ComboColours.Count > 0 ? [.. doc.ComboColours.Select(c => Color.FromRgb(c.R, c.G, c.B))] : DefaultCombo;
             comboFills = [.. colours.Select(c => ((IBrush)Paint.Brush(c, 0.55), (IBrush)Paint.Brush(c)))];
         }
@@ -153,6 +192,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     {
         base.OnSizeChanged(e);
         Axis.Width = Grid.Width;
+        ScrollChanged?.Invoke();
     }
 
     // Coordinates.
@@ -182,7 +222,27 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         for (int p = top; p >= bottom; p--) yield return (p, YOfPitch(p));
     }
 
-    private double SnapTime(double time) => SnapOn ? doc!.Tempo.Snap(time, 1, SnapDivisions) : time;
+    private double[] objectMoments = [];
+
+    /// <summary>A time on the snap: the grid, or with snap mode Objects the nearest gameplay-object moment.</summary>
+    private double SnapTime(double time)
+    {
+        if (!SnapOn) return time;
+        if (SnapMode != SnapMode.Objects || objectMoments.Length == 0) return doc!.Tempo.Snap(time, Spacing.Beats, Spacing.Divisions);
+        int next = Sorted.LowerBound(objectMoments, time, x => x);
+        if (next == 0) return objectMoments[0];
+        if (next == objectMoments.Length) return objectMoments[^1];
+        double before = objectMoments[next - 1], after = objectMoments[next];
+        return time - before <= after - time ? before : after;
+    }
+
+    /// <summary>
+    /// Where a note at <paramref name="time"/> lands when dragged by <paramref name="raw"/> ms: on the snap, or with Grid
+    /// relative by whole grid steps, keeping its offset from its own grid line (as in the Hitsound editor).
+    /// </summary>
+    private double SnapMoved(double time, double raw) => SnapOn && SnapMode == SnapMode.GridRelative
+        ? time + doc!.Tempo.Snap(time + raw, Spacing.Beats, Spacing.Divisions) - doc.Tempo.Snap(time, Spacing.Beats, Spacing.Divisions)
+        : SnapTime(time + raw);
 
     /// <summary>
     /// The grid cell's start at or before a time: where Draw puts a note. Ticks count beats, so one step is the same number
@@ -191,11 +251,12 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private double FloorSnap(double time)
     {
         if (!SnapOn) return time;
-        double snapped = doc!.Tempo.Snap(time, 1, SnapDivisions);
-        return snapped <= time + 0.01 ? snapped : doc.Tempo.Snap(time - doc.Tempo.SegmentAtTime(time).BeatLength / SnapDivisions, 1, SnapDivisions);
+        if (SnapMode == SnapMode.Objects) return SnapTime(time);
+        double snapped = doc!.Tempo.Snap(time, Spacing.Beats, Spacing.Divisions);
+        return snapped <= time + 0.01 ? snapped : doc.Tempo.Snap(time - Spacing.Step(doc.Tempo.SegmentAtTime(time).BeatLength), Spacing.Beats, Spacing.Divisions);
     }
 
-    private long StepTicks => Math.Max(1, TempoMap.Ppq / SnapDivisions);
+    private long StepTicks => Math.Max(1, TempoMap.Ppq * Spacing.Beats / Spacing.Divisions);
 
     // Drawing.
 
@@ -218,7 +279,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 double x = Math.Round(XOfTime(time)) + 0.5;
                 var pen = level switch { 0 => Paint.BarPen, 1 => Paint.BeatPen, _ => RowLine };
                 ctx.DrawLine(pen, new Point(x, grid.Top), new Point(x, grid.Bottom));
-                ctx.DrawLine(pen, new Point(x, VelocityArea.Top), new Point(x, VelocityArea.Bottom));
+                if (VelocityLaneHeight > 0) ctx.DrawLine(pen, new Point(x, VelocityArea.Top), new Point(x, VelocityArea.Bottom));
             }
 
             if (ShowMarkers)
@@ -234,7 +295,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         DrawKeyboard(ctx, grid);
         DrawRuler(ctx, lines, b.Width);
         DrawStrip(ctx, objects, b.Width);
-        DrawVelocity(ctx, ticks);
+        if (VelocityLaneHeight > 0) DrawVelocity(ctx, ticks);
 
         if (drag is { Kind: DragKind.Box } box)
         {
@@ -251,7 +312,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private int VisibleDivisions()
     {
         double beatPx = doc!.Tempo.SegmentAtTime(TimeOfX(KeyboardWidth)).BeatLength * Axis.Zoom;
-        int d = SnapDivisions;
+        int d = Spacing.Divisions;
         while (d > 1 && beatPx / d < 8) d = d % 2 == 0 ? d / 2 : 1;
         return d;
     }
@@ -296,8 +357,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         }
 
         ctx.DrawLine(Paint.DividerPen, new Point(KeyboardWidth - 0.5, 0), new Point(KeyboardWidth - 0.5, Bounds.Height));
-        Paint.DrawText(ctx, "Velocity", new Point(6, VelocityArea.Top + 4), 10, Paint.Dim, KeyboardWidth - 8);
-        Paint.DrawText(ctx, "Drag bars · Ctrl = spread · Alt = paint · Shift = ramp", new Point(Math.Max(KeyboardWidth + 6, Bounds.Width - 300), VelocityArea.Top + 4), 10, Paint.Dim, 294);
+        if (VelocityLaneHeight > 0)
+        {
+            var lane = VelocityArea;
+            Paint.DrawText(ctx, "Velocity", new Point(6, lane.Top + 4), 10, Paint.Dim, KeyboardWidth - 8);
+            foreach (int v in (int[])[127, 64, 1])
+                Paint.DrawText(ctx, v.ToString(), new Point(KeyboardWidth + 4, Math.Min(lane.Bottom - 13, lane.Bottom - (lane.Height - 8) * v / 127.0 - 6)), 9, Paint.Dim, 0);
+        }
     }
 
     private void DrawNotes(DrawingContext ctx, (long From, long To) ticks)
@@ -321,7 +387,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             if (n.End < fromTick || n.Start > toTick) continue;
             var r = NoteRect(n);
             bool selected = selection.Contains(n.Id);
-            ctx.DrawRectangle(VelocityFill(n.Velocity), selected ? WhiteRing : NoteEdge, r, 1.5, 1.5);
+            // A note the Mute tool silenced shows faintly, as a muted hit does in the Hitsound grid.
+            using (ctx.PushOpacity(PreviewMuted.Contains(n.Id) ? 0.3 : 1))
+                ctx.DrawRectangle(VelocityFill(n.Velocity), selected ? WhiteRing : NoteEdge, r, 1.5, 1.5);
             if (n.Target is not null)
                 ctx.FillRectangle(KeySync.Status(n, doc!.TargetIndex) == KeySyncStatus.Synced ? SyncedMark : StaleMark,
                     new Rect(r.Left, r.Top, Math.Min(3, r.Width), r.Height));
@@ -357,7 +425,42 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         }
 
         DrawLocators(ctx, width);
+        DrawBookmarks(ctx, width);
         ctx.DrawLine(Paint.DividerPen, new Point(KeyboardWidth, RulerHeight - 0.5), new Point(width, RulerHeight - 0.5));
+    }
+
+    private static readonly IBrush BookmarkFill = Paint.Brush("#4cc3d1");
+
+    /// <summary>
+    /// Bookmark flags on the ruler, as in the Hitsound editor: a labelled one shows its label beside its flag, cut short
+    /// before the next flag, over the bar numbers.
+    /// </summary>
+    private void DrawBookmarks(DrawingContext ctx, double width)
+    {
+        var marks = Bookmarks;
+        using var clip = ctx.PushClip(new Rect(KeyboardWidth, 0, width - KeyboardWidth, RulerHeight));
+        for (int i = 0; i < marks.Count; i++)
+        {
+            double x = Math.Round(XOfTime(marks[i].Time)) + 0.5;
+            if (x < KeyboardWidth - 8 || x > width + 8) continue;
+            var flag = new StreamGeometry();
+            using (var g = flag.Open())
+            {
+                g.BeginFigure(new Point(x, 0), true);
+                g.LineTo(new Point(x + 7, 4));
+                g.LineTo(new Point(x, 8));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(BookmarkFill, null, flag);
+            ctx.FillRectangle(BookmarkFill, new Rect(x, 0, 1, RulerHeight));
+            if (marks[i].Label is not { Length: > 0 } label) continue;
+            double next = i + 1 < marks.Count ? XOfTime(marks[i + 1].Time) - 4 : width;
+            double room = next - (x + 9);
+            if (room < 16) continue;
+            var text = Paint.Format(label, 10, BookmarkFill);
+            ctx.FillRectangle(Paint.Chrome2, new Rect(x + 8, 9, Math.Min(text.Width, room) + 2, RulerHeight - 10));
+            Paint.DrawText(ctx, label, new Point(x + 9, 10), 10, BookmarkFill, room);
+        }
     }
 
     /// <summary>Gameplay objects over the song waveform: numbered circular heads, straight slider bodies, unnumbered tails.</summary>
@@ -565,12 +668,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             double at = Math.Max(0, TimeOfX(p.X));
             if (mods.HasFlag(KeyModifiers.Control) || mods.HasFlag(KeyModifiers.Alt))
             {
-                if (SnapOn) at = Math.Max(0, doc.Tempo.Snap(at, 1, SnapDivisions));
+                at = Math.Max(0, SnapTime(at));
                 LocatorRequested?.Invoke(mods.HasFlag(KeyModifiers.Control), at);
                 e.Handled = true;
                 return;
             }
 
+            if (p.Y < RulerHeight && doc.Session.NearestBookmark(at, 7 / Axis.Zoom) is { } bookmark) at = bookmark.Time;
             SeekRequested?.Invoke(at);
             e.Handled = true;
             return;
@@ -597,7 +701,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         if (VelocityArea.Contains(p))
         {
-            if (mods.HasFlag(KeyModifiers.Alt) || mods.HasFlag(KeyModifiers.Shift))
+            if (mods.HasFlag(KeyModifiers.Alt) || mods.HasFlag(KeyModifiers.Shift) || Tool == KeyTool.Ramp)
             {
                 drag = new Drag(mods.HasFlag(KeyModifiers.Alt) ? DragKind.VelocityPaint : DragKind.VelocityRamp, p);
                 lastPaintX = null;
@@ -630,15 +734,30 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
         var hit = NoteAt(p);
 
-        // Right-click edits nothing here either (it used to delete the note; the user ruled that out, 2026-11-12).
+        // Right-click opens the tool picker at the pointer, as in the Hitsound grid and Cubase, and edits nothing (it used to
+        // delete the note; the user ruled that out, 2026-11-12).
         if (point.IsRightButtonPressed)
         {
             e.Handled = true;
+            ToolPickerRequested?.Invoke();
             return;
         }
 
-        switch (Tool)
+        // Holding Alt draws with any tool, as in the Hitsound editor; Ctrl+Alt+drag copies notes instead.
+        bool copyDrag = mods.HasFlag(KeyModifiers.Alt) && mods.HasFlag(KeyModifiers.Control);
+        var tool = mods.HasFlag(KeyModifiers.Alt) && !copyDrag ? KeyTool.Draw : Tool;
+        switch (tool)
         {
+            case KeyTool.Mute:
+                // Preview only, as in the Hitsound editor: silenced while listening, never saved, and Generate still renders it.
+                if (hit is not null)
+                {
+                    if (!PreviewMuted.Remove(hit.Id)) PreviewMuted.Add(hit.Id);
+                    MuteChanged?.Invoke();
+                }
+
+                break;
+
             case KeyTool.Split when hit is not null:
             {
                 // At the snapped click; a click on a selected note splits every selected note there.
@@ -690,14 +809,27 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 AuditionRequested?.Invoke(hit.Pitch, hit.Velocity);
                 break;
 
+            case KeyTool.Select or KeyTool.Ramp when hit is null && e.ClickCount == 2 && mods == KeyModifiers.None:
+            {
+                // Double-click on empty space inserts a note there, as Draw would (Cubase's Key Editor does the same with
+                // its Select tool): snapped, one snap step long, at the insert velocity.
+                long startTick = doc.Tempo.RoundTick(FloorSnap(TimeOfX(p.X)));
+                var note = new KeyNote(Guid.NewGuid(), startTick, StepTicks, PitchOfY(p.Y), InsertVelocity);
+                SelectOnly([note.Id]);
+                session.AddNotes(track.Id, [note], "Draw note");
+                AuditionRequested?.Invoke(note.Pitch, note.Velocity);
+                break;
+            }
+
             case KeyTool.Select when hit is not null && e.ClickCount == 2 && mods.HasFlag(KeyModifiers.Shift):
                 // Cubase: Shift+double-click selects this note and every later one of its pitch.
                 selection.UnionWith(KeyEditing.FollowingOfPitch(track.Notes, hit).Select(n => n.Id));
                 break;
 
-            case KeyTool.Select when hit is not null:
+            case KeyTool.Select or KeyTool.Ramp when hit is not null:
             {
-                bool ctrl = mods.HasFlag(KeyModifiers.Control), shift = mods.HasFlag(KeyModifiers.Shift), velocity = ctrl && shift;
+                // Ctrl+Alt is the copy drag: its Ctrl doesn't toggle the note's selection.
+                bool ctrl = mods.HasFlag(KeyModifiers.Control) && !copyDrag, shift = mods.HasFlag(KeyModifiers.Shift), velocity = ctrl && shift;
                 if (ctrl && !shift) { if (!selection.Remove(hit.Id)) selection.Add(hit.Id); }
                 else if (shift && !ctrl) selection.Add(hit.Id);
                 else if (!selection.Contains(hit.Id)) SelectOnly([hit.Id]);
@@ -707,7 +839,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 var (kind, label) = velocity ? (DragKind.NoteVelocity, "Velocity")
                     : OnRightEdge(hit, p) ? (DragKind.Resize, "Resize notes")
                     : OnLeftEdge(hit, p) ? (DragKind.ResizeStart, "Resize notes")
-                    : mods.HasFlag(KeyModifiers.Alt) ? (DragKind.Copy, "Copy notes") // Cubase: Alt+drag copies
+                    : copyDrag ? (DragKind.Copy, "Copy notes") // Ctrl+Alt+drag copies (Alt alone draws, as in the Hitsound editor)
                     : (DragKind.Move, "Move notes");
                 StartGesture(kind, p, hit, track, label);
                 if (kind == DragKind.Copy)
@@ -784,6 +916,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     private double? lastPaintX; // where the last Alt+drag step painted
 
+    /// <summary>The shape of velocity ramps (the controller's ramp shape box).</summary>
+    public RampShape RampShape { get; set; } = RampShape.Linear;
+
     private int VelocityAtY(double y)
     {
         var area = VelocityArea;
@@ -826,7 +961,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             {
                 // The anchor note's start follows the pointer (snapped); the others keep their distance to it.
                 double anchorTime = tempo.TimeAt(anchor.Start);
-                double target = SnapTime(anchorTime + (TimeOfX(p.X) - TimeOfX(drag.Start.X)));
+                double target = SnapMoved(anchorTime, TimeOfX(p.X) - TimeOfX(drag.Start.X));
                 long dt = tempo.RoundTick(target) - anchor.Start;
                 int dp = (int)Math.Round((drag.Start.Y - p.Y) / rowHeight);
                 if (mods.HasFlag(KeyModifiers.Control)) // Ctrl keeps the move to one direction, whichever is larger
@@ -905,7 +1040,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
                 session.UpdateNotes(track.Id, [.. NotesBetween(fresh, x0, x1).Select(n =>
                 {
                     double x = XOfTick(n.Start), f = Math.Abs(x1 - x0) < 1 ? 1 : Math.Clamp((x - x0) / (x1 - x0), 0, 1);
-                    return n with { Velocity = Math.Clamp((int)Math.Round(v0 + (v1 - v0) * f), KeyNote.MinVelocity, KeyNote.MaxVelocity) };
+                    return n with { Velocity = Math.Clamp(VolumeRamp.At(RampShape, f, v0, v1), KeyNote.MinVelocity, KeyNote.MaxVelocity) };
                 })], "Velocity");
                 break;
             }
@@ -1018,6 +1153,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         double visible = Grid.Height / rowHeight;
         topPitch = Math.Clamp(topPitch + semitones, Math.Min(KeyNote.MaxPitch + 1, visible - 1), KeyNote.MaxPitch + 1);
         InvalidateVisual();
+        ScrollChanged?.Invoke();
     }
 
     /// <summary>Shows the selected track's notes (or middle C) vertically.</summary>
@@ -1120,14 +1256,58 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     }
 
     /// <summary>Q: moves the selected notes' starts onto the grid (always, even with Snap off).</summary>
-    public void QuantizeSelection()
+    /// <summary>Quantize, as the Hitsound editor's: the selected notes move <paramref name="strength"/> % of the way to the grid.</summary>
+    public void QuantizeSelection(double strength = 100)
     {
         if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
         var tempo = doc!.Tempo;
-        doc.Session.UpdateNotes(t.Id, KeyEditing.Quantize(notes, tick => tempo.RoundTick(tempo.Snap(tempo.TimeAt(tick), 1, SnapDivisions))), "Quantize");
+        double f = Math.Clamp(strength, 1, 100) / 100;
+        doc.Session.UpdateNotes(t.Id, KeyEditing.Quantize(notes, tick =>
+        {
+            double at = tempo.TimeAt(tick);
+            return tempo.RoundTick(at + (SnapTime(at) - at) * f);
+        }), "Quantize");
     }
 
-    /// <summary>Moves the selected notes by whole grid steps.</summary>
+    /// <summary>Repeat's gap: the selection's length in snap steps, at least one.</summary>
+    public int DefaultRepeatGap()
+    {
+        var notes = SelectedNotes();
+        if (notes.Count == 0) return 1;
+        long span = notes.Max(n => n.End) - notes.Min(n => n.Start);
+        return Math.Max(1, (int)Math.Ceiling((double)span / StepTicks - 0.01));
+    }
+
+    /// <summary>Ctrl+R, as in the Hitsound editor: <paramref name="copies"/> copies of the selection, each <paramref name="gap"/> snap steps after the last, as one step.</summary>
+    public void Repeat(int copies, int gap)
+    {
+        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes || copies is < 1 or > HitEditor.MaxRepeatCopies || gap is < 1 or > HitEditor.MaxRepeatGap) return;
+        long first = notes.Min(n => n.Start), step = gap * StepTicks;
+        var added = new List<KeyNote>();
+        for (int c = 1; c <= copies; c++) added.AddRange(KeyEditing.PasteAt(notes, first + c * step));
+        doc!.Session.AddNotes(t.Id, added, "Repeat");
+        SelectOnly(added.Select(n => n.Id));
+    }
+
+    /// <summary>Ctrl+Alt+Left/Right, as in the Hitsound editor: the selection moves so its first note lands on the previous or next grid line.</summary>
+    public void NudgeToGrid(int direction)
+    {
+        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
+        var tempo = doc!.Tempo;
+        long start = notes.Min(n => n.Start);
+        long dt = tempo.RoundTick(GridStep(tempo.TimeAt(start), direction)) - start;
+        if (dt != 0) doc.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Start = Math.Max(0, n.Start + dt) })], "Move notes");
+    }
+
+    /// <summary>Selects the selected track's notes that <paramref name="match"/> (the controller's velocity range).</summary>
+    public int SelectWhere(Func<KeyNote, bool> match)
+    {
+        if (Track is not { } t) return 0;
+        var ids = t.Notes.Where(match).Select(n => n.Id).ToList();
+        SelectOnly(ids);
+        return ids.Count;
+    }
+
     /// <summary>The info bar's Start: the selected notes move so the first starts at this tick (the others keep their spacing).</summary>
     public void MoveSelectionTo(long tick)
     {

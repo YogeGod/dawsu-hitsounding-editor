@@ -50,7 +50,7 @@ public partial class MainWindow
         if (SaveBadge.IsVisible != saveProblems > 0)
         {
             SaveBadge.IsVisible = saveProblems > 0;
-            ribbonFitWidth = double.NaN; // Save changed width: fit the ribbon beside it again
+            ribbonFit?.Reset(); // Save changed width: fit the ribbon beside it again
             UpdateRibbonFit(Bounds.Width > 0 ? Bounds.Width : Width);
         }
         SaveBadgeText.Text = saveProblems.ToString(System.Globalization.CultureInfo.InvariantCulture);

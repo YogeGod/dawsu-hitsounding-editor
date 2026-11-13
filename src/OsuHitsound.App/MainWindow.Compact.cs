@@ -9,7 +9,6 @@ namespace OsuHitsound.App;
 public partial class MainWindow
 {
     private bool narrowLayout, wideInspectorOpen, compactInspectorOpen;
-    private bool SelectionBarCollapsed => prefs.SelectionBarCollapsed;
 
     private void SetupCompactLayout()
     {
@@ -29,9 +28,6 @@ public partial class MainWindow
 
         // The colour scheme and the user's colours (Preferences, Colours); the old dark-mode switch picks the scheme until then.
         ThemeColors.Apply(UiTheme.Current, prefs.Colors, prefs.DarkMode);
-        // Only Keysound mode retains a collapsible selection bar.
-        Keys.SelectionCollapsed = SelectionBarCollapsed;
-        Keys.SelectionCollapseRequested += SetSelectionCollapsed;
         Lanes.LaneListResizing += AlignToLaneList;
         Lanes.LaneListResized += () =>
         {
@@ -53,14 +49,6 @@ public partial class MainWindow
             var tip = ToolTip.GetTip(button)?.ToString();
             ToolTip.SetTip(button, string.IsNullOrEmpty(tip) ? name : name + "\n" + tip);
         }
-    }
-
-    // Keysound mode's selection bar remembers whether it is collapsed.
-    private void SetSelectionCollapsed(bool collapsed)
-    {
-        prefs = prefs with { SelectionBarCollapsed = collapsed };
-        Keys.SelectionCollapsed = collapsed;
-        SavePrefs();
     }
 
     private void UpdateCompactLayout(double width)
@@ -87,6 +75,7 @@ public partial class MainWindow
         // No sideways scrolling: the bars fit the window, and the map name shortens with "…" instead of growing the bar.
         TitleBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         UpdateRibbonFit(width);
+        Keys.FitWidth(width);
         Lcd.Margin = default;
         Lcd.Padding = new Thickness(12, 2);
         MixControls.Width = width < 1000 ? 268 : 308;
@@ -117,34 +106,8 @@ public partial class MainWindow
     /// <summary>The narrowest window that shows the L/R locator button beside Cycle.</summary>
     public const double LocatorsMinWidth = 1000;
 
-    private static readonly string[] RibbonSteps = ["", "narrow", "compact", "iconsOnly"];
-    private double ribbonFitWidth = double.NaN;
+    private RibbonFit? ribbonFit;
 
-    /// <summary>
-    /// Fits the ribbon in one row: the first step whose groups fit beside Save, from everything labelled to icons only
-    /// (Save keeps its label). Each step hides more: group captions, then secondary labels, then all labels.
-    /// </summary>
-    private void UpdateRibbonFit(double width)
-    {
-        // Resizes and theme changes call this often and the fit only depends on width. Before the window is shown its
-        // styles aren't applied yet, so that fit is redone.
-        if (width == ribbonFitWidth) return;
-        if (RibbonGroups.GetVisualRoot() is not null) ribbonFitWidth = width;
-        var margin = ControlBarContent.Margin;
-        double available = width - margin.Left - margin.Right - Remeasure(SaveButton).Width - SaveButton.Margin.Left;
-        foreach (var step in RibbonSteps)
-        {
-            foreach (var other in RibbonSteps.Where(s => s.Length > 0)) ControlBar.Classes.Set(other, other == step);
-            if (Remeasure(RibbonGroups).Width <= available) break;
-        }
-    }
-
-    // A label or badge shown or hidden inside leaves the button's measure cached, so measure every part afresh.
-    private static Size Remeasure(Layoutable control)
-    {
-        foreach (var part in control.GetVisualDescendants().OfType<Layoutable>()) part.InvalidateMeasure();
-        control.InvalidateMeasure();
-        control.Measure(Size.Infinity);
-        return control.DesiredSize;
-    }
+    /// <summary>Fits the ribbon in one row beside Save (<see cref="App.RibbonFit"/>).</summary>
+    private void UpdateRibbonFit(double width) => (ribbonFit ??= new RibbonFit(ControlBar, ControlBarContent, RibbonGroups, SaveButton)).Update(width);
 }
