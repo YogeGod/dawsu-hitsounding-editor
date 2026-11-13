@@ -121,16 +121,20 @@ internal sealed class HitEditor
         Notify();
     }
 
+    /// <summary>The hits on screen: in drum map view, hits on samples no instrument row uses are left alone.</summary>
+    private IEnumerable<EditHit> Visible(EditSession session) =>
+        Model is { DrumMapMode: true } model ? session.State.Hits.Where(h => model.ShowsLane(h.Lane)) : session.State.Hits;
+
     public void SelectAll()
     {
-        if (Session is { } session) Select(session.State.Hits);
+        if (Session is { } session) Select(Visible(session));
     }
 
     public void Clear() => Select([]);
 
     public void SelectWhere(Func<EditHit, bool> predicate)
     {
-        if (Session is { } session) Select(session.State.Hits.Where(predicate));
+        if (Session is { } session) Select(Visible(session).Where(predicate));
     }
 
     /// <summary>Removes one hit and drops it from the selection (Draw strokes that start on a hit, Erase).</summary>
@@ -377,8 +381,8 @@ internal sealed class HitEditor
         var hits = scope switch
         {
             VolumeScope.Selected => Selected,
-            VolumeScope.SelectedLanes => session.State.Hits.Where(h => lanes.Contains(h.Lane)),
-            _ => session.State.Hits,
+            VolumeScope.SelectedLanes => Visible(session).Where(h => lanes.Contains(h.Lane)),
+            _ => Visible(session),
         };
         return session.MomentsWithVolume(hits, from, to);
     }

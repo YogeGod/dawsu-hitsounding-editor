@@ -10,6 +10,8 @@ internal sealed partial class ArrangeModel
     public bool DrumMapMode => DrumMaps.Enabled;
     public DrumMapPreset? ActiveDrumMap => DrumMaps.Presets.FirstOrDefault(p => p.Id == DrumMaps.Active);
     public event Action? DrumMapsChanged;
+    /// <summary>Lanes the active drum map shows (its assigned samples and their drum renders), whatever the filter.</summary>
+    private HashSet<Lane> drumMapped = [];
 
     public void RestoreDrumMaps(DrumMapCollection maps)
     { maps.Validate(); Relayout(() => DrumMaps = maps); }
@@ -41,10 +43,37 @@ internal sealed partial class ArrangeModel
     public string DrumRowName(LaneRow row) => row.InstrumentName ?? NameOf(row.Lane);
     public Guid? ActiveDrumEntry { get; private set; }
     public void SetActiveRow(LaneRow row) { ActiveDrumEntry = row.DrumEntryId; SetActive(row.Lane); }
+    public void SetActiveDrumEntry(Guid id) => ActiveDrumEntry = id;
+
+    /// <summary>Whether a hit on this lane is on screen and editable. In drum map view only mapped lanes are.</summary>
+    public bool ShowsLane(Lane lane) => !DrumMapMode || drumMapped.Contains(lane);
+    /// <summary>Hits that drum map view hides because no instrument row uses their sample.</summary>
+    public int HiddenDrumHits => DrumMapMode ? Session.State.Hits.Count(h => !drumMapped.Contains(h.Lane)) : 0;
+
+    /// <summary>Adds an instrument row with no sample under the active row (or at the end) and makes it active.</summary>
+    public Guid? AddDrumRow(string name = "New instrument")
+    {
+        if (!DrumMapMode || ActiveDrumMap is not { } preset || preset.Rows.Count >= 4096 ||
+            DrumMaps.Presets.Sum(p => p.Rows.Count) >= 16384) return null;
+        var entry = new DrumMapEntry(Guid.NewGuid(), name, null, null);
+        int at = ActiveDrumEntry is { } active ? preset.Rows.FindIndex(r => r.Id == active) : -1;
+        SetDrumPreset(preset with { Rows = at < 0 ? preset.Rows.Add(entry) : preset.Rows.Insert(at + 1, entry) }, "Add instrument row");
+        ActiveDrumEntry = entry.Id;
+        return entry.Id;
+    }
+
+    /// <summary>Removes the active instrument row. Its hits stay on their sample lane.</summary>
+    public bool RemoveActiveDrumRow()
+    {
+        if (!DrumMapMode || ActiveDrumMap is not { } preset || ActiveDrumEntry is not { } id || preset.Rows.All(r => r.Id != id)) return false;
+        SetDrumPreset(preset with { Rows = preset.Rows.RemoveAll(r => r.Id == id) }, "Remove instrument row");
+        ActiveDrumEntry = null;
+        return true;
+    }
+    public bool HasActiveDrumRow => DrumMapMode && ActiveDrumEntry is { } id && ActiveDrumMap?.Rows.Any(r => r.Id == id) == true;
 
     private List<Row> BuildDrumRows()
     {
-        var grouped = BuildGroupedRows();
         var rows = new List<Row>(); var assigned = new HashSet<Lane>();
         foreach (var entry in ActiveDrumMap?.Rows ?? [])
         {
@@ -64,10 +93,8 @@ internal sealed partial class ArrangeModel
                 if (!IsFamilyCollapsed(source.Lane) || Filter.Length > 0) rows.AddRange(children);
             }
         }
-        // Never lose access to samples or existing hits when entering the instrument view.
-        var withHits = Session.State.Hits.Select(h => h.Lane).ToHashSet();
-        rows.AddRange(laneRows.Where(r => !assigned.Contains(r.Lane) && RenderFamily(r.Lane) is null && (!hidden.Contains(r.Lane) || withHits.Contains(r.Lane)) && MatchesFilter(r.Lane)));
-        rows.AddRange(grouped.OfType<LaneRow>().Where(r => !assigned.Contains(r.Lane) && RenderFamily(r.Lane) is not null));
+        // Only the drum map's rows: lanes no instrument uses stay out, hits included. Sample view shows them.
+        drumMapped = assigned;
         return rows;
     }
 

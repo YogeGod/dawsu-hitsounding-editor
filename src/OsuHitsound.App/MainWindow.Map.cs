@@ -22,12 +22,13 @@ public partial class MainWindow
         Lanes.ToolPickerRequested += ShowToolPicker;
         Lanes.SliderMenuRequested += ShowSliderMenu;
         // Standard families add a numbered default immediately, like Electron V6.39.
-        Lanes.AddLaneRequested += async lane => await AddExtraLane(lane);
-        Lanes.RemoveLaneRequested += async () => await DeleteActiveLane();
+        Lanes.AddLaneRequested += async lane => { if (model?.DrumMapMode == true) await AddDrumRow(); else await AddExtraLane(lane); };
+        Lanes.RemoveLaneRequested += async () => { if (model?.DrumMapMode == true) RemoveDrumRow(); else await DeleteActiveLane(); };
+        Lanes.DrumMapExitRequested += () => DrumMapToggle.IsChecked = false;
         Lanes.CollapseNamesRequested += ToggleLaneNames;
         // Samples dropped into the folder (File → Open map folder) show up when the editor is back in front.
         Activated += (_, _) => RefreshFolder();
-        AddLaneItem.Click += async (_, _) => await AddExtraLane();
+        AddLaneItem.Click += async (_, _) => { if (model?.DrumMapMode == true) await AddDrumRow(); else await AddExtraLane(); };
         GenerateItem.Click += async (_, _) => await Generate();
         CopyHitsoundsItem.Click += async (_, _) => await CopyHitsounds();
         CleanGreenLinesItem.Click += async (_, _) => await CleanGreenLines();

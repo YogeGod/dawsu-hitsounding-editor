@@ -14,35 +14,27 @@ public class DrumMapModelTests
         var folder = new MapFolder([]); var session = new EditSession(file, folder, Decompiler.Decompile(file, folder));
         return new(session, file, new HashSet<Lane>());
     }
+    private static DrumMapPreset KitWithClap(ArrangeModel model)
+    {
+        var clap = model.LaneRows.First(r => r.Lane.Name == "soft-hitclap").Lane; var kit = Kit(model);
+        return kit with { Rows = kit.Rows.Add(new(Guid.NewGuid(), "Clap", ProjectStore.KeyOf(clap), ProjectStore.KeyOf(clap))) };
+    }
     private static DrumMapPreset Kit(ArrangeModel model)
     {
         var kick = model.LaneRows.First(r => r.Lane.Name == "drum-hitnormal").Lane;
         return new(Guid.NewGuid(), "Kit", [new(Guid.NewGuid(), "Kick", ProjectStore.KeyOf(kick), ProjectStore.KeyOf(kick)), new(Guid.NewGuid(), "Subkick", ProjectStore.KeyOf(kick), ProjectStore.KeyOf(kick))]);
     }
     [Fact]
-    public void Undoing_an_extra_lane_hides_it_in_the_flat_view_and_redo_restores_it()
+    public void A_sample_lane_added_in_drum_map_view_only_shows_in_sample_view()
     {
-        var model = Model(); model.SetDrumMapMode(true);
+        var model = Model(); model.SetDrumPreset(Kit(model)); model.SetDrumMapMode(true);
         var lane = new Lane(LaneSource.BeatmapFile, "drum-hitnormal2.wav");
         model.AddSlotLane(lane, lane);
-        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == lane);
-        model.Session.Undo();
         Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Lane == lane);
-        model.Session.Redo();
+        model.SetDrumMapMode(false);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == lane);
     }
 
-    [Fact]
-    public void Reordering_other_samples_accepts_long_sample_filenames()
-    {
-        var model = Model(); var sample = new Lane(LaneSource.BeatmapFile, new string('a', 160) + ".wav");
-        model.AddLane(sample); model.SetDrumMapMode(true);
-        var source = model.Rows.OfType<LaneRow>().Single(r => r.Lane == sample);
-        model.MoveDrumRow(source, model.Rows[0], false);
-        model.DrumMaps.Validate();
-        var row = Assert.IsType<LaneRow>(model.Rows[0]);
-        Assert.Equal(sample, row.Lane); Assert.Equal(128, row.InstrumentName!.Length);
-    }
 
     [Fact]
     public void Replacing_a_sample_keeps_all_aliases_linked_and_undoes_with_notes()
@@ -94,13 +86,14 @@ public class DrumMapModelTests
     public void Instrument_rows_can_cross_families_without_reordering_sample_view()
     {
         var model = Model(); var original = model.Rows.ToList();
+        var clap = model.LaneRows.First(r => r.Lane.Name == "soft-hitclap").Lane;
+        model.SetDrumPreset(KitWithClap(model));
         model.SetDrumMapMode(true);
         var originalEntries = model.ActiveDrumMap!.Rows;
-        var source = model.Rows.OfType<LaneRow>().First(r => r.Lane.Name == "drum-hitnormal");
-        var target = model.Rows.OfType<LaneRow>().First(r => r.Lane.Name == "soft-hitclap");
+        var source = (LaneRow)model.Rows[0]; var target = model.Rows.OfType<LaneRow>().Single(r => r.Lane == clap);
         model.MoveDrumRow(source, target, false);
-        int at = model.Rows.ToList().FindIndex(r => r is LaneRow l && l.Lane == source.Lane);
-        Assert.Equal(target.Lane, ((LaneRow)model.Rows[at + 1]).Lane);
+        int at = model.Rows.ToList().FindIndex(r => r is LaneRow l && l.DrumEntryId == source.DrumEntryId);
+        Assert.Equal(clap, ((LaneRow)model.Rows[at + 1]).Lane);
         model.Session.Undo(); Assert.Equal(originalEntries, model.ActiveDrumMap!.Rows);
         model.SetDrumMapMode(false); Assert.Equal(original, model.Rows);
     }
@@ -113,17 +106,68 @@ public class DrumMapModelTests
         Assert.DoesNotContain(model.LaneRows, r => r.Lane.Name == "soft-hitfinish77.wav");
     }
     [Fact]
-    public void Filtering_matches_instrument_names_and_other_samples_remain_accessible()
+    public void Filtering_matches_instrument_names()
     {
         var model = Model(); var kit = Kit(model); model.SetDrumPreset(kit); model.SetDrumMapMode(true);
-        Assert.Equal(model.LaneRows.Count + 1, model.Rows.Count);
+        Assert.Equal(2, model.Rows.Count);
         model.SetFilter("Subkick"); var row = Assert.IsType<LaneRow>(Assert.Single(model.Rows)); Assert.Equal("Subkick", row.InstrumentName);
-        model.SetFilter(""); Assert.Equal(model.LaneRows.Count + 1, model.Rows.Count);
+        model.SetFilter(""); Assert.Equal(2, model.Rows.Count);
+    }
+
+    [Fact]
+    public void Drum_map_view_shows_only_its_rows_and_hides_unmapped_notes_from_edits()
+    {
+        var model = Model(); model.SetDrumPreset(Kit(model)); model.SetDrumMapMode(true);
+        var kick = model.LaneRows.First(r => r.Lane.Name == "drum-hitnormal").Lane;
+        Assert.All(model.Rows, r => Assert.NotNull(Assert.IsType<LaneRow>(r).DrumEntryId));
+        int hidden = model.Session.State.Hits.Count(h => h.Lane != kick);
+        Assert.True(hidden > 0);
+        Assert.Equal(hidden, model.HiddenDrumHits);
+        var editor = new HitEditor { Model = model };
+        editor.SelectAll();
+        Assert.All(editor.Selected, h => Assert.Equal(kick, h.Lane));
+        Assert.NotEmpty(editor.Selected);
+        model.SetDrumMapMode(false);
+        Assert.Equal(0, model.HiddenDrumHits);
+        Assert.Equal(model.LaneRows.Count, model.Rows.OfType<LaneRow>().Count());
+    }
+
+    [Fact]
+    public void Plus_adds_an_empty_instrument_under_the_active_row_and_minus_removes_it_keeping_notes()
+    {
+        var model = Model(); model.SetDrumPreset(Kit(model)); model.SetDrumMapMode(true);
+        var hits = model.Session.State.Hits;
+        model.SetActiveRow((LaneRow)model.Rows[0]);
+        var id = model.AddDrumRow();
+        Assert.NotNull(id);
+        var added = Assert.IsType<UnassignedDrumRow>(model.Rows[1]);
+        Assert.Equal("New instrument", added.Entry.Name);
+        Assert.True(model.HasActiveDrumRow);
+        Assert.Equal(id, model.ActiveDrumEntry);
+
+        model.SetActiveRow((LaneRow)model.Rows[0]);
+        Assert.True(model.RemoveActiveDrumRow());
+        Assert.Equal(2, model.Rows.Count);
+        Assert.Equal("Subkick", ((LaneRow)model.Rows[1]).InstrumentName);
+        Assert.Same(hits, model.Session.State.Hits);
+        Assert.False(model.HasActiveDrumRow);
+        Assert.False(model.RemoveActiveDrumRow());
+        model.Session.Undo();
+        Assert.Equal("Kick", ((LaneRow)model.Rows[0]).InstrumentName);
+    }
+
+    [Fact]
+    public void Plus_with_no_active_row_appends_at_the_end()
+    {
+        var model = Model(); model.SetDrumPreset(Kit(model)); model.SetDrumMapMode(true);
+        model.AddDrumRow();
+        Assert.IsType<UnassignedDrumRow>(model.Rows[^1]);
+        Assert.Equal(3, model.Rows.Count);
     }
     [Fact]
     public void Keyboard_lane_move_uses_the_active_alias_row()
     {
-        var model = Model(); model.SetDrumPreset(Kit(model)); model.SetDrumMapMode(true);
+        var model = Model(); model.SetDrumPreset(KitWithClap(model)); model.SetDrumMapMode(true);
         var alias = (LaneRow)model.Rows[1]; model.SetActiveRow(alias);
         Assert.Equal(((LaneRow)model.Rows[2]).Lane, HitEditor.ShiftLane(model, alias.Lane, 1));
     }
@@ -131,7 +175,7 @@ public class DrumMapModelTests
     [Fact]
     public void Drag_mapping_uses_the_grabbed_alias_instead_of_its_first_mirror()
     {
-        var model = Model(); var kit = Kit(model); model.SetDrumPreset(kit); model.SetDrumMapMode(true);
+        var model = Model(); var kit = KitWithClap(model); model.SetDrumPreset(kit); model.SetDrumMapMode(true);
         var lane = ((LaneRow)model.Rows[1]).Lane;
         Assert.Equal(((LaneRow)model.Rows[2]).Lane, model.ShiftDrumLane(lane, 1, 1));
         Assert.Equal(lane, model.ShiftDrumLane(lane, -1, 1));

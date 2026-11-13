@@ -120,6 +120,22 @@ public partial class MainWindow
         menu.Open(Lanes);
     }
 
+    /// <summary>Drum map view's +: a new instrument row with no sample, then its setup to name it and pick one.</summary>
+    private async Task AddDrumRow()
+    {
+        if (model?.AddDrumRow() is not { } id) { flash = "The drum map has reached its row limit."; UpdateStatus(); return; }
+        Lanes.InvalidateVisual(); SyncScrollBars();
+        await EditActiveDrumMap(id);
+    }
+
+    /// <summary>Drum map view's −: removes the clicked instrument row. Its notes stay on their sample.</summary>
+    private void RemoveDrumRow()
+    {
+        if (model is null) return;
+        if (!model.RemoveActiveDrumRow()) { flash = "Click an instrument row first: − removes it (its notes stay)."; UpdateStatus(); return; }
+        Lanes.InvalidateVisual(); SyncScrollBars();
+    }
+
     private async Task EditActiveDrumMap(Guid? entryId)
     {
         if (drumSetupBusy || model is not { } current || current.ActiveDrumMap is not { } preset || drumReadFailed) return;

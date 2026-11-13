@@ -52,6 +52,8 @@ public class DrumRenderTests
         Assert.DoesNotContain(m.Rows.OfType<LaneRow>(), r => r.Lane == wav);
         m.ToggleFamily(hit.Lane); Assert.Contains(m.Rows.OfType<LaneRow>(), r => r.Lane == wav);
         m.SetDrumMapMode(true);
+        Assert.DoesNotContain(m.Rows.OfType<LaneRow>(), r => r.Lane == wav); // its parent isn't in the drum map
+        m.SetDrumPreset(DrumMapPreset.Empty("Kit") with { Rows = [new(Guid.NewGuid(), "Kick", ProjectStore.KeyOf(hit.Lane), ProjectStore.KeyOf(m.SlotOf(hit.Lane)))] });
         Assert.Contains(m.Rows.OfType<LaneRow>(), r => r.Lane == wav);
         m.ToggleFamily(hit.Lane); Assert.DoesNotContain(m.Rows.OfType<LaneRow>(), r => r.Lane == wav);
         m.ToggleMute(hit.Lane); Assert.False(m.IsAudible(wav)); m.ToggleMute(hit.Lane);

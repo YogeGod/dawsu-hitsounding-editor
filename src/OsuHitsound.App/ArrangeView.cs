@@ -326,6 +326,9 @@ internal sealed class ArrangeView : Control
     /// <summary>The "−" above the lane list: delete the active lane.</summary>
     public event Action? RemoveLaneRequested;
 
+    /// <summary>The drum map title's hidden-notes count was clicked: show the real sample lanes again.</summary>
+    public event Action? DrumMapExitRequested;
+
     /// <summary>The "‹" above the lane list: collapse or expand the lane names.</summary>
     public event Action? CollapseNamesRequested;
 
@@ -553,12 +556,17 @@ internal sealed class ArrangeView : Control
     {
         ctx.FillRectangle(Paint.Chrome2, new Rect(0, 0, width, HeaderHeight));
         ctx.FillRectangle(TitleBand, new Rect(0, 0, GridLeft, RulerBottom));
-        string laneTitle = model.DrumMapMode ? "DRUM MAP · " + model.ActiveDrumMap?.Name : "SAMPLE LANES";
+        // Hidden notes come before the kit name so a narrow list cuts the name, not the count.
+        int hiddenHits = model.HiddenDrumHits;
+        string laneTitle = !model.DrumMapMode ? "SAMPLE LANES"
+            : "DRUM MAP" + (hiddenHits > 0 ? $" ({hiddenHits} HIDDEN)" : "") + " · " + model.ActiveDrumMap?.Name;
         if (model.SelectedLanes.Count > 1) laneTitle += $" · {model.SelectedLanes.Count} SELECTED";
         Paint.DrawText(ctx, laneTitle, new Point(10, 6), 8, Paint.Dim, Math.Max(20, GridLeft - 114), Paint.UiBold);
         double headerY = -((RowHeight - 18) / 2) + 2;
         DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, headerY, null);
-        DrawToggle(ctx, "−", GridLeft - RemoveLaneFromRight, headerY, null);
+        // In drum map view − removes the clicked instrument row; with none clicked it has nothing to remove.
+        using (ctx.PushOpacity(model.DrumMapMode && !model.HasActiveDrumRow ? 0.35 : 1))
+            DrawToggle(ctx, "−", GridLeft - RemoveLaneFromRight, headerY, null);
         DrawToggle(ctx, NamesCollapsed ? "›" : "‹", GridLeft - CollapseFromRight, headerY, null);
         // The waveform and the objects strip are rows of the list, as in V6.39.
         ctx.DrawLine(Paint.DividerPen, new Point(0, RulerBottom - 0.5), new Point(GridLeft, RulerBottom - 0.5));
@@ -1464,6 +1472,13 @@ internal sealed class ArrangeView : Control
                 return;
             }
 
+            // "(N HIDDEN)" in the drum map title: back to the sample lanes, where those notes are.
+            if (model.DrumMapMode && p.X < GridLeft - AddLaneFromRight && p.Y < 22 && model.HiddenDrumHits > 0)
+            {
+                DrumMapExitRequested?.Invoke();
+                return;
+            }
+
             if (On(CollapseFromRight))
             {
                 CollapseNamesRequested?.Invoke();
@@ -1535,6 +1550,7 @@ internal sealed class ArrangeView : Control
         if (row is LaneRow touched && point.Properties.IsLeftButtonPressed) model.SetActiveRow(touched);
         if (row is UnassignedDrumRow empty && p.X < GridLeft)
         {
+            if (point.Properties.IsLeftButtonPressed) model.SetActiveDrumEntry(empty.Entry.Id);
             if (point.Properties.IsLeftButtonPressed && OnLaneGrip(row, p))
             { drag = Drag.Layout; draggedRow = row; dropRow = null; dragStart = dragNow = p; layoutMoved = false; e.Pointer.Capture(this); }
             else DrumEntrySetupRequested?.Invoke(empty.Entry.Id);
