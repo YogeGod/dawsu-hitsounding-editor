@@ -273,9 +273,12 @@
       <Grid Name="ControlBarContent" ColumnDefinitions="*,Auto" Margin="6,5">
         <StackPanel Name="RibbonGroups" Orientation="Horizontal" VerticalAlignment="Center" ClipToBounds="True">
           <StackPanel Classes="ribbonGroup">
-            <Button Name="OpenButton" Classes="ribbon" AutomationProperties.Name="Open a map" ToolTip.Tip="Open a map (Ctrl+O)">
+            <Button Name="OpenButton" Classes="ribbon" AutomationProperties.Name="Open a map" ToolTip.Tip="Open a map (File → Open; Ctrl+O when no map is open, otherwise Ctrl+O switches difficulty)">
               <StackPanel><app:AppIcon Glyph="OsuOpen" /><TextBlock Classes="ribbonText secondary" Text="Open" /></StackPanel>
             </Button>
+            <!-- The open mapset's difficulties, by their osu! difficulty name; picking one opens it (asks first if unsaved). -->
+            <Panel Classes="captioned"><ComboBox Name="DifficultyBox" Classes="captioned" Width="150" IsEnabled="False" Focusable="True"
+                      AutomationProperties.Name="Difficulty" ToolTip.Tip="Switch to another difficulty of this mapset (Ctrl+O). Asks first if this one has unsaved edits." /><TextBlock Classes="boxCaption" Text="Difficulty" /></Panel>
             <ToggleButton Name="HsModeButton" Classes="ribbon" IsEnabled="False" AutomationProperties.Name="HS mode"
                           ToolTip.Tip="Open an empty difficulty or one named HS / hitsounds to create circles as you place sounds.">
               <StackPanel><app:AppIcon Glyph="OsuHsMode" /><TextBlock Classes="ribbonText" Text="HS mode" /></StackPanel>

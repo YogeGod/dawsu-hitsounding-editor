@@ -59,7 +59,7 @@ internal static class EditorCommands
 
     private static IReadOnlyList<EditorCommand> Commands() =>
     [
-        new("open", Areas.HsMapFiles, "Open a .osu", [K(Key.O, Ctrl)]),
+        new("open", Areas.HsMapFiles, "Open a .osu. With a map open in the Hitsound editor, the key drops down the Difficulty list instead", [K(Key.O, Ctrl)]),
         new("openFromOsu", Areas.HsOsuConnection, "Open the map osu! has open (it reloads when osu! saves it)", []),
         new("newDiff", Areas.HsMapFiles, "New hitsound diff: an empty difficulty with this map's red lines", [K(Key.N, Ctrl)]),
         new("importOsz", Areas.HsMapFiles, "Import an .osz into the Songs folder", []),

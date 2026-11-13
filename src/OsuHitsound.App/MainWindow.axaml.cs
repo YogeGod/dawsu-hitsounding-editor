@@ -70,6 +70,7 @@ public partial class MainWindow : Window, IMapWriteHost
         KeepAltSpaceForCommands();
         SetupDrumVst();
         SetupHsMode();
+        SetUpDifficultyBox();
 
         (this.usePreferences, prefs) = (usePreferences, usePreferences ? Preferences.Load(Preferences.DefaultPath()) : new());
         SetupWorkflowFeedback();
@@ -504,6 +505,7 @@ public partial class MainWindow : Window, IMapWriteHost
             ScheduleCompile();
             RevertItem.IsEnabled = true;
             RefreshHsMode();
+            RefreshDifficulties();
             WatchMapFile(full); // live reload when osu! (or anything else) saves it
             HideStartScreen();
             return true;
@@ -671,7 +673,7 @@ public partial class MainWindow : Window, IMapWriteHost
         e.Handled = true;
         shortcutKeyHeld = e.Key;
         if (Keys.Document is not null) Keys.HandleKey(e);
-        else Run(command.Id);
+        else RunKey(command.Id);
     }
 
     // The key's release would click a focused button: it belongs to the press above.
@@ -723,8 +725,15 @@ public partial class MainWindow : Window, IMapWriteHost
             return;
         }
 
-        Run(command.Id);
+        RunKey(command.Id);
         e.Handled = true;
+    }
+
+    /// <summary>A command from a key press: Open's key (Ctrl+O) opens the Difficulty list while a map is open in the Hitsound editor.</summary>
+    private void RunKey(string id)
+    {
+        if (id == "open" && OpenDifficultyList()) return;
+        Run(id);
     }
 
     /// <summary>Runs a command from <see cref="EditorCommands"/>, from a key press or a menu item.</summary>

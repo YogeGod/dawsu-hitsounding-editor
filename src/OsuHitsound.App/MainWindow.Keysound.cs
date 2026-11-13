@@ -235,6 +235,7 @@ public partial class MainWindow
         else ShowSaveState(); // the .osu tooltip and the problem badge
         if (!on) keysoundMessage = null;
         RefreshWorkflowFeedback();
+        RefreshDifficulties(); // off in Keysound, the open map's list again after
     }
 
     /// <summary>The Keysound menu items whose Tag is a shared key-binding command, for their shortcut chips.</summary>

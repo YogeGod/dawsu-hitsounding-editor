@@ -56,7 +56,7 @@ var state = w.ArrangeArea.Model!.Session.State;
 foreach (var (width, height) in new[] { (1920, 1080), (1600, 900), (1040, 720), (900, 600) })
 {
     w.Width = width; w.Height = height; Pump();
-    string[] controls = ["OpenButton", "HsModeButton", "UndoButton", "SelectTool", "MuteTool", "SnapToggle", "SnapModeBox", "SnapBox", "TripletSnapToggle", "AuditionPlacementButton", "DrumDetectButton", "DrumVstButton", "FitButton", "BrowserToggle", "InspectorToggle", "LaneDetailsToggle", "UsedLanesToggle", "ObjectLinesToggle", "VolumeToggle", "SaveButton", "ZoomSlider", "TimeZoomInButton", "TimeZoomOutButton", "RowHeightSlider", "RowZoomInButton", "RowZoomOutButton", "LocatorsButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "SongVolumeSlider", "SongMuteButton", "SongOffsetBox"];
+    string[] controls = ["OpenButton", "DifficultyBox", "HsModeButton", "UndoButton", "SelectTool", "MuteTool", "SnapToggle", "SnapModeBox", "SnapBox", "TripletSnapToggle", "AuditionPlacementButton", "DrumDetectButton", "DrumVstButton", "FitButton", "BrowserToggle", "InspectorToggle", "LaneDetailsToggle", "UsedLanesToggle", "ObjectLinesToggle", "VolumeToggle", "SaveButton", "ZoomSlider", "TimeZoomInButton", "TimeZoomOutButton", "RowHeightSlider", "RowZoomInButton", "RowZoomOutButton", "LocatorsButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "SongVolumeSlider", "SongMuteButton", "SongOffsetBox"];
     foreach (var id in controls.Where(id => id != "LocatorsButton" || width >= MainWindow.LocatorsMinWidth))
     {
         var c = Find<Control>(id);
@@ -163,6 +163,12 @@ Check(Find<MenuItem>("FollowItem").IsChecked == (Find<ToggleButton>("FollowPlayb
 Click("ReturnOnStopButton");
 Check(Find<MenuItem>("ReturnOnStopItem").IsChecked == (Find<ToggleButton>("ReturnOnStopButton").IsChecked == true), "Return button and menu remain bound");
 Find<ComboBox>("SnapModeBox").SelectedIndex = 1; Pump();
+// Ctrl+O with a map open drops down the Difficulty list instead of the file picker; the open map is the one selected.
+w.ArrangeArea.Focus(); Pump();
+w.KeyPress(Key.O, RawInputModifiers.Control, PhysicalKey.O, "o"); Pump();
+var difficultyBox = Find<ComboBox>("DifficultyBox");
+Check(difficultyBox.IsDropDownOpen && difficultyBox.SelectedIndex >= 0, $"Ctrl+O with a map open drops down the Difficulty list (open: {difficultyBox.IsDropDownOpen}, selected: {difficultyBox.SelectedIndex})");
+difficultyBox.IsDropDownOpen = false; w.ArrangeArea.Focus(); Pump();
 Check(lanes.Edits.SnapMode == SnapMode.GridRelative, "Visible grid selector changes the editing snap mode");
 Click("SongMuteButton"); Check(lanes.SongMuted, "Song mute still drives playback state");
 Click("LaneDetailsToggle"); Check(lanes.ShowIndexes, "Lane info still toggles sample indexes");

@@ -9,6 +9,7 @@ The top bar has the menus (File, Edit, Playback, Map and View) and the name of t
 ## Hitsound – Map files
 
 - **Open map…** (Ctrl+O): pick a `.osu`, or drop a `.osu` or `.osz` on the window. Each sample file in the mapset becomes a lane.
+- **Difficulty** (the list next to Open, or Ctrl+O while a map is open): switch to another difficulty of the same mapset. It asks first if the open one has unsaved edits. With no map open, Ctrl+O opens a file as above.
 - The File menu also has Recent maps, Import .osz… and Open map folder (Ctrl+Shift+O). Sample files you put in that folder show up as lanes when you come back.
 
 ## Hitsound – osu! connection

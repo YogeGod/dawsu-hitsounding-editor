@@ -100,7 +100,7 @@ public partial class MainWindow
         new("Welcome to the osu! hitsound editor",
             "This short tour points at every part of the screen and says what it's for. Use Next and Back (or the arrow keys); Esc ends the tour. You can see it again any time from File → Full interface tour.",
             () => null),
-        new("Open a map", "Opens a .osu from your Songs folder (Ctrl+O), or drag a .osu or .osz onto the window. Each sample file in the mapset becomes a lane you can draw in. The File menu also has Recent maps, Import .osz… and Open map folder (Ctrl+Shift+O): sample files you put in that folder show up as lanes.",
+        new("Open a map", "Opens a .osu from your Songs folder (Ctrl+O), or drag a .osu or .osz onto the window. Each sample file in the mapset becomes a lane you can draw in. The Difficulty list beside it switches to another difficulty of the mapset; once a map is open, Ctrl+O drops that list down. The File menu also has Recent maps, Import .osz… and Open map folder (Ctrl+Shift+O): sample files you put in that folder show up as lanes.",
             () => On(OpenButton)),
         new("Save .osu", "Writes your hitsounds into the open difficulty (Ctrl+S). Hover the map title for its path. Only changed lines are rewritten; a backup is kept outside the mapset. A warning badge on the button counts hits that Save can't write as drawn; clicking it lists them first, then Continue to Save runs the normal save. Ctrl+S skips the list. Generate creates a separate hitsound difficulty; Copy applies sounds to chosen difficulties.",
             () => On(SaveButton)),
