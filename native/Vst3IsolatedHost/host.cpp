@@ -38,7 +38,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
-#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -124,17 +123,25 @@ bool FromBase64(const std::string& in, size_t from, std::vector<uint8_t>& out)
 // ---- Host-side interfaces the plug-in calls ----
 
 // Parameter edits made in the plug-in's editor reach its processor through the next block's parameter changes.
+// All of them land at offset 0 of that block, so only the latest value per parameter matters: keeping that one means a
+// long drag while no block runs never loses its final value.
+constexpr size_t MaxPendingEdits = 4096;
+
 class ComponentHandler : public IComponentHandler
 {
 public:
     std::mutex lock;
     std::vector<std::pair<ParamID, ParamValue>> pending;
 
+    ComponentHandler() { pending.reserve(MaxPendingEdits); } // never reallocates under the lock the audio thread takes
+
     tresult PLUGIN_API beginEdit(ParamID) override { return kResultOk; }
     tresult PLUGIN_API performEdit(ParamID id, ParamValue value) override
     {
         std::lock_guard<std::mutex> g(lock);
-        if (pending.size() < 4096) pending.emplace_back(id, value);
+        for (auto& edit : pending)
+            if (edit.first == id) { edit.second = value; return kResultOk; }
+        if (pending.size() < MaxPendingEdits) pending.emplace_back(id, value);
         return kResultOk;
     }
     tresult PLUGIN_API endEdit(ParamID) override { return kResultOk; }
@@ -194,6 +201,23 @@ HostApplication hostApp;
 std::string pluginName;
 std::mutex processLock; // state access and processing don't overlap
 
+// (channel, controller) -> parameter, read once on the main thread at load. IMidiMapping belongs to the edit
+// controller, which VST 3 only allows on the UI thread, so the audio thread only looks this table up.
+std::vector<ParamID> midiMap(16 * kCountCtrlNumber, kNoParamId);
+
+void ReadMidiMap()
+{
+    if (!midiMapping) return;
+    for (int16 channel = 0; channel < 16; channel++)
+        for (int16 cc = 0; cc < kCountCtrlNumber; cc++)
+        {
+            ParamID id = kNoParamId;
+            // Only an assigned controller's id counts: a plug-in may write to id and still answer kResultFalse.
+            if (midiMapping->getMidiControllerAssignment(0, channel, (CtrlNumber)cc, id) == kResultTrue)
+                midiMap[channel * kCountCtrlNumber + cc] = id;
+        }
+}
+
 bool IsInstrument(const VST3::Hosting::ClassInfo& c)
 {
     return c.category() == kVstAudioEffectClass && c.subCategoriesString().find("Instrument") != std::string::npos;
@@ -251,6 +275,7 @@ bool Load(const std::string& path, const std::string& uid, std::string& error)
     if (processor->setupProcessing(setup) != kResultOk) { error = "The plug-in refused 44.1 kHz processing."; return false; }
     if (component->setActive(true) != kResultOk) { error = "The plug-in couldn't be activated."; return false; }
     processor->setProcessing(true);
+    ReadMidiMap();
     return true;
 }
 
@@ -258,11 +283,12 @@ bool Load(const std::string& path, const std::string& uid, std::string& error)
 bool ReadStream(MemoryStream& s, std::vector<uint8_t>& out)
 {
     int64 size = 0;
-    s.seek(0, IBStream::kIBSeekEnd, &size);
+    // Refuse an unreadable or oversized stream before allocating for it; a short read is a failure.
+    if (s.seek(0, IBStream::kIBSeekEnd, &size) != kResultOk || size < 0 || size > (int64)MaxStateBytes) return false;
     s.seek(0, IBStream::kIBSeekSet, nullptr);
     out.resize((size_t)size);
     int32 read = 0;
-    return size == 0 || s.read(out.data(), (int32)size, &read) == kResultOk;
+    return size == 0 || (s.read(out.data(), (int32)size, &read) == kResultOk && read == size);
 }
 
 std::string GetState()
@@ -272,10 +298,10 @@ std::string GetState()
         // Only reading the plug-in holds up its audio; encoding happens after.
         std::lock_guard<std::mutex> g(processLock);
         MemoryStream comp, ctrl;
-        if (component->getState(&comp) != kResultOk) return "ERROR\tThe plug-in didn't save its state.";
-        if (controller) controller->getState(&ctrl);
-        ReadStream(comp, a);
-        ReadStream(ctrl, b);
+        if (component->getState(&comp) != kResultOk || !ReadStream(comp, a)) return "ERROR\tThe plug-in didn't save its state.";
+        // A controller without state of its own (kNotImplemented) is fine; one whose state can't be read is not.
+        if (controller && controller->getState(&ctrl) == kResultOk && !ReadStream(ctrl, b))
+            return "ERROR\tThe plug-in's editor state couldn't be read.";
     }
     if (a.size() + b.size() > MaxStateBytes) return "ERROR\tThe plug-in's state is larger than 64 MB.";
     all.reserve(1 + 8 + a.size() + b.size());
@@ -360,10 +386,6 @@ std::string ShowEditor()
     return "OK";
 }
 
-// Commands that touch the plug-in's UI run on the main thread: the reader thread hands them over and waits.
-constexpr UINT WM_COMMAND_LINE = WM_APP + 1;
-struct Pending { std::string id, line, reply; };
-
 std::string Render(const std::string& line);
 
 // The plug-in's names for its MIDI notes (VST 3 program pitch names, as DAWs use for drum maps):
@@ -384,10 +406,13 @@ std::string NoteNames()
             {
                 String128 name{};
                 if (units->getProgramPitchName(list.id, program, pitch, name) != kResultOk || !name[0]) continue;
-                std::u16string wide(reinterpret_cast<const char16_t*>(name));
-                std::string utf8(WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wide.c_str(), (int)wide.size(), nullptr, 0, nullptr, nullptr), ' ');
-                WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)wide.c_str(), (int)wide.size(), utf8.data(), (int)utf8.size(), nullptr, nullptr);
-                reply += "	" + std::to_string(pitch) + "=" + Clean(utf8);
+                int length = 0;
+                while (length < 128 && name[length]) length++; // a String128 needn't end with a NUL
+                auto* wide = reinterpret_cast<LPCWCH>(name);
+                int bytes = WideCharToMultiByte(CP_UTF8, 0, wide, length, nullptr, 0, nullptr, nullptr);
+                std::string utf8(bytes > 0 ? bytes : 0, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, wide, length, utf8.data(), bytes, nullptr, nullptr);
+                reply += "\t" + std::to_string(pitch) + "=" + Clean(utf8);
             }
             return reply;
         }
@@ -406,6 +431,30 @@ std::string Run(const std::string& line)
     return "ERROR\tUnknown command.";
 }
 
+// Commands that touch the plug-in run on the main thread: the reader thread hands each one over and waits. They go to
+// a message-only window, not to the thread itself, because modal loops (dragging the editor window, a plug-in's menu
+// or file dialog) dispatch window messages but silently drop thread messages, which left the reader waiting forever.
+constexpr UINT WM_RUN_COMMAND = WM_APP + 1, WM_STOP_HOST = WM_APP + 2;
+struct Pending { std::string id, line, reply; HANDLE ready; };
+HWND commandWindow = nullptr;
+
+LRESULT CALLBACK CommandProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    if (msg == WM_RUN_COMMAND)
+    {
+        auto* p = reinterpret_cast<Pending*>(wp);
+        p->reply = Run(p->line);
+        SetEvent(p->ready);
+        return 0;
+    }
+    if (msg == WM_STOP_HOST)
+    {
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
 // ---- Processing one block: MIDI-style events in, stereo out (live playback and offline rendering) ----
 struct Block
 {
@@ -413,7 +462,6 @@ struct Block
     EventList events{MaxEvents};
     ParameterChanges params{64};
     ProcessContext context{};
-    std::map<int, ParamID> mapped; // (channel << 8 | controller) -> parameter, or kNoParamId
 
     Block()
     {
@@ -423,15 +471,8 @@ struct Block
         context.state = ProcessContext::kPlaying | ProcessContext::kTempoValid;
     }
 
-    ParamID Map(int channel, int cc)
-    {
-        int key = channel << 8 | cc;
-        auto it = mapped.find(key);
-        if (it != mapped.end()) return it->second;
-        ParamID id = kNoParamId;
-        if (midiMapping) midiMapping->getMidiControllerAssignment(0, (int16)channel, (CtrlNumber)cc, id);
-        return mapped[key] = id;
-    }
+    // channel is 0-15 and cc is 0-127 or kPitchBend (129), all inside the table.
+    static ParamID Map(int channel, int cc) { return midiMap[channel * kCountCtrlNumber + cc]; }
 
     void Change(ParamID id, int offset, ParamValue value)
     {
@@ -452,6 +493,9 @@ struct Block
 
     void Add(int offset, uint8_t status, uint8_t data1, uint8_t data2)
     {
+        // The shared memory isn't checked by its writer: keep the data bytes MIDI-legal.
+        data1 &= 0x7F;
+        data2 &= 0x7F;
         int kind = status & 0xF0, channel = status & 0x0F;
         Event ev{};
         ev.busIndex = 0;
@@ -488,12 +532,17 @@ struct Block
         bool ok = processor->process(data) == kResultOk && data.numOutputs > 0 && data.outputs[0].numChannels > 0;
         if (ok)
         {
-            float* l = data.outputs[0].channelBuffers32[0];
-            float* r = data.outputs[0].numChannels > 1 ? data.outputs[0].channelBuffers32[1] : l;
-            memcpy(left, l, frames * sizeof(float));
-            memcpy(right, r, frames * sizeof(float));
+            const float* l = data.outputs[0].channelBuffers32[0];
+            const float* r = data.outputs[0].numChannels > 1 ? data.outputs[0].channelBuffers32[1] : l;
+            // A NaN or infinity would poison dawsu!'s whole mix: such a block counts as failed, as in the JUCE host.
+            for (int i = 0; i < frames && ok; i++) ok = std::isfinite(l[i]) && std::isfinite(r[i]);
+            if (ok)
+            {
+                memcpy(left, l, frames * sizeof(float));
+                memcpy(right, r, frames * sizeof(float));
+            }
         }
-        else
+        if (!ok)
         {
             memset(left, 0, frames * sizeof(float));
             memset(right, 0, frames * sizeof(float));
@@ -690,40 +739,44 @@ int wmain(int argc, wchar_t** argv)
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClassW(&wc);
 
+    WNDCLASSW commands{};
+    commands.lpfnWndProc = CommandProc;
+    commands.hInstance = wc.hInstance;
+    commands.lpszClassName = L"DawsuVst3Commands";
+    RegisterClassW(&commands);
+    // Creating it also gives this thread its message queue, so no command posted before the loop starts is lost.
+    commandWindow = CreateWindowExW(0, commands.lpszClassName, nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, wc.hInstance, nullptr);
+    if (!commandWindow) { Reply("ERROR\tThe VST3 host couldn't start its command window."); return 1; }
+
     std::string error;
     if (!Load(Arg(4), uid, error)) { Reply("ERROR\t" + Clean(error)); return 2; }
     Reply("READY\t" + Clean(pluginName) + "\t" + std::to_string(Protocol));
 
     std::thread audio(AudioThread, shm, req, done, parent);
-    DWORD mainThread = GetCurrentThreadId();
-    std::thread reader([mainThread] {
+    std::thread reader([] {
         std::string line;
         while (std::getline(std::cin, line))
         {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             size_t tab = line.find('\t');
             if (tab == std::string::npos) continue; // every command is "<id> \t <command>"
-            Pending p{line.substr(0, tab), line.substr(tab + 1), ""};
-            if (p.line == "QUIT") break;
-            HANDLE ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-            PostThreadMessageW(mainThread, WM_COMMAND_LINE, (WPARAM)&p, (LPARAM)ready);
-            WaitForSingleObject(ready, INFINITE);
-            CloseHandle(ready);
+            std::string id = line.substr(0, tab), command = line.substr(tab + 1);
+            if (command == "QUIT") break;
+            // The reader waits for each command before taking the next, so commands never run inside one another.
+            Pending p{id, command, "", CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+            if (!p.ready || !PostMessageW(commandWindow, WM_RUN_COMMAND, reinterpret_cast<WPARAM>(&p), 0))
+                p.reply = "ERROR\tThe VST3 host couldn't run the command."; // answered now, never waited on
+            else
+                WaitForSingleObject(p.ready, INFINITE);
+            if (p.ready) CloseHandle(p.ready);
             Reply(p.id + "\t" + p.reply);
         }
-        PostThreadMessageW(mainThread, WM_QUIT, 0, 0);
+        PostMessageW(commandWindow, WM_STOP_HOST, 0, 0); // a window message, so a modal loop can't swallow it either
     });
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0)
     {
-        if (msg.hwnd == nullptr && msg.message == WM_COMMAND_LINE)
-        {
-            auto* p = (Pending*)msg.wParam;
-            p->reply = Run(p->line);
-            SetEvent((HANDLE)msg.lParam);
-            continue;
-        }
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
