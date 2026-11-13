@@ -1,6 +1,6 @@
 # Tutorial
 
-A tour of dawsu! 3.1.3 in Hitsound mode, grouped by **feature area** (the same groups as the F1 help). **File → Full interface tour** walks through the same features in screen order. Next and Back (or the arrow keys) step through that tour, and Esc ends it.
+A tour of dawsu! 3.1.4 in Hitsound mode, grouped by **feature area** (the same groups as the F1 help). **File → Full interface tour** walks through the same features in screen order. Next and Back (or the arrow keys) step through that tour, and Esc ends it.
 
 The first launch asks whether you want **DAW-like keys** or **osu! editor controls**, then runs **Quick start** (also under **File → Quick start**). Quick start covers opening a difficulty, choosing a lane, assigning a sample, placing a hit, listening, and choosing Save, Generate or Copy. The house button next to the dawsu! name, or **File → Start screen**, goes back to the start screen and asks to save first.
 
@@ -55,6 +55,7 @@ The Draw tool uses a drumstick icon and cursor. When Audition is on, moving a hi
 - The **Edit** menu has quantize, repeat, range and scale by volume.
 - **Protect hitnormals from deletion** (Edit menu): when it's on, deleting, cutting, erasing or clearing a range keeps base hitnormal sounds. It's off until you turn it on, and the choice is remembered.
 - **Drum hit detection…** (Edit menu) finds the kicks and snares in the song, or in a drum stem you choose, and adds them as hits. Pick a lane for kicks and one for snares (or Skip either), the sensitivity, and how close a hit must be to a circle or slider node to snap to it. Use the Range tool first to analyse only part of the song. The review window lists every proposed hit: uncheck any you don't want, and **Listen** plays the song on the left with short cues on the right. Apply is one Undo step and doesn't save. A **Beat grid** setting (1/4 by default) drops hits that are not on the map's beat divisions and snaps the rest onto them. It runs on your PC with signal processing, with no trained model, and no audio is uploaded. It works best on a drum stem; on a full mix, listen before applying.
+- **Live** (ribbon, Alt+K) plays the lanes live: each computer key plays one lane, in lane-list order (the panel at the bottom of the lanes shows which), and a MIDI keyboard or pads play lanes too. **Record** (Numpad *, or the panel's Record button) records your taps from the playhead, after a one-bar count-in. Taps snap to the grid and land on a circle or slider node when one is there. When you stop, the tapped lanes' hits in the recorded range are replaced, and one Undo removes the take. While Live is on, only Space, Numpad * and Esc keep their editor meaning.
 - **Undo and redo** (Ctrl+Z, Ctrl+Y). The optional History panel in the inspector lists edits by name.
 
 ## Hitsound – Timeline navigation
