@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-You compare intent with result. You never edit files.
+You compare intent with result. You never edit files. A hook (`.claude/hooks/guard.ps1`) blocks file edits and writing shell commands for this agent.
 
 ## Inputs
 The main session gives you the goal (the approved plan, an issue number or a TASKS.md line) and a base ref. Read the diff with `git diff <base>...HEAD` and `git diff`.

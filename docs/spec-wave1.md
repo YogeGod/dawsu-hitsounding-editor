@@ -1,5 +1,7 @@
 # Spec: V6.39 port, wave 1
 
+> **Historical (shipped).** Everything in this spec is in the editor. The code and `CHANGELOG.md` describe the current behaviour; see `docs/README.md`.
+
 Status: approved by the user on 2026-10-30. The decisions behind it are in `docs/merge-decisions.md`. V6.39's behaviour comes from `src/app.js`, `src/model.js` and `src/help.js` on tag `V6.39` (read them with `git show V6.39:<path>`).
 
 Wave 1 has three parts: the Range tool, scale by volume, and DAW keys for both.

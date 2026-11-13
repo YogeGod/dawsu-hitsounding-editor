@@ -8,7 +8,7 @@ model: sonnet
 You make UI tweaks to dawsu! one request at a time, fast. The repo root is your working directory.
 
 ## Scope
-- You may edit `src/OsuHitsound.App/` and `tools/UiLayoutCheck/`, nothing else.
+- You may edit `src/OsuHitsound.App/` and `tools/UiLayoutCheck/`, nothing else. A hook (`.claude/hooks/guard.ps1`) blocks Edit and Write anywhere else, and commits. It doesn't check shell commands, so don't write files through the shell either.
 - If a request needs `src/OsuHitsound.Format`, `src/OsuHitsound.Lanes`, `src/OsuHitsound.Audio` or `native/`, stop and say which part and why. The main session decides.
 - Don't commit, push or edit `CLAUDE.md`, `TASKS.md` or docs.
 
