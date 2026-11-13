@@ -37,6 +37,8 @@ internal static class KeysoundShortcuts
         ["toolMute"] = Areas.KsNoteEditing, ["toolRamp"] = Areas.KsNoteEditing, ["quantizeDialog"] = Areas.KsNoteEditing,
         ["repeat"] = Areas.KsNoteEditing, ["gridLeft"] = Areas.KsNoteEditing, ["gridRight"] = Areas.KsNoteEditing,
         ["laneUp"] = Areas.KsNoteEditing, ["laneDown"] = Areas.KsNoteEditing,
+        // Live input: the Hitsound editor's Live and Record are its musical typing and Record.
+        ["ks.record"] = Areas.KsNoteInput, ["ks.typing"] = Areas.KsNoteInput,
         ["toolRange"] = Areas.KsNoteEditing, ["editRange"] = Areas.KsNoteEditing, ["scaleByVolume"] = Areas.KsNoteEditing,
     };
 

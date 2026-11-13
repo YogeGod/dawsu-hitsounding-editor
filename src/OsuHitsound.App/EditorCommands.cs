@@ -149,8 +149,8 @@ internal static class EditorCommands
         // Keysound mode's key editor: the commands above work there too (same keys, same meaning); these are its own.
         new("ks.toolSplit", Areas.KsNoteEditing, "Split tool: click a note to split it", [K(Key.D7)]),
         new("ks.toolGlue", Areas.KsNoteEditing, "Glue tool: click a note to join it with the next of its pitch", [K(Key.D8)]),
-        new("ks.record", Areas.KsNoteInput, "Record from the MIDI keyboard or musical typing into the selected track", [K(Key.Multiply)]),
-        new("ks.typing", Areas.KsNoteInput, "Musical typing: play the selected track from the computer keyboard (other shortcuts are off meanwhile)", [K(Key.K, Alt)]),
+        new("ks.record", Areas.HsHitEditing, "Record live: Hitsound taps into lanes (snapped to the grid, replacing the tapped lanes' hits in the range); Keysound notes from the MIDI keyboard or musical typing into the selected track", [K(Key.Multiply)]),
+        new("ks.typing", Areas.HsHitEditing, "Live playing: Hitsound plays lanes from the computer keyboard or MIDI (Live); Keysound plays the selected track (musical typing). Other shortcuts are off meanwhile", [K(Key.K, Alt)]),
         new("ks.sync", Areas.KsSync, "Sync notes to gameplay objects", []),
         new("ks.generate", Areas.KsOutput, "Generate keysounds", []),
 

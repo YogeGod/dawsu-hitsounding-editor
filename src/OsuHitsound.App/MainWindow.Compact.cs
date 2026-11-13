@@ -91,6 +91,7 @@ public partial class MainWindow
         bool tightTransport = width < 1100;
         TransportLabels.Fit(width, (LoopButton, "Cycle", "OsuCycle"), (ReturnOnStopButton, "Return", "OsuReturn"), (FollowPlaybackButton, "Follow", "OsuFollow"));
         LocatorsButton.IsVisible = width >= LocatorsMinWidth;
+        HsRecordButton.IsVisible = width >= RecordMinWidth; // narrower, Record is in the Live panel (and Numpad *)
         TransportLeft.Spacing = tightTransport ? 2 : 4;
         TransportButtons.Spacing = tightTransport ? 2 : 4;
         PlaybackOptionsPanel.Spacing = tightTransport ? 2 : 4;
@@ -113,6 +114,9 @@ public partial class MainWindow
 
     /// <summary>The narrowest window that shows the L/R locator button beside Cycle.</summary>
     public const double LocatorsMinWidth = 1000;
+
+    /// <summary>The narrowest window that shows Record in the transport; the Live panel always has it.</summary>
+    public const double RecordMinWidth = 1100;
 
     private RibbonFit? ribbonFit;
 

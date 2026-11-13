@@ -310,11 +310,11 @@ public sealed class AudioEngine : IDisposable
     public void SetLiveParts(IReadOnlyList<ILivePart> parts) => mixer.SetLiveParts(parts);
 
     /// <summary>Auditions a resolved map lane, loading an unused custom index on demand.</summary>
-    public void Preview(Lane lane, MapFolder folder)
+    public void Preview(Lane lane, MapFolder folder, float volume = 1)
     {
         if (lane.Source != LaneSource.Skin && !loaded.Contains(lane))
             LoadLane(lane, folder.Find(lane.Name) is { } file ? folder.ReadBytes(file) : null);
-        Preview(lane);
+        Preview(lane, volume);
     }
 
     /// <summary>Loads the sample of a lane (decoded once to the mix format); no-op if it is already loaded.</summary>

@@ -332,6 +332,13 @@
           </StackPanel>
           <Border Classes="ribbonSep" />
           <StackPanel Classes="ribbonGroup">
+            <ToggleButton Name="LiveToggle" Classes="ribbon" AutomationProperties.Name="Live hitsounding"
+                          ToolTip.Tip="Live hitsounding (Alt+K): play the lanes with your computer keyboard or a MIDI keyboard, and record them (Numpad *). While it's on, only Space (play/stop), Numpad * (record) and Esc (close) keep their editor meaning.">
+              <StackPanel><app:AppIcon Glyph="KeyboardMusic" /><TextBlock Classes="ribbonText secondary" Text="Live" /></StackPanel>
+            </ToggleButton>
+          </StackPanel>
+          <Border Classes="ribbonSep" />
+          <StackPanel Classes="ribbonGroup">
             <Button Name="DrumDetectButton" Classes="ribbon" AutomationProperties.Name="Drum hit detection" ToolTip.Tip="Drum hit detection: find kick and snare hits in the song or a drum stem">
               <StackPanel><app:AppIcon Glyph="OsuDetect" /><TextBlock Classes="ribbonText" Text="Detect hits" /></StackPanel>
             </Button>
@@ -413,6 +420,25 @@
     <!-- 5. Arrange area -->
     <Grid Grid.Row="3" Grid.Column="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <app:ArrangeView Name="Lanes" />
+      <!-- Live hitsounding: which computer key plays which lane, and the MIDI input, shown while it's on. -->
+      <Border Name="LivePanel" IsVisible="False" VerticalAlignment="Bottom" Background="{DynamicResource PanelRaised}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="12,6">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+          <StackPanel Spacing="2">
+            <TextBlock Name="LiveTitle" Text="Live hitsounding" FontWeight="SemiBold" />
+            <WrapPanel Name="LiveKeysPanel" />
+            <TextBlock Name="LiveHelp" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+            <ToggleButton Name="LiveRecordButton" Classes="transport record wide" AutomationProperties.Name="Record live" ToolTip.Tip="Record (Numpad *): from the playhead, the lanes you tap. Taps snap to the grid; the hits of the tapped lanes in the recorded range are replaced. Space or Record stops.">
+              <StackPanel Orientation="Horizontal" Spacing="6"><Ellipse Width="12" Height="12" /><TextBlock Text="Record" VerticalAlignment="Center" /></StackPanel>
+            </ToggleButton>
+            <CheckBox Name="HsCountInToggle" Content="Count-in" IsChecked="True" VerticalAlignment="Center" ToolTip.Tip="Count-in: recording starts playback one bar early, so you hear the song before the take (shorter at the very start of the song)" />
+            <ComboBox Name="LiveMidiBox" Width="180" ToolTip.Tip="MIDI keyboard or pads (all channels)" />
+            <Button Name="LiveMidiRescanButton" Classes="icon" ToolTip.Tip="Look for MIDI keyboards again (after plugging one in)" AutomationProperties.Name="Look for MIDI keyboards"><app:AppIcon Glyph="RotateCw" /></Button>
+          </StackPanel>
+          <Button Grid.Column="2" Name="LiveCloseButton" Classes="icon flat" VerticalAlignment="Top" AutomationProperties.Name="Close live hitsounding" ToolTip.Tip="Close live hitsounding (Esc)"><app:AppIcon Glyph="X" /></Button>
+        </Grid>
+      </Border>
       <TextBox Name="LaneFilterBox" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9,33,0,0" MinHeight="24" Height="24" Padding="9,0" FontSize="10.5" CornerRadius="8" VerticalContentAlignment="Center" TextAlignment="Left" Watermark="Filter samples…" />
       <!-- Lane switches, on the filter's row (placed by AlignToLaneList). -->
       <ToggleButton Name="UsedLanesToggle" Classes="laneSwitch" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True" AutomationProperties.Name="Only lanes with hits" IsChecked="False" ToolTip.Tip="Show only the lanes that have hits on them (switch off and on again to refresh the list after adding hits)" Content="Used only" />
@@ -509,6 +535,9 @@
           </Button>
           <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:AppIcon Size="20" Glyph="OsuStop" /></Button>
           <Button Name="PlayButton" Classes="transport play" Width="42" Height="36" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:AppIcon Name="PlayGlyph" Glyph="OsuPlay" Size="22" /></Button>
+          <ToggleButton Name="HsRecordButton" Classes="transport record" ToolTip.Tip="Record (Numpad *): from the playhead, tap lanes with live hitsounding (computer keys or MIDI). Taps snap to the grid; the hits of the tapped lanes in the recorded range are replaced. Space or Record stops." AutomationProperties.Name="Record">
+            <Ellipse Width="12" Height="12" />
+          </ToggleButton>
           <ToggleButton Name="LoopButton" Classes="transport wide" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R, drag in the upper ruler draws a range." AutomationProperties.Name="Loop">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <app:AppIcon Glyph="Repeat2" />

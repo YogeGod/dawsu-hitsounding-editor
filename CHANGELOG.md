@@ -2,6 +2,13 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## Unreleased
+
+Live hitsounding: play and record the lanes, as Keysound mode plays and records notes.
+
+- **Live** (ribbon, Alt+K): your computer keyboard plays one lane per key, in lane-list order (A S D F G H J K L ; ' then Q to ] then Z to /; Up and Down shift which lane A plays). A MIDI keyboard or pads play lanes too: the Drums VST's drum notes and the drum map's first, then the other lanes from middle C up. While Live is on, other shortcuts are off except Space (play/stop), Numpad * (record) and Esc (close).
+- **Record** (transport and Live panel, Numpad *): records taps from the playhead, with a one-bar count-in (switch it off in the Live panel). Taps snap to the grid at the current spacing (as played with Snap off), and land on a gameplay object when one is there. When you stop, the hits of the lanes you tapped in the recorded range are replaced; other lanes keep theirs. Undo removes the whole take.
+
 ## 3.1.3
 
 Saves no longer write volumes below 5 %.
