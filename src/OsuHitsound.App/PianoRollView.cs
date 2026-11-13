@@ -12,12 +12,6 @@ namespace OsuHitsound.App;
 /// <summary>The key editor's tools, numbered as Cubase's (1 Select, 3 Split, 4 Glue, 5 Erase, 8 Draw).</summary>
 internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue, Mute, Ramp, Range }
 
-/// <summary>A range marked with the Range tool: a time span (ms, end excluded) over the pitches from Low to High.</summary>
-internal sealed record KeyRange(double Start, double End, int Low, int High);
-
-/// <summary>Which notes Scale by velocity looks at, as Scale by volume's scopes.</summary>
-internal enum VelocityScope { Selected, SelectedTrack, AllTracks }
-
 /// <summary>
 /// Keysound mode's key editor, after Cubase's Key Editor: a ruler, a strip with the reference's gameplay objects over the
 /// song waveform, a piano keyboard beside the note grid, and a velocity lane. It edits the selected track of a
@@ -46,11 +40,11 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     // osu!'s default combo colours, for references that set none.
     private static readonly Color[] DefaultCombo = [Color.Parse("#ffc000"), Color.Parse("#00ca00"), Color.Parse("#127cff"), Color.Parse("#f21839")];
     private static readonly IBrush[] VelocityFills = [.. Enumerable.Range(0, 128).Select(v => (IBrush)Paint.Brush(VelocityColor(v)))];
-    private static readonly string[] NoteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast), HandCursor = new(StandardCursorType.Hand);
 
     private KeysoundDocument? doc;
-    private readonly HashSet<Guid> selection = [];
+    // The selection belongs to the note editor; gestures change it directly while dragging.
+    private HashSet<Guid> selection => Notes.SelectedIds;
     private Drag? drag;
     private (IBrush Body, IBrush Head)[] comboFills = [];
     private readonly Dictionary<int, FormattedText> comboLabels = [];
@@ -63,11 +57,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public Waveform? Wave { get; set; }
     public double Playhead { get; set; }
     public KeyTool Tool { get; set; } = KeyTool.Select;
-    public bool SnapOn { get; set; } = true;
-    /// <summary>The snap spacing, as the Hitsound editor's: whole beats (2/1, 3/1, 4/1) or a fraction of one.</summary>
-    public SnapSpacing Spacing { get; set; } = new(1, 4);
-    /// <summary>Grid, Grid relative (moves keep their offset from the grid) or Objects (the reference's object moments).</summary>
-    public SnapMode SnapMode { get; set; } = SnapMode.Grid;
+    /// <summary>The selection, the snap, the range, the clipboard and the editing commands on the selected track's notes.</summary>
+    public NoteEditor Notes { get; } = new();
     /// <summary>Notes silenced while listening (the Mute tool). Never saved and Generate ignores it, as in the Hitsound editor.</summary>
     public HashSet<Guid> PreviewMuted { get; } = [];
     /// <summary>The Mute tool silenced or restored a note.</summary>
@@ -76,8 +67,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public event Action? ToolPickerRequested;
     /// <summary>The ruler's bookmarks: the editor keeps them in the project's state.</summary>
     public IReadOnlyList<KeyBookmark> Bookmarks => doc?.Session.State.Bookmarks ?? [];
-    /// <summary>The range marked with the Range tool, kept apart from the selection and the locators; null when none.</summary>
-    public KeyRange? Range { get; private set; }
+    private KeyRange? Range { get => Notes.Range; set => Notes.Range = value; }
     public bool ShowGhosts { get; set; } = true;
     public bool ShowMarkers { get; set; } = true;
     /// <summary>Notes being recorded, drawn over the selected track until the take ends.</summary>
@@ -98,14 +88,6 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     /// <summary>The osu! editor's wheel: move the playhead by this many snap steps (later = +).</summary>
     public event Action<int>? PlayheadStepRequested;
 
-    /// <summary>The next grid line from <paramref name="time"/> in <paramref name="direction"/>, at the snap's spacing.</summary>
-    public double GridStep(double time, int direction)
-    {
-        if (doc is null) return time;
-        double step = Spacing.Step(doc.Tempo.SegmentAtTime(time).BeatLength);
-        double target = doc.Tempo.Snap(time + direction * step * 0.51, Spacing.Beats, Spacing.Divisions);
-        return Math.Max(0, Math.Abs(target - time) < 0.5 ? time + direction * step : target);
-    }
     /// <summary>Ctrl+click (left) or Alt+click (right) in the ruler, as in Hitsound mode: set that locator here.</summary>
     public event Action<bool, double>? LocatorRequested;
     /// <summary>The upper half of the ruler, as in Cubase: a drawn, moved or resized cycle range (left, right; true for a new one).</summary>
@@ -130,6 +112,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         ClipToBounds = true;
         Axis.Changed += InvalidateVisual;
         Axis.Changed += () => ScrollChanged?.Invoke();
+        Notes.Changed += () => { InvalidateVisual(); ViewChanged?.Invoke(); };
+        Notes.AuditionRequested += (pitch, velocity) => AuditionRequested?.Invoke(pitch, velocity);
     }
 
     private KeysoundSession? Session => doc?.Session;
@@ -158,11 +142,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     {
         if (doc is not null) doc.Session.Changed -= OnSessionChanged;
         doc = document;
-        selection.Clear();
+        Notes.Document = document;
         PreviewMuted.Clear();
-        Range = null;
         drag = null;
-        objectMoments = [];
         if (doc is not null)
         {
             doc.Session.Changed += OnSessionChanged;
@@ -170,7 +152,6 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             Axis.Zoom = 0.45; // about 2.2 s per 1000 px, so objects and notes are readable from the start
             Axis.Left = (doc.Objects.Count > 0 ? doc.Objects[0].Start : doc.Tempo.Segments[0].Time) - 500;
             objectLookBack = doc.Objects.Select(o => o.End - o.Start).DefaultIfEmpty(0).Max();
-            objectMoments = [.. doc.Objects.SelectMany(o => o.Nodes.Select(n => n.Time)).Order()];
             Color[] colours = doc.ComboColours.Count > 0 ? [.. doc.ComboColours.Select(c => Color.FromRgb(c.R, c.G, c.B))] : DefaultCombo;
             comboFills = [.. colours.Select(c => ((IBrush)Paint.Brush(c, 0.55), (IBrush)Paint.Brush(c)))];
         }
@@ -181,10 +162,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     /// <summary>Called when the selected track changes: the selection belongs to one track.</summary>
     public void TrackChanged()
     {
-        selection.Clear();
         drag = null;
-        InvalidateVisual();
-        ViewChanged?.Invoke();
+        Notes.TrackChanged();
     }
 
     private void OnSessionChanged()
@@ -192,8 +171,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         // Undo may remove notes that are selected. During a drag the selection is the drag's own (an Alt+drag selects copies
         // that come and go with each move).
         if (drag is not null) { }
-        else if (Track is { } t) selection.IntersectWith(t.Notes.Select(n => n.Id));
-        else selection.Clear();
+        else Notes.KeepExisting();
         InvalidateVisual();
     }
 
@@ -213,8 +191,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     private int PitchOfY(double y) => Math.Clamp((int)Math.Floor(topPitch - (y - Grid.Top) / rowHeight) + 1, KeyNote.MinPitch, KeyNote.MaxPitch);
 
     private static bool IsBlack(int pitch) => (pitch % 12) is 1 or 3 or 6 or 8 or 10;
-    // Cubase's names: middle C (60) is C3.
-    internal static string PitchName(int pitch) => $"{NoteNames[pitch % 12]}{pitch / 12 - 2}";
+    private static string PitchName(int pitch) => NoteEditor.PitchName(pitch);
 
     /// <summary>Velocity colour, as in Cubase's default: blue (soft) through purple to red (loud).</summary>
     private static Color VelocityColor(int velocity) => Paint.LevelColor((velocity - 1) / 126.0);
@@ -231,41 +208,11 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         for (int p = top; p >= bottom; p--) yield return (p, YOfPitch(p));
     }
 
-    private double[] objectMoments = [];
-
-    /// <summary>A time on the snap: the grid, or with snap mode Objects the nearest gameplay-object moment.</summary>
-    private double SnapTime(double time)
-    {
-        if (!SnapOn) return time;
-        if (SnapMode != SnapMode.Objects || objectMoments.Length == 0) return doc!.Tempo.Snap(time, Spacing.Beats, Spacing.Divisions);
-        int next = Sorted.LowerBound(objectMoments, time, x => x);
-        if (next == 0) return objectMoments[0];
-        if (next == objectMoments.Length) return objectMoments[^1];
-        double before = objectMoments[next - 1], after = objectMoments[next];
-        return time - before <= after - time ? before : after;
-    }
-
-    /// <summary>
-    /// Where a note at <paramref name="time"/> lands when dragged by <paramref name="raw"/> ms: on the snap, or with Grid
-    /// relative by whole grid steps, keeping its offset from its own grid line (as in the Hitsound editor).
-    /// </summary>
-    private double SnapMoved(double time, double raw) => SnapOn && SnapMode == SnapMode.GridRelative
-        ? time + doc!.Tempo.Snap(time + raw, Spacing.Beats, Spacing.Divisions) - doc.Tempo.Snap(time, Spacing.Beats, Spacing.Divisions)
-        : SnapTime(time + raw);
-
-    /// <summary>
-    /// The grid cell's start at or before a time: where Draw puts a note. Ticks count beats, so one step is the same number
-    /// of ticks under every red line.
-    /// </summary>
-    private double FloorSnap(double time)
-    {
-        if (!SnapOn) return time;
-        if (SnapMode == SnapMode.Objects) return SnapTime(time);
-        double snapped = doc!.Tempo.Snap(time, Spacing.Beats, Spacing.Divisions);
-        return snapped <= time + 0.01 ? snapped : doc.Tempo.Snap(time - Spacing.Step(doc.Tempo.SegmentAtTime(time).BeatLength), Spacing.Beats, Spacing.Divisions);
-    }
-
-    private long StepTicks => Math.Max(1, TempoMap.Ppq * Spacing.Beats / Spacing.Divisions);
+    private SnapSpacing Spacing => Notes.Spacing;
+    private double SnapTime(double time) => Notes.SnapTime(time);
+    private double SnapMoved(double time, double raw) => Notes.SnapMoved(time, raw);
+    private double FloorSnap(double time) => Notes.FloorSnap(time);
+    private long StepTicks => Notes.StepTicks;
 
     // Drawing.
 
@@ -1102,7 +1049,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         }
     }
 
-    private long MinLength => SnapOn ? StepTicks : 1;
+    private long MinLength => Notes.MinLength;
 
     private void EraseAt(Point p)
     {
@@ -1200,255 +1147,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         ScrollPitch(0);
     }
 
-    // Keyboard commands on the selection (the editor routes keys here).
+    private void SelectOnly(IEnumerable<Guid> ids) => Notes.SelectOnly(ids);
 
-    public void SelectAll()
-    {
-        if (Track is not { } t) return;
-        selection.UnionWith(t.Notes.Select(n => n.Id));
-        InvalidateVisual();
-        ViewChanged?.Invoke();
-    }
-
-    /// <summary>Esc: selects nothing and drops the range, as in the Hitsound editor.</summary>
-    public void Deselect()
-    {
-        Range = null;
-        selection.Clear();
-        InvalidateVisual();
-        ViewChanged?.Invoke();
-    }
-
-    public void DeleteSelection()
-    {
-        if (Track is not { } t || selection.Count == 0) return;
-        doc!.Session.RemoveNotes(t.Id, selection.ToHashSet());
-        selection.Clear();
-        ViewChanged?.Invoke();
-    }
-
-    public void Transpose(int semitones)
-    {
-        if (Track is not { } t || selection.Count == 0) return;
-        var notes = SelectedNotes();
-        semitones = Math.Clamp(semitones, KeyNote.MinPitch - notes.Min(n => n.Pitch), KeyNote.MaxPitch - notes.Max(n => n.Pitch));
-        if (semitones == 0) return;
-        doc!.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Pitch = n.Pitch + semitones })], "Transpose");
-    }
-
-    private void SelectOnly(IEnumerable<Guid> ids)
-    {
-        selection.Clear();
-        selection.UnionWith(ids);
-        InvalidateVisual();
-        ViewChanged?.Invoke();
-    }
-
-    private List<KeyNote> SelectedNotes() => Track is { } t ? [.. t.Notes.Where(n => selection.Contains(n.Id))] : [];
-
-    /// <summary>Left/Right: the previous or next note in time; with <paramref name="extend"/> (Shift) it is added.</summary>
-    public void SelectNeighbour(int direction, bool extend)
-    {
-        if (Track is not { } t) return;
-        var ordered = KeyEditing.InTimeOrder(SelectedNotes()).ToList();
-        var current = direction > 0 ? ordered.LastOrDefault() : ordered.FirstOrDefault();
-        if (KeyEditing.Neighbour(t.Notes, current, direction) is not { } next) return;
-        if (!extend) selection.Clear();
-        selection.Add(next.Id);
-        AuditionRequested?.Invoke(next.Pitch, next.Velocity);
-        InvalidateVisual();
-        ViewChanged?.Invoke();
-    }
-
-    /// <summary>The selected notes of the selected track.</summary>
-    public IReadOnlyList<KeyNote> Selected => SelectedNotes();
-
-    /// <summary>The info bar's velocity edit: a new velocity for every selected note, as one undo step.</summary>
-    public void SetSelectionVelocity(Func<int, int> velocity)
-    {
-        if (Track is not { } track) return;
-        var notes = SelectedNotes();
-        if (notes.Count == 0) return;
-        doc!.Session.UpdateNotes(track.Id, [.. notes.Select(n => n with { Velocity = Math.Clamp(velocity(n.Velocity), KeyNote.MinVelocity, KeyNote.MaxVelocity) })], "Velocity");
-    }
-
-    /// <summary>Ctrl+D: copies of the selection right after it; the copies become the selection.</summary>
-    public void Duplicate()
-    {
-        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
-        var copies = KeyEditing.Duplicate(notes);
-        doc!.Session.AddNotes(t.Id, copies, "Duplicate");
-        SelectOnly(copies.Select(n => n.Id));
-    }
-
-    /// <summary>The selected notes, for the clipboard.</summary>
-    public IReadOnlyList<KeyNote> CopySelection() => SelectedNotes();
-
-    /// <summary>Pastes notes with the earliest at <paramref name="time"/>; the pasted notes become the selection.</summary>
-    public void Paste(IReadOnlyCollection<KeyNote> notes, double time)
-    {
-        if (Track is not { } t || notes.Count == 0) return;
-        var pasted = KeyEditing.PasteAt(notes, doc!.Tempo.RoundTick(time));
-        doc.Session.AddNotes(t.Id, pasted, "Paste");
-        SelectOnly(pasted.Select(n => n.Id));
-    }
-
-    /// <summary>Q: moves the selected notes' starts onto the grid (always, even with Snap off).</summary>
-    /// <summary>Quantize, as the Hitsound editor's: the selected notes move <paramref name="strength"/> % of the way to the grid.</summary>
-    public void QuantizeSelection(double strength = 100)
-    {
-        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
-        var tempo = doc!.Tempo;
-        double f = Math.Clamp(strength, 1, 100) / 100;
-        doc.Session.UpdateNotes(t.Id, KeyEditing.Quantize(notes, tick =>
-        {
-            double at = tempo.TimeAt(tick);
-            return tempo.RoundTick(at + (SnapTime(at) - at) * f);
-        }), "Quantize");
-    }
-
-    /// <summary>The selected track's notes in the range: starting in it (end excluded) on its pitches.</summary>
-    public IReadOnlyList<KeyNote> NotesInRange() =>
-        Range is { } r && Track is { } t && doc is { } d
-            ? [.. t.Notes.Where(n => n.Pitch >= r.Low && n.Pitch <= r.High && d.Tempo.TimeAt(n.Start) is var at && at >= r.Start - 0.5 && at < r.End - 0.5)]
-            : [];
-
-    /// <summary>
-    /// Edit range, as in the Hitsound editor: copies, moves or deletes the notes in the range by an offset in ms (one undo
-    /// step) and selects the copies or moved notes. Returns how many notes it changed.
-    /// </summary>
-    public int EditRange(RangeOperation operation, double offsetMs)
-    {
-        if (Track is not { } t || doc is not { } d) return 0;
-        var notes = NotesInRange();
-        if (notes.Count == 0) return 0;
-        long Shift(KeyNote n) => Math.Max(0, d.Tempo.RoundTick(d.Tempo.TimeAt(n.Start) + offsetMs));
-        switch (operation)
-        {
-            case RangeOperation.Delete:
-                d.Session.RemoveNotes(t.Id, notes.Select(n => n.Id).ToHashSet(), "Range delete");
-                selection.Clear();
-                break;
-            case RangeOperation.Move:
-            {
-                var moved = notes.Select(n => n with { Start = Shift(n) }).ToList();
-                d.Session.UpdateNotes(t.Id, moved, "Range move");
-                SelectOnly(moved.Select(n => n.Id));
-                break;
-            }
-            default:
-            {
-                var copies = notes.Select(n => n with { Id = Guid.NewGuid(), Start = Shift(n), Target = null }).ToList();
-                d.Session.AddNotes(t.Id, copies, "Range copy");
-                SelectOnly(copies.Select(n => n.Id));
-                break;
-            }
-        }
-
-        return notes.Count;
-    }
-
-    /// <summary>The notes Scale by velocity would change: those in scope with a velocity from–to (inclusive).</summary>
-    public IReadOnlyList<(Guid Track, KeyNote Note)> NotesToScale(VelocityScope scope, int from, int to)
-    {
-        if (doc is null) return [];
-        var tracks = scope == VelocityScope.AllTracks ? doc.Session.State.Tracks : Track is { } t ? [t] : [];
-        return [.. tracks.SelectMany(tr => tr.Notes.Select(n => (tr.Id, n)))
-            .Where(x => (scope != VelocityScope.Selected || selection.Contains(x.n.Id)) && x.n.Velocity >= from && x.n.Velocity <= to)];
-    }
-
-    /// <summary>Scale by velocity, as the Hitsound editor's Scale by volume: one undo step. Scaled velocities stay 1–127.</summary>
-    public void ScaleVelocity(VelocityScope scope, int from, int to, double percent)
-    {
-        if (doc is null) return;
-        var groups = NotesToScale(scope, from, to).GroupBy(x => x.Track).ToList();
-        if (groups.Count == 0) return;
-        doc.Session.Change("Scale by velocity", state => groups.Aggregate(state, (st, g) =>
-        {
-            var changed = g.ToDictionary(x => x.Note.Id, x => x.Note with
-            {
-                Velocity = Math.Clamp((int)Math.Round(x.Note.Velocity * percent / 100), KeyNote.MinVelocity, KeyNote.MaxVelocity),
-            });
-            return st.WithTrack(g.Key, tr => tr with { Notes = [.. tr.Notes.Select(n => changed.GetValueOrDefault(n.Id, n))] });
-        }));
-    }
-
-    /// <summary>Repeat's gap: the selection's length in snap steps, at least one.</summary>
-    public int DefaultRepeatGap()
-    {
-        var notes = SelectedNotes();
-        if (notes.Count == 0) return 1;
-        long span = notes.Max(n => n.End) - notes.Min(n => n.Start);
-        return Math.Max(1, (int)Math.Ceiling((double)span / StepTicks - 0.01));
-    }
-
-    /// <summary>Ctrl+R, as in the Hitsound editor: <paramref name="copies"/> copies of the selection, each <paramref name="gap"/> snap steps after the last, as one step.</summary>
-    public void Repeat(int copies, int gap)
-    {
-        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes || copies is < 1 or > HitEditor.MaxRepeatCopies || gap is < 1 or > HitEditor.MaxRepeatGap) return;
-        long first = notes.Min(n => n.Start), step = gap * StepTicks;
-        var added = new List<KeyNote>();
-        for (int c = 1; c <= copies; c++) added.AddRange(KeyEditing.PasteAt(notes, first + c * step));
-        doc!.Session.AddNotes(t.Id, added, "Repeat");
-        SelectOnly(added.Select(n => n.Id));
-    }
-
-    /// <summary>Ctrl+Alt+Left/Right, as in the Hitsound editor: the selection moves so its first note lands on the previous or next grid line.</summary>
-    public void NudgeToGrid(int direction)
-    {
-        if (Track is not { } t || SelectedNotes() is not { Count: > 0 } notes) return;
-        var tempo = doc!.Tempo;
-        long start = notes.Min(n => n.Start);
-        long dt = tempo.RoundTick(GridStep(tempo.TimeAt(start), direction)) - start;
-        if (dt != 0) doc.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Start = Math.Max(0, n.Start + dt) })], "Move notes");
-    }
-
-    /// <summary>Selects the selected track's notes that <paramref name="match"/> (the controller's velocity range).</summary>
-    public int SelectWhere(Func<KeyNote, bool> match)
-    {
-        if (Track is not { } t) return 0;
-        var ids = t.Notes.Where(match).Select(n => n.Id).ToList();
-        SelectOnly(ids);
-        return ids.Count;
-    }
-
-    /// <summary>The info bar's Start: the selected notes move so the first starts at this tick (the others keep their spacing).</summary>
-    public void MoveSelectionTo(long tick)
-    {
-        if (Track is not { } t || selection.Count == 0) return;
-        var notes = SelectedNotes();
-        long dt = Math.Max(0, tick) - notes.Min(n => n.Start);
-        if (dt != 0) doc!.Session.UpdateNotes(t.Id, [.. notes.Select(n => n with { Start = n.Start + dt })], "Move notes");
-    }
-
-    /// <summary>Cubase's Nudge Start/End: moves the selected notes' starts and/or ends by snap steps; the end stays put when the start moves, and a note keeps at least one step.</summary>
-    public void NudgeEdges(int startSteps, int endSteps)
-    {
-        if (Track is not { } t || selection.Count == 0) return;
-        long step = StepTicks, ds = startSteps * step, de = endSteps * step;
-        var moved = SelectedNotes().Select(n =>
-        {
-            long start = Math.Max(0, n.Start + ds), end = n.End + de;
-            if (end - start < MinLength) { if (ds != 0) start = end - MinLength; else end = start + MinLength; }
-            return n with { Start = start, Length = end - start };
-        }).ToList();
-        doc!.Session.UpdateNotes(t.Id, moved, ds != 0 ? "Nudge start" : "Nudge end");
-    }
-
-    public void Nudge(int steps)
-    {
-        if (Track is not { } t || selection.Count == 0) return;
-        long dt = steps * StepTicks;
-        doc!.Session.UpdateNotes(t.Id, [.. SelectedNotes().Select(n => n with { Start = n.Start + dt })], "Move notes");
-    }
-
-    public string SelectionText()
-    {
-        if (Track is not { } t || selection.Count == 0) return "No notes selected";
-        var notes = SelectedNotes();
-        if (notes.Count != 1) return $"{notes.Count} notes selected";
-        var n = notes[0];
-        var (bar, beat) = doc!.Tempo.BarBeatAt(doc.Tempo.TimeAt(n.Start));
-        return $"{PitchName(n.Pitch)} · bar {bar}.{beat} · {n.Length / (double)TempoMap.Ppq:0.###} beats · velocity {n.Velocity}";
-    }
+    private IReadOnlyList<KeyNote> SelectedNotes() => Notes.Selected;
 }

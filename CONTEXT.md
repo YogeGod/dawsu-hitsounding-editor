@@ -25,6 +25,10 @@ _Avoid_: Note timing, sample assignment
 **Keysounding**:
 A separate editor mode for arranging pitched musical notes and turning their instrument sounds into samples assigned to an osu! beatmap. Editable notes and instrument settings remain part of the project.
 
+**Note**:
+In Keysounding, one pitched musical note on a track: a pitch, a start and length in ticks, and a velocity. Sync may tie it to a gameplay position.
+_Avoid_: Hit (that is a Hitsound-mode lane event)
+
 **Feature area**:
 A named group of related features. F1 groups commands by area, and so do Preferences → Keys and the README. An area that belongs to one mode starts with that mode, as "Hitsound – Drums"; an area for both modes has no prefix. A capability both modes have gets one area per mode, and a command both editors run is listed under both.
 - Hitsound: Map files, osu! connection, Lanes, Hit editing, Timeline navigation, Volume control, Map output, Sound sets, Drums, Playback.

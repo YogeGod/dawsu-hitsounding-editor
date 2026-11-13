@@ -25,8 +25,6 @@ public partial class KeysoundEditor : UserControl
     private static Task<SfzInstrument>? piano;
     private CancellationTokenSource? waveCancel;
     private string status = "";
-    // Copied notes, shared between projects in a session (not the system clipboard).
-    private static IReadOnlyList<KeyNote> clipboard = [];
     private string trackListKey = "";
     private bool showingZoom; // the slider shows the zoom set elsewhere (wheel, keys), which isn't a slider change
     private bool showingVolume; // the volume box shows the selected track's value, which isn't an edit
@@ -36,7 +34,7 @@ public partial class KeysoundEditor : UserControl
     {
         InitializeComponent();
         Roll.PlayheadStepRequested += SeekGridSteps;
-        SnapToggle.IsCheckedChanged += (_, _) => Roll.SnapOn = SnapToggle.IsChecked == true;
+        SnapToggle.IsCheckedChanged += (_, _) => Roll.Notes.SnapOn = SnapToggle.IsChecked == true;
         GhostToggle.IsCheckedChanged += (_, _) => { Roll.ShowGhosts = GhostToggle.IsChecked == true; Roll.InvalidateVisual(); };
         MarkerToggle.IsCheckedChanged += (_, _) => { Roll.ShowMarkers = MarkerToggle.IsChecked == true; Roll.InvalidateVisual(); };
         SelectTool.Click += (_, _) => SetTool(KeyTool.Select);
@@ -59,7 +57,7 @@ public partial class KeysoundEditor : UserControl
             if (e.Key == Avalonia.Input.Key.Enter)
             {
                 if (doc is not null && OsuHitsound.Format.OsuNumber.TryParseDouble(StartBox.Text?.Trim() ?? "", out double ms) && double.IsFinite(ms))
-                    Roll.MoveSelectionTo((long)Math.Round(doc.Tempo.TickAt(Math.Max(0, ms))));
+                    Roll.Notes.MoveSelectionTo((long)Math.Round(doc.Tempo.TickAt(Math.Max(0, ms))));
                 Roll.Focus();
                 UpdateSelectionInfo();
                 e.Handled = true;
@@ -458,7 +456,7 @@ public partial class KeysoundEditor : UserControl
             return;
         }
 
-        if (await Dialogs.Sync(owner, project, Roll.CopySelection()) is not { } moves || !ReferenceEquals(doc, project)) return;
+        if (await Dialogs.Sync(owner, project, Roll.Notes.Selected) is not { } moves || !ReferenceEquals(doc, project)) return;
         if (moves.Count == 0)
         {
             SetStatus("No notes were synced.");
@@ -497,7 +495,7 @@ public partial class KeysoundEditor : UserControl
     // Transport.
 
     /// <summary>The playhead by whole grid lines at the snap's spacing (the osu! editor's arrows and wheel).</summary>
-    private void SeekGridSteps(int steps) => Seek(WheelMode.StepGrid(audio?.Position ?? Roll.Playhead, steps, Roll.GridStep));
+    private void SeekGridSteps(int steps) => Seek(WheelMode.StepGrid(audio?.Position ?? Roll.Playhead, steps, Roll.Notes.GridStep));
 
     private void Seek(double time)
     {
@@ -516,7 +514,7 @@ public partial class KeysoundEditor : UserControl
         if (IsRecording) { StopRecording(); return; }
         if (audio.IsPlaying) { Stop(); return; }
         if (!audio.HasSong) SetStatus("The song audio is missing from this project.");
-        double? selectionStart = Roll.Selected.Count > 0 && doc is { } d ? d.Tempo.TimeAt(Roll.Selected.Min(n => n.Start)) : null;
+        double? selectionStart = Roll.Notes.Selected.Count > 0 && doc is { } d ? d.Tempo.TimeAt(Roll.Notes.Selected.Min(n => n.Start)) : null;
         double? from = StartFrom switch
         {
             PlayStart.LeftLocator => locatorLeft,
@@ -598,7 +596,7 @@ public partial class KeysoundEditor : UserControl
     private void UpdateSelectionInfo()
     {
         if (doc is null) return;
-        var notes = Roll.Selected;
+        var notes = Roll.Notes.Selected;
         InfoSelection.Text = notes.Count switch { 0 => "Nothing selected", 1 => "1 note", var n => $"{n} notes" };
         SelectionFields.IsVisible = notes.Count > 0;
         SelectionHelp.IsVisible = notes.Count == 0;
@@ -617,7 +615,7 @@ public partial class KeysoundEditor : UserControl
         if (!StartBox.IsFocused) StartBox.Text = ms.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
         InfoStart.Text = $"({TimeSpan.FromMilliseconds(Math.Max(0, ms)):m\\:ss\\.fff} · {bar}.{beat}.{tick})";
         var pitches = notes.Select(n => n.Pitch).Distinct().ToList();
-        InfoPitch.Text = pitches.Count == 1 ? PianoRollView.PitchName(pitches[0]) : $"{PianoRollView.PitchName(pitches.Min())}–{PianoRollView.PitchName(pitches.Max())}";
+        InfoPitch.Text = pitches.Count == 1 ? NoteEditor.PitchName(pitches[0]) : $"{NoteEditor.PitchName(pitches.Min())}–{NoteEditor.PitchName(pitches.Max())}";
         var velocities = notes.Select(n => n.Velocity).Distinct().ToList();
         VelocityValueBox.Watermark = velocities.Count == 1 ? velocities[0].ToString() : "mixed";
         int synced = notes.Count(n => KeySync.Status(n, doc.TargetIndex) == KeySyncStatus.Synced);
@@ -636,7 +634,7 @@ public partial class KeysoundEditor : UserControl
     {
         if (!int.TryParse(VelocityValueBox.Text?.Trim(), out int value)) return;
         bool relative = VelocityModeBox.SelectedIndex == 1;
-        Roll.SetSelectionVelocity(v => relative ? v + value : value);
+        Roll.Notes.SetSelectionVelocity(v => relative ? v + value : value);
         VelocityValueBox.Text = "";
         Roll.Focus();
     }

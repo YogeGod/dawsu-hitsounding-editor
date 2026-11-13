@@ -34,7 +34,7 @@ public partial class KeysoundEditor
     /// <summary>The settings remembered for all projects, as the Hitsound editor remembers its own.</summary>
     internal (int InsertVelocity, bool Audition, SnapMode SnapMode, bool Triplets, bool Controller) ViewSettings
     {
-        get => (Roll.InsertVelocity, HearToggle.IsChecked == true, Roll.SnapMode, TripletSnapToggle.IsChecked == true, VelocityToggle.IsChecked == true);
+        get => (Roll.InsertVelocity, HearToggle.IsChecked == true, Roll.Notes.SnapMode, TripletSnapToggle.IsChecked == true, VelocityToggle.IsChecked == true);
         set
         {
             InsertVelocityBox.Value = Math.Clamp(value.InsertVelocity, 1, 127);
@@ -52,17 +52,17 @@ public partial class KeysoundEditor
         SnapBox.SelectedIndex = Array.IndexOf(MainWindow.SnapOptions, new SnapSpacing(1, 4));
         SnapBox.SelectionChanged += (_, _) =>
         {
-            Roll.Spacing = MainWindow.SnapOptions[Math.Max(0, SnapBox.SelectedIndex)];
+            Roll.Notes.Spacing = MainWindow.SnapOptions[Math.Max(0, SnapBox.SelectedIndex)];
             Roll.InvalidateVisual();
             UpdateTransport();
         };
         Roll.DivisorWheel += step => SnapBox.SelectedIndex = Array.IndexOf(MainWindow.SnapOptions,
-            MainWindow.NextWheelSnap(Roll.Spacing, step, TripletSnapToggle.IsChecked == true));
+            MainWindow.NextWheelSnap(Roll.Notes.Spacing, step, TripletSnapToggle.IsChecked == true));
         SnapModeBox.ItemsSource = new[] { "Grid", "Grid relative", "Objects" };
         SnapModeBox.SelectedIndex = 0;
         SnapModeBox.SelectionChanged += (_, _) =>
         {
-            Roll.SnapMode = SnapModeBox.SelectedIndex is >= 0 and <= 2 ? (SnapMode)SnapModeBox.SelectedIndex : SnapMode.Grid;
+            Roll.Notes.SnapMode = SnapModeBox.SelectedIndex is >= 0 and <= 2 ? (SnapMode)SnapModeBox.SelectedIndex : SnapMode.Grid;
             ViewSettingsChanged?.Invoke();
         };
         TripletSnapToggle.IsCheckedChanged += (_, _) => ViewSettingsChanged?.Invoke();
@@ -190,7 +190,7 @@ public partial class KeysoundEditor
         int min = int.TryParse(VelocityMinBox.Text?.Trim(), out var a) ? a : KeyNote.MinVelocity;
         int max = int.TryParse(VelocityMaxBox.Text?.Trim(), out var b) ? b : KeyNote.MaxVelocity;
         if (min > max) (min, max) = (max, min);
-        int count = Roll.SelectWhere(n => n.Velocity >= min && n.Velocity <= max);
+        int count = Roll.Notes.SelectWhere(n => n.Velocity >= min && n.Velocity <= max);
         SetStatus(count == 0 ? $"No notes with velocity {min}–{max} on this track." : $"Selected {count} note{(count == 1 ? "" : "s")} with velocity {min}–{max}.");
         Roll.Focus();
     }
@@ -215,7 +215,7 @@ public partial class KeysoundEditor
     private void UpdateControllerText()
     {
         var track = doc?.SelectedTrack is { } id ? doc.Session.State.Track(id) : null;
-        int selected = Roll.Selected.Count;
+        int selected = Roll.Notes.Selected.Count;
         ActiveTrackText.Text = track is null ? "No track" : selected > 0 ? $"{track.Name} · {selected} selected" : track.Name;
     }
 

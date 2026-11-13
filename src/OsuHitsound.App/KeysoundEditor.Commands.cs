@@ -24,13 +24,13 @@ public partial class KeysoundEditor
         {
             case "undo": doc.Session.Undo(); break;
             case "redo": doc.Session.Redo(); break;
-            case "cut": clipboard = Roll.CopySelection(); Roll.DeleteSelection(); break;
-            case "copy": clipboard = Roll.CopySelection(); break;
-            case "paste": Roll.Paste(clipboard, Roll.Playhead); break;
-            case "duplicate": Roll.Duplicate(); break;
-            case "delete": Roll.DeleteSelection(); break;
-            case "selectAll": Roll.SelectAll(); break;
-            case "quantize": Roll.QuantizeSelection(QuantizeStrength); break;
+            case "cut": Roll.Notes.Cut(); break;
+            case "copy": Roll.Notes.Copy(); break;
+            case "paste": Roll.Notes.Paste(Roll.Playhead); break;
+            case "duplicate": Roll.Notes.Duplicate(); break;
+            case "delete": Roll.Notes.DeleteSelection(); break;
+            case "selectAll": Roll.Notes.SelectAll(); break;
+            case "quantize": Roll.Notes.QuantizeSelection(QuantizeStrength); break;
             case "quantizeDialog": await QuantizeDialog(); break;
             case "repeat": await Repeat(); break;
             case "editRange": await EditRange(); break;
@@ -72,37 +72,37 @@ public partial class KeysoundEditor
             QuantizeStrength.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (text is null || !OsuHitsound.Format.OsuNumber.TryParseDouble(text, out double strength) || !double.IsFinite(strength)) return;
         QuantizeStrength = Math.Clamp(strength, 1, 100);
-        Roll.QuantizeSelection(QuantizeStrength);
+        Roll.Notes.QuantizeSelection(QuantizeStrength);
     }
 
     /// <summary>Ctrl+R, as in the Hitsound editor: how many copies and how many snap steps apart.</summary>
     private async Task Repeat()
     {
         if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
-        if (Roll.Selected.Count == 0) { SetStatus("Select some notes to repeat first."); return; }
-        if (await Dialogs.Repeat(owner, Roll.DefaultRepeatGap(), Roll.Spacing) is { } r) Roll.Repeat(r.Copies, r.Gap);
+        if (Roll.Notes.Selected.Count == 0) { SetStatus("Select some notes to repeat first."); return; }
+        if (await Dialogs.Repeat(owner, Roll.Notes.DefaultRepeatGap(), Roll.Notes.Spacing) is { } r) Roll.Notes.Repeat(r.Copies, r.Gap);
     }
 
     /// <summary>Edit range…, as in the Hitsound editor: copy, move or delete the notes in the range marked with the Range tool.</summary>
     private async Task EditRange()
     {
         if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
-        if (Roll.Range is not { } range)
+        if (Roll.Notes.Range is not { } range)
         {
             SetStatus("Choose the Range tool and drag a time range over the keys first.");
             return;
         }
 
         if (await Dialogs.EditRange(owner, range.End - range.Start) is not { } choice) return;
-        if (Roll.EditRange(choice.Operation, choice.Offset) == 0) SetStatus("The range has no notes of the selected track.");
+        if (Roll.Notes.EditRange(choice.Operation, choice.Offset) == 0) SetStatus("The range has no notes of the selected track.");
     }
 
     /// <summary>Scale by velocity…, the key editor's Scale by volume: louder or quieter notes in a velocity range.</summary>
     private async Task ScaleByVelocity()
     {
         if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
-        if (await Dialogs.ScaleByVelocity(owner, Roll.Selected.Count > 0, (scope, from, to) => Roll.NotesToScale(scope, from, to).Count) is { } c)
-            Roll.ScaleVelocity(c.Scope, c.From, c.To, c.Percent);
+        if (await Dialogs.ScaleByVelocity(owner, Roll.Notes.Selected.Count > 0, (scope, from, to) => Roll.Notes.NotesToScale(scope, from, to).Count) is { } c)
+            Roll.Notes.ScaleVelocity(c.Scope, c.From, c.To, c.Percent);
     }
 
     /// <summary>Whether a command can run now (for greying out menu items).</summary>
@@ -110,11 +110,11 @@ public partial class KeysoundEditor
     {
         "undo" => doc.Session.CanUndo,
         "redo" => doc.Session.CanRedo,
-        "cut" or "copy" or "duplicate" or "delete" or "quantize" or "quantizeDialog" or "repeat" => Roll.Selected.Count > 0,
-        "paste" => clipboard.Count > 0 && doc.SelectedTrack is not null,
+        "cut" or "copy" or "duplicate" or "delete" or "quantize" or "quantizeDialog" or "repeat" => Roll.Notes.Selected.Count > 0,
+        "paste" => Roll.Notes.CanPaste && doc.SelectedTrack is not null,
         "renameTrack" or "deleteTrack" or "instrument" => doc.SelectedTrack is not null,
         "instrumentEditor" => SelectedTrackPart()?.Vst is not null,
-        "editRange" => Roll.Range is not null,
+        "editRange" => Roll.Notes.Range is not null,
         _ => true,
     };
 

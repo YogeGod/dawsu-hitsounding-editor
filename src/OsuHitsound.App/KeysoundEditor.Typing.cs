@@ -44,7 +44,7 @@ public partial class KeysoundEditor
         if (!TypingOn) ReleaseTypedNotes();
         TypingPanel.IsVisible = TypingOn;
         // The key names as the piano roll shows them.
-        TypingTitle.Text = $"Musical typing · {PianoRollView.PitchName(typingBase)}–{PianoRollView.PitchName(typingBase + 17)} · velocity {TypingVelocity}";
+        TypingTitle.Text = $"Musical typing · {NoteEditor.PitchName(typingBase)}–{NoteEditor.PitchName(typingBase + 17)} · velocity {TypingVelocity}";
     }
 
     private int TypingVelocity => (int)(InsertVelocityBox.Value ?? 100);

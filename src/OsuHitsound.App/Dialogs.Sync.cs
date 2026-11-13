@@ -79,7 +79,7 @@ internal static partial class Dialogs
                 foreach (var p in proposals.Take(MaxRows))
                 {
                     string track = state.Track(p.Track)?.Name ?? "";
-                    string head = $"{track} · {PianoRollView.PitchName(p.Note.Pitch)} at {SyncTime(p.NoteTime)}";
+                    string head = $"{track} · {NoteEditor.PitchName(p.Note.Pitch)} at {SyncTime(p.NoteTime)}";
                     Control detail;
                     if (!p.InRange) detail = new TextBlock { Text = $"no target within {options.MaxShift:0} ms: stays unsynced", Opacity = 0.7 };
                     else if (!p.Ambiguous) detail = new TextBlock { Text = "→ " + SyncLabel(p.Candidates[0], p.NoteTime) };
