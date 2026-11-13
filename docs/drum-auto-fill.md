@@ -1,84 +1,81 @@
 # Drum Hits auto-fill
 
-Status: local **kick-and-snare-only Windows editor test**. Toms are excluded. The editor can analyse, review and apply hits; no public release has been made.
+Status: local **kick-and-snare-only** editor feature, built into the app. Toms are excluded. No public release has been made.
 
 ## Try it in the editor
 
-The local test copy is `E:/Codex-releases/dawsu!/Drum-Auto-fill-Test/app/dawsu!.exe`. A staged mapset is alongside it in `mapset/`, with `Roselia - MIIRO [Drum auto-fill test].osu` and demonstration `Kick.wav`/`Snare.wav` lanes. The first two circles introduce those samples; original library files are unchanged.
-
-1. Open the staged `.osu` in the test editor, then **Edit → Drum Hits auto-fill…**.
+1. Open a map, then **Edit → Drum Hits auto-fill…**.
 2. Choose the kick and snare destination lanes, or Skip either category. Start with Conservative sensitivity and 30 ms object tolerance.
-3. Analyse the whole song, or use the Range tool first and leave Selected range checked. An aligned external drum stem is optional.
-4. Review the proposed hits. Uncheck any to exclude them; the Listen button plays the source on the left and diagnostic cues on the right.
-5. **Apply selected hits**, then play the map in the editor to hear your chosen samples. **Ctrl+Z** undoes the complete addition. Save/Generate remain separate actions.
+3. Analyse the whole song, or use the Range tool first and leave Selected range checked. An aligned drum stem is optional and gives much cleaner results than a full mix.
+4. Review the proposed hits. Uncheck any to exclude them; the Listen button plays the source on the left and synthesised cues on the right.
+5. **Apply selected hits**, then play the map to hear your chosen samples. **Ctrl+Z** undoes the complete addition. Save/Generate remain separate actions.
 
 Existing hits and volumes are preserved. Duplicates are skipped. Unmatched hits are excluded unless explicitly enabled for Generate/HS mode. Destination lanes are remembered. If the map, edits, song offset or source audio changes before Apply, the analysis is rejected instead of applying stale results.
 
-This test copy uses the Python detector environment already installed on this PC, configured by `app/drum-autofill.json`; it is not a standalone redistribution. Keep `E:/Claude/osu-hitsound-editor/artifacts/drum-autofill/` in place. No source audio is uploaded.
+## Detector: signal processing, no machine learning
 
-## Confirmed design
+`src/OsuHitsound.Audio/DrumOnsets.cs` runs in-process in C#. There is no model, Python runtime or download, and no audio leaves the machine. Steps:
 
-Windows first. Detect actual kick and snare onsets from the map song or an optional drum stem, locally. A model download is acceptable; audio is not uploaded. Analyse the selected time range when present, otherwise the whole song. The user removed tom hits from the prototype after the initial evaluation.
+1. Mono mix of the analysed range, peak-normalised so the result does not depend on the song's level.
+2. STFT: 2048-sample Hann window, 10 ms hop, bins up to 11 kHz.
+3. Harmonic/percussive separation: 17-point median filters across time (harmonic) and frequency (percussive), soft mask `P²/(P²+H²)`. This suppresses sustained guitar, bass and vocal partials.
+4. Log spectral flux (`log(1 + 3·|X|)`, positive increase over a 3-bin maximum of the previous frame) in four bands: kick 30–120 Hz, snare body 150–400 Hz, snare wires 1.5–5 kHz, high noise 7–11 kHz.
+5. Each curve is scaled so a typical strong hit is about 1. The snare curve is the geometric mean of body and wires, so both must rise together.
+6. Peak picking: local maximum within ±30 ms, above `0.3·s` absolute and `0.12·s` over the local mean (−100/+30 ms), at least 60 ms between peaks of the same drum. `s` is the dialog's threshold scale: Conservative 2.0, Normal 1.5, Sensitive 1.0.
+7. Kick bleed rule: a snare candidate is dropped when it is weaker than 0.75 × a coinciding kick (unless its own score is ≥ 1), or when its body is under 1.3 × the kick and its high noise under 0.5 × the kick.
+8. Times get a +4 ms bias correction (measured), then the excerpt start and song offset.
 
-The editor test chooses and remembers destination lanes, with each category optional. Preview proposed hits and choose sensitivity before analysing. Prefer fewer false detections. Snap to nearby gameplay objects within an adjustable tolerance. Show unmatched candidates separately, skipped by default, with an option to include them for Generate. Preserve existing hits and map volume, avoid duplicates, and apply in one undo step.
+### Beat grid
 
-The CLI still only exports detections and a read-only object-matching preview. The editor test creates a separate plan against the current edit session and adds only the reviewed hits. Its 30 ms default matching tolerance is a trial value; it does not change the editor's existing 2 ms anchoring tolerance.
+The dialog's **Beat grid** option defaults to 1/4. The other choices are 1/4 + 1/3, 1/8, 1/8 + 1/6 and Off. It works in `DrumAutoFillPlan.Create` using the map's red lines, through `ArrangeModel.Snap`:
 
-## Detector evaluated
+1. **Lag.** A map's timing and its decoded audio often disagree by a constant 10–30 ms. For Roselia - MIIRO, detections run about 20 ms after the grid, and ADTOF's did too. `GridShift` measures this lag from the detections themselves: the median distance to the first division's lines, refined twice over the deltas within 25 ms. Up to ±50 ms is compensated. With fewer than 8 detections the lag is not measured.
+2. **Filter.** After allowing for the lag, a detection is kept only if it is within 20 ms of a line of an allowed division. The window narrows to a third of the step for fast tempos or fine divisions. A kept hit moves exactly onto its line; others are counted as dropped off the grid.
+3. **Review.** The dialog reports the number dropped and the measured lag. Where the map has no red line, nothing is dropped.
 
-[ADTOF-pytorch](https://github.com/xavriley/ADTOF-pytorch), commit `85c192e78f716ea0b111cc8a5ee4a8f6a3a4f8a9`, supplies a five-class pretrained model. The runner retains only kick and snare output; toms, hats and cymbals are excluded from candidates, MIDI, audition cues, exported activations and evaluation metrics. The underlying pretrained model is unchanged. Weights SHA256: `1bc986e596ec47ba0b44916f87cd4a39f0b2bec23596df3fb5d0e87749217320` (3,617,805 bytes).
+Without lag compensation, a 20 ms window would have dropped about half the real hits on MIIRO.
 
-The runner requires pretrained weights, uses strict loading, and refuses a partial/random model. Loading explicitly uses PyTorch's `weights_only=True`. Its output score is a raw activation, not a calibrated probability that a candidate is correct.
+`Score` is the normalised peak height, a strength rather than a probability. `DrumAutoFillDetector.AuditionWav` writes the review audio: the analysed audio on the left, with a synthetic thump (kick) or noise burst (snare) on the right at each detected time.
 
-Third-party code and weights are installed in an ignored environment, not copied into application sources or a release. [Original ADTOF](https://github.com/MZehren/ADTOF) declares CC BY-NC-SA 4.0; distribution of the port and weights needs a separate provenance/licence review before bundling. The annotated evaluation files come from [MDB Drums ++](https://github.com/xavriley/MDBDrumsPlusPlus), attributed there to the original MDB Drums / MedleyDB recordings and published under CC BY-NC-SA 4.0. They remain local evaluation artifacts.
+## Measured results
 
-## Run the prototype
+`tools/DrumAutoFill/DspEval` scores the detector against drum-only GM MIDI annotations (kick 35/36, snare 38/40, one-to-one matching within 50 ms). The constants above were tuned on these same two clips, so these numbers are optimistic. They are not a held-out benchmark.
 
-From the repository root, create an environment and install the pinned detector:
+| Annotated recording | Conservative (2.0) kick correct / proposed / reference | Conservative snare | Normal (1.5) kick | Normal snare |
+|---|---|---|---|---|
+| MusicDelta 80sRock, 36.92 s | 63 / 63 / 64 | 21 / 21 / 35 | 64 / 64 / 64 | 23 / 24 / 35 |
+| MusicDelta Punk, 28.76 s | 81 / 81 / 84 | 30 / 31 / 44 | 83 / 93 / 84 | 33 / 38 / 44 |
+
+For comparison, the earlier ADTOF neural detector scored 63/63/64 and 35/35/35 on 80sRock, and 82/84/84 and 32/32/44 on Punk. Kick quality is about the same. Snare recall is lower: some quieter snares and snares played together with kicks are missed.
+
+Mean timing error is within ±2 ms. Analysis takes roughly 0.2–0.5 s per 30 s of audio.
+
+**Dense full mixes are the weak point.** On the Roselia - MIIRO 30–50 s excerpt (no ground truth), Conservative proposes about 42 kicks and 40 snares. ADTOF proposed 28 and 14 there, and all of those are among the DSP detections. Some of the extras may be real hits that ADTOF skipped, but many are likely guitar or bass attacks.
+
+The beat grid barely changes this. Measured with the editor's own BASS decode of the map's MP3, after lag compensation:
+- at Conservative with the 1/4 grid, kicks go from 37 to 34 and snares stay at 38, while 27 of 28 ADTOF kicks and all 14 ADTOF snares are kept
+- at Sensitive, kicks go from 74 to 61 and snares from 69 to 64
+
+The extras sit on the beat, so they can't be removed by timing alone. Use a drum stem where possible, keep Conservative, and listen before applying.
+
+Run the scorer:
 
 ```powershell
-python -m venv artifacts/drum-autofill/venv
-artifacts/drum-autofill/venv/Scripts/python.exe -m pip install -r tools/DrumAutoFill/requirements.txt
+dotnet run --project tools/DrumAutoFill/DspEval -c Release -- --scale 2 artifacts/drum-autofill/benchmark/80sRock.wav artifacts/drum-autofill/benchmark/80sRock.mid artifacts/drum-autofill/benchmark/Punk.wav artifacts/drum-autofill/benchmark/Punk.mid
 ```
 
-Stage a WAV excerpt yourself, or use ffmpeg. Originals are only read. Put the staged map in its own folder; the export tool needs the map's timing and object lines, not audio/sample copies.
+Set `DSP_DIAG=1` to see which reference instrument each false detection lands on. Add `--osu map.osu --start-ms <excerpt start> --grid 4` to apply a plain grid filter. That filter does not compensate for lag, so use excerpts decoded the way the editor decodes them. The annotated recordings come from [MDB Drums ++](https://github.com/xavriley/MDBDrumsPlusPlus) (CC BY-NC-SA 4.0) and stay local evaluation artifacts.
 
-```powershell
-ffmpeg -i path/to/song.mp3 -ss 30 -t 20 -ar 44100 -ac 1 artifacts/drum-autofill/excerpt.wav
-dotnet run --project tools/DrumAutoFill/MapMoments -- path/to/staged.osu artifacts/drum-autofill/moments.json
-artifacts/drum-autofill/venv/Scripts/python.exe tools/DrumAutoFill/prototype.py --audio artifacts/drum-autofill/excerpt.wav --audio-start-ms 30000 --moments artifacts/drum-autofill/moments.json --output artifacts/drum-autofill/run-01
-```
+## Verification
 
-Both outputs must be new: the exporter refuses to overwrite a JSON file, and the detector requires a new result directory. Use WAV input for this experiment. `--audio-start-ms` is the excerpt's position in the original song; `--song-offset-ms` is the editor's song offset, added to song time. For an external stem, alignment to the original song is the caller's responsibility. Defaults: CPU, four threads, 30 ms object tolerance, threshold scale 1.25. Scale 1 uses the upstream class thresholds; larger values keep fewer candidates.
+- `tests/OsuHitsound.App.Tests/DrumOnsetsTests.cs`: a synthetic 120 BPM kick/snare/hi-hat pattern. All kicks and snares are found; hi-hats and kicks are never labelled snare; results are identical at 1/20 the level; silence gives nothing; cancellation and argument checks work; the audition WAV is correct.
+- `tests/OsuHitsound.App.Tests/DrumAutoFillTests.cs` covers:
+  - plan creation, one-step Undo/Redo, preserving hits and volumes, deduplication, skipped categories, unmatched handling and range boundaries
+  - the grid: snapping, dropping off-grid hits, triplets, keeping the stronger of two hits on one line, narrowing the window for fine divisions, unmapped time, and measuring a constant lag (including the case with too few hits).
+- `tools/DrumAutoFill/EditorCheck`: `dotnet run --project tools/DrumAutoFill/EditorCheck -- <output folder> <song.wav>` drives the real dialogs headlessly through analysis, deselection, Apply, Undo/Redo, cancellation and stale-analysis rejection.
 
-Each result directory contains:
+Detection quality on arbitrary songs still needs listening; passing these checks does not establish it.
 
-- `candidates.json`: absolute timeline times, raw scores, optional nearest object/node and its volume, snap delta, collision/unmatched status, hashes, counts and timings. If multiple same-class candidates target one node, the strongest wins in the preview. This is not existing-lane deduplication.
-- `activations.npy`: kick/snare activations with shape `[1, frames, 2]`. JSON schema version 2 records `enabledDrums` and `activationLabels` as `["kick", "snare"]`.
-- `detected.mid`: all detected candidates at excerpt-relative times, including unmatched/duplicate preview candidates. Diagnostic only; it is not the proposed set to apply.
-- `audition.wav`: original audio on the left, synthesized kick/snare cues on the right, at detected unsnapped times. These cues are not the user's destination samples. Any toms in the original recording remain audible on the left, but no tom cues are generated.
+## Earlier prototype (ADTOF, no longer used by the app)
 
-For annotated evaluation, add `--reference-midi path/to/annotation.mid`. This must be a drum-only GM annotation file aligned to the WAV excerpt, even if it uses MIDI channel 1 rather than channel 10. Scoring groups GM kick 35/36 and snare 38/40, ignoring other instruments, with chronological one-to-one matching within 50 ms. It is a small functional check, not a representative held-out benchmark or ranking against other detectors.
-
-## Measured local results
-
-Current evidence: `artifacts/drum-autofill/kick-snare/`. Thresholds were not trained or tuned on these recordings. Both annotated examples were rerun with kick/snare-only output at conservative threshold scale 1.25.
-
-| Annotated recording | Kick correct / proposed / reference | Snare correct / proposed / reference |
-|---|---|---|
-| MusicDelta 80sRock, 36.92 s | 63 / 63 / 64 | 35 / 35 / 35 |
-| MusicDelta Punk, 28.76 s | 82 / 84 / 84 | 32 / 32 / 44 |
-
-The earlier three-class experiment found both missed and false tom hits. Its artifacts remain under `artifacts/drum-autofill/benchmark/` for historical reference; they are not the current prototype outputs. The current runner intentionally excludes toms rather than attempting to correct them.
-
-A staged excerpt of Roselia - MIIRO, 30–50 s, produced 28 kick and 14 snare candidates. At 30 ms tolerance, 41 matched gameplay moments and 1 was unmatched. It took approximately 0.71 s inside the runner (0.44 s features, 0.22 s neural inference), excluding Python/import startup and environment installation. The source map's volume is retained in the preview. There are no manually verified drum annotations for this song; these numbers demonstrate execution and alignment, not accuracy.
-
-Listen to `artifacts/drum-autofill/kick-snare/map/audition.wav` for the current kick/snare-only preview. The retained kick/snare events match the corresponding events in the original three-class run.
-
-## Verification and next milestone
-
-Run `python -m unittest discover -s tools/DrumAutoFill -p test_prototype.py -v`. Five tests cover tolerance boundaries, stable stacked-object choice, same-class collisions, simultaneous different drums, empty moments, one-to-one accuracy scoring and exclusion of strong tom peaks. Export checks also inspect JSON, MIDI, activation channels and synthesized audition cues. The exporter is built independently of the desktop/Android solution.
-
-Editor integration tests live in `tests/OsuHitsound.App.Tests/DrumAutoFillTests.cs`. They cover one-step Undo/Redo, preserving hits/volumes, deduplication, skipped categories, empty hitsound difficulties, unmatched handling and range boundaries. `tools/DrumAutoFill/EditorCheck` exercises the real Python detector through both dialogs, deselection, Apply, Undo/Redo, cancellation and rejection after edits change. It also confirms that Apply alone leaves `.osu` bytes unchanged.
-
-Continue auditioning representative acoustic/electronic songs to judge whether the cleanup effort is worthwhile. Physical output and detection correctness on arbitrary songs need user listening; passing an automated editor-flow check does not establish either.
+`tools/DrumAutoFill/prototype.py` ran [ADTOF-pytorch](https://github.com/xavriley/ADTOF-pytorch) (commit `85c192e7`) in a separate Python environment, and the app called it through a `drum-autofill.json` configuration. The app no longer does this. The script and its tests remain only for comparison runs. Original ADTOF is CC BY-NC-SA 4.0, and its weights were never bundled.

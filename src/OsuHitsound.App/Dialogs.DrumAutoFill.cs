@@ -24,6 +24,9 @@ internal static partial class Dialogs
             var selected = new CheckBox { Name = "AutoFillRange", Content = range is null ? "Selected range (use the Range tool first)" : $"Selected range: {range.Start / 1000:F2}–{range.End / 1000:F2} seconds",
                 IsEnabled = range is not null, IsChecked = range is not null };
             var sensitivity = new ComboBox { Name = "AutoFillSensitivity", ItemsSource = new[] { "Conservative — fewer candidates", "Normal", "Sensitive — more candidates" }, SelectedIndex = 0, Width = 510 };
+            int[][] grids = [[4], [4, 3], [8], [8, 6], []];
+            var grid = new ComboBox { Name = "AutoFillGrid", Width = 510, SelectedIndex = 0, ItemsSource = new[] {
+                "1/4 beats — drop hits off the map's grid", "1/4 and 1/3 beats (triplets)", "1/8 beats", "1/8 and 1/6 beats", "Off — keep hits off the grid" } };
             var tolerance = new NumericUpDown { Name = "AutoFillTolerance", Value = 30, Minimum = 0, Maximum = 100, Increment = 5, Width = 110 };
             var unmatched = new CheckBox { Name = "AutoFillUnmatched", Content = "Include hits with no nearby gameplay object (for Generate)", IsChecked = false };
             var stem = new TextBox { Name = "AutoFillStem", Watermark = "Use the map's song", IsReadOnly = true, Width = 510 };
@@ -43,6 +46,7 @@ internal static partial class Dialogs
                 new TextBlock { Text = "Kick destination" }, kick,
                 new TextBlock { Text = "Snare destination" }, snare,
                 selected, new TextBlock { Text = "Sensitivity" }, sensitivity,
+                new TextBlock { Text = "Beat grid — hits are snapped to it; hits more than 20 ms away are dropped" }, grid,
                 new TextBlock { Text = "Attach to gameplay objects within (ms)" }, tolerance, unmatched,
                 new TextBlock { Text = "Audio source — a stem must start at the same time as the song" }, stem, fileButtons, problem
             ]);
@@ -51,15 +55,17 @@ internal static partial class Dialogs
                 if (kick.SelectedIndex <= 0 && snare.SelectedIndex <= 0) { problem.Text = "Choose at least one destination lane."; return; }
                 close(new(kick.SelectedIndex > 0 ? lanes[kick.SelectedIndex - 1] : null,
                     snare.SelectedIndex > 0 ? lanes[snare.SelectedIndex - 1] : null,
-                    selected.IsChecked == true, sensitivity.SelectedIndex switch { 1 => 1.0, 2 => .75, _ => 1.25 },
-                    (double)(tolerance.Value ?? 30), unmatched.IsChecked == true, string.IsNullOrWhiteSpace(stem.Text) ? null : stem.Text));
+                    selected.IsChecked == true, sensitivity.SelectedIndex switch { 1 => 1.5, 2 => 1.0, _ => 2.0 },
+                    (double)(tolerance.Value ?? 30), unmatched.IsChecked == true, string.IsNullOrWhiteSpace(stem.Text) ? null : stem.Text,
+                    grids[Math.Clamp(grid.SelectedIndex, 0, grids.Length - 1)]));
             }, "Analyse");
         }, scroll: true);
 
     public static Task<EditHit[]?> ReviewDrumAutoFill(Window owner, DrumAutoFillPlan plan, Func<Lane, string> nameOf, Action listen) =>
         Show<EditHit[]>(owner, "Review Drum Hits auto-fill", (body, close) =>
         {
-            body.Children.Add(new TextBlock { Text = $"{plan.Hits.Count} new hits · {plan.Duplicates} duplicates skipped · {plan.Unmatched} without a nearby object\nUncheck any hit to leave it out. Existing hits and volumes stay. Apply is one Undo step; Save is separate.", TextWrapping = TextWrapping.Wrap, MaxWidth = 570 });
+            body.Children.Add(new TextBlock { Text = $"{plan.Hits.Count} new hits · {plan.OffGrid} off the beat grid dropped · {plan.Duplicates} duplicates skipped · {plan.Unmatched} without a nearby object" +
+                (Math.Abs(plan.GridShiftMs) >= 1 ? $"\nThe audio runs {Math.Abs(plan.GridShiftMs):F0} ms {(plan.GridShiftMs > 0 ? "behind" : "ahead of")} the map's timing; hits were compared with the grid allowing for that." : "") + $"\nUncheck any hit to leave it out. Existing hits and volumes stay. Apply is one Undo step; Save is separate.", TextWrapping = TextWrapping.Wrap, MaxWidth = 570 });
             var checks = plan.Hits.Select(h => new CheckBox { IsChecked = true,
                 Content = $"{h.Time / 1000:F3} s · {nameOf(h.Lane)} · {(h.Anchor is null ? "no object" : "on object")}" }).ToArray();
             var list = new StackPanel { Spacing = 3 };

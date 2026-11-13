@@ -56,7 +56,9 @@ public partial class MainWindow
             if (!Current()) throw new IOException("The map or edits changed during analysis. Nothing was applied.");
             var plan = DrumAutoFillPlan.Create(document.Session, detected.Events, options,
                 options.SelectedRange ? range!.Start : double.NegativeInfinity,
-                options.SelectedRange ? range!.End : double.PositiveInfinity);
+                options.SelectedRange ? range!.End : double.PositiveInfinity,
+                (time, divisor) => (targetModel.Snap(time, divisor),
+                    targetModel.RedLineAt(time) is { } red ? red.BeatLength / divisor : double.PositiveInfinity));
             var selected = await Dialogs.ReviewDrumAutoFill(this, plan, targetModel.NameOf, () =>
             {
                 try { audio?.Pause(); audio?.PreviewMix(File.ReadAllBytes(detected.AuditionPath)); }

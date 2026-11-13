@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -10,9 +9,8 @@ using OsuHitsound.App;
 
 string root = Path.GetFullPath(args[0]);
 Directory.CreateDirectory(root);
-File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "drum-autofill.json"), JsonSerializer.Serialize(new
-{ Python = Path.GetFullPath(args[1]), Script = Path.GetFullPath(args[2]) }));
-File.Copy(Path.GetFullPath(args[3]), Path.Combine(root, "song.wav"), overwrite: true);
+// Usage: EditorCheck <output folder> <song.wav>. Drives the built-in detector through the real dialogs.
+File.Copy(Path.GetFullPath(args[1]), Path.Combine(root, "song.wav"), overwrite: true);
 string map = Path.Combine(root, "editor-check.osu");
 File.WriteAllText(map, """
     osu file format v14
@@ -50,7 +48,7 @@ Click(options, "Analyse");
 Wait(() => w.OwnedWindows.Any(p => p.Title == "Review Drum Hits auto-fill" || p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")) || task.IsCompleted);
 if (w.OwnedWindows.Any(p => p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")))
     throw new Exception(string.Join(" ", w.OwnedWindows.Last().GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text)));
-Check(!task.IsCompleted, "actual Python detector reaches preview");
+Check(!task.IsCompleted, "built-in detector reaches preview");
 var preview = w.OwnedWindows.Last(p => p.Title == "Review Drum Hits auto-fill");
 preview.CaptureRenderedFrame()!.Save(Path.Combine(root, "preview.png"));
 Check(preview.GetLogicalDescendants().OfType<CheckBox>().Any(), "preview contains selectable proposed hits");
@@ -72,7 +70,8 @@ session.Undo();
 task = (Task)typeof(MainWindow).GetMethod("ShowDrumAutoFill", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null)!;
 Wait(() => w.OwnedWindows.Any());
 Click(w.OwnedWindows.Last(), "Analyse");
-Wait(() => w.OwnedWindows.Any(p => p.Title == "Drum Hits auto-fill"));
+// Analysis is fast, so cancel from whichever window is showing: the progress window or the review.
+Wait(() => w.OwnedWindows.Any(p => p.Title is "Drum Hits auto-fill" or "Review Drum Hits auto-fill"));
 Click(w.OwnedWindows.Last(), "Cancel");
 Wait(() => task.IsCompleted);
 Check(ReferenceEquals(session.State, before), "cancelling detection leaves edits intact");
