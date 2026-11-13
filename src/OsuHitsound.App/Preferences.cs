@@ -83,6 +83,12 @@ internal sealed record Preferences
     public double? PlayfieldWidth { get; init; }
     public double? PlayfieldHeight { get; init; }
 
+    /// <summary>The map preview's skin: "argon", "classic" or "folder:<name>" for a folder of osu!'s Skins directory.</summary>
+    public string? PlayfieldSkin { get; init; }
+
+    /// <summary>osu!'s Skins folder when chosen by hand; null uses the one beside the Songs folder.</summary>
+    public string? SkinsFolder { get; init; }
+
     public double InspectorWidth { get; init; } = 208;
 
     public List<string> InspectorCards { get; init; } = [];

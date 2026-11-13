@@ -124,6 +124,7 @@ if (model.Objects.Count > 0)
     foreach (var (offset, n) in moments.Select((o, n) => (o, n)))
     {
         window.ShowMapPreviewForSnapshot(firstObject + offset);
+        if (args.Length > 5) window.SetPreviewSkinForSnapshot(args[5]); // "classic" or a skin folder
         var previewWindow = window.OwnedWindows.OfType<PlayfieldWindow>().First();
         (previewWindow.Width, previewWindow.Height) = (960, 720);
         Pump();

@@ -13,7 +13,7 @@ namespace OsuHitsound.App;
 /// (osu.Game.Rulesets.Osu: Skinning/Argon, Objects/Drawables and the editor's SuppressHitAnimations); pieces are laid
 /// out in lazer's own units, where a hit circle is 128 across. It only reads the map; it follows <see cref="Playhead"/>.
 /// </summary>
-internal sealed class PlayfieldView : Control
+internal sealed partial class PlayfieldView : Control
 {
     // ArgonMainCirclePiece's sizes, for a 128-unit circle.
     private const double Diameter = 128;
@@ -53,8 +53,21 @@ internal sealed class PlayfieldView : Control
     private Playfield? field;
     private IReadOnlyList<Color> colours = ArgonComboColours;
     private double playhead;
+    private LegacySkin? skin; // null draws lazer's Argon
 
     public PlayfieldView() => ClipToBounds = true;
+
+    /// <summary>The skin objects are drawn with: an osu!stable-format skin, or null for lazer's Argon.</summary>
+    public LegacySkin? Skin
+    {
+        get => skin;
+        set
+        {
+            skin = value;
+            legacyBodies.Clear();
+            InvalidateVisual();
+        }
+    }
 
     /// <summary>The time shown, in editor ms.</summary>
     public double Playhead
@@ -74,6 +87,7 @@ internal sealed class PlayfieldView : Control
         field = map;
         colours = comboColours is { Count: > 0 } ? comboColours : ArgonComboColours;
         bodies.Clear();
+        legacyBodies.Clear();
         InvalidateVisual();
     }
 
@@ -113,8 +127,10 @@ internal sealed class PlayfieldView : Control
             using (ctx.PushOpacity(Math.Min(1, appeared / Math.Min(field.FadeIn * 2, field.Preempt)) * 0.9))
             using (frame.Object(o, o.Position))
             {
-                // The sprite is 128 wide, enlarged by 128/118 so its ring meets the circle's edge.
-                if (ArgonPieces.HasApproachCircle) ArgonPieces.DrawApproachCircle(ctx, default, Diameter * (Diameter / 118) * size, Colour(o));
+                // A legacy skin's approachcircle at its own size; Argon's is 128 wide, enlarged by 128/118 so its
+                // ring meets the circle's edge.
+                if (skin is not null) Sprite(ctx, skin.Get("approachcircle"), Colour(o), size: size);
+                else if (ArgonPieces.HasApproachCircle) ArgonPieces.DrawApproachCircle(ctx, default, Diameter * (Diameter / 118) * size, Colour(o));
                 else ctx.DrawEllipse(null, new ImmutablePen(Paint.Brush(Colour(o)), 4), default, Diameter / 2 * size - 2, Diameter / 2 * size - 2);
             }
         }
@@ -194,19 +210,27 @@ internal sealed class PlayfieldView : Control
         ctx.DrawEllipse(null, new ImmutablePen(brush, thickness), default, (diameter - thickness) / 2, (diameter - thickness) / 2);
 
     // A circle, or a slider's head. In lazer's editor an object past its time turns white and fades over 700 ms.
-    private void DrawHead(Frame f, PlayfieldObject o, bool outerFill)
+    private void DrawHead(Frame f, PlayfieldObject o, CirclePiece piece) =>
+        DrawPiece(f, o, o.Position, piece, o.Start, f.FadeIn(o));
+
+    // A circle piece at a point: as given before its time, then white and fading over 700 ms.
+    private void DrawPiece(Frame f, PlayfieldObject o, PlayfieldPoint at, CirclePiece piece, double hitTime, double alphaBefore)
     {
-        bool passed = f.Time > o.Start;
-        double alpha = passed ? Math.Clamp(1 - (f.Time - o.Start) / EditorFadeOut, 0, 1) : f.FadeIn(o);
+        bool passed = f.Time > hitTime;
+        double alpha = passed ? Math.Clamp(1 - (f.Time - hitTime) / EditorFadeOut, 0, 1) : alphaBefore;
         if (alpha <= 0) return;
+        var accent = passed ? Colors.White : Colour(o);
         using (f.Ctx.PushOpacity(alpha))
-        using (f.Object(o, o.Position))
-            DrawArgonCircle(f.Ctx, passed ? Colors.White : Colour(o), o.Combo, outerFill);
+        using (f.Object(o, at))
+        {
+            if (skin is not null) DrawLegacyCircle(f.Ctx, skin, accent, o.Combo, piece);
+            else if (piece != CirclePiece.SliderEnd) DrawArgonCircle(f.Ctx, accent, o.Combo, outerFill: piece == CirclePiece.HitCircle); // Argon has no end circle
+        }
     }
 
     private void DrawCircle(Frame f, PlayfieldObject o)
     {
-        DrawHead(f, o, outerFill: true);
+        DrawHead(f, o, CirclePiece.HitCircle);
         if (f.Time < o.Start) return;
 
         // The editor's hit marker (HitCircleOverlapMarker): a ring in the combo colour that grows a little and fades.
@@ -228,7 +252,8 @@ internal sealed class PlayfieldView : Control
         // the first third of the approach time. After the slider's end only the body fades, over 240 ms.
         double bodyAlpha = time > o.End ? Math.Clamp(1 - (time - o.End) / SliderFadeOut, 0, 1) : f.FadeIn(o);
         double snaked = Math.Clamp((time - (o.Start - f.Field.Preempt)) / (f.Field.Preempt / 3), 0, 1);
-        if (bodyAlpha > 0 && snaked > 0)
+        if (bodyAlpha > 0 && snaked > 0 && skin is not null) DrawLegacyBody(f, o, skin, colour, bodyAlpha, snaked);
+        else if (bodyAlpha > 0 && snaked > 0)
         {
             Geometry body;
             if (snaked >= 1)
@@ -248,6 +273,14 @@ internal sealed class PlayfieldView : Control
             }
         }
 
+        // The end circle (legacy skins only): it waits for the body to snake in, or appears two spans ahead.
+        if (skin is not null && o.Spans > 0)
+        {
+            double appears = o.Spans == 1 ? o.Start - f.Field.Preempt + f.Field.Preempt / 3 : o.End - o.SpanDuration * 2;
+            double before = Math.Clamp((time - appears) / (o.Spans == 1 ? f.Field.FadeIn : 1), 0, 1);
+            DrawPiece(f, o, o.EndPosition, CirclePiece.SliderEnd, o.End, before);
+        }
+
         // Ticks still to come (ArgonSliderScorePoint): a 12-unit ring in the accent colour. Each appears partway
         // through its span (SliderTick.TimePreempt) and pops in over 150 ms.
         foreach (double tick in o.TickTimes)
@@ -259,7 +292,10 @@ internal sealed class PlayfieldView : Control
             if (time < appears) continue;
             using (ctx.PushOpacity(Math.Clamp((time - appears) / 150, 0, 1)))
             using (f.Object(o, o.BallAt(tick), size: 0.5 + 0.5 * OutQuint((time - appears) / 600)))
-                Ring(ctx, Paint.Brush(colour), 12, 3);
+            {
+                if (skin is not null) Sprite(ctx, skin.Get("sliderscorepoint"), Colors.White, Diameter);
+                else Ring(ctx, Paint.Brush(colour), 12, 3);
+            }
         }
 
         // Reverse arrows at the ends the ball still turns round at. The first waits for the body to snake in; later
@@ -267,20 +303,26 @@ internal sealed class PlayfieldView : Control
         for (int node = o.Spans - 1; node >= 1; node--)
         {
             double nodeTime = o.Start + node * o.SpanDuration;
-            if (time >= nodeTime || o.Path.Count < 2) continue;
+            if (o.Path.Count < 2) continue;
             double appears = node == 1 ? o.Start - f.Field.Preempt + f.Field.Preempt / 3 : nodeTime - o.SpanDuration * 2;
             if (time < appears) continue;
             bool atEnd = node % 2 == 1;
             var at = atEnd ? o.Path[^1] : o.Path[0];
+            // A legacy skin's end circle sits under each arrow, and stays, whitening, after the ball has turned.
+            if (skin is not null) DrawPiece(f, o, at, CirclePiece.SliderEnd, nodeTime, Math.Clamp((time - appears) / (node == 1 ? f.Field.FadeIn : 1), 0, 1));
+            if (time >= nodeTime) continue;
             var towards = at;
             for (int i = atEnd ? o.Path.Count - 1 : 0; i >= 0 && i < o.Path.Count; i += atEnd ? -1 : 1)
                 if (o.Path[i].DistanceTo(at) > 1e-3) { towards = o.Path[i]; break; }
             using (ctx.PushOpacity(Math.Clamp((time - appears) / 150, 0, 1)))
             using (f.Object(o, at, rotation: Math.Atan2(towards.Y - at.Y, towards.X - at.X)))
-                DrawReverseArrow(ctx, colour, time - appears);
+            {
+                if (skin is not null) DrawLegacyArrow(ctx, skin, colour, time - appears);
+                else DrawReverseArrow(ctx, colour, time - appears);
+            }
         }
 
-        DrawHead(f, o, outerFill: false);
+        DrawHead(f, o, CirclePiece.SliderHead);
 
         // The ball (ArgonSliderBall) while the slider runs.
         if (time >= o.Start && time <= o.End)
@@ -289,7 +331,12 @@ internal sealed class PlayfieldView : Control
             var ahead = o.BallAt(time + 1);
             var behind = o.BallAt(time - 1);
             double angle = Math.Atan2(ahead.Y - behind.Y, ahead.X - behind.X);
-            using (ctx.PushOpacity(Math.Clamp((time - o.Start) / 50, 0, 1)))
+            if (skin is not null)
+            {
+                using (f.Object(o, ball, rotation: angle))
+                    DrawLegacyBall(ctx, skin, colour, o, time);
+            }
+            else using (ctx.PushOpacity(Math.Clamp((time - o.Start) / 50, 0, 1)))
             {
                 using (f.Object(o, ball))
                 {
@@ -351,11 +398,12 @@ internal sealed class PlayfieldView : Control
     /// of 25 ticks, the two thin ring arcs above and below, the two wide arcs at the sides and the white centre.
     /// It grows in during the approach time and fades over 240 ms after its end.
     /// </summary>
-    private static void DrawSpinner(Frame f, PlayfieldObject o)
+    private void DrawSpinner(Frame f, PlayfieldObject o)
     {
         var ctx = f.Ctx;
         double alpha = f.Time > o.End ? Math.Clamp(1 - (f.Time - o.End) / SliderFadeOut, 0, 1) : f.FadeIn(o);
         if (alpha <= 0) return;
+        if (skin is not null) { DrawLegacySpinner(f, o, skin, alpha); return; }
 
         // The disc opens to 0.2 in the first quarter of the approach time, then to full size over the next half.
         double preempt = f.Field.Preempt, since = f.Time - (o.Start - preempt);
