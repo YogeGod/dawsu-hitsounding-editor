@@ -46,6 +46,27 @@ public class ThemeColorsTests
     }
 
     [Fact]
+    public void Slate_scheme_has_its_own_surfaces_and_dark_text_on_the_accent()
+    {
+        var theme = new UiTheme();
+        theme.SetScheme(UiTheme.SlateScheme);
+        Assert.True(theme.DarkMode);
+        Assert.Equal("#181b21", theme.Get("title.bg"));
+        Assert.Equal("#2e343f", theme.Get("control.bg"));
+        Assert.Equal("#13161b", theme.Get("arrange.bg"));
+        Assert.Equal("#3d9bff", theme.Get("button.active"));
+        Assert.Equal("#06121f", theme.Get("text.onAccent"));
+        // Bars differ in shade: the title bar is darker than the toolbar, the grid darker than both.
+        double B(string key) => Hsb.FromColor(theme.Color(key)).B;
+        Assert.True(B("arrange.bg") < B("title.bg") && B("title.bg") < B("control.bg"));
+        // The user's accent still wins over the scheme, and leaving the scheme restores the default text colour.
+        ThemeColors.Apply(theme, new UserColors { Scheme = UiTheme.SlateScheme }.With(ThemeColors.Accent, new Hsb(10, 1, 1)), darkModeFallback: false);
+        Assert.NotEqual("#3d9bff", theme.Get("button.active"));
+        ThemeColors.Apply(theme, new UserColors { Scheme = 1 }, darkModeFallback: false);
+        Assert.Equal("#ffffff", theme.Get("text.onAccent"));
+    }
+
+    [Fact]
     public void Nothing_ticked_changes_nothing_and_ticking_starts_from_the_current_colour()
     {
         var theme = new UiTheme();
@@ -121,7 +142,7 @@ public class ThemeColorsTests
         ThemeColors.Apply(theme, new UserColors(), darkModeFallback: false);
         Assert.Equal(0, theme.Scheme);
         ThemeColors.Apply(theme, new UserColors(), darkModeFallback: true);
-        Assert.Equal(1, theme.Scheme);
+        Assert.Equal(UiTheme.SlateScheme, theme.Scheme); // dark mode with no scheme picked: Slate, the default look since 2026-11-13
 
         var path = Path.Combine(Path.GetTempPath(), $"dawsu-colours-{Guid.NewGuid():N}.json");
         try

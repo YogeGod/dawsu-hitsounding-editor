@@ -69,11 +69,35 @@ internal sealed partial class ArrangeModel
         }
     }
 
-    private List<Row> BuildGroupedRows()
+    /// <summary>
+    /// The lane list's rows. With <paramref name="folders"/> (UI refresh, 2026-11-13) each sample set gets a header row
+    /// (<see cref="GroupRow"/>: its name, lane count, M and S; it folds and can be dragged to reorder the sets), and its
+    /// lanes follow it in their own order: hitnormal first, then the addition families. A folded set shows only its
+    /// header (<see cref="FolderChildren"/> gives its lanes for the dim note preview). Drum map view has no folders.
+    /// </summary>
+    private List<Row> BuildGroupedRows(bool folders = true)
     {
         var withHits = Session.State.Hits.Select(h => h.Lane).ToHashSet();
         var visible = NormalizeFamilies(laneRows.Where(r => !hidden.Contains(r.Lane) || withHits.Contains(r.Lane))).ToList();
         familyParents.Clear(); familiesWithChildren.Clear(); collapsedChildren.Clear(); closedFolders.Clear(); depths.Clear();
+        if (!folders) return BuildFamilyRows(visible);
+        var all = new List<Row>();
+        // A set's lanes gather under its header in the order they have in the list; sets keep their first-seen order.
+        foreach (var set in visible.GroupBy(r => r.Group))
+        {
+            var members = set.ToList();
+            var shown = BuildFamilyRows(members);
+            if (shown.Count == 0) continue; // nothing in this set matches the filter
+            all.Add(new GroupRow(set.Key, members.Count));
+            // A filter looks inside folded sets too, as it does inside folded families.
+            if (collapsed.Contains(set.Key) && Filter.Length == 0) closedFolders[set.Key] = shown.OfType<LaneRow>().ToList();
+            else all.AddRange(shown);
+        }
+        return all;
+    }
+
+    private List<Row> BuildFamilyRows(IReadOnlyList<LaneRow> visible)
+    {
         var rows = new List<Row>();
         foreach (var family in visible.GroupBy(r => FamilyKey(r.Lane) ?? "file:" + ProjectStore.KeyOf(r.Lane)))
         {

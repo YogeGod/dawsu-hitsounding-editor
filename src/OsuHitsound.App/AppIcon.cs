@@ -62,7 +62,9 @@ public sealed class AppIcon : Control
     /// <summary>A transport Play button: shows Pause and turns green (the "playing" class) while playing.</summary>
     public static void ShowPlaying(Button button, AppIcon glyph, bool playing)
     {
-        glyph.Glyph = playing ? "Pause" : "Play";
+        // A Play button drawn with the hit-circle set keeps to it while playing.
+        bool osu = glyph.Glyph.StartsWith("Osu", StringComparison.Ordinal);
+        glyph.Glyph = (osu ? "Osu" : "") + (playing ? "Pause" : "Play");
         button.Classes.Set("playing", playing);
     }
 

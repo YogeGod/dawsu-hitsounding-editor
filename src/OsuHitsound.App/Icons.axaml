@@ -64,4 +64,29 @@
   <StreamGeometry x:Key="IconHouse">M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8 M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z</StreamGeometry>
   <StreamGeometry x:Key="IconTimer">M10 2h4 M12 14l3-3 M4 14a8 8 0 1 0 16 0a8 8 0 1 0-16 0Z</StreamGeometry>
   <StreamGeometry x:Key="IconMetronome">M10 3h4l3.5 18h-11Z M8 16h8 M12 16l5-10</StreamGeometry>
+  <!-- Hit-circle icons (UI refresh, 2026-11-13): the ribbon (not its tools), the transport, Save, Fit and the panel
+       switches, drawn around osu! shapes (hit circles, approach arcs, slider tracks and balls) on the same 24-unit
+       grid and stroke. The tools and the menus keep the Lucide and Studio icons. -->
+  <StreamGeometry x:Key="IconOsuOpen">M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z M9.5 13.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuHsMode">M6 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0Z M12 9.5v5 M9.5 12h5 M2.5 9A9.5 9.5 0 0 1 9 2.5 M21.5 15a9.5 9.5 0 0 1-6.5 6.5</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuUndo">M9 14 4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H14 M9.6 20a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuRedo">M15 14l5-5-5-5 M20 9H9.5a5.5 5.5 0 0 0 0 11H10 M10 20a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuSnap">M12 2v20 M7 12a5 5 0 1 0 10 0a5 5 0 1 0-10 0Z M2 12h2.5 M19.5 12H22</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuTriplets">M3 9V5h18v4 M2.5 16a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0Z M9.5 16a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0Z M16.5 16a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuLines">M4 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0Z M14 6a3 3 0 1 0 6 0a3 3 0 1 0-6 0Z M7 9v13 M17 9v13</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuAudition">M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0Z M6.3 6.3a8 8 0 0 0 0 11.4 M17.7 6.3a8 8 0 0 1 0 11.4</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuDetect">M2 12h3l2-6 3 12 3-9 2 3h2 M17 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuVst">M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z M3 12h18 M8 12v8 M12 12v8 M16 12v8 M7 8h.01 M11 8h.01</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuFit">M3 7V5a2 2 0 0 1 2-2h2 M17 3h2a2 2 0 0 1 2 2v2 M21 17v2a2 2 0 0 1-2 2h-2 M7 21H5a2 2 0 0 1-2-2v-2 M8.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuInspector">M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z M9 3v18 M12.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuFiles">M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8.5 17a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0Z M11.5 17v-6l3 1.5</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuSave">M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2Z M7 3v5h8V3 M9 15a3 3 0 1 0 6 0a3 3 0 1 0-6 0Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuStart">M4 5v14 M8 12a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0Z M16 9.5l-3.5 2.5 3.5 2.5Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuStop">M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0Z M9 9h6v6H9Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuPlay">M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0Z M10 8l6 4-6 4Z</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuPause">M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0Z M10 9v6 M14 9v6</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuCycle">M4 12a8 8 0 0 1 14-5.3 M20 12a8 8 0 0 1-14 5.3 M18 3v4h-4 M6 21v-4h4 M12 12h.01</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuReturn">M7 8h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8Z M12 10l-2.5 2 2.5 2 M9.5 12h5</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuFollow">M12 2v20 M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0Z M3 9l3 3-3 3 M21 9l-3 3 3 3</StreamGeometry>
+  <StreamGeometry x:Key="IconOsuSnare">M3 10a9 3.5 0 1 0 18 0a9 3.5 0 1 0-18 0Z M3 10v7c0 1.9 4 3.5 9 3.5s9-1.6 9-3.5v-7 M7 13.2v6.5 M12 13.5v7 M17 13.2v6.5 M5 2l6 6 M19 2l-6 6</StreamGeometry>
 </ResourceDictionary>

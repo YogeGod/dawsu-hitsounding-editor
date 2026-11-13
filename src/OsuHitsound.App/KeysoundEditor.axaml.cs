@@ -69,6 +69,7 @@ public partial class KeysoundEditor : UserControl
         StartBox.LostFocus += (_, _) => UpdateSelectionInfo();
         VelocityModeBox.ItemsSource = new[] { "Set all", "Relative" };
         VelocityModeBox.SelectedIndex = 1; // relative: several notes keep their differences
+        SegmentedChoice.Attach(VelocityModeBox);
         VelocityApplyButton.Click += (_, _) => ApplyVelocity();
         VelocityValueBox.KeyDown += (_, e) =>
         {

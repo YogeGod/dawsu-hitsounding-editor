@@ -7,16 +7,16 @@
         Width="1600" Height="900" MinWidth="900" MinHeight="500"
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaChromeHints="NoChrome" ExtendClientAreaTitleBarHeightHint="-1"
         RequestedThemeVariant="Dark">
-  <!-- The window's own title bar (WindowTitleBar) above the editor. -->
+  <!-- One bar on top (UI refresh, 2026-11-13): the menu bar is also the window's title bar and carries Save and the
+       window buttons (WindowButtons), so the editor gets the old title strip's height back. -->
   <DockPanel Name="WindowRoot">
-  <app:WindowTitleBar Name="WindowBar" DockPanel.Dock="Top" />
 
-  <Grid Name="Root" RowDefinitions="44,Auto,20,*,160,Auto,Auto" ColumnDefinitions="208,4,*,4,224">
+  <Grid Name="Root" RowDefinitions="44,Auto,20,*,160,Auto,Auto" ColumnDefinitions="224,4,208,4,*">
     <!-- 1. Header: logo, title, menus; map name and settings on the right. Open and Save sit in the ribbon (in Keysound
          mode, the key editor's own ribbon). -->
     <Border Grid.Row="0" Grid.ColumnSpan="5" Name="TitleBar" Classes="header" BorderThickness="0,0,0,1">
       <ScrollViewer Name="TitleBarScroller" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
-      <Grid Name="TitleBarContent" MinWidth="1080" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
+      <Grid Name="TitleBarContent" MinWidth="1080" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0,0,0">
         <TextBlock Text="dawsu!" Classes="appTitle" FontSize="16" />
         <TextBlock Name="AppTitle" Grid.Column="1" Text="" Classes="appTitle" Margin="0,0,16,0" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
@@ -213,8 +213,17 @@
             </MenuItem>
           </Menu>
         </StackPanel>
-        <TextBlock Grid.Column="3" Name="FileTitle" Text="No map open" Classes="projectName" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" Margin="16,0" />
-        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+        <!-- The open file as a chip: a dot while there are unsaved changes, the name, then the mode. FileTitle keeps the
+             whole text ("name — Hitsounds") for the code that sets and reads it; the chip shows its two parts. -->
+        <Border Grid.Column="3" Name="TitleChip" Classes="titleChip" HorizontalAlignment="Center" Margin="16,0">
+          <DockPanel>
+            <Ellipse DockPanel.Dock="Left" Name="TitleDot" Width="7" Height="7" Margin="0,0,8,0" Fill="{DynamicResource ButtonText}" VerticalAlignment="Center" IsVisible="False" />
+            <Border DockPanel.Dock="Right" Name="TitleModePill" Classes="modePill" Margin="8,0,0,0" IsVisible="False"><TextBlock Name="TitleMode" /></Border>
+            <TextBlock DockPanel.Dock="Right" Name="FileTitle" Text="No map open" IsVisible="False" />
+            <TextBlock Name="TitleName" Classes="projectName" Text="No map open" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+        </Border>
+        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2">
           <Button Name="UpdateButton" Classes="flat icon" IsVisible="False" AutomationProperties.Name="Update dawsu!">
             <app:AppIcon Glyph="Download" Foreground="{DynamicResource Brand}" />
           </Button>
@@ -223,39 +232,64 @@
           </Button>
           <Button Name="PreferencesButton" Classes="flat icon" AutomationProperties.Name="Preferences" ToolTip.Tip="Preferences: Songs folder, audio output, keys and colours (Ctrl+,)"><app:AppIcon Glyph="Settings" /></Button>
           <Button Name="HelpButton" Classes="flat icon" AutomationProperties.Name="Shortcuts and help" ToolTip.Tip="Every shortcut and mouse action, with search (F1)"><app:AppIcon Glyph="CircleHelp" /></Button>
+          <!-- Save .osu: the badge counts what Save can't write as drawn; with problems, a click lists them first. -->
+          <Button Name="SaveButton" Classes="primary titleSave" Margin="8,0,0,0" AutomationProperties.Name="Save .osu"
+                  ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset.">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <app:AppIcon Glyph="OsuSave" Size="15" />
+              <TextBlock Name="SaveLabel" Text="Save .osu" VerticalAlignment="Center" />
+              <Border Name="SaveBadge" Classes="saveBadge" IsVisible="False">
+                <StackPanel Orientation="Horizontal" Spacing="3">
+                  <app:AppIcon Glyph="TriangleAlert" Size="11" />
+                  <TextBlock Name="SaveBadgeText" Text="0" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            <FlyoutBase.AttachedFlyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <StackPanel Name="SaveCheckPanel" Width="340" Spacing="8">
+                  <TextBlock Text="Before you save" Classes="sectionLabel" />
+                  <StackPanel Name="SaveCheckList" Spacing="6" />
+                  <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                    <Button Name="SaveCheckShowButton" Content="Show first problem" ToolTip.Tip="Select the hits at the next problem and move the playhead there" />
+                    <Button Name="SaveContinueButton" Classes="primary" Content="Continue to Save" ToolTip.Tip="Run Save .osu as usual: it asks before leaving out hits with no object, and refuses what it can't write" />
+                  </StackPanel>
+                </StackPanel>
+              </Flyout>
+            </FlyoutBase.AttachedFlyout>
+          </Button>
+          <app:WindowButtons Name="WindowBar" Margin="8,0,0,0" />
         </StackPanel>
       </Grid>
       </ScrollViewer>
     </Border>
 
-    <!-- 2. Ribbon (layout D2, decided 2026-11-12): labelled buttons in groups, Save with its problem badge on the right.
-         Captions, then secondary labels, then all labels but Save's hide as the window narrows (UpdateRibbonFit). -->
+    <!-- 2. Ribbon (UI refresh, 2026-11-13): tiles with the icon over its label, in groups. Secondary labels, then all
+         labels hide as the window narrows (UpdateRibbonFit). Save is in the title bar; Fit sits by the time zoom, the
+         lane switches by the lane filter, and the volume panel folds from its own header. -->
     <Border Grid.Row="1" Grid.ColumnSpan="5" Name="ControlBar" Classes="toolbar" BorderThickness="0,0,0,1">
       <Grid Name="ControlBarContent" ColumnDefinitions="*,Auto" Margin="6,5">
         <StackPanel Name="RibbonGroups" Orientation="Horizontal" VerticalAlignment="Center" ClipToBounds="True">
           <StackPanel Classes="ribbonGroup">
-            <TextBlock Classes="ribbonCaption" Text="MAP" />
             <Button Name="OpenButton" Classes="ribbon" AutomationProperties.Name="Open a map" ToolTip.Tip="Open a map (Ctrl+O)">
-              <StackPanel><app:AppIcon Glyph="FolderOpen" /><TextBlock Classes="ribbonText secondary" Text="Open" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuOpen" /><TextBlock Classes="ribbonText secondary" Text="Open" /></StackPanel>
             </Button>
             <ToggleButton Name="HsModeButton" Classes="ribbon" IsEnabled="False" AutomationProperties.Name="HS mode"
                           ToolTip.Tip="Open an empty difficulty or one named HS / hitsounds to create circles as you place sounds.">
-              <StackPanel><app:AppIcon Glyph="CirclePlus" /><TextBlock Classes="ribbonText" Text="HS mode" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuHsMode" /><TextBlock Classes="ribbonText" Text="HS mode" /></StackPanel>
             </ToggleButton>
           </StackPanel>
           <Border Classes="ribbonSep" />
           <StackPanel Classes="ribbonGroup">
-            <TextBlock Classes="ribbonCaption" Text="HISTORY" />
             <Button Name="UndoButton" Classes="ribbon" ToolTip.Tip="Undo (Ctrl+Z)" AutomationProperties.Name="Undo">
-              <StackPanel><app:AppIcon Glyph="Undo2" /><TextBlock Classes="ribbonText secondary" Text="Undo" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuUndo" /><TextBlock Classes="ribbonText secondary" Text="Undo" /></StackPanel>
             </Button>
             <Button Name="RedoButton" Classes="ribbon" ToolTip.Tip="Redo (Ctrl+Y)" AutomationProperties.Name="Redo">
-              <StackPanel><app:AppIcon Glyph="Redo2" /><TextBlock Classes="ribbonText secondary" Text="Redo" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuRedo" /><TextBlock Classes="ribbonText secondary" Text="Redo" /></StackPanel>
             </Button>
           </StackPanel>
           <Border Classes="ribbonSep" />
           <StackPanel Classes="ribbonGroup">
-            <TextBlock Classes="ribbonCaption" Text="TOOL" />
             <ToggleButton Name="SelectTool" Classes="tool ribbon" IsChecked="True" ToolTip.Tip="Select and move (1). Click, Ctrl/Shift+click, drag a box; drag hits to move them." AutomationProperties.Name="Select">
               <StackPanel><app:AppIcon Glyph="MousePointer2" /><TextBlock Classes="ribbonText" Text="Select" /></StackPanel>
             </ToggleButton>
@@ -274,83 +308,42 @@
           </StackPanel>
           <Border Classes="ribbonSep" />
           <StackPanel Classes="ribbonGroup">
-            <TextBlock Classes="ribbonCaption" Text="GRID" />
             <ToggleButton Name="SnapToggle" Classes="ribbon" IsChecked="True" AutomationProperties.Name="Snap" ToolTip.Tip="Snapping on / off (J)">
-              <StackPanel><app:AppIcon Glyph="Magnet" /><TextBlock Classes="ribbonText" Text="Snap" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuSnap" /><TextBlock Classes="ribbonText" Text="Snap" /></StackPanel>
             </ToggleButton>
-            <ComboBox Name="SnapModeBox" Width="102" Focusable="True" ToolTip.Tip="Grid: land on grid lines. Grid relative: keep the offset from the grid. Objects: snap to gameplay circles, slider nodes and spinner ends." />
-            <ComboBox Name="SnapBox" Width="64" Focusable="True" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." />
+            <Panel Classes="captioned"><ComboBox Name="SnapModeBox" Classes="captioned" Width="106" Focusable="True" ToolTip.Tip="Grid: land on grid lines. Grid relative: keep the offset from the grid. Objects: snap to gameplay circles, slider nodes and spinner ends." /><TextBlock Classes="boxCaption" Text="Snap to" /></Panel>
+            <Panel Classes="captioned"><ComboBox Name="SnapBox" Classes="captioned" Width="76" Focusable="True" ToolTip.Tip="Snap spacing: 2/1, 3/1 or 4/1 means every 2, 3 or 4 beats from each red timing point. Shift+1–9 selects 1/n; Alt+wheel cycles snaps." /><TextBlock Classes="boxCaption" Text="Spacing" /></Panel>
             <ToggleButton Name="ObjectLinesToggle" Classes="ribbon" AutomationProperties.Name="Gameplay-object lines" IsChecked="True" ToolTip.Tip="Vertical lines down the lanes at every circle, slider head, repeat and tail, and spinner end, whatever the snap">
-              <StackPanel><app:AppIcon Glyph="Columns3" /><TextBlock Classes="ribbonText secondary" Text="Object lines" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuLines" /><TextBlock Classes="ribbonText secondary" Text="Object lines" /></StackPanel>
             </ToggleButton>
             <ToggleButton Name="TripletSnapToggle" Classes="ribbon" AutomationProperties.Name="Triplets"
                           ToolTip.Tip="Alt+wheel: on cycles 3/1, 1/1, 1/3, 1/6, 1/12; off cycles 4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16. The drop-down offers every spacing; Shift+number still selects 1/n.">
-              <StackPanel><app:AppIcon Glyph="Triplet" /><TextBlock Classes="ribbonText secondary" Text="Triplets" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuTriplets" /><TextBlock Classes="ribbonText secondary" Text="Triplets" /></StackPanel>
             </ToggleButton>
             <ToggleButton Name="AuditionPlacementButton" Classes="ribbon" AutomationProperties.Name="Audition"
                           ToolTip.Tip="Play samples when drawing notes or moving them between lanes. Saved for all projects.">
-              <StackPanel><app:AppIcon Glyph="Headphones" /><TextBlock Classes="ribbonText secondary" Text="Audition" /></StackPanel>
-            </ToggleButton>
-            <ToggleButton Name="VolumeToggle" Classes="ribbon" AutomationProperties.Name="Volume controller" IsChecked="True" ToolTip.Tip="Show the volume controller at the bottom">
-              <StackPanel><app:AppIcon Glyph="SlidersHorizontal" /><TextBlock Classes="ribbonText secondary" Text="Controller" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuAudition" /><TextBlock Classes="ribbonText secondary" Text="Audition" /></StackPanel>
             </ToggleButton>
           </StackPanel>
           <Border Classes="ribbonSep" />
           <StackPanel Classes="ribbonGroup">
-            <TextBlock Classes="ribbonCaption" Text="DRUMS" />
             <Button Name="DrumDetectButton" Classes="ribbon" AutomationProperties.Name="Drum hit detection" ToolTip.Tip="Drum hit detection: find kick and snare hits in the song or a drum stem">
-              <StackPanel><app:AppIcon Glyph="AudioWaveform" /><TextBlock Classes="ribbonText" Text="Detect hits" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuDetect" /><TextBlock Classes="ribbonText" Text="Detect hits" /></StackPanel>
             </Button>
             <Button Name="DrumVstButton" Classes="ribbon" AutomationProperties.Name="Drums VST" ToolTip.Tip="Play the drum lanes through a VST instrument">
-              <StackPanel><app:AppIcon Glyph="Piano" /><TextBlock Classes="ribbonText secondary" Text="VST" /></StackPanel>
+              <StackPanel><app:AppIcon Glyph="OsuVst" /><TextBlock Classes="ribbonText secondary" Text="VST" /></StackPanel>
             </Button>
-          </StackPanel>
-          <Border Classes="ribbonSep" />
-          <StackPanel Classes="ribbonGroup">
-            <TextBlock Classes="ribbonCaption" Text="VIEW" />
-            <Button Name="FitButton" Classes="ribbon" AutomationProperties.Name="Fit" ToolTip.Tip="Zoom out to the whole map">
-              <StackPanel><app:AppIcon Glyph="Scan" /><TextBlock Classes="ribbonText secondary" Text="Fit" /></StackPanel>
-            </Button>
-            <ToggleButton Name="BrowserToggle" Classes="ribbon" IsChecked="{Binding #BrowserPanelItem.IsChecked, Mode=TwoWay}" ToolTip.Tip="Show sample browser" AutomationProperties.Name="Sample browser">
-              <StackPanel><app:AppIcon Glyph="PanelRight" /><TextBlock Classes="ribbonText secondary" Text="Browser" /></StackPanel>
-            </ToggleButton>
-            <ToggleButton Name="InspectorToggle" Classes="ribbon" AutomationProperties.Name="Inspector" IsChecked="True" ToolTip.Tip="Show the inspector on the left: selection, active lane, bookmarks and optional panels">
-              <StackPanel><app:AppIcon Glyph="PanelLeft" /><TextBlock Classes="ribbonText secondary" Text="Inspector" /></StackPanel>
-            </ToggleButton>
-            <ToggleButton Name="LaneDetailsToggle" Classes="ribbon" AutomationProperties.Name="Lane info (sample indexes)" IsChecked="False" ToolTip.Tip="Show each lane's file index after its name">
-              <StackPanel><app:AppIcon Glyph="Info" /><TextBlock Classes="ribbonText secondary" Text="Lane info" /></StackPanel>
-            </ToggleButton>
-            <ToggleButton Name="UsedLanesToggle" Classes="ribbon" AutomationProperties.Name="Only lanes with hits" IsChecked="False" ToolTip.Tip="Show only the lanes that have hits on them (switch off and on again to refresh the list after adding hits)">
-              <StackPanel><app:AppIcon Glyph="ListFilter" /><TextBlock Classes="ribbonText secondary" Text="Used lanes" /></StackPanel>
-            </ToggleButton>
           </StackPanel>
         </StackPanel>
-        <!-- Save .osu: the badge counts what Save can't write as drawn; with problems, a click lists them first. -->
-        <Button Grid.Column="1" Name="SaveButton" Classes="primary ribbon" Margin="8,0,0,0" AutomationProperties.Name="Save .osu"
-                ToolTip.Tip="Save the .osu (Ctrl+S). A backup of the previous version is kept outside the mapset.">
-          <StackPanel>
-            <app:AppIcon Glyph="Save" />
-            <TextBlock Classes="ribbonText keep" Text="Save .osu" />
-            <Border Name="SaveBadge" Classes="saveBadge" IsVisible="False">
-              <StackPanel Orientation="Horizontal" Spacing="3">
-                <app:AppIcon Glyph="TriangleAlert" Size="11" />
-                <TextBlock Name="SaveBadgeText" Text="0" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-              </StackPanel>
-            </Border>
-          </StackPanel>
-          <FlyoutBase.AttachedFlyout>
-            <Flyout Placement="BottomEdgeAlignedRight">
-              <StackPanel Name="SaveCheckPanel" Width="340" Spacing="8">
-                <TextBlock Text="Before you save" Classes="sectionLabel" />
-                <StackPanel Name="SaveCheckList" Spacing="6" />
-                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
-                  <Button Name="SaveCheckShowButton" Content="Show first problem" ToolTip.Tip="Select the hits at the next problem and move the playhead there" />
-                  <Button Name="SaveContinueButton" Classes="primary" Content="Continue to Save" ToolTip.Tip="Run Save .osu as usual: it asks before leaving out hits with no object, and refuses what it can't write" />
-                </StackPanel>
-              </StackPanel>
-            </Flyout>
-          </FlyoutBase.AttachedFlyout>
-        </Button>
+        <!-- The side panels' switches sit alone at the far right, in the panels' own left-to-right order. -->
+        <StackPanel Grid.Column="1" Name="RibbonPanels" Classes="ribbonGroup" Margin="8,0,0,0">
+            <ToggleButton Name="BrowserToggle" Classes="ribbon" IsChecked="{Binding #BrowserPanelItem.IsChecked, Mode=TwoWay}" ToolTip.Tip="Show the file browser on the left" AutomationProperties.Name="Sample browser">
+              <StackPanel><app:AppIcon Glyph="OsuFiles" /><TextBlock Classes="ribbonText secondary" Text="Files" /></StackPanel>
+            </ToggleButton>
+            <ToggleButton Name="InspectorToggle" Classes="ribbon" AutomationProperties.Name="Inspector" IsChecked="True" ToolTip.Tip="Show the inspector beside the lanes: selection, active lane, bookmarks and optional panels">
+              <StackPanel><app:AppIcon Glyph="OsuInspector" /><TextBlock Classes="ribbonText secondary" Text="Inspector" /></StackPanel>
+            </ToggleButton>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -371,14 +364,14 @@
             <TextBox Grid.Column="1" Name="VolumeValueBox" Width="52" Watermark="0-100" ToolTip.Tip="Volume at the selected times, using All lanes or Selected lanes. Enter or Apply commits the value." />
             <Button Grid.Column="2" Name="VolumeApplyButton" Content="Apply" Focusable="True" ToolTip.Tip="Apply to the chosen volume scope at the selected times." />
           </Grid>
-          <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="3">
             <TextBlock Text="Change" Classes="toolLabel" />
-            <ComboBox Grid.Column="1" Name="VolumeModeBox" Width="110" Focusable="True" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
-          </Grid>
-          <Grid ColumnDefinitions="*,Auto">
+            <ComboBox HorizontalAlignment="Left" Name="VolumeModeBox" Width="110" Focusable="True" ToolTip.Tip="Relative moves every selected volume by the value; Set all gives them that value" />
+          </StackPanel>
+          <StackPanel Spacing="3">
             <TextBlock Text="Applies to" Classes="toolLabel" />
-            <ComboBox Grid.Column="1" Name="VolumeScopeBox" Width="110" ToolTip.Tip="All lanes changes every sound at the affected times. Selected lanes changes only the selected lanes." />
-          </Grid>
+            <ComboBox HorizontalAlignment="Left" Name="VolumeScopeBox" Width="110" ToolTip.Tip="All lanes changes every sound at the affected times. Selected lanes changes only the selected lanes." />
+          </StackPanel>
           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
             <TextBlock Text="Object" Classes="toolLabel" />
             <TextBlock Grid.Column="1" Name="InfoObject" Text="—" Classes="fieldValue" TextWrapping="Wrap" ToolTip.Tip="The gameplay object under the selection" />
@@ -399,19 +392,27 @@
     </Panel>
 
     <!-- 4. Overview strip -->
-    <app:OverviewStrip Grid.Row="2" Grid.Column="2" Name="Overview" />
+    <app:OverviewStrip Grid.Row="2" Grid.Column="4" Name="Overview" />
 
     <!-- Inspector (left): Selection, Bookmarks, Recent edits; the splitter resizes it -->
-    <app:InspectorPanel Grid.Row="2" Grid.RowSpan="3" Grid.Column="0" Name="Inspector" Background="{DynamicResource VolumeSide}" />
-    <GridSplitter Grid.Row="2" Grid.RowSpan="3" Grid.Column="1" Name="InspectorSplitter" ResizeDirection="Columns" Background="{DynamicResource Divider}" />
+    <app:InspectorPanel Grid.Row="2" Grid.RowSpan="3" Grid.Column="2" Name="Inspector" Background="{DynamicResource VolumeSide}" />
+    <GridSplitter Grid.Row="2" Grid.RowSpan="3" Grid.Column="3" Name="InspectorSplitter" ResizeDirection="Columns" Background="{DynamicResource Divider}" />
 
     <!-- 5. Arrange area -->
-    <Grid Grid.Row="3" Grid.Column="2" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+    <Grid Grid.Row="3" Grid.Column="4" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <app:ArrangeView Name="Lanes" />
-      <TextBox Name="LaneFilterBox" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9,22,0,0" MinHeight="20" Height="20" Padding="6,0" FontSize="9" CornerRadius="5" VerticalContentAlignment="Center" Watermark="Filter samples…" />
-      <ToggleButton Name="DrumMapToggle" Width="22" Height="28" MinHeight="28" Padding="3" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True"
+      <TextBox Name="LaneFilterBox" Width="300" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="9,33,0,0" MinHeight="24" Height="24" Padding="9,0" FontSize="10.5" CornerRadius="8" VerticalContentAlignment="Center" TextAlignment="Left" Watermark="Filter samples…" />
+      <!-- Lane switches, on the filter's row (placed by AlignToLaneList). -->
+      <ToggleButton Name="UsedLanesToggle" Classes="laneSwitch" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True" AutomationProperties.Name="Only lanes with hits" IsChecked="False" ToolTip.Tip="Show only the lanes that have hits on them (switch off and on again to refresh the list after adding hits)" Content="Used only" />
+      <ToggleButton Name="LaneDetailsToggle" Classes="laneSwitch" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True" AutomationProperties.Name="Lane info (sample indexes)" IsChecked="False" ToolTip.Tip="Show each lane's file index after its name"><app:AppIcon Glyph="Info" Size="13" /></ToggleButton>
+      <Border Name="ViewSwitchBack" Classes="switchBack" HorizontalAlignment="Left" VerticalAlignment="Top" Height="28" IsHitTestVisible="False" />
+      <ToggleButton Name="SamplesViewButton" Classes="viewSwitch" Width="54" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True" IsChecked="True" IsEnabled="False"
+                    AutomationProperties.Name="Sample view" ToolTip.Tip="Sample view: one lane per sample">
+        <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center"><app:AppIcon Glyph="AudioWaveform" Size="13" /><TextBlock Name="SamplesViewLabel" Text="Samples" VerticalAlignment="Center" /></StackPanel>
+      </ToggleButton>
+      <ToggleButton Name="DrumMapToggle" Classes="drumMap" Width="78" HorizontalAlignment="Left" VerticalAlignment="Top" Focusable="True"
                     AutomationProperties.Name="Drum-map view" ToolTip.Tip="Switch Sample / Drum-map view. Right-click for Drum Map Setup." IsEnabled="False">
-        <app:AppIcon Glyph="Piano" />
+        <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center"><app:AppIcon Glyph="OsuSnare" Size="14" /><TextBlock Name="DrumMapLabel" Text="Drum map" VerticalAlignment="Center" /></StackPanel>
         <ToggleButton.ContextMenu><ContextMenu><MenuItem Name="DrumMapSetupItem" Header="Drum Map Setup…" /><MenuItem Name="DrumKitMapItem" Header="Map lanes from drum instrument…" /></ContextMenu></ToggleButton.ContextMenu>
       </ToggleButton>
       <!-- Scrollbars with Cubase-style zoom ends: lane height at the bottom of the vertical one, time zoom at the
@@ -419,15 +420,18 @@
       <DockPanel Grid.Column="1" Name="VScrollColumn">
         <StackPanel Name="RowZoomPanel" DockPanel.Dock="Bottom" Classes="zoomEnd" Orientation="Vertical">
           <Button Name="RowZoomInButton" Classes="zoomStep" Content="+" AutomationProperties.Name="Taller lanes" ToolTip.Tip="Taller lanes (Ctrl+Up, or Ctrl+Shift+wheel)" />
-          <Slider Name="RowHeightSlider" Orientation="Vertical" Height="64" Focusable="True" AutomationProperties.Name="Lane height" ToolTip.Tip="Lane height" />
+          <Slider Name="RowHeightSlider" Classes="zoom" Orientation="Vertical" Height="64" Focusable="True" AutomationProperties.Name="Lane height" ToolTip.Tip="Lane height" />
           <Button Name="RowZoomOutButton" Classes="zoomStep" Content="−" AutomationProperties.Name="Shorter lanes" ToolTip.Tip="Shorter lanes (Ctrl+Down, or Ctrl+Shift+wheel)" />
         </StackPanel>
         <ScrollBar Name="VScroll" Orientation="Vertical" />
       </DockPanel>
       <DockPanel Grid.Row="1" Name="HScrollRow" Margin="328,0,0,0">
         <StackPanel Name="TimeZoomPanel" DockPanel.Dock="Right" Classes="zoomEnd" Orientation="Horizontal">
+          <Button Name="FitButton" Classes="zoomFit" AutomationProperties.Name="Fit" ToolTip.Tip="Zoom out to the whole map">
+              <StackPanel Orientation="Horizontal" Spacing="4"><app:AppIcon Glyph="OsuFit" Size="12" /><TextBlock Text="Fit" VerticalAlignment="Center" /></StackPanel>
+          </Button>
           <Button Name="TimeZoomOutButton" Classes="zoomStep" Content="−" AutomationProperties.Name="Zoom out" ToolTip.Tip="Zoom out in time (G, or Ctrl+wheel)" />
-          <Slider Name="ZoomSlider" Width="80" Minimum="0" Maximum="1" Value="0.5" Focusable="True" AutomationProperties.Name="Timeline zoom" ToolTip.Tip="Time zoom" />
+          <Slider Name="ZoomSlider" Classes="zoom" Width="80" Minimum="0" Maximum="1" Value="0.5" Focusable="True" AutomationProperties.Name="Timeline zoom" ToolTip.Tip="Time zoom" />
           <Button Name="TimeZoomInButton" Classes="zoomStep" Content="+" AutomationProperties.Name="Zoom in" ToolTip.Tip="Zoom in on time (H, or Ctrl+wheel)" />
         </StackPanel>
         <ScrollBar Name="HScroll" Orientation="Horizontal" />
@@ -435,14 +439,14 @@
     </Grid>
 
     <!-- Bottom panel (V6.39 controller): Controller tabs · ramp shape · hint; bars on the right -->
-    <Border Grid.Row="4" Grid.Column="2" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
+    <Border Grid.Row="4" Grid.Column="4" Name="BottomPanel" Background="{DynamicResource VolumeSide}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Background="{DynamicResource PaneTitle}">
-        <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0,12,0">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="8,0,6,0">
         <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <TextBlock Text="Controller" Classes="toolLabel" Margin="0,0,6,0" />
-          <RadioButton Name="VolumeTab" Classes="tab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="True" />
-          <RadioButton Name="SavedTab" Classes="tab" Content="What gets saved" GroupName="bottom" Focusable="True" />
+          <TextBlock Text="Volumes" Classes="paneTitle" Margin="0,0,8,0" />
+          <RadioButton Name="VolumeTab" Classes="pilltab" Content="Volume" IsChecked="True" GroupName="bottom" Focusable="True" />
+          <RadioButton Name="SavedTab" Classes="pilltab" Content="What gets saved" GroupName="bottom" Focusable="True" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
           <ToggleButton Name="RampTool" Classes="tool" ToolTip.Tip="Ramp (6). Drag in the volume lane to draw a volume ramp." AutomationProperties.Name="Ramp"><app:AppIcon Glyph="TrendingUp" /></ToggleButton>
@@ -450,10 +454,12 @@
           <ComboBox Name="RampShapeBox" Width="110" Focusable="True" ToolTip.Tip="Shape of ramps (Shift+drag in the bars, or the Ramp tool)" />
         </StackPanel>
         <TextBlock Grid.Column="2" Name="ActiveLaneText" Classes="fieldLabel" VerticalAlignment="Center" Margin="16,0,0,0" ToolTip.Tip="The active lane: the one touched last (highlighted in the lane list)" />
-        <TextBlock Grid.Column="3" Text="Drag bars · Ctrl = spread · Alt = paint · Shift = ramp" Classes="fieldLabel" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Column="3" Classes="keyHint" HorizontalAlignment="Right" VerticalAlignment="Center" ClipToBounds="True"><TextBlock Text="Drag bars" /><Border Classes="keyChip"><TextBlock Text="Ctrl" /></Border><TextBlock Text="spread" /><Border Classes="keyChip"><TextBlock Text="Alt" /></Border><TextBlock Text="paint" /><Border Classes="keyChip"><TextBlock Text="Shift" /></Border><TextBlock Text="ramp" /></StackPanel>
+        <ToggleButton Grid.Column="4" Name="VolumeToggle" Classes="icon fold" IsChecked="True" Margin="8,0,0,0" AutomationProperties.Name="Volume controller"
+                      ToolTip.Tip="Fold or unfold the volume controller"><app:AppIcon Glyph="ChevronDown" Size="13" /></ToggleButton>
         </Grid>
         </Border>
-        <Panel>
+        <Panel Name="VolumeBody">
           <app:VolumeLane Name="Volume" />
           <ScrollViewer Name="VolumeControlScroller" HorizontalAlignment="Left" Width="347" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
           <StackPanel Name="VolumeControls" Margin="14,8" Spacing="8">
@@ -479,18 +485,18 @@
       </DockPanel>
     </Border>
 
-    <GridSplitter Name="BrowserSplitter" Grid.Row="2" Grid.RowSpan="3" Grid.Column="3" ResizeDirection="Columns" Background="{DynamicResource ChromeBorder}" />
-    <Border Name="BrowserHost" Grid.Row="2" Grid.RowSpan="3" Grid.Column="4" Padding="8" Background="{DynamicResource PaneTitle}" />
+    <GridSplitter Name="BrowserSplitter" Grid.Row="2" Grid.RowSpan="3" Grid.Column="1" ResizeDirection="Columns" Background="{DynamicResource ChromeBorder}" />
+    <Border Name="BrowserHost" Grid.Row="2" Grid.RowSpan="3" Grid.Column="0" Padding="8" Background="{DynamicResource PaneTitle}" />
     <!-- Transport: primary actions left, position centered, master/song mix right. -->
     <Border Grid.Row="5" Grid.ColumnSpan="5" Name="StatusBar" Classes="transportBar" BorderThickness="0,1,0,0">
       <Grid Name="StatusBarContent" ColumnDefinitions="*,Auto,*" Margin="12,0">
         <StackPanel Name="TransportLeft" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
         <StackPanel Name="TransportButtons" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Name="StartButton" Classes="transport" ToolTip.Tip="Go to start (Home)" AutomationProperties.Name="Go to start">
-            <app:AppIcon Glyph="SkipBack" />
+            <app:AppIcon Size="20" Glyph="OsuStart" />
           </Button>
-          <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:AppIcon Glyph="Square" /></Button>
-          <Button Name="PlayButton" Classes="transport" Width="42" Height="36" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:AppIcon Name="PlayGlyph" Glyph="Play" Size="16" /></Button>
+          <Button Name="StopButton" Classes="transport" ToolTip.Tip="Stop; press again to go to the start" AutomationProperties.Name="Stop"><app:AppIcon Size="20" Glyph="OsuStop" /></Button>
+          <Button Name="PlayButton" Classes="transport play" Width="42" Height="36" ToolTip.Tip="Play / stop (Space)" AutomationProperties.Name="Play or stop"><app:AppIcon Name="PlayGlyph" Glyph="OsuPlay" Size="22" /></Button>
           <ToggleButton Name="LoopButton" Classes="transport wide" ToolTip.Tip="Cycle between the L and R locators (L or /). Ctrl+click the ruler sets L, Alt+click sets R, drag in the upper ruler draws a range." AutomationProperties.Name="Loop">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <app:AppIcon Glyph="Repeat2" />
@@ -530,9 +536,9 @@
         <Border Grid.Column="1" Name="Lcd" Grid.Row="0" HorizontalAlignment="Center" Background="{DynamicResource LcdBg}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="1" CornerRadius="6" Padding="12,2" Height="44" VerticalAlignment="Center">
           <Grid Name="LcdColumns" ColumnDefinitions="96,80,48,70" VerticalAlignment="Center">
             <StackPanel Grid.Column="0"><TextBlock Name="LcdTime" Classes="lcd" Text="0:00.000" /><TextBlock Classes="caption" Text="TIME" /></StackPanel>
-            <StackPanel Grid.Column="1"><TextBlock Name="LcdBar" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="BAR · BEAT · TICK" /></StackPanel>
-            <StackPanel Grid.Column="2"><TextBlock Name="LcdBpm" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="TEMPO" /></StackPanel>
-            <StackPanel Grid.Column="3"><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="METER" /></StackPanel>
+            <Border Grid.Column="1" Classes="lcdCell"><StackPanel><TextBlock Name="LcdBar" Classes="lcd" Text="1.1.1" /><TextBlock Classes="caption" Text="BAR · BEAT · TICK" /></StackPanel></Border>
+            <Border Grid.Column="2" Classes="lcdCell"><StackPanel><TextBlock Name="LcdBpm" Classes="lcd" Text="—" /><TextBlock Classes="caption" Text="TEMPO" /></StackPanel></Border>
+            <Border Grid.Column="3" Classes="lcdCell"><StackPanel><TextBlock Name="LcdMeter" Classes="lcd" Text="4/4 /16" /><TextBlock Classes="caption" Text="METER" /></StackPanel></Border>
           </Grid>
         </Border>
         <StackPanel Grid.Column="2" Name="MixControls" Width="308" Spacing="2" VerticalAlignment="Center" HorizontalAlignment="Right">

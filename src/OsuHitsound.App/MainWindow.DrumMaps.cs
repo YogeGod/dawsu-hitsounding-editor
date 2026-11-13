@@ -23,6 +23,13 @@ public partial class MainWindow
             model.SetDrumMapMode(DrumMapToggle.IsChecked == true);
             Lanes.ScrollY = 0; Lanes.Focus(); SyncScrollBars(); ScheduleProjectSave();
         };
+        // The switch's Samples half: it shows the other state of the drum map toggle and switches back to the sample lanes.
+        DrumMapToggle.IsCheckedChanged += (_, _) => SamplesViewButton.IsChecked = DrumMapToggle.IsChecked != true;
+        SamplesViewButton.Click += (_, _) =>
+        {
+            if (DrumMapToggle.IsChecked == true) DrumMapToggle.IsChecked = false;
+            SamplesViewButton.IsChecked = DrumMapToggle.IsChecked != true;
+        };
         DrumMapSetupItem.Click += async (_, _) => await ShowDrumMapSetup();
         Lanes.DrumEntrySetupRequested += async id => await EditActiveDrumMap(id);
     }
@@ -34,6 +41,10 @@ public partial class MainWindow
         {
             DrumMapToggle.IsEnabled = model is not null && !drumReadFailed;
             DrumMapToggle.IsChecked = model?.DrumMapMode == true;
+            ToolTip.SetTip(DrumMapToggle, "Switch Sample / Drum-map view. Right-click for Drum Map Setup."
+                + (model?.ActiveDrumMap?.Name is { Length: > 0 } mapName ? "\nDrum map: " + mapName : ""));
+            SamplesViewButton.IsEnabled = DrumMapToggle.IsEnabled;
+            SamplesViewButton.IsChecked = DrumMapToggle.IsChecked != true;
             ToolTip.SetTip(DrumMapToggle, model?.DrumMapMode == true
                 ? $"Drum map: {model.ActiveDrumMap?.Name}. Click for Sample view; right-click for Drum Map Setup."
                 : "Switch to flat Drum-map view. Right-click for Drum Map Setup.");

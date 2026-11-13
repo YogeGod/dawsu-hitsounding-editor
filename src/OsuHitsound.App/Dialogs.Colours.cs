@@ -10,7 +10,7 @@ namespace OsuHitsound.App;
 internal static partial class Dialogs
 {
     /// <summary>
-    /// The Colours tab, laid out as Cubase's User Interface – General Colors page: four Default Color Schemes, then rows
+    /// The Colours tab, laid out as Cubase's User Interface – General Colors page: five Default Color Schemes, then rows
     /// in groups, each a tick box and a swatch whose ▾ opens hue, saturation and brightness sliders (two-slider rows take
     /// the scheme's hue). Every change shows at once through <paramref name="preview"/>; Apply saves without closing.
     /// Returns the colours as edited.
@@ -18,7 +18,7 @@ internal static partial class Dialogs
     internal static Func<UserColors> ColoursPage(StackPanel page, UserColors start, bool darkModeFallback,
         Action<UserColors> preview, Action<UserColors> apply)
     {
-        var current = start.Scheme is null ? start with { Scheme = darkModeFallback ? 1 : 0 } : start;
+        var current = start.Scheme is null ? start with { Scheme = darkModeFallback ? UiTheme.SlateScheme : 0 } : start;
         var refreshers = new List<Action>();
         void Changed()
         {
@@ -43,7 +43,7 @@ internal static partial class Dialogs
 
         Header("Default Color Schemes");
         var schemes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        string[] schemeNames = ["Grey", "Dark", "Blue-grey dark", "Teal dark"];
+        string[] schemeNames = ["Grey", "Dark", "Blue-grey dark", "Teal dark", "Slate"];
         for (int i = 0; i < UiTheme.SchemeCount; i++)
         {
             int scheme = i;
@@ -73,8 +73,8 @@ internal static partial class Dialogs
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 10, 0, 0) };
         var defaults = new Button { Content = "Defaults" };
-        ToolTip.SetTip(defaults, "Back to the Dark scheme with no custom colours");
-        defaults.Click += (_, _) => { current = new UserColors { Scheme = 1 }; Changed(); };
+        ToolTip.SetTip(defaults, "Back to the Slate scheme with no custom colours");
+        defaults.Click += (_, _) => { current = new UserColors { Scheme = UiTheme.SlateScheme }; Changed(); };
         var applyButton = new Button { Content = "Apply" };
         ToolTip.SetTip(applyButton, "Keep these colours now; the window stays open");
         applyButton.Click += (_, _) => apply(current);

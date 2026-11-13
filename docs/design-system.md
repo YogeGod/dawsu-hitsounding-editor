@@ -40,6 +40,31 @@ components mirror the tokens below.
 Sizes: controls are 30 px high with 2 px corners (`button.height`, `button.radius`); tools are 30 × 30 and joined
 1 px apart; transport buttons are 38 × 32 and joined.
 
+## UI refresh (2026-11-13)
+
+The design is the Claude Design canvas "dawsu Editor UI Refresh" (Hitsound editor, Keysound editor and Menus artboards).
+
+- **Font:** Nunito (static `Assets/Fonts/Nunito-{Regular,Medium,SemiBold,Bold,ExtraBold}.ttf`, OFL; Avalonia does not apply a variable font's weight axis). Text is SemiBold by default (`:is(TopLevel)` in `DesignSystem.axaml`; drawn text through `Paint.Ui` / `Paint.UiBold`). Loaded through Fluent's `ContentControlThemeFontFamily` in `App.axaml`; Inter is the fallback and Roboto Mono still draws numbers.
+- **Slate scheme:** `UiTheme.SlatePalette`, scheme 4, the default when no scheme was picked (`ThemeColors.Apply`); it also sets `button.radius` to 8. Surfaces differ by area: title bar `#181b21`, toolbar and transport `#2e343f`, panels `#272c35`, lane list `#1f232a`, grid `#13161b`. Accent `#3d9bff` with dark text on it (`text.onAccent` `#06121f`). `line.barShade` (0 in the other schemes) shades every other bar.
+- **Colour meanings:** solid accent = the current tool and Save; accent tint with an underline = a switch that is on (`AccentTint`, `AccentText`); green = playback; yellow = gameplay objects; the sample-set colours only on a lane's 3 px strip, its set header and the BASE tag; hits and notes keep the volume and velocity colours; pink is the brand's alone.
+- **Window:** no separate title strip. `WindowButtons` and `SaveButton` sit in the menu bar (`Border.header`), which drags the window.
+- **Icons:** `IconOsu*` in `Icons.axaml` are the hit-circle set (ribbon except the tools, transport, Save, Fit, panel switches). The four hit-sound lane icons in `ArrangeView.SoundIcons` follow the same idea.
+
+| Class | Looks like |
+| --- | --- |
+| `Button.ribbon`, `ToggleButton.ribbon` | A ribbon tile: icon (20 px) over its label, 42 px high, 8 px corners. On = tint and underline; `.tool` on = solid |
+| `Button.titleSave` | Save in the title bar |
+| `ToggleButton.laneSwitch` | The small switches beside the lane filter (Used only, lane info) |
+| `Button.zoomFit` | Fit, beside the time zoom |
+| `ToggleButton.icon.fold` | The arrow that folds a bottom panel to its header |
+| `TextBlock.paneTitle` | A panel header's title (Volumes, Velocities) |
+| `RadioButton.pilltab` | A bottom panel's tabs, as quiet pills |
+| `StackPanel.segment.quiet` | A two- or three-way choice shown as buttons (`SegmentedChoice.Attach` puts one in place of a short drop-down) |
+| `Border.keyChip` in `StackPanel.keyHint` | A hint with its keys as chips |
+| `Button.transport.play` | Play: always green |
+| `ToggleButton.viewSwitch` | The Samples half of the lane header's two-way view switch |
+| `ToggleButton.drumMap` | The Drum map half of that switch (orange when on) |
+
 ## Classes
 
 | Class | Looks like |

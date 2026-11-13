@@ -158,7 +158,7 @@ Check(!inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree brow
 Check(inspector.Order.FirstOrDefault() == InspectorPanel.SelectionCard, "the Selection card (D2) starts at the top of the inspector");
 Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
 var browserHost = w.FindControl<Border>("BrowserHost")!;
-Check(Grid.GetColumn(browserHost) == 4 && browserHost.Bounds.Height > 400, "browser fills right sidebar");
+Check(Grid.GetColumn(browserHost) == 0 && browserHost.Bounds.Height > 400 && browserHost.TranslatePoint(default, w)!.Value.X < inspector.TranslatePoint(default, w)!.Value.X, "browser fills the left sidebar, left of the inspector (UI refresh, 2026-11-13)");
 var stateBeforePan = s.State; int historyBeforePan = s.StepCount;
 w.Height = 720; Pump();
 area.Axis.Zoom = 1; area.Axis.Left = 1000; area.ScrollY = 100; Pump();
@@ -208,7 +208,9 @@ Check(!File.ReadAllText(MapPath(w)).Contains("Chorus"), "bookmark labels stay ou
 foreach (var size in new[] { (1920, 1030), (1040, 720) })
 {
     w.Width = size.Item1; w.Height = size.Item2; Pump();
-    var scopeControl = w.FindControl<ComboBox>("VolumeScopeBox")!;
+    // The scope drop-down is shown as two buttons (SegmentedChoice): the row of buttons right after the hidden box.
+    var scopeBox = w.FindControl<ComboBox>("VolumeScopeBox")!;
+    var scopeControl = ((Panel)scopeBox.Parent!).Children[((Panel)scopeBox.Parent!).Children.IndexOf(scopeBox) + 1];
     Check(scopeControl.IsEffectivelyVisible && scopeControl.TranslatePoint(default, w)!.Value.X + scopeControl.Bounds.Width < w.Bounds.Width, $"volume scope remains accessible at {size}");
     w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, $"workflow-{size.Item1}x{size.Item2}.png"));
 }
@@ -284,7 +286,11 @@ var keys = w.Keys; var roll = keys.Roll; var ks = keys.Document!.Session; var tr
 var keyTempo = keys.Document.Tempo;
 Check(keys.IsVisible && w.FindControl<Menu>("KeysoundMenu")!.IsVisible && !w.FindControl<Menu>("HeaderMenu")!.IsVisible, "a Keysound project opens in Keysound mode with its own menus");
 Check(keys.FindControl<StackPanel>("RibbonGroups") is { } ribbon && ribbon.Children.OfType<StackPanel>().Count(g => g.Classes.Contains("ribbonGroup")) >= 5
-    && keys.FindControl<Button>("SaveButton")!.Classes.Contains("primary"), "the key editor has the Hitsound ribbon: captioned groups and Save on the right");
+    && keys.FindControl<Button>("SaveButton") is null && w.FindControl<TextBlock>("SaveLabel")!.Text == "Save project" && w.FindControl<Button>("SaveButton")!.IsVisible,
+    "the key editor has the Hitsound ribbon's groups, and the title bar's Save button saves the project (UI refresh, 2026-11-13)");
+ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = UiTheme.SlateScheme }, darkModeFallback: true); Pump();
+w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, "keysound-slate-1600x900.png"));
+ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = 1 }, darkModeFallback: true); Pump();
 roll.Axis.Zoom = 0.5; roll.Axis.Left = 1000; roll.TopPitch = 66.5; Pump(); // 1000 to 2000 ms in 500 px; pitch 60 in view
 IReadOnlyList<OsuHitsound.Lanes.Keysound.KeyNote> Notes() => ks.State.Track(track)!.Notes;
 long Tick(double ms) => keyTempo.RoundTick(ms);

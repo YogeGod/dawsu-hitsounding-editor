@@ -32,10 +32,11 @@ internal static class ToolPicker
 }
 
 /// <summary>
-/// Fits a ribbon in one row (both editors): the first step whose groups fit beside the Save button, from everything
-/// labelled to icons only (Save keeps its label). Each step hides more: group captions, then secondary labels, then all.
+/// Fits a ribbon in one row (both editors): the first step whose groups fit beside what trails them (the key editor's
+/// Save button, the Hitsound editor's panel switches), from everything labelled to icons only. Each step hides more:
+/// group captions, then secondary labels, then all.
 /// </summary>
-internal sealed class RibbonFit(Border bar, Grid content, Panel groups, Button save)
+internal sealed class RibbonFit(Border bar, Grid content, Panel groups, Layoutable trailing)
 {
     private static readonly string[] Steps = ["", "narrow", "compact", "iconsOnly"];
     private double fitWidth = double.NaN;
@@ -47,10 +48,11 @@ internal sealed class RibbonFit(Border bar, Grid content, Panel groups, Button s
         if (width == fitWidth) return;
         if (Avalonia.VisualTree.VisualExtensions.GetVisualRoot(groups) is not null) fitWidth = width;
         var margin = content.Margin;
-        double available = width - margin.Left - margin.Right - Remeasure(save).Width - save.Margin.Left;
         foreach (var step in Steps)
         {
             foreach (var other in Steps.Where(s => s.Length > 0)) bar.Classes.Set(other, other == step);
+            // What trails may carry labels that this step hides too, so it is measured afresh each time.
+            double available = width - margin.Left - margin.Right - Remeasure(trailing).Width - trailing.Margin.Left;
             if (Remeasure(groups).Width <= available) break;
         }
     }

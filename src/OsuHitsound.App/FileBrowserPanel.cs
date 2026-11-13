@@ -43,21 +43,41 @@ internal sealed class FileBrowserPanel : DockPanel
     public event Action<string>? SampleRequested;
     public event Action<string>? PreviewRequested;
     public event Action? CloseRequested;
+    /// <summary>The Sound sets shortcut: the window shows its Sound sets panel.</summary>
+    public event Action? SoundSetsRequested;
 
     public FileBrowserPanel()
     {
-        var close = new Button { Content = "‹" };
+        var close = new Button { Content = "‹", Width = 24, Height = 24, MinHeight = 24, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center }; // the same small button as the inspector
         close.Click += (_, _) => CloseRequested?.Invoke();
         ToolTip.SetTip(close, "Hide file browser");
         SetDock(close, Dock.Right);
-        title.Children.AddRange([close, new TextBlock { Text = "File browser", FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center }]);
+        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
+        heading.Children.AddRange([new AppIcon { Glyph = "OsuFiles", Size = 15 }, new TextBlock { Text = "File browser", FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center }]);
+        title.Children.AddRange([close, heading]);
         var browse = new Button { Content = "Folder…" };
         var go = new Button { Content = "Go" };
         var mapFolder = new Button { Content = "Map folder" };
         var library = new Button { Content = "Library" };
-        var navigation = new WrapPanel { Orientation = Orientation.Horizontal };
-        navigation.Children.AddRange([browse, up, go, mapFolder, library]);
-        var top = new StackPanel { Spacing = 6, Children = { title, mode, location, navigation } };
+        var soundSets = new Button { Content = "Sound sets" };
+        ToolTip.SetTip(soundSets, "Show the Sound sets panel in the inspector");
+        soundSets.Click += (_, _) => SoundSetsRequested?.Invoke();
+        // UI refresh (2026-11-13): no wrapping row of buttons. The two shortcuts share a row; the path has Go and Folder… beside it.
+        var shortcuts = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1 };
+        foreach (var shortcut in new[] { mapFolder, library, soundSets, up })
+        {
+            shortcut.HorizontalAlignment = HorizontalAlignment.Stretch;
+            shortcut.HorizontalContentAlignment = HorizontalAlignment.Center;
+            shortcut.Margin = new Thickness(shortcut == mapFolder ? 0 : 4, 0, 0, 0); // gaps between, none trailing: the row ends where the path row does
+            shortcut.Padding = new Thickness(0, 4);
+            shortcut.FontSize = 11;
+        }
+        shortcuts.Children.AddRange([mapFolder, library, soundSets, up]);
+        var pathRow = new DockPanel();
+        foreach (var beside in new[] { browse, go }) { beside.Margin = new Thickness(4, 0, 0, 0); beside.Padding = new Thickness(8, 4); SetDock(beside, Dock.Right); }
+        pathRow.Children.AddRange([browse, go, location]);
+        var top = new StackPanel { Spacing = 6, Children = { title, mode, shortcuts, pathRow } };
+        SegmentedChoice.Attach(mode); // "Samples | Maps and difficulties" as two buttons
         var bottom = new StackPanel { Spacing = 6, Margin = new Thickness(0, 8, 0, 0), Children = { assignment, use, status } };
         SetDock(top, Dock.Top); SetDock(bottom, Dock.Bottom);
         Children.AddRange([top, bottom, entries]);
@@ -122,14 +142,24 @@ internal sealed class FileBrowserPanel : DockPanel
     {
         if (entry is null) return null;
         if (classic) return new TextBlock { Text = (entry.Folder ? "▸ " : "") + entry.Name, TextTrimming = TextTrimming.CharacterEllipsis };
-        var row = new DockPanel { Margin = new Thickness(entry.Depth * 14, 0, 0, 0), MinHeight = 26 };
-        var toggle = new Button { Content = entry.Expanded ? "−" : "+", Width = 22, MinWidth = 22, Padding = new Thickness(0), IsVisible = entry.Folder };
+        // Flat rows (the design's list): a fold arrow before a folder, a play mark before a file. Deep folders stop
+        // indenting after six levels so the names stay readable in a narrow pane.
+        var row = new DockPanel { Margin = new Thickness(Math.Min(entry.Depth, 6) * 10, 0, 0, 0), MinHeight = 28 };
+        var toggle = new Button { Content = entry.Expanded ? "▾" : "▸", Width = 22, MinWidth = 22, Padding = new Thickness(0), IsVisible = entry.Folder,
+            Background = Avalonia.Media.Brushes.Transparent, BorderThickness = new Thickness(0) };
+        toggle.Classes.Add("flat");
+        if (!entry.Folder)
+        {
+            var mark = new AppIcon { Glyph = "OsuPlay", Size = 13, Opacity = 0.6, Width = 22, VerticalAlignment = VerticalAlignment.Center };
+            SetDock(mark, Dock.Left);
+            row.Children.Add(mark);
+        }
         Avalonia.Automation.AutomationProperties.SetName(toggle, $"{(entry.Expanded ? "Collapse" : "Expand")} {entry.Path}");
         toggle.Click += async (_, e) => { e.Handled = true; await Toggle(entry); };
         SetDock(toggle, Dock.Left);
         row.Children.Add(toggle);
         row.Children.Add(new TextBlock { Text = entry.Name, VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(entry.Folder ? 4 : 26, 0, 0, 0) });
+            TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4, 0, 0, 0) });
         ToolTip.SetTip(row, entry.Path);
         return row;
     });

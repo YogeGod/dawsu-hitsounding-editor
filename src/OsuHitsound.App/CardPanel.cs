@@ -28,7 +28,8 @@ internal class CardPanel : Border
 
     public CardPanel(string title)
     {
-        var close = new Button { Content = "‹", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(8, 0) };
+        var close = new Button { Content = "‹", Width = 24, Height = 24, MinHeight = 24, Padding = new Thickness(0), Margin = new Thickness(0, 0, 8, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; // a small button, as in the design
         ToolTip.SetTip(close, $"Hide the {title.ToLowerInvariant()}");
         close.Click += (_, _) => CloseRequested?.Invoke();
         var bar = new DockPanel { Height = 32 };

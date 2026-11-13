@@ -4,6 +4,16 @@ Public releases of the C# dawsu! editor, newest first. Each version's notes are 
 
 ## Unreleased
 
+- **Interface refresh** for both editors:
+  - **One bar on top:** the menu bar is also the window's title bar. It carries Save (Save .osu, or Save project in the Keysound editor) and the minimise, maximise and close buttons.
+  - **Ribbon tiles:** every ribbon button shows its icon over its name. Switches that are on are tinted with an underline; the current tool is solid. Files and Inspector sit alone at the right end.
+  - **Panels:** the file browser is at the far left, with the inspector beside the lanes.
+  - **Controls moved next to what they affect:** Fit beside the time zoom, "Used only" and lane info beside the lane filter, and the bottom panel (now "Volumes" / "Velocities") folds to its header from an arrow.
+  - **Sample-set folders:** lanes sit under a header per sample set (Normal, Soft, Drum) with the set's M and S. Hitnormal comes first with its additions indented under it, lane names drop the set prefix, and a header can be dragged to reorder the sets. A lane now moves only within its own set.
+  - **Slate colour scheme:** a fifth scheme in Preferences → Colours and the new default, with blue-slate panels that differ in shade by area, rounder controls and every other bar shaded in the grid. A scheme you already picked stays.
+  - **Icons and font:** hit-circle style icons on the ribbon (not the tools), and the transport (the lane sound icons are redrawn and sit before the lane name; the row buttons are larger and further apart); the interface font is Nunito, semibold. Sliders and scrollbars are thin and flat, and scrollbars no longer grow under the pointer. The lane rows lose their ● preview button. In wide windows Cycle, Return and Follow are labelled; the title shows the file as a chip with its mode; Snap to and Spacing are captioned; object lines are gold.
+  - **Menus:** rounded, and switches that are on use the accent colour.
+  - **Smaller touches:** Play is always green, the time display is divided, Global and Song share a line in wide windows, the inspector's two-way choices and the file browser's mode are buttons instead of drop-downs, the lane header has a two-way Samples | Drum map switch, and the bottom panel's hint shows its keys as chips.
 - **Drum hit detection** now uses signal processing instead of the ADTOF neural model. It no longer needs a model file or ONNX Runtime, so the installer is about 8 MB smaller. Kicks are found about as well as before; fewer snares are found, especially snares played together with kicks, and dense full mixes can give extra hits, so listen before applying.
 - **Beat grid** setting for drum hit detection (1/4 by default; also 1/4 + 1/3, 1/8, 1/8 + 1/6 or Off). Hits off the map's beat divisions are dropped and the rest snap onto them. A steady offset between the song and the map's timing is measured and allowed for.
 

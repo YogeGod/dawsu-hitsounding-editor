@@ -44,7 +44,7 @@ internal sealed partial class ArrangeModel
 
     private List<Row> BuildDrumRows()
     {
-        var grouped = BuildGroupedRows();
+        var grouped = BuildGroupedRows(folders: false);
         var rows = new List<Row>(); var assigned = new HashSet<Lane>();
         foreach (var entry in ActiveDrumMap?.Rows ?? [])
         {

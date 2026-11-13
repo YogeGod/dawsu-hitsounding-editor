@@ -65,9 +65,9 @@ internal static class Paint
     public static IPen SnapPen(int fraction) => P("line.snap", 1);
 
     /// <summary>The faint lines at gameplay objects (circles, slider nodes, spinner ends) in both editors.</summary>
-    public static IPen ObjectLinePen { get; } = new ImmutablePen(Brush(Color.Parse("#ff66aa"), 0.24), 1);
+    public static IPen ObjectLinePen { get; } = new ImmutablePen(Brush(Color.Parse("#e8b84a"), 0.26), 1); // gold: gameplay objects (pink is the brand only)
     /// <summary>The same, a little stronger, for the Hitsound grid, whose busy lanes would hide the faint one.</summary>
-    public static IPen StrongObjectLinePen { get; } = new ImmutablePen(Brush(Color.Parse("#ff66aa"), 0.38), 1);
+    public static IPen StrongObjectLinePen { get; } = new ImmutablePen(Brush(Color.Parse("#e8b84a"), 0.42), 1);
     public static IPen LongSnapPen => P("line.bar", 2);
     public static IPen DividerPen => P("divider", 1);
     public static IPen PlayheadPen => P("playhead.color", T.Number("playhead.width"));
@@ -75,8 +75,11 @@ internal static class Paint
     public static IPen SelectedRingPen => P("note.selected", 2);
     public static IPen OutlinePen => P("playhead.color", 1);
 
-    public static readonly Typeface Ui = new("Inter");
-    public static readonly Typeface UiBold = new("Inter", FontStyle.Normal, FontWeight.Bold);
+    // Drawn text (lanes, rulers, the piano roll) uses the interface font at the interface's weight.
+    private static readonly FontFamily UiFamily = new("avares://OsuHitsoundEditor/Assets/Fonts#Nunito, Inter");
+    public static readonly Typeface Ui = new(UiFamily, FontStyle.Normal, FontWeight.SemiBold);
+    public static readonly Typeface UiBold = new(UiFamily, FontStyle.Normal, FontWeight.Bold);
+    public static readonly Typeface UiLight = new(UiFamily, FontStyle.Normal, FontWeight.Medium);
     public static readonly Typeface Mono = new(new FontFamily("avares://OsuHitsoundEditor/Assets/Fonts#Roboto Mono, Consolas, monospace"));
 
     public const double BaseSize = 13;

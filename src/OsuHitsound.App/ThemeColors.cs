@@ -38,7 +38,7 @@ internal sealed record ColorRow(string Id, string Group, string Label, string Ma
 /// <summary>The user's colours from Preferences, Colours (Cubase's User Interface – General Colors).</summary>
 internal sealed record UserColors
 {
-    /// <summary>The Default Color Scheme swatch (0–3); null before one is picked (the old dark-mode switch decides).</summary>
+    /// <summary>The Default Color Scheme swatch (0–4); null before one is picked (the old dark-mode switch decides).</summary>
     public int? Scheme { get; init; }
 
     /// <summary>The ticked rows and their colours, by <see cref="ColorRow.Id"/>.</summary>
@@ -148,7 +148,7 @@ internal static class ThemeColors
     /// <summary>Applies the user's colours to a theme: the scheme, then the user layer.</summary>
     public static void Apply(UiTheme theme, UserColors colors, bool darkModeFallback)
     {
-        theme.SetScheme(colors.Scheme ?? (darkModeFallback ? 1 : 0));
+        theme.SetScheme(colors.Scheme ?? (darkModeFallback ? UiTheme.SlateScheme : 0)); // Slate is the default look (2026-11-13)
         theme.SetUserColors(Build(colors, theme.BaseValue)); // BaseValue never includes the old user layer
     }
 

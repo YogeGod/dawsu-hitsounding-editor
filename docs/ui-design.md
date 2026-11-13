@@ -1,5 +1,7 @@
 # Main screen UI design
 
+**2026-11-13:** the current look is the UI refresh described in [design-system.md](design-system.md#ui-refresh-2026-11-13) (design canvas https://claude.ai/artifact/Uf3tFWuhn6pxviVx6owyT5, private until shared). The rest of this note is the earlier direction.
+
 Direction chosen 2026-10-30. The shipped editor from V2.0 onward uses the later window (custom title bar, icon toolbar, volume-coloured hits). This note is not a picture of 2.2.4.
 
 Design canvas: https://claude.ai/artifact/C3ChZkS3d9onU2eF5bHW41

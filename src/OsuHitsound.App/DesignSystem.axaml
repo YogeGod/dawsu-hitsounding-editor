@@ -15,6 +15,11 @@
   -->
 
   <!-- Base -->
+  <!-- Nunito reads thin at regular weight on the dark panels, so the interface's text is semibold (the design's weight);
+       pop-ups (menus, tooltips, flyouts) are their own top levels. -->
+  <Style Selector=":is(TopLevel)">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
   <Style Selector="Window">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
@@ -369,9 +374,9 @@
        tool and icon sizes above. The window sets narrow, compact or iconsOnly on the bar as it shrinks. -->
   <Style Selector="StackPanel.ribbonGroup">
     <Setter Property="Orientation" Value="Horizontal" />
-    <Setter Property="Spacing" Value="3" />
+    <Setter Property="Spacing" Value="6" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Margin" Value="5,0" />
+    <Setter Property="Margin" Value="7,0" />
   </Style>
   <Style Selector="TextBlock.ribbonCaption">
     <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
@@ -382,25 +387,99 @@
   </Style>
   <Style Selector="Border.ribbonSep">
     <Setter Property="Width" Value="1" />
-    <Setter Property="Height" Value="20" />
+    <Setter Property="Height" Value="26" />
     <Setter Property="Background" Value="{DynamicResource ChromeBorder}" />
   </Style>
+  <!-- A ribbon tile (UI refresh, 2026-11-13): the icon over its label, on a visible surface, so every button names
+       itself. Tool tiles stay solid when chosen; switches that are on take a tint and an underline in the accent. -->
   <Style Selector="Button.ribbon, ToggleButton.ribbon">
     <Setter Property="Width" Value="NaN" />
-    <Setter Property="MinWidth" Value="30" />
-    <Setter Property="Height" Value="30" />
+    <Setter Property="MinWidth" Value="46" />
+    <Setter Property="Height" Value="42" />
     <Setter Property="MinHeight" Value="30" />
-    <Setter Property="Padding" Value="7,0" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.ribbon > StackPanel, ToggleButton.ribbon > StackPanel">
-    <Setter Property="Orientation" Value="Horizontal" />
-    <Setter Property="Spacing" Value="5" />
+    <Setter Property="Orientation" Value="Vertical" />
+    <Setter Property="Spacing" Value="2" />
+  </Style>
+  <Style Selector="Button.ribbon > StackPanel > :is(Control), ToggleButton.ribbon > StackPanel > :is(Control)">
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.ribbon > StackPanel > app|AppIcon, ToggleButton.ribbon > StackPanel > app|AppIcon">
+    <Setter Property="Size" Value="20" />
   </Style>
   <Style Selector="Button.ribbon TextBlock, ToggleButton.ribbon TextBlock">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.ribbon:not(.tool):checked /template/ ContentPresenter, ToggleButton.ribbon:not(.tool):checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentTint}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonActive}" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+  </Style>
+  <!-- The underline takes 2 px at the bottom; the padding keeps the icon and label where they are when off. -->
+  <Style Selector="ToggleButton.ribbon:not(.tool):checked">
+    <Setter Property="Padding" Value="6,2,6,0" />
+  </Style>
+  <Style Selector="ToggleButton.tool.ribbon:checked /template/ ContentPresenter, ToggleButton.tool.ribbon:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ToolActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource ToolActiveIcon}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ToggleButton.tool.ribbon:checked TextBlock">
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="ToggleButton.tool.ribbon">
+    <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+  </Style>
+  <!-- Tiles with no label left (narrow windows) shrink back to square icon buttons. -->
+  <Style Selector="Border.iconsOnly Button.ribbon, Border.iconsOnly ToggleButton.ribbon">
+    <Setter Property="Height" Value="32" />
+  </Style>
+
+  <!-- Save in the title bar, the lane switches beside the lane filter, Fit beside the time zoom, the fold arrow and
+       title of a panel header. -->
+  <Style Selector="Button.titleSave">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.laneSwitch">
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.zoomFit">
+    <Setter Property="Height" Value="18" />
+    <Setter Property="MinHeight" Value="18" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+  <Style Selector="ToggleButton.icon.fold">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="MinHeight" Value="26" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.icon.fold:checked /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+  </Style>
+  <Style Selector="TextBlock.paneTitle">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
   <Style Selector="Border.narrow TextBlock.ribbonCaption, Border.compact TextBlock.ribbonCaption, Border.iconsOnly TextBlock.ribbonCaption">
@@ -422,6 +501,146 @@
   </Style>
   <!-- Menus (layout D): shortcut chips, switches instead of checkmarks, rows of choice buttons. Part names are the
        Fluent MenuItem template's (Avalonia.Themes.Fluent 11.3). -->
+  <!-- Fidelity pass (2026-11-13): Play is always green; the time display is divided; hints show their keys as chips;
+       a bottom panel's tabs and the inspector's two-way choices are quiet pills; the drum map switch is named. -->
+  <Style Selector="Button.transport.play">
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+  <Style Selector="Button.transport.play /template/ ContentPresenter, Button.transport.play:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PlayBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+  </Style>
+  <Style Selector="Border.lcdCell">
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    <Setter Property="BorderThickness" Value="1,0,0,0" />
+  </Style>
+  <Style Selector="StackPanel.keyHint">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="5" />
+  </Style>
+  <Style Selector="StackPanel.keyHint > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <!-- A ribbon drop-down with its caption inside the box, above the value (the design's Snap to / Spacing). -->
+  <Style Selector="ComboBox.captioned">
+    <Setter Property="Height" Value="40" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="10,13,0,0" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="TextBlock.boxCaption">
+    <Setter Property="FontSize" Value="9.5" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    <Setter Property="Margin" Value="11,5,0,0" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="Border.titleChip">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Padding" Value="10,3,4,3" />
+    <Setter Property="CornerRadius" Value="9" />
+  </Style>
+  <Style Selector="Border.modePill">
+    <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.modePill > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+  </Style>
+  <Style Selector="Border.keyChip">
+    <Setter Property="Background" Value="{DynamicResource PanelRaised}" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="Padding" Value="5,1" />
+    <Setter Property="Margin" Value="5,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.keyChip > TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+  </Style>
+  <Style Selector="RadioButton.pilltab">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="TabBorder" Padding="10,3" CornerRadius="8" Background="Transparent">
+          <ContentPresenter Content="{TemplateBinding Content}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.pilltab:checked">
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="RadioButton.pilltab:checked /template/ Border#TabBorder">
+    <Setter Property="Background" Value="{DynamicResource LineDivider}" />
+  </Style>
+  <Style Selector="RadioButton.pilltab:pointerover /template/ Border#TabBorder, RadioButton.pilltab:focus-visible /template/ Border#TabBorder">
+    <Setter Property="Background" Value="{DynamicResource ControlHover}" />
+  </Style>
+  <Style Selector="StackPanel.segment.quiet > ToggleButton:checked /template/ ContentPresenter, StackPanel.segment.quiet > ToggleButton:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource LineDivider}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}" />
+  </Style>
+  <!-- The lane header's view switch: Samples | Drum map, two joined halves. -->
+  <Style Selector="Border.switchBack">
+    <Setter Property="Background" Value="{DynamicResource FieldBg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ChromeBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+  <Style Selector="ToggleButton.viewSwitch">
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.viewSwitch:checked /template/ ContentPresenter, ToggleButton.viewSwitch:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ButtonBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource ButtonText}" />
+  </Style>
+  <Style Selector="ToggleButton.drumMap">
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Background" Value="#29ff9550" />
+    <Setter Property="Foreground" Value="#ffb488" />
+    <Setter Property="BorderBrush" Value="#ff9550" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ToggleButton.drumMap:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#44ff9550" />
+    <Setter Property="Foreground" Value="#ffd0b0" />
+    <Setter Property="BorderBrush" Value="#ff9550" />
+  </Style>
+  <Style Selector="ToggleButton.drumMap:checked /template/ ContentPresenter, ToggleButton.drumMap:checked:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#ff9550" />
+    <Setter Property="Foreground" Value="#2a1200" />
+    <Setter Property="BorderBrush" Value="#ff9550" />
+  </Style>
+  <!-- UI refresh (2026-11-13): each menu row is rounded inside the rounded menu panel (ThemeResources sets the
+       panel's corners and padding); a switch that is on takes the accent colour, so pink stays the brand's alone. -->
+  <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
   <Style Selector="MenuItem.hasKey /template/ TextBlock#PART_InputGestureText">
     <Setter Property="Background" Value="{DynamicResource LcdBg}" />
     <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
@@ -451,7 +670,7 @@
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
   <Style Selector="MenuItem.switch:checked Border.switchTrack">
-    <Setter Property="Background" Value="{DynamicResource Brand}" />
+    <Setter Property="Background" Value="{DynamicResource ButtonActive}" />
   </Style>
   <Style Selector="MenuItem.switch:checked Border.switchKnob">
     <Setter Property="HorizontalAlignment" Value="Right" />
@@ -469,10 +688,10 @@
     <Setter Property="Margin" Value="0,0,-1,0" />
   </Style>
   <Style Selector="StackPanel.segment > ToggleButton:nth-child(1)">
-    <Setter Property="CornerRadius" Value="4,0,0,4" />
+    <Setter Property="CornerRadius" Value="8,0,0,8" />
   </Style>
   <Style Selector="StackPanel.segment > ToggleButton:nth-last-child(1)">
-    <Setter Property="CornerRadius" Value="0,4,4,0" />
+    <Setter Property="CornerRadius" Value="0,8,8,0" />
   </Style>
   <Style Selector="StackPanel.zoomEnd">
     <Setter Property="Spacing" Value="2" />
@@ -486,16 +705,198 @@
     <Setter Property="MinHeight" Value="18" />
     <Setter Property="MinWidth" Value="18" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- Plain small + and − at the ends of the zoom sliders: no button under them until the pointer is over one. -->
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
   </Style>
   <Style Selector="Border.saveBadge">
     <Setter Property="Background" Value="#33000000" />
     <Setter Property="CornerRadius" Value="9" />
     <Setter Property="Padding" Value="6,1" />
     <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- A flat slider (UI refresh): a thin track, the filled part in the accent, a plain round handle. It replaces
+       Fluent's, whose handle was clipped and sat low in the 22 px rows of the mixer. -->
+  <Styles.Resources>
+    <!-- A thin scrollbar (UI refresh): a rounded handle that stays the same size when the pointer is over it, no
+         arrow buttons. It replaces Fluent's, which grows on hover. -->
+    <ControlTheme x:Key="ThinScrollThumb" TargetType="Thumb">
+      <Setter Property="Background" Value="{DynamicResource TextSecondary}" />
+      <Setter Property="Opacity" Value="0.45" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="3" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover, ^:pressed">
+        <Setter Property="Opacity" Value="0.8" />
+      </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="ThinScrollPage" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Template">
+        <ControlTemplate><Border Background="Transparent" /></ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+      <Setter Property="Background" Value="Transparent" />
+      <Style Selector="^:vertical">
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Border Background="{TemplateBinding Background}">
+              <Track Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value, Mode=TwoWay}"
+                     ViewportSize="{TemplateBinding ViewportSize}" Orientation="Vertical" IsDirectionReversed="True">
+                <Track.DecreaseButton><RepeatButton Name="PART_PageUpButton" Theme="{StaticResource ThinScrollPage}" /></Track.DecreaseButton>
+                <Track.IncreaseButton><RepeatButton Name="PART_PageDownButton" Theme="{StaticResource ThinScrollPage}" /></Track.IncreaseButton>
+                <Thumb Theme="{StaticResource ThinScrollThumb}" Width="6" MinHeight="24" HorizontalAlignment="Center" />
+              </Track>
+            </Border>
+          </ControlTemplate>
+        </Setter>
+      </Style>
+      <Style Selector="^:horizontal">
+        <Setter Property="Height" Value="10" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Border Background="{TemplateBinding Background}">
+              <Track Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value, Mode=TwoWay}"
+                     ViewportSize="{TemplateBinding ViewportSize}" Orientation="Horizontal">
+                <Track.DecreaseButton><RepeatButton Name="PART_PageUpButton" Theme="{StaticResource ThinScrollPage}" /></Track.DecreaseButton>
+                <Track.IncreaseButton><RepeatButton Name="PART_PageDownButton" Theme="{StaticResource ThinScrollPage}" /></Track.IncreaseButton>
+                <Thumb Theme="{StaticResource ThinScrollThumb}" Height="6" MinWidth="24" VerticalAlignment="Center" />
+              </Track>
+            </Border>
+          </ControlTemplate>
+        </Setter>
+      </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="FlatSliderThumb" TargetType="Thumb">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{DynamicResource ButtonText}" CornerRadius="6" />
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="FlatSliderRunH" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel Background="Transparent"><Border Height="4" VerticalAlignment="Center" Background="{TemplateBinding Background}" /></Panel>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="FlatSliderRunV" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel Background="Transparent"><Border Width="4" HorizontalAlignment="Center" Background="{TemplateBinding Background}" /></Panel>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="{x:Type Slider}" TargetType="Slider">
+      <Setter Property="Background" Value="Transparent" />
+      <Style Selector="^:horizontal">
+        <Setter Property="MinHeight" Value="16" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Panel Background="{TemplateBinding Background}">
+              <Border Height="4" CornerRadius="2" Margin="2,0" VerticalAlignment="Center" Background="{DynamicResource LineDivider}" />
+              <Track Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                     Value="{TemplateBinding Value, Mode=TwoWay}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                <Track.DecreaseButton>
+                  <RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource FlatSliderRunH}" Background="{DynamicResource ButtonActive}" Margin="2,0,-4,0" />
+                </Track.DecreaseButton>
+                <Track.IncreaseButton>
+                  <RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource FlatSliderRunH}" Background="Transparent" />
+                </Track.IncreaseButton>
+                <Thumb Name="thumb" Width="12" Height="12" Theme="{StaticResource FlatSliderThumb}" />
+              </Track>
+            </Panel>
+          </ControlTemplate>
+        </Setter>
+      </Style>
+      <Style Selector="^:vertical">
+        <Setter Property="MinWidth" Value="16" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Panel Background="{TemplateBinding Background}">
+              <Border Width="4" CornerRadius="2" Margin="0,2" HorizontalAlignment="Center" Background="{DynamicResource LineDivider}" />
+              <Track Name="PART_Track" Orientation="Vertical" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                     Value="{TemplateBinding Value, Mode=TwoWay}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                <Track.DecreaseButton>
+                  <RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource FlatSliderRunV}" Background="{DynamicResource ButtonActive}" Margin="0,-4,0,2" />
+                </Track.DecreaseButton>
+                <Track.IncreaseButton>
+                  <RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource FlatSliderRunV}" Background="Transparent" />
+                </Track.IncreaseButton>
+                <Thumb Name="thumb" Width="12" Height="12" Theme="{StaticResource FlatSliderThumb}" />
+              </Track>
+            </Panel>
+          </ControlTemplate>
+        </Setter>
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+      </Style>
+    </ControlTheme>
+    <!-- The zoom sliders at the ends of the scrollbars look like the scrollbars: a grey rounded handle on a thin groove. -->
+    <ControlTheme x:Key="ZoomSliderThumb" TargetType="Thumb">
+      <Setter Property="Background" Value="{DynamicResource TextSecondary}" />
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="3" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover, ^:pressed">
+        <Setter Property="Opacity" Value="1" />
+      </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="ZoomSlider" TargetType="Slider">
+      <Setter Property="Background" Value="Transparent" />
+      <Style Selector="^:horizontal">
+        <Setter Property="MinHeight" Value="16" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Panel Background="{TemplateBinding Background}">
+              <Border Height="4" CornerRadius="2" VerticalAlignment="Center" Background="{DynamicResource LineDivider}" />
+              <Track Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                     Value="{TemplateBinding Value, Mode=TwoWay}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                <Track.DecreaseButton><RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource ThinScrollPage}" /></Track.DecreaseButton>
+                <Track.IncreaseButton><RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource ThinScrollPage}" /></Track.IncreaseButton>
+                <Thumb Name="thumb" Width="18" Height="6" Theme="{StaticResource ZoomSliderThumb}" />
+              </Track>
+            </Panel>
+          </ControlTemplate>
+        </Setter>
+      </Style>
+      <Style Selector="^:vertical">
+        <Setter Property="MinWidth" Value="16" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Panel Background="{TemplateBinding Background}">
+              <Border Width="4" CornerRadius="2" HorizontalAlignment="Center" Background="{DynamicResource LineDivider}" />
+              <Track Name="PART_Track" Orientation="Vertical" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                     Value="{TemplateBinding Value, Mode=TwoWay}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                <Track.DecreaseButton><RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource ThinScrollPage}" /></Track.DecreaseButton>
+                <Track.IncreaseButton><RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource ThinScrollPage}" /></Track.IncreaseButton>
+                <Thumb Name="thumb" Width="6" Height="18" Theme="{StaticResource ZoomSliderThumb}" />
+              </Track>
+            </Panel>
+          </ControlTemplate>
+        </Setter>
+      </Style>
+    </ControlTheme>
+  </Styles.Resources>
+  <Style Selector="Slider.zoom">
+    <Setter Property="Theme" Value="{StaticResource ZoomSlider}" />
   </Style>
 </Styles>

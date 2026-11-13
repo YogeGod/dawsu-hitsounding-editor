@@ -8,6 +8,9 @@
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://OsuHitsoundEditor/Icons.axaml" />
       </ResourceDictionary.MergedDictionaries>
+      <!-- The interface font (UI refresh, 2026-11-13): Nunito, a rounded sans in the spirit of osu!lazer's. Fluent
+           reads this key for every window and pop-up; Inter stays as the fallback. -->
+      <FontFamily x:Key="ContentControlThemeFontFamily">avares://OsuHitsoundEditor/Assets/Fonts#Nunito, fonts:Inter#Inter, $Default</FontFamily>
       <FontFamily x:Key="MonoFont">avares://OsuHitsoundEditor/Assets/Fonts#Roboto Mono, Consolas, monospace</FontFamily>
     </ResourceDictionary>
   </Application.Resources>

@@ -40,6 +40,15 @@ public partial class MainWindow
     /// Updates the badge and the list behind it from the latest compile and the hits with no object. The status runs on
     /// every edit and selection change, so the list is rebuilt only when what it says changes.
     /// </summary>
+    private void ShowSaveState()
+    {
+        if (keysoundChrome) return; // the button is the key editor's "Save project" for now
+        SaveBadge.IsVisible = saveProblems > 0;
+        ToolTip.SetTip(SaveButton, saveProblems == 0 ? SaveTip
+            : $"Save the .osu: {saveProblems} problem{(saveProblems == 1 ? "" : "s")} to check first. Ctrl+S skips this list.");
+    }
+
+    /// <summary>The title bar's Save button in Hitsound mode: the badge and the tooltip follow the number of problems.</summary>
     private void UpdateSaveCheck(IReadOnlyList<Conflict> conflicts, int unanchored)
     {
         var shown = (conflicts.Count, conflicts.Count > 0 ? conflicts[0] : null, unanchored);
@@ -47,15 +56,8 @@ public partial class MainWindow
         saveCheckShown = shown;
 
         saveProblems = conflicts.Count + unanchored;
-        if (SaveBadge.IsVisible != saveProblems > 0)
-        {
-            SaveBadge.IsVisible = saveProblems > 0;
-            ribbonFit?.Reset(); // Save changed width: fit the ribbon beside it again
-            UpdateRibbonFit(Bounds.Width > 0 ? Bounds.Width : Width);
-        }
         SaveBadgeText.Text = saveProblems.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        ToolTip.SetTip(SaveButton, saveProblems == 0 ? SaveTip
-            : $"Save the .osu: {saveProblems} problem{(saveProblems == 1 ? "" : "s")} to check first. Ctrl+S skips this list.");
+        ShowSaveState();
 
         SaveCheckList.Children.Clear();
         if (conflicts.Count > 0) SaveCheckList.Children.Add(Row("TriangleAlert", ConflictNote(conflicts)));
