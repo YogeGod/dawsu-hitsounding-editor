@@ -787,6 +787,9 @@ int wmain(int argc, wchar_t** argv)
     if (view) { view->removed(); view = nullptr; }
     if (processor) processor->setProcessing(false);
     if (component) component->setActive(false);
+    // Every reference into the plug-in goes before its module unloads: a global left holding one (midiMapping is a
+    // second reference to the controller) is released by the exit-time destructors through a vtable that is gone.
+    midiMapping = nullptr;
     controller = nullptr;
     processor = nullptr;
     component = nullptr;
