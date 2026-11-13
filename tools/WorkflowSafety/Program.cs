@@ -329,7 +329,7 @@ Check(Notes().Count == 3 && Notes().Any(n => n.Id == drawn.Id && n.Start == draw
     "Ctrl+Alt+drag copies a note and leaves the original in place");
 
 // Keys the Hitsound editor has: Alt+Space to the selection, Ctrl+B bookmark, ] next bookmark, Ctrl+Alt+Right to the next grid line.
-roll.SelectWhere(n => n.Id == drawn.Id); Pump();
+roll.Notes.SelectWhere(n => n.Id == drawn.Id); Pump();
 Press(w, Key.Space, RawInputModifiers.Alt);
 Check(Math.Abs(roll.Playhead - keyTempo.TimeAt(drawn.Start)) < 1, "Alt+Space moves the playhead to the selected note");
 Press(w, Key.B, RawInputModifiers.Control);
@@ -350,20 +350,13 @@ keys.FindControl<ComboBox>("SnapModeBox")!.SelectedIndex = 0; Pump();
 keys.RunShortcut("toolRange"); Pump();
 var rangeFrom = RollPoint(1490, 65); var rangeTo = RollPoint(1990, 59);
 w.MouseDown(rangeFrom, MouseButton.Left); w.MouseMove(rangeTo); w.MouseUp(rangeTo, MouseButton.Left); Pump();
-Check(roll.Range is { Start: 1500, End: 2000, Low: 59, High: 65 }, "dragging with the Range tool marks a snapped time range over the keys dragged across");
-int notesBefore = Notes().Count, inRange = roll.NotesInRange().Count;
-Check(inRange >= 2, "the range holds the notes starting in it on its keys");
-roll.EditRange(RangeOperation.Copy, 1000); Pump();
-Check(Notes().Count == notesBefore + inRange && roll.Selected.Count == inRange && roll.Selected.All(n => keyTempo.TimeAt(n.Start) >= 2499), "Edit range Copy adds moved copies and selects them, in one step");
-ks.Undo(); Pump();
-Check(Notes().Count == notesBefore, "one Undo removes the range copy");
+Check(roll.Notes.Range is { Start: 1500, End: 2000, Low: 59, High: 65 }, "dragging with the Range tool marks a snapped time range over the keys dragged across");
+Check(roll.Notes.NotesInRange().Count >= 2, "the range holds the notes starting in it on its keys");
+// What Edit range and Scale by velocity do to notes is tested in NoteEditorTests.
 Press(w, Key.P);
 Check(w.Keys.FindControl<TextBox>("LeftLocatorBox")!.Text == "1500" && w.Keys.FindControl<TextBox>("RightLocatorBox")!.Text == "2000", "P puts the locators around the range");
 Press(w, Key.Escape);
-Check(roll.Range is null, "Esc drops the range");
-roll.ScaleVelocity(VelocityScope.SelectedTrack, 1, 127, 50); Pump();
-Check(Notes().All(n => n.Velocity == 50), "Scale by velocity halves every note of the track (insert velocity 100) in one step");
-ks.Undo(); Pump();
+Check(roll.Notes.Range is null, "Esc drops the range");
 
 // Narrow windows close the inspector, as in Hitsound mode, and wide ones bring it back.
 w.Width = 1000; Pump();

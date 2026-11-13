@@ -75,8 +75,8 @@ public partial class KeysoundEditor
             case "playLocatorRange": PlayLocatorRange(); return true;
             case "jumpToSelection":
                 // Alt+Space, as in the Hitsound editor: the playhead to the first selected note.
-                if (Roll.Selected.Count == 0) SetStatus("Select a note first: Alt+Space moves the playhead to it.");
-                else Seek(Math.Max(0, doc.Tempo.TimeAt(Roll.Selected.Min(n => n.Start))));
+                if (Roll.Notes.Selected.Count == 0) SetStatus("Select a note first: Alt+Space moves the playhead to it.");
+                else Seek(Math.Max(0, doc.Tempo.TimeAt(Roll.Notes.Selected.Min(n => n.Start))));
                 return true;
             case "previousBookmark": JumpToBookmark(-1); return true;
             case "nextBookmark": JumpToBookmark(1); return true;
@@ -103,37 +103,37 @@ public partial class KeysoundEditor
             case "addBookmark": case "removeBookmark": case "editRange": case "scaleByVolume":
                 _ = RunCommand(id);
                 return true;
-            case "deselect": if (!Roll.CancelDrag()) Roll.Deselect(); return true;
-            case "nudgeLeft": Roll.Nudge(-1); return true;
-            case "volumeUp": Roll.SetSelectionVelocity(v => v + 5); return true;
-            case "volumeDown": Roll.SetSelectionVelocity(v => v - 5); return true;
-            case "volumeUpFine": Roll.SetSelectionVelocity(v => v + 1); return true;
-            case "volumeDownFine": Roll.SetSelectionVelocity(v => v - 1); return true;
-            case "nudgeRight": Roll.Nudge(1); return true;
-            case "gridLeft": Roll.NudgeToGrid(-1); return true;
-            case "gridRight": Roll.NudgeToGrid(1); return true;
+            case "deselect": if (!Roll.CancelDrag()) Roll.Notes.Deselect(); return true;
+            case "nudgeLeft": Roll.Notes.Nudge(-1); return true;
+            case "volumeUp": Roll.Notes.SetSelectionVelocity(v => v + 5); return true;
+            case "volumeDown": Roll.Notes.SetSelectionVelocity(v => v - 5); return true;
+            case "volumeUpFine": Roll.Notes.SetSelectionVelocity(v => v + 1); return true;
+            case "volumeDownFine": Roll.Notes.SetSelectionVelocity(v => v - 1); return true;
+            case "nudgeRight": Roll.Notes.Nudge(1); return true;
+            case "gridLeft": Roll.Notes.NudgeToGrid(-1); return true;
+            case "gridRight": Roll.Notes.NudgeToGrid(1); return true;
 
             case "ks.record": ToggleRecord(); return true;
             case "ks.typing": ToggleTyping(); return true;
             // The arrow keys as in Cubase's Key Editor: Up/Down transpose (Shift: an octave), Left/Right select.
-            case "navUp": Roll.Transpose(1); return true;
-            case "navDown": Roll.Transpose(-1); return true;
-            case "navAddUp": Roll.Transpose(12); return true;
-            case "navAddDown": Roll.Transpose(-12); return true;
+            case "navUp": Roll.Notes.Transpose(1); return true;
+            case "navDown": Roll.Notes.Transpose(-1); return true;
+            case "navAddUp": Roll.Notes.Transpose(12); return true;
+            case "navAddDown": Roll.Notes.Transpose(-12); return true;
             // Ctrl+Alt+Up/Down move the selection a row, as Up/Down do: in the key editor, a semitone.
-            case "laneUp": Roll.Transpose(1); return true;
-            case "laneDown": Roll.Transpose(-1); return true;
-            case "selectPrevious": Roll.SelectNeighbour(-1, extend: false); return true;
-            case "selectNext": Roll.SelectNeighbour(1, extend: false); return true;
-            case "addPrevious": Roll.SelectNeighbour(-1, extend: true); return true;
-            case "addNext": Roll.SelectNeighbour(1, extend: true); return true;
+            case "laneUp": Roll.Notes.Transpose(1); return true;
+            case "laneDown": Roll.Notes.Transpose(-1); return true;
+            case "selectPrevious": Roll.Notes.SelectNeighbour(-1, extend: false); return true;
+            case "selectNext": Roll.Notes.SelectNeighbour(1, extend: false); return true;
+            case "addPrevious": Roll.Notes.SelectNeighbour(-1, extend: true); return true;
+            case "addNext": Roll.Notes.SelectNeighbour(1, extend: true); return true;
             case "rowsOut": Roll.ZoomRows(1 / 1.2); return true;
             case "rowsIn": Roll.ZoomRows(1.2); return true;
             // Cubase's Nudge Start/End: Alt+Left the start earlier, Alt+Shift+Right later; Alt+Right the end later, Alt+Shift+Left earlier.
-            case "ks.startLeft": Roll.NudgeEdges(-1, 0); return true;
-            case "ks.startRight": Roll.NudgeEdges(1, 0); return true;
-            case "ks.endRight": Roll.NudgeEdges(0, 1); return true;
-            case "ks.endLeft": Roll.NudgeEdges(0, -1); return true;
+            case "ks.startLeft": Roll.Notes.NudgeEdges(-1, 0); return true;
+            case "ks.startRight": Roll.Notes.NudgeEdges(1, 0); return true;
+            case "ks.endRight": Roll.Notes.NudgeEdges(0, 1); return true;
+            case "ks.endLeft": Roll.Notes.NudgeEdges(0, -1); return true;
             case "ks.sync": _ = RunCommand("sync"); return true;
             case "ks.generate": _ = RunCommand("generate"); return true;
             default:
@@ -166,14 +166,14 @@ public partial class KeysoundEditor
     // P: the locators around the selected notes.
     private void LocatorsToSelection()
     {
-        if (Roll.Range is { } range)
+        if (Roll.Notes.Range is { } range)
         {
             (locatorLeft, locatorRight) = (range.Start, range.End);
             ShowLocators();
             return;
         }
 
-        var notes = Roll.Selected;
+        var notes = Roll.Notes.Selected;
         if (doc is null || notes.Count == 0) return;
         locatorLeft = Math.Max(0, doc.Tempo.TimeAt(notes.Min(n => n.Start)));
         locatorRight = Math.Max(0, doc.Tempo.TimeAt(notes.Max(n => n.End)));
