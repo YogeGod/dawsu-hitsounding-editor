@@ -302,7 +302,7 @@ var onNote = RollPoint(1760, 60);
 w.MouseDown(onNote, MouseButton.Right); w.MouseUp(onNote, MouseButton.Right); Pump();
 Check(Notes().Count == 1 && keys.ToolPickerFlyout is { IsOpen: true }, "right-click on a note keeps it and opens the tool picker");
 var keyPickerButtons = ((StackPanel)keys.ToolPickerFlyout!.Content!).Children.OfType<ToggleButton>().ToList();
-Check(keyPickerButtons.Count == 8 && keyPickerButtons[0].IsChecked == true, "the key editor's picker shows its tools, the current one checked");
+Check(keyPickerButtons.Count == 9 && keyPickerButtons[0].IsChecked == true, "the key editor's picker shows its tools, the current one checked");
 keyPickerButtons.Single(b => AutomationProperties.GetName(b) == "Mute").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
 Check(roll.Tool == KeyTool.Mute && !keys.ToolPickerFlyout.IsOpen, "picking Mute switches tool and closes the picker");
 var stateBeforeMute = ks.State;
@@ -337,6 +337,27 @@ Check(Notes().Single(n => n.Id == drawn.Id).Start == Tick(1875), "Ctrl+Alt+Right
 keys.FindControl<ComboBox>("SnapModeBox")!.SelectedIndex = 2; Pump();
 DoubleClick(RollPoint(1560, 64));
 Check(Notes().Any(n => n.Pitch == 64 && n.Start == Tick(1500)), "snap mode Objects puts an inserted note on the nearest gameplay object");
+
+// The Range tool: drag a time range over keys, then Edit range copies, moves or deletes the notes in it; P puts the
+// locators around it; Esc drops it. Scale by velocity scales the notes in a velocity range.
+keys.FindControl<ComboBox>("SnapModeBox")!.SelectedIndex = 0; Pump();
+keys.RunShortcut("toolRange"); Pump();
+var rangeFrom = RollPoint(1490, 65); var rangeTo = RollPoint(1990, 59);
+w.MouseDown(rangeFrom, MouseButton.Left); w.MouseMove(rangeTo); w.MouseUp(rangeTo, MouseButton.Left); Pump();
+Check(roll.Range is { Start: 1500, End: 2000, Low: 59, High: 65 }, "dragging with the Range tool marks a snapped time range over the keys dragged across");
+int notesBefore = Notes().Count, inRange = roll.NotesInRange().Count;
+Check(inRange >= 2, "the range holds the notes starting in it on its keys");
+roll.EditRange(RangeOperation.Copy, 1000); Pump();
+Check(Notes().Count == notesBefore + inRange && roll.Selected.Count == inRange && roll.Selected.All(n => keyTempo.TimeAt(n.Start) >= 2499), "Edit range Copy adds moved copies and selects them, in one step");
+ks.Undo(); Pump();
+Check(Notes().Count == notesBefore, "one Undo removes the range copy");
+Press(w, Key.P);
+Check(w.Keys.FindControl<TextBox>("LeftLocatorBox")!.Text == "1500" && w.Keys.FindControl<TextBox>("RightLocatorBox")!.Text == "2000", "P puts the locators around the range");
+Press(w, Key.Escape);
+Check(roll.Range is null, "Esc drops the range");
+roll.ScaleVelocity(VelocityScope.SelectedTrack, 1, 127, 50); Pump();
+Check(Notes().All(n => n.Velocity == 50), "Scale by velocity halves every note of the track (insert velocity 100) in one step");
+ks.Undo(); Pump();
 
 // Narrow windows close the inspector, as in Hitsound mode, and wide ones bring it back.
 w.Width = 1000; Pump();

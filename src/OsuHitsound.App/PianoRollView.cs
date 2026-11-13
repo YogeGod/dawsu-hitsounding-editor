@@ -10,7 +10,13 @@ using OsuHitsound.Lanes.Keysound;
 namespace OsuHitsound.App;
 
 /// <summary>The key editor's tools, numbered as Cubase's (1 Select, 3 Split, 4 Glue, 5 Erase, 8 Draw).</summary>
-internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue, Mute, Ramp }
+internal enum KeyTool { Select, Grab, Draw, Erase, Split, Glue, Mute, Ramp, Range }
+
+/// <summary>A range marked with the Range tool: a time span (ms, end excluded) over the pitches from Low to High.</summary>
+internal sealed record KeyRange(double Start, double End, int Low, int High);
+
+/// <summary>Which notes Scale by velocity looks at, as Scale by volume's scopes.</summary>
+internal enum VelocityScope { Selected, SelectedTrack, AllTracks }
 
 /// <summary>
 /// Keysound mode's key editor, after Cubase's Key Editor: a ruler, a strip with the reference's gameplay objects over the
@@ -70,6 +76,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public event Action? ToolPickerRequested;
     /// <summary>The ruler's bookmarks: the editor keeps them in the project's state.</summary>
     public IReadOnlyList<KeyBookmark> Bookmarks => doc?.Session.State.Bookmarks ?? [];
+    /// <summary>The range marked with the Range tool, kept apart from the selection and the locators; null when none.</summary>
+    public KeyRange? Range { get; private set; }
     public bool ShowGhosts { get; set; } = true;
     public bool ShowMarkers { get; set; } = true;
     /// <summary>Notes being recorded, drawn over the selected track until the take ends.</summary>
@@ -152,6 +160,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         doc = document;
         selection.Clear();
         PreviewMuted.Clear();
+        Range = null;
         drag = null;
         objectMoments = [];
         if (doc is not null)
@@ -297,6 +306,13 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         DrawStrip(ctx, objects, b.Width);
         if (VelocityLaneHeight > 0) DrawVelocity(ctx, ticks);
 
+        if (Range is { } range)
+        {
+            double x0 = XOfTime(range.Start), x1 = XOfTime(range.End);
+            double y0 = YOfPitch(range.High), y1 = YOfPitch(range.Low) + rowHeight;
+            using (ctx.PushClip(grid)) ctx.DrawRectangle(RangeShade, RangeEdge, new Rect(x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0)));
+        }
+
         if (drag is { Kind: DragKind.Box } box)
         {
             var r = new Rect(box.Start, box.Current).Normalize().Intersect(grid);
@@ -430,6 +446,8 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     }
 
     private static readonly IBrush BookmarkFill = Paint.Brush("#4cc3d1");
+    private static IBrush RangeShade => Paint.TokenAt("cycle.inactive", 0.25);
+    private static IPen RangeEdge => UiTheme.Current.Cached("pen:keyRange", () => (IPen)new ImmutablePen((IImmutableBrush)Paint.Brush(UiTheme.Current.Color("cycle.active")), 1));
 
     /// <summary>
     /// Bookmark flags on the ruler, as in the Hitsound editor: a labelled one shows its label beside its flag, cut short
@@ -581,7 +599,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
 
     // Editing.
 
-    private enum DragKind { Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity, Pan, VelocityPaint, VelocityRamp, VelocityScale, CycleNew, CycleMove, CycleLeft, CycleRight }
+    private enum DragKind { Range, Move, Copy, Resize, ResizeStart, Draw, Box, Erase, Velocity, NoteVelocity, Pan, VelocityPaint, VelocityRamp, VelocityScale, CycleNew, CycleMove, CycleLeft, CycleRight }
 
     private (double Left, double Right) cycleAtStart; // the locators when a cycle move or resize began
 
@@ -748,6 +766,11 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         var tool = mods.HasFlag(KeyModifiers.Alt) && !copyDrag ? KeyTool.Draw : Tool;
         switch (tool)
         {
+            case KeyTool.Range:
+                // As in the Hitsound grid: a press starts a new range, a click without a drag clears it (FinishDrag).
+                drag = new Drag(DragKind.Range, p);
+                break;
+
             case KeyTool.Mute:
                 // Preview only, as in the Hitsound editor: silenced while listening, never saved, and Generate still renders it.
                 if (hit is not null)
@@ -942,6 +965,18 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         var tempo = doc.Tempo;
         switch (drag.Kind)
         {
+            case DragKind.Range:
+            {
+                // Snapped times, either order, over the pitches dragged across (as the Hitsound range over lanes).
+                if (Math.Abs(p.X - drag.Start.X) < 3) break;
+                drag.Moved = true;
+                double a = SnapTime(Math.Max(0, TimeOfX(drag.Start.X))), b = SnapTime(Math.Max(0, TimeOfX(p.X)));
+                int pa = PitchOfY(drag.Start.Y), pb = PitchOfY(p.Y);
+                var next = new KeyRange(Math.Min(a, b), Math.Max(a, b), Math.Min(pa, pb), Math.Max(pa, pb));
+                if (next != Range) { Range = next; ViewChanged?.Invoke(); }
+                break;
+            }
+
             case DragKind.Box:
             {
                 var r = new Rect(drag.Start, p).Normalize();
@@ -1101,8 +1136,9 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             selection.UnionWith(drag.Originals.Keys);
         }
 
+        if (kind == DragKind.Range && !drag.Moved) Range = null; // a click without a drag clears the range
         drag = null;
-        if (kind != DragKind.Box) doc?.Session.EndGesture();
+        if (kind is not (DragKind.Box or DragKind.Range)) doc?.Session.EndGesture();
         InvalidateVisual();
         ViewChanged?.Invoke();
     }
@@ -1111,7 +1147,7 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
     public bool CancelDrag()
     {
         if (drag is null) return false;
-        if (drag.Kind != DragKind.Box) doc?.Session.CancelGesture();
+        if (drag.Kind is not (DragKind.Box or DragKind.Range)) doc?.Session.CancelGesture();
         drag = null;
         InvalidateVisual();
         return true;
@@ -1174,8 +1210,10 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
         ViewChanged?.Invoke();
     }
 
+    /// <summary>Esc: selects nothing and drops the range, as in the Hitsound editor.</summary>
     public void Deselect()
     {
+        Range = null;
         selection.Clear();
         InvalidateVisual();
         ViewChanged?.Invoke();
@@ -1267,6 +1305,72 @@ internal sealed class PianoRollView : Avalonia.Controls.Control
             double at = tempo.TimeAt(tick);
             return tempo.RoundTick(at + (SnapTime(at) - at) * f);
         }), "Quantize");
+    }
+
+    /// <summary>The selected track's notes in the range: starting in it (end excluded) on its pitches.</summary>
+    public IReadOnlyList<KeyNote> NotesInRange() =>
+        Range is { } r && Track is { } t && doc is { } d
+            ? [.. t.Notes.Where(n => n.Pitch >= r.Low && n.Pitch <= r.High && d.Tempo.TimeAt(n.Start) is var at && at >= r.Start - 0.5 && at < r.End - 0.5)]
+            : [];
+
+    /// <summary>
+    /// Edit range, as in the Hitsound editor: copies, moves or deletes the notes in the range by an offset in ms (one undo
+    /// step) and selects the copies or moved notes. Returns how many notes it changed.
+    /// </summary>
+    public int EditRange(RangeOperation operation, double offsetMs)
+    {
+        if (Track is not { } t || doc is not { } d) return 0;
+        var notes = NotesInRange();
+        if (notes.Count == 0) return 0;
+        long Shift(KeyNote n) => Math.Max(0, d.Tempo.RoundTick(d.Tempo.TimeAt(n.Start) + offsetMs));
+        switch (operation)
+        {
+            case RangeOperation.Delete:
+                d.Session.RemoveNotes(t.Id, notes.Select(n => n.Id).ToHashSet(), "Range delete");
+                selection.Clear();
+                break;
+            case RangeOperation.Move:
+            {
+                var moved = notes.Select(n => n with { Start = Shift(n) }).ToList();
+                d.Session.UpdateNotes(t.Id, moved, "Range move");
+                SelectOnly(moved.Select(n => n.Id));
+                break;
+            }
+            default:
+            {
+                var copies = notes.Select(n => n with { Id = Guid.NewGuid(), Start = Shift(n), Target = null }).ToList();
+                d.Session.AddNotes(t.Id, copies, "Range copy");
+                SelectOnly(copies.Select(n => n.Id));
+                break;
+            }
+        }
+
+        return notes.Count;
+    }
+
+    /// <summary>The notes Scale by velocity would change: those in scope with a velocity from–to (inclusive).</summary>
+    public IReadOnlyList<(Guid Track, KeyNote Note)> NotesToScale(VelocityScope scope, int from, int to)
+    {
+        if (doc is null) return [];
+        var tracks = scope == VelocityScope.AllTracks ? doc.Session.State.Tracks : Track is { } t ? [t] : [];
+        return [.. tracks.SelectMany(tr => tr.Notes.Select(n => (tr.Id, n)))
+            .Where(x => (scope != VelocityScope.Selected || selection.Contains(x.n.Id)) && x.n.Velocity >= from && x.n.Velocity <= to)];
+    }
+
+    /// <summary>Scale by velocity, as the Hitsound editor's Scale by volume: one undo step. Scaled velocities stay 1–127.</summary>
+    public void ScaleVelocity(VelocityScope scope, int from, int to, double percent)
+    {
+        if (doc is null) return;
+        var groups = NotesToScale(scope, from, to).GroupBy(x => x.Track).ToList();
+        if (groups.Count == 0) return;
+        doc.Session.Change("Scale by velocity", state => groups.Aggregate(state, (st, g) =>
+        {
+            var changed = g.ToDictionary(x => x.Note.Id, x => x.Note with
+            {
+                Velocity = Math.Clamp((int)Math.Round(x.Note.Velocity * percent / 100), KeyNote.MinVelocity, KeyNote.MaxVelocity),
+            });
+            return st.WithTrack(g.Key, tr => tr with { Notes = [.. tr.Notes.Select(n => changed.GetValueOrDefault(n.Id, n))] });
+        }));
     }
 
     /// <summary>Repeat's gap: the selection's length in snap steps, at least one.</summary>

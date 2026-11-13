@@ -333,6 +333,56 @@ internal static partial class Dialogs
     }
 
     /// <summary>
+    /// The key editor's Scale by velocity dialog, laid out as Scale by volume. <paramref name="count"/> says how many notes
+    /// a choice changes, for the live preview. Returns the choice, or null on Cancel.
+    /// </summary>
+    public static async Task<(VelocityScope Scope, int From, int To, double Percent)?> ScaleByVelocity(Window owner, bool hasSelection, Func<VelocityScope, int, int, int> count) =>
+        await Show<(VelocityScope, int, int, double)?>(owner, "Scale by velocity", (body, close) =>
+        {
+            (VelocityScope Scope, string Label)[] scopes = [(VelocityScope.Selected, "Selected notes"), (VelocityScope.SelectedTrack, "The selected track"), (VelocityScope.AllTracks, "All tracks")];
+            var scope = new ComboBox
+            {
+                ItemsSource = scopes.Select(x => x.Label).ToList(),
+                SelectedIndex = Array.FindIndex(scopes, x => x.Scope == (hasSelection ? VelocityScope.Selected : VelocityScope.SelectedTrack)),
+                Width = 240,
+            };
+            var from = new TextBox { Text = "1", Width = 70 };
+            var to = new TextBox { Text = "127", Width = 70 };
+            var percent = new TextBox { Text = "100", Width = 70 };
+            var preview = new TextBlock { Opacity = 0.8 };
+
+            bool Read(out VelocityScope s, out int low, out int high, out double p)
+            {
+                s = scopes[Math.Max(0, scope.SelectedIndex)].Scope;
+                p = 0;
+                bool ok = OsuNumber.TryParseInt(from.Text ?? "", out int a) & OsuNumber.TryParseInt(to.Text ?? "", out int b)
+                          && OsuNumber.TryParseDouble(percent.Text ?? "", out p) && double.IsFinite(p) && p >= 0;
+                (low, high) = (Math.Min(a, b), Math.Max(a, b));
+                return ok && low >= 1 && high <= 127;
+            }
+
+            void Update() => preview.Text = Read(out var s, out int a, out int b, out _)
+                ? count(s, a, b) switch { 1 => "Changes 1 note.", var n => $"Changes {n} notes." }
+                : "Velocities are 1–127, and the scale is a percentage of at least 0. Scaled velocities stay 1–127.";
+
+            foreach (var box in new[] { from, to, percent }) box.TextChanged += (_, _) => Update();
+            scope.SelectionChanged += (_, _) => Update();
+            var range = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            range.Children.AddRange([from, new TextBlock { Text = "to", VerticalAlignment = VerticalAlignment.Center }, to]);
+            body.Children.AddRange([
+                new TextBlock { Text = "Look at" }, scope,
+                new TextBlock { Text = "Notes with a velocity from" }, range,
+                new TextBlock { Text = "Scale by (%; 50 halves, 150 is half as loud again)" }, percent,
+                preview,
+            ]);
+            Update();
+            return (() =>
+            {
+                if (Read(out var s, out int a, out int b, out double p)) close((s, a, b, p));
+            }, "Scale");
+        });
+
+    /// <summary>
     /// The Scale by volume dialog. <paramref name="count"/> says how many circles and slider ends a choice changes, for
     /// the live preview. Returns the choice, or null on Cancel.
     /// </summary>

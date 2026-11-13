@@ -135,7 +135,7 @@ public partial class KeysoundEditor
         (string, string, KeyTool)[] tools =
         [
             ("MousePointer2", "Select", KeyTool.Select), ("Hand", "Grab", KeyTool.Grab), ("Drumstick", "Draw", KeyTool.Draw),
-            ("Eraser", "Erase", KeyTool.Erase), ("VolumeX", "Mute", KeyTool.Mute), ("TrendingUp", "Ramp", KeyTool.Ramp),
+            ("Scan", "Range", KeyTool.Range), ("Eraser", "Erase", KeyTool.Erase), ("VolumeX", "Mute", KeyTool.Mute), ("TrendingUp", "Ramp", KeyTool.Ramp),
             ("Scissors", "Split", KeyTool.Split), ("Link2", "Glue", KeyTool.Glue),
         ];
         ToolPickerFlyout = ToolPicker.Show(Roll, tools.Select(t => (t.Item1, t.Item2, Roll.Tool == t.Item3, (Action)(() => SetTool(t.Item3)))));

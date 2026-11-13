@@ -37,6 +37,7 @@ internal static class KeysoundShortcuts
         ["toolMute"] = Areas.KsNoteEditing, ["toolRamp"] = Areas.KsNoteEditing, ["quantizeDialog"] = Areas.KsNoteEditing,
         ["repeat"] = Areas.KsNoteEditing, ["gridLeft"] = Areas.KsNoteEditing, ["gridRight"] = Areas.KsNoteEditing,
         ["laneUp"] = Areas.KsNoteEditing, ["laneDown"] = Areas.KsNoteEditing,
+        ["toolRange"] = Areas.KsNoteEditing, ["editRange"] = Areas.KsNoteEditing, ["scaleByVolume"] = Areas.KsNoteEditing,
     };
 
     /// <summary>The Keysound area of a shared command the key editor runs too, else null (the key editor's own "ks." ones included).</summary>
@@ -87,6 +88,7 @@ public partial class KeysoundEditor
             case "toolDraw": SetTool(KeyTool.Draw); return true;
             case "toolErase": SetTool(KeyTool.Erase); return true;
             case "toolMute": SetTool(KeyTool.Mute); return true;
+            case "toolRange": SetTool(KeyTool.Range); return true;
             case "toolRamp": SetTool(KeyTool.Ramp); return true;
             case "ks.toolSplit": SetTool(KeyTool.Split); return true;
             case "ks.toolGlue": SetTool(KeyTool.Glue); return true;
@@ -98,7 +100,7 @@ public partial class KeysoundEditor
 
             case "undo": case "redo": case "cut": case "copy": case "paste": case "duplicate": case "delete":
             case "selectAll": case "quantize": case "zoomIn": case "zoomOut": case "quantizeDialog": case "repeat":
-            case "addBookmark": case "removeBookmark":
+            case "addBookmark": case "removeBookmark": case "editRange": case "scaleByVolume":
                 _ = RunCommand(id);
                 return true;
             case "deselect": if (!Roll.CancelDrag()) Roll.Deselect(); return true;
@@ -164,6 +166,13 @@ public partial class KeysoundEditor
     // P: the locators around the selected notes.
     private void LocatorsToSelection()
     {
+        if (Roll.Range is { } range)
+        {
+            (locatorLeft, locatorRight) = (range.Start, range.End);
+            ShowLocators();
+            return;
+        }
+
         var notes = Roll.Selected;
         if (doc is null || notes.Count == 0) return;
         locatorLeft = Math.Max(0, doc.Tempo.TimeAt(notes.Min(n => n.Start)));

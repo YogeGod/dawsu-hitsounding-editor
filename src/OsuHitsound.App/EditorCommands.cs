@@ -139,8 +139,8 @@ internal static class EditorCommands
         new("quantize", Areas.HsHitEditing, "Quantize: move the selected loose hits (key editor: notes) toward the grid (last strength)", [K(Key.Q)]),
         new("quantizeDialog", Areas.HsHitEditing, "Quantize with a chosen strength", []),
         new("repeat", Areas.HsHitEditing, "Repeat: copies of the selection, a number of snap steps apart", [K(Key.R, Ctrl)]),
-        new("editRange", Areas.HsHitEditing, "Edit range: copy, move or delete the hits in the range", []),
-        new("scaleByVolume", Areas.HsHitEditing, "Scale by volume: make circles in a volume range louder or quieter", []),
+        new("editRange", Areas.HsHitEditing, "Edit range: copy, move or delete the hits (key editor: notes) in the range", []),
+        new("scaleByVolume", Areas.HsHitEditing, "Scale by volume: make circles in a volume range louder or quieter (key editor: Scale by velocity, notes)", []),
 
         new("zoomIn", Areas.HsTimeline, "Zoom in", [K(Key.H)]),
         new("zoomOut", Areas.HsTimeline, "Zoom out", [K(Key.G)]),
@@ -195,6 +195,7 @@ internal static class EditorCommands
         (Areas.Mouse(Areas.KsNoteEditing), "Ctrl+Shift+drag a note", "Change the selected notes' velocity"),
         (Areas.Mouse(Areas.KsNoteEditing), "Click / drag (Draw)", "Add a note; drag right to set its length. Clicking a note deletes it"),
         (Areas.Mouse(Areas.KsNoteEditing), "Alt+click / Alt+drag", "Draw with any tool"),
+        (Areas.Mouse(Areas.KsNoteEditing), "Drag (Range)", "Mark a time range over the keys dragged across; a click clears it"),
         (Areas.Mouse(Areas.KsNoteEditing), "Click a note (Mute)", "Silence it while listening (never saved; Generate still renders it)"),
         (Areas.Mouse(Areas.KsNoteEditing), "Double-click a note (Select tool)", "Move the playhead to it and hear it"),
         (Areas.Mouse(Areas.KsNoteEditing), "Double-click empty space (Select tool)", "Insert a note there, as Draw would"),

@@ -169,6 +169,8 @@
               <Separator />
               <MenuItem Name="KsQuantizeItem" Header="Quantize…" Tag="ks:quantizeDialog" />
               <MenuItem Name="KsRepeatItem" Header="Repeat…" Tag="ks:repeat" />
+              <MenuItem Name="KsEditRangeItem" Header="Edit range…" Tag="ks:editRange" />
+              <MenuItem Name="KsScaleVelocityItem" Header="Scale by velocity…" Tag="ks:scaleByVolume" />
               <MenuItem Name="KsSyncItem" Header="Sync to gameplay objects…" Tag="ks:sync" />
             </MenuItem>
             <MenuItem Header="Playback" Name="KsPlaybackMenu">
@@ -205,6 +207,7 @@
               <MenuItem Name="KsInspectorPanelItem" Header="Inspector panel" Tag="ks:inspector" ToggleType="CheckBox" />
               <MenuItem Name="KsControllerItem" Header="Velocity controller" Tag="ks:controller" ToggleType="CheckBox" />
               <Separator />
+              <MenuItem Name="KsRangeToolItem" Header="Range selection tool" Tag="ks:rangeTool" />
               <MenuItem Name="KsUiInspectorItem" Header="UI inspector" Tag="inspector" />
               <MenuItem Name="KsHelpItem" Header="Shortcuts and help" Tag="help" />
             </MenuItem>

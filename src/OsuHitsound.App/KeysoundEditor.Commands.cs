@@ -13,7 +13,7 @@ public partial class KeysoundEditor
         "undo", "redo", "cut", "copy", "paste", "duplicate", "delete", "selectAll", "quantize", "sync",
         "importMidi", "generate", "projectFolder", "close",
         "addTrack", "renameTrack", "deleteTrack", "instrument", "instrumentEditor",
-        "ghosts", "objectLines", "zoomIn", "zoomOut", "quantizeDialog", "repeat", "addBookmark", "removeBookmark",
+        "ghosts", "objectLines", "zoomIn", "zoomOut", "quantizeDialog", "repeat", "addBookmark", "removeBookmark", "editRange", "scaleByVolume", "rangeTool",
     ];
 
     /// <summary>Runs a command (see <see cref="CommandIds"/>); unknown ids do nothing.</summary>
@@ -33,6 +33,8 @@ public partial class KeysoundEditor
             case "quantize": Roll.QuantizeSelection(QuantizeStrength); break;
             case "quantizeDialog": await QuantizeDialog(); break;
             case "repeat": await Repeat(); break;
+            case "editRange": await EditRange(); break;
+            case "scaleByVolume": await ScaleByVelocity(); break;
             case "addBookmark": AddBookmark(); break;
             case "removeBookmark": doc.Session.RemoveBookmarkNear(Roll.Playhead, 8 / Roll.Axis.Zoom); break;
             case "sync": await SyncNotes(); break;
@@ -49,6 +51,7 @@ public partial class KeysoundEditor
             case "objectLines": MarkerToggle.IsChecked = MarkerToggle.IsChecked != true; break;
             case "zoomIn": Roll.ZoomTime(1.25); break;
             case "zoomOut": Roll.ZoomTime(0.8); break;
+            case "rangeTool": SetTool(KeyTool.Range); break;
             case "inspector": InspectorToggle.IsChecked = InspectorToggle.IsChecked != true; break;
             case "controller": VelocityToggle.IsChecked = VelocityToggle.IsChecked != true; break;
             case "returnOnStop": ReturnOnStopButton.IsChecked = ReturnOnStopButton.IsChecked != true; break;
@@ -80,6 +83,28 @@ public partial class KeysoundEditor
         if (await Dialogs.Repeat(owner, Roll.DefaultRepeatGap(), Roll.Spacing) is { } r) Roll.Repeat(r.Copies, r.Gap);
     }
 
+    /// <summary>Edit range…, as in the Hitsound editor: copy, move or delete the notes in the range marked with the Range tool.</summary>
+    private async Task EditRange()
+    {
+        if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (Roll.Range is not { } range)
+        {
+            SetStatus("Choose the Range tool and drag a time range over the keys first.");
+            return;
+        }
+
+        if (await Dialogs.EditRange(owner, range.End - range.Start) is not { } choice) return;
+        if (Roll.EditRange(choice.Operation, choice.Offset) == 0) SetStatus("The range has no notes of the selected track.");
+    }
+
+    /// <summary>Scale by velocity…, the key editor's Scale by volume: louder or quieter notes in a velocity range.</summary>
+    private async Task ScaleByVelocity()
+    {
+        if (doc is null || TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (await Dialogs.ScaleByVelocity(owner, Roll.Selected.Count > 0, (scope, from, to) => Roll.NotesToScale(scope, from, to).Count) is { } c)
+            Roll.ScaleVelocity(c.Scope, c.From, c.To, c.Percent);
+    }
+
     /// <summary>Whether a command can run now (for greying out menu items).</summary>
     public bool CanRun(string id) => doc is not null && id switch
     {
@@ -89,6 +114,7 @@ public partial class KeysoundEditor
         "paste" => clipboard.Count > 0 && doc.SelectedTrack is not null,
         "renameTrack" or "deleteTrack" or "instrument" => doc.SelectedTrack is not null,
         "instrumentEditor" => SelectedTrackPart()?.Vst is not null,
+        "editRange" => Roll.Range is not null,
         _ => true,
     };
 
