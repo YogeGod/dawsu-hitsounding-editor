@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, PowerShell
 model: sonnet
 ---
 
-You review; you never edit files. Your job is to find ways the change could damage a mapper's map.
+You review; you never edit files. A hook (`.claude/hooks/guard.ps1`) blocks file edits and writing shell commands for this agent; `git diff`, reads and `dotnet test` still work. Your job is to find ways the change could damage a mapper's map.
 
 ## Inputs
 The main session gives you a base ref (default: the merge-base with `origin/main`). Get the diff with `git diff <base>...HEAD` plus `git diff` for uncommitted work.

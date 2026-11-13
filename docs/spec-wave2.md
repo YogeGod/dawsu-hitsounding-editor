@@ -1,5 +1,7 @@
 # Spec: V6.39 port, wave 2
 
+> **Historical (shipped).** Everything in this spec is in the editor. The code and `CHANGELOG.md` describe the current behaviour; see `docs/README.md`.
+
 Status: approved by the user on 2026-10-30. The decisions behind it are in `docs/merge-decisions.md`, and wave 1 is in `docs/spec-wave1.md`. V6.39's behaviour comes from `src/app.js`, `src/model.js` and `src/help.js` on tag `V6.39`.
 
 ## Already in the C# editor (not part of this wave)
