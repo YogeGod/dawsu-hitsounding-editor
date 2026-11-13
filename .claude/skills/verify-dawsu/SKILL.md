@@ -8,11 +8,13 @@ description: Run dawsu!'s full check suite (build, the three test projects with 
 Run these from the repo root, in order. Run long ones in the background. Put tool output in a scratch folder, not in the repo.
 
 ## 0. Corpus first
-The corpus tests (round trip, compile, decompile, green-line clean-up over thousands of real maps) live inside the Format and Lanes test projects. They **skip silently** when `corpus/` is missing. `corpus/` is git-ignored, so every new worktree lacks it. In a worktree, link the main checkout's copy (the tests only read it):
+The corpus tests (round trip, compile, decompile, green-line clean-up over thousands of real maps) live inside the Format and Lanes test projects. They **skip silently** when `corpus/` is missing. `corpus/` is git-ignored, so every new worktree lacks it. In a worktree, **copy** the main checkout's corpus. Never link it with a junction or symlink:
 
 ```powershell
-New-Item -ItemType Junction -Path corpus -Target E:\GitHub\dawsu-hitsounding-editor\corpus
+robocopy E:\GitHub\dawsu-hitsounding-editor\corpus corpus /E /NFL /NDL /NJH /NJS
 ```
+
+Why: on 2026-11-13 the main checkout's corpus (4,062 files) was emptied while it was linked into a worktree with a junction during a check run. The cause wasn't found, but a copy means nothing in a worktree can reach the main corpus. Before removing a worktree, delete its `corpus/` copy normally.
 
 If no copy exists anywhere, `tools/build-corpus.ps1` builds one from the local lazer library. Report any skipped tests by name; never count them as passes.
 
