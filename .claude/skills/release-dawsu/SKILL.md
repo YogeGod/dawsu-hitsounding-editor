@@ -16,12 +16,14 @@ Installed copies update through Velopack, which reads the **latest** GitHub rele
 - On `main`, clean tree, up to date with `origin/main`. Release from the main checkout, not a worktree.
 - Run the `verify-dawsu` skill. Any failure or skipped corpus test stops the release.
 - `CHANGELOG.md` has an **Unreleased** section describing what users will notice. If it's empty, ask what this release is for.
-- Drive C: is often nearly full. Do all build work under the git-ignored `artifacts/release-X.Y.Z/` on E:, and point the temp folders there. NuGet packages come from the shared cache that the user-level `NUGET_PACKAGES` variable names (on E: since 2026-11-13), so a release doesn't download them again. A shell started before that variable was set doesn't have it, so the block below reads it from the user settings; if it was never set on this PC, it falls back to a folder under the release folder:
+- Drive C: is often nearly full. Do all build work under the git-ignored `artifacts/release-X.Y.Z/` on E:, and point the temp folders there. NuGet packages come from the shared cache named by the user-level `NUGET_PACKAGES` variable, so a release doesn't download them again:
 
 ```powershell
 $v = 'X.Y.Z'; $R = "E:\GitHub\dawsu-hitsounding-editor\artifacts\release-$v"
 New-Item -ItemType Directory -Force "$R\tmp","$R\clihome","$R\tools","$R\pub","$R\out","$R\native" | Out-Null
 $env:TEMP = "$R\tmp"; $env:TMP = "$R\tmp"; $env:DOTNET_CLI_HOME = "$R\clihome"
+# Read from the user settings: a shell opened before the variable was set doesn't have it.
+# Never set on this PC: use a per-release folder, which keeps packages off C:.
 $env:NUGET_PACKAGES = [Environment]::GetEnvironmentVariable('NUGET_PACKAGES', 'User') ?? "$R\nuget"
 ```
 
