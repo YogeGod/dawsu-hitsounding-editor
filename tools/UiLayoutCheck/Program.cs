@@ -93,9 +93,18 @@ foreach (var (width, height) in new[] { (1920, 1080), (1600, 900), (1040, 720), 
     foreach (var id in new[] { "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel" })
         Check(bottom.Contains(Rect(Find<Control>(id))), $"{width}: {id} remains in the bottom bar");
     Check(Find<Control>("LocatorsButton").IsVisible == width >= MainWindow.LocatorsMinWidth, $"{width}: the L/R button shows from {MainWindow.LocatorsMinWidth} px");
-    var positions = new[] { "StartButton", "StopButton", "PlayButton", "LoopButton", "LocatorsButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "Lcd", "MixControls" }.Select(Find<Control>).Where(c => c.IsVisible).Select(Rect).ToArray();
+    Check(Find<Control>("HsRecordButton").IsVisible == width >= MainWindow.RecordMinWidth, $"{width}: Record shows in the transport from {MainWindow.RecordMinWidth} px");
+    var positions = new[] { "StartButton", "StopButton", "PlayButton", "HsRecordButton", "LoopButton", "LocatorsButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "Lcd", "MixControls" }.Select(Find<Control>).Where(c => c.IsVisible).Select(Rect).ToArray();
     for (var i = 1; i < positions.Length; i++) Check(positions[i - 1].Right <= positions[i].Left + 1, $"{width}: transport controls {i - 1} and {i} do not overlap ({positions[i - 1].Right:0} vs {positions[i].Left:0})");
     Save($"editor-dark-{width}x{height}.png");
+    // Live hitsounding: its panel sits at the bottom of the lanes, with Record, Count-in, the MIDI input and Close in view.
+    Find<ToggleButton>("LiveToggle").IsChecked = true; Pump();
+    var livePanel = Rect(Find<Control>("LivePanel"));
+    Check(Find<Control>("LivePanel").IsVisible && Rect(Find<Control>("Lanes")).Contains(livePanel), $"{width}: the Live panel shows inside the lanes");
+    foreach (var id in new[] { "LiveRecordButton", "HsCountInToggle", "LiveMidiBox", "LiveCloseButton" })
+        Check(livePanel.Contains(Rect(Find<Control>(id))), $"{width}: {id} fits in the Live panel");
+    if (width == 1600) Save("editor-live-1600x900.png");
+    Find<ToggleButton>("LiveToggle").IsChecked = false; Pump();
     // The five Default Color Schemes (Preferences, Colours) replace the old dark-mode button.
     Check(w.FindControl<Control>("ThemeToggle") is null, $"{width}: the dark-mode button is gone (schemes are in Preferences, Colours)");
     string[] schemeFiles = ["grey", "dark", "blue-grey", "teal", "slate"];

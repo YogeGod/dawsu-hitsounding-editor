@@ -172,6 +172,7 @@ public partial class MainWindow
         else prepared?.Dispose();
         Keys.GlobalSongOffset = prefs.GlobalSongOffset;
         Keys.ShowGlobalVolume(GlobalVolumeSlider.Value);
+        LiveToggle.IsChecked = false; // its MIDI input goes back to the key editor
         Keys.Open(project, audio);
         Keys.IsVisible = true;
         HideStartScreen();

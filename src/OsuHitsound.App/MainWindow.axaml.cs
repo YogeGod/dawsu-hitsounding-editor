@@ -336,10 +336,12 @@ public partial class MainWindow : Window, IMapWriteHost
         SetupOutput();
         SetupSoundSets();
         SetupPlayfield();
+        SetupLiveHits();
         Deactivated += (_, _) =>
         {
             UpdateToolCursors(KeyModifiers.None);
             Keys.ReleaseTypedNotes(); // their key releases now go to another app
+            liveHeld.Clear();
         };
         HScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.Axis.Left = HScroll.Value; };
         VScroll.Scroll += (_, _) => { if (!syncingScroll) Lanes.ScrollY = VScroll.Value; SyncScrollBars(); };
@@ -486,6 +488,7 @@ public partial class MainWindow : Window, IMapWriteHost
             UpdateCues(); // project restoration may have changed layers and preview mutes
             model.PreviewMutesChanged += ScheduleProjectSave;
             model.Changed += UpdateSongMute; // soloing a lane silences the song
+            model.Changed += RefreshLivePanel; // the keys follow the lane list
 
             Lanes.IsPreview = false;
             Lanes.SetModel(model);
@@ -656,6 +659,8 @@ public partial class MainWindow : Window, IMapWriteHost
     // key handling (OnKeyDown) runs as before.
     private void OnPlayKeyDown(object? sender, KeyEventArgs e)
     {
+        // Live hitsounding takes the keyboard first in Hitsound mode, as musical typing does in Keysound mode.
+        if (LiveKeyDown(e)) { e.Handled = true; return; }
         // Musical typing takes the keyboard first (except in text boxes): only Space and Esc keep a meaning, as in DAWs.
         if (!Start.IsVisible && Keys.Document is not null && Keys.TypingOn && FocusManager?.GetFocusedElement() is not TextBox)
         {
@@ -679,6 +684,12 @@ public partial class MainWindow : Window, IMapWriteHost
     // The key's release would click a focused button: it belongs to the press above.
     private void OnPlayKeyUp(object? sender, KeyEventArgs e)
     {
+        if (LiveKeyUp(e))
+        {
+            if (shortcutKeyHeld == e.Key) shortcutKeyHeld = null; // e.g. the K of the Alt+K that turned it on
+            e.Handled = true;
+            return;
+        }
         if (Keys.Document is not null && Keys.TypingOn && FocusManager?.GetFocusedElement() is not TextBox && Keys.TypingKeyUp(e))
         {
             if (shortcutKeyHeld == e.Key) shortcutKeyHeld = null; // e.g. the K of the Alt+K that turned typing on
@@ -745,6 +756,8 @@ public partial class MainWindow : Window, IMapWriteHost
             case "open": _ = PickMap(); break;
             case "openFromOsu": _ = OpenFromOsu(); break;
             case "startScreen": _ = GoToStartScreen(); break;
+            case "ks.record": ToggleHitRecording(); break;
+            case "ks.typing": ToggleLive(); break;
             case "updates": _ = CheckForUpdates(quiet: false); break;
             case "importOsz": _ = ImportOsz(); break;
             case "openFolder": OpenMapFolder(); break;
@@ -1570,7 +1583,8 @@ public partial class MainWindow : Window, IMapWriteHost
     private void TogglePlay()
     {
         if (audio is null || model is null) return;
-        if (audio.IsPlaying) StopPlaying();
+        if (IsRecordingHits) StopHitRecording();
+        else if (audio.IsPlaying) StopPlaying();
         else
         {
             // "Start from": the cursor, the left locator, the selection, or the selection falling back to the locator.
@@ -1598,7 +1612,8 @@ public partial class MainWindow : Window, IMapWriteHost
     private void StopPressed()
     {
         if (audio is null) return;
-        if (audio.IsPlaying) StopPlaying();
+        if (IsRecordingHits) StopHitRecording();
+        else if (audio.IsPlaying) StopPlaying();
         else audio.Seek(0);
         ShowPlaying(false);
     }
@@ -1633,6 +1648,7 @@ public partial class MainWindow : Window, IMapWriteHost
         if (audio is not null)
         {
             Lanes.Playhead = audio.Position;
+            if (!audio.IsPlaying && IsRecordingHits) StopHitRecording(); // playback ran out: the take ends there
             if (!audio.IsPlaying && PlayGlyph.Glyph == "Pause") ShowPlaying(false);
 
             // Page when the playhead reaches the right edge (or is off screen to the left), as Cubase does.
