@@ -20,6 +20,8 @@ public partial class MainWindow
         if (prefs is { PlayfieldX: { } x, PlayfieldY: { } y, PlayfieldWidth: > 100 and var w, PlayfieldHeight: > 100 and var h })
             playfieldPlacement = (new PixelPoint((int)x, (int)y), new Size(w, h));
         PlayfieldToggle.IsCheckedChanged += (_, _) => ShowPlayfield(PlayfieldToggle.IsChecked == true);
+        // lazer's approach circle, reverse-arrow edge and Torus digits, for the preview's Argon look.
+        ArgonPieces.LoadAsync(prefs.LazerResources, () => playfieldWindow?.View.InvalidateVisual());
         // An owned window can only open once its owner is on screen.
         if (prefs.PlayfieldOpen) Opened += (_, _) => PlayfieldToggle.IsChecked = true;
         Closed += (_, _) =>
@@ -73,7 +75,7 @@ public partial class MainWindow
         if (!ReferenceEquals(file, playfieldFile))
         {
             playfieldFile = file;
-            window.View.SetMap(file is null ? null : Playfield.Build(file), model?.ComboColours);
+            window.View.SetMap(file is null ? null : Playfield.Build(file), file is null ? null : ComboColoursAsInLazer(file));
         }
 
         window.View.Playhead = Lanes.Playhead;
@@ -87,6 +89,12 @@ public partial class MainWindow
         UpdatePlayfield();
         return playfieldWindow!.View;
     }
+
+    // The map's own combo colours; without any, lazer uses its skin's (Argon's six), not stable's four.
+    private static IReadOnlyList<Avalonia.Media.Color> ComboColoursAsInLazer(OsuFile file) =>
+        OsuHitsound.Lanes.Keysound.KeysoundStore.ComboColours(file) is { Count: > 0 } own
+            ? [.. own.Select(c => Avalonia.Media.Color.FromRgb(c.R, c.G, c.B))]
+            : PlayfieldView.ArgonComboColours;
 
     // A key pressed in the preview window runs the editor's command for it (Space plays, Z and V jump, Ctrl+Z undoes…).
     private void PlayfieldKey(KeyEventArgs e)

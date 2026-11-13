@@ -52,6 +52,18 @@ public sealed record PlayfieldObject(HitObjectKind Kind, double Start, double En
         return segment <= 0 ? Path[index] : PlayfieldPoint.Lerp(Path[index - 1], Path[index], (target - lengths[index - 1]) / segment);
     }
 
+    /// <summary>The path from its start up to a share (0 to 1) of its length: a slider's body while it snakes in.</summary>
+    public IReadOnlyList<PlayfieldPoint> PathTo(double progress)
+    {
+        if (progress >= 1 || Path.Count < 2) return Path;
+        var end = PointAt(progress);
+        double target = Math.Clamp(progress, 0, 1) * lengths![^1];
+        var result = new List<PlayfieldPoint> { Path[0] };
+        for (int i = 1; i < Path.Count && lengths[i] < target; i++) result.Add(Path[i]);
+        result.Add(end);
+        return result;
+    }
+
     /// <summary>Where a slider's ball is at a time: back and forth along the path, once per span.</summary>
     public PlayfieldPoint BallAt(double time)
     {

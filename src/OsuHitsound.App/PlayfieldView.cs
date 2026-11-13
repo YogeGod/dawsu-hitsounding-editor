@@ -8,30 +8,50 @@ using OsuHitsound.Lanes;
 namespace OsuHitsound.App;
 
 /// <summary>
-/// The map preview: osu!'s playfield with the objects on screen at the playhead, drawn as osu!'s editor shows them
-/// (circles with approach circles, slider bodies with their ball, ticks and reverse arrows, spinners) and nothing
-/// else. It only reads the map; it follows <see cref="Playhead"/>.
+/// The map preview: osu!'s playfield with the objects on screen at the playhead, drawn as osu!lazer's editor shows
+/// them with its default (Argon) skin and nothing else. Sizes, colours and timings are lazer's
+/// (osu.Game.Rulesets.Osu: Skinning/Argon, Objects/Drawables and the editor's SuppressHitAnimations); pieces are laid
+/// out in lazer's own units, where a hit circle is 128 across. It only reads the map; it follows <see cref="Playhead"/>.
 /// </summary>
 internal sealed class PlayfieldView : Control
 {
-    /// <summary>How long an object stays, fading, after its time (the editor keeps hit objects visible a moment).</summary>
-    private const double FadeOut = 700; // lazer's editor: HitCircleOverlapMarker.FADE_OUT_EXTENSION
+    // ArgonMainCirclePiece's sizes, for a 128-unit circle.
+    private const double Diameter = 128;
+    private const double BorderThickness = Diameter * 2 / 58;
+    private const double GradientThickness = BorderThickness * 2.5;
+    private const double OuterGradientSize = Diameter - BorderThickness * 4;
+    private const double InnerGradientSize = OuterGradientSize - GradientThickness * 2;
+    private const double InnerFillSize = InnerGradientSize - GradientThickness * 2;
 
-    // osu!'s 4:3 screen around the 512 × 384 playfield: objects near the edge still fit.
+    /// <summary>How long a hit object stays, fading to white, after its time in lazer's editor.</summary>
+    private const double EditorFadeOut = 700;
+    private const double SliderFadeOut = 240; // a slider's body after its end
+
+    // osu!'s 4:3 screen around the 512 × 384 playfield (lazer's playfield is 0.8 of it): objects near the edge still fit.
     private const double ScreenWidth = 640, ScreenHeight = 480;
+
+    /// <summary>lazer's Argon combo colours, used when the map has none of its own.</summary>
+    public static readonly IReadOnlyList<Color> ArgonComboColours =
+    [
+        Color.FromRgb(241, 116, 0), Color.FromRgb(0, 241, 53), Color.FromRgb(0, 82, 241),
+        Color.FromRgb(241, 0, 0), Color.FromRgb(232, 235, 0), Color.FromRgb(92, 0, 241),
+    ];
 
     private static readonly IBrush Background = Paint.Brush("#0b0b0f");
     private static readonly IBrush FieldFill = Paint.Brush("#121218");
     private static readonly IPen FieldPen = new ImmutablePen(Paint.Brush(Colors.White, 0.14), 1);
     private static readonly IBrush Message = Paint.Brush("#9a9aa2");
-    private static readonly IBrush TickBrush = Paint.Brush(Colors.White, 0.85);
-    private static readonly ImmutableSolidColorBrush BallFill =Paint.Brush(Colors.White, 0.9);
-    private static readonly IBrush SpinnerFill = Paint.Brush(Colors.White, 0.06);
+    private static readonly Color SpinnerPink = Color.Parse("#FC618F");
+    private static readonly RelativePoint Top = new(0.5, 0, RelativeUnit.Relative), Bottom = new(0.5, 1, RelativeUnit.Relative);
 
+    // A circle's four fills in one accent colour: dark fill, outer gradient, inner gradient (the dark fill is used twice).
+    private sealed record CircleBrushes(IImmutableBrush Fill, IImmutableBrush Outer, IImmutableBrush Inner, IImmutableBrush Ball);
+
+    private readonly Dictionary<Color, CircleBrushes> brushes = [];
     private readonly Dictionary<PlayfieldObject, Geometry> bodies = [];
-    private readonly Dictionary<(int Combo, double Size), FormattedText> numbers = [];
+    private readonly Dictionary<int, FormattedText> numbers = [];
     private Playfield? field;
-    private IReadOnlyList<Color> colours = [Colors.Orange];
+    private IReadOnlyList<Color> colours = ArgonComboColours;
     private double playhead;
 
     public PlayfieldView() => ClipToBounds = true;
@@ -52,7 +72,7 @@ internal sealed class PlayfieldView : Control
     public void SetMap(Playfield? map, IReadOnlyList<Color>? comboColours)
     {
         field = map;
-        if (comboColours is { Count: > 0 }) colours = comboColours;
+        colours = comboColours is { Count: > 0 } ? comboColours : ArgonComboColours;
         bodies.Clear();
         InvalidateVisual();
     }
@@ -71,155 +91,314 @@ internal sealed class PlayfieldView : Control
         if (field.Mode != 0) { DrawMessage(ctx, bounds, "The map preview shows osu!standard maps only."); return; }
 
         double time = playhead;
+        var frame = new Frame(ctx, field, time, scale, origin);
         // Later objects first, so the next one to hit is on top, as in osu!.
-        var visible = field.Between(time - FadeOut, time + field.Preempt).Reverse().ToList();
+        var visible = field.Between(time - EditorFadeOut, time + field.Preempt).Reverse().ToList();
         foreach (var o in visible)
-        {
-            double alpha = Alpha(o, time);
-            if (alpha <= 0) continue;
-            using (ctx.PushOpacity(alpha))
-                switch (o.Kind)
-                {
-                    case HitObjectKind.Slider: DrawSlider(ctx, o, time, scale, origin); break;
-                    case HitObjectKind.Spinner: DrawSpinner(ctx, o, time, scale, origin); break;
-                    default: DrawHead(ctx, o, time, scale, ToScreen(o.Position, o, scale, origin)); break;
-                }
-        }
+            switch (o.Kind)
+            {
+                case HitObjectKind.Slider: DrawSlider(frame, o); break;
+                case HitObjectKind.Spinner: DrawSpinner(frame, o); break;
+                default: DrawCircle(frame, o); break;
+            }
 
-        // Approach circles over everything.
+        // Approach circles over everything (lazer proxies them above the objects): 4× shrinking to 1× at the object's
+        // time, fading in to 0.9.
         foreach (var o in visible)
         {
             if (o.Kind == HitObjectKind.Spinner || time >= o.Start) continue;
             double appeared = time - (o.Start - field.Preempt);
             if (appeared <= 0) continue;
             double size = 1 + 3 * (o.Start - time) / field.Preempt;
-            double radius = field.Radius * scale;
-            var pen = new ImmutablePen(Paint.Brush(Colour(o), Math.Min(1, appeared / Math.Min(field.FadeIn * 2, field.Preempt)) * 0.9), Math.Max(1.5, radius * 0.09));
-            ctx.DrawEllipse(null, pen, ToScreen(o.Position, o, scale, origin), radius * size, radius * size);
+            using (ctx.PushOpacity(Math.Min(1, appeared / Math.Min(field.FadeIn * 2, field.Preempt)) * 0.9))
+            using (frame.Object(o, o.Position))
+            {
+                // The sprite is 128 wide, enlarged by 128/118 so its ring meets the circle's edge.
+                if (ArgonPieces.HasApproachCircle) ArgonPieces.DrawApproachCircle(ctx, default, Diameter * (Diameter / 118) * size, Colour(o));
+                else ctx.DrawEllipse(null, new ImmutablePen(Paint.Brush(Colour(o)), 4), default, Diameter / 2 * size - 2, Diameter / 2 * size - 2);
+            }
         }
     }
 
-    // Fading in from when the object appears; whole until it ends; then fading away.
-    private double Alpha(PlayfieldObject o, double time)
+    /// <summary>One frame's drawing state: where playfield points land on screen and how big a 128-unit circle is.</summary>
+    private readonly record struct Frame(DrawingContext Ctx, Playfield Field, double Time, double Scale, Point Origin)
     {
-        if (time > o.End) return Math.Clamp(1 - (time - o.End) / FadeOut, 0, 1);
-        return Math.Clamp((time - (o.Start - field!.Preempt)) / field.FadeIn, 0, 1);
+        public Point Screen(PlayfieldObject o, PlayfieldPoint p) =>
+            new(Origin.X + (p.X - o.StackOffset) * Scale, Origin.Y + (p.Y - o.StackOffset) * Scale);
+
+        /// <summary>Draws in lazer's object units (a circle is 128 across) centred on a playfield point, optionally turned and resized.</summary>
+        public DrawingContext.PushedState Object(PlayfieldObject o, PlayfieldPoint at, double rotation = 0, double size = 1)
+        {
+            var centre = Screen(o, at);
+            double s = Field.Radius / (Diameter / 2) * Scale * size;
+            return Ctx.PushTransform(Matrix.CreateRotation(rotation) * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(centre.X, centre.Y));
+        }
+
+        public double FadeIn(PlayfieldObject o) => Math.Clamp((Time - (o.Start - Field.Preempt)) / Field.FadeIn, 0, 1);
     }
 
     private Color Colour(PlayfieldObject o) => colours[o.Colour % colours.Count];
 
-    private static Point ToScreen(PlayfieldPoint p, PlayfieldObject o, double scale, Point origin) =>
-        new(origin.X + (p.X - o.StackOffset) * scale, origin.Y + (p.Y - o.StackOffset) * scale);
+    // lazer's Darken: every channel divided by 1 + amount.
+    private static Color Darken(Color c, double amount) =>
+        Color.FromRgb((byte)(c.R / (1 + amount)), (byte)(c.G / (1 + amount)), (byte)(c.B / (1 + amount)));
 
-    // A hit circle (or a slider's head): whole until its time, then fading faster than the rest of its object.
-    private void DrawHead(DrawingContext ctx, PlayfieldObject o, double time, double scale, Point centre)
+    private static double OutQuint(double t) => 1 - Math.Pow(1 - Math.Clamp(t, 0, 1), 5);
+
+    private static double OutQuad(double t) => 1 - Math.Pow(1 - Math.Clamp(t, 0, 1), 2);
+
+    private CircleBrushes Brushes(Color accent)
     {
-        double radius = field!.Radius * scale;
-        double alpha = o.Kind == HitObjectKind.Slider && time > o.Start ? Math.Clamp(1 - (time - o.Start) / 250, 0, 1) : 1;
+        if (brushes.TryGetValue(accent, out var made)) return made;
+        if (brushes.Count > 64) brushes.Clear();
+        static IImmutableBrush Vertical(Color top, Color bottom) =>
+            new ImmutableLinearGradientBrush([new ImmutableGradientStop(0, top), new ImmutableGradientStop(1, bottom)], startPoint: Top, endPoint: Bottom);
+        return brushes[accent] = new(
+            Paint.Brush(Darken(accent, 4)),
+            Vertical(accent, Darken(accent, 0.1)),
+            Vertical(Darken(accent, 0.5), Darken(accent, 0.6)),
+            Vertical(accent, Darken(accent, 0.5)));
+    }
+
+    /// <summary>
+    /// ArgonMainCirclePiece at the origin, in object units: dark fill, bright outer gradient, darker inner gradient,
+    /// dark centre with the combo number in Torus Bold 52, and the white border ring on top.
+    /// </summary>
+    private void DrawArgonCircle(DrawingContext ctx, Color accent, int number, bool outerFill)
+    {
+        var b = Brushes(accent);
+        if (outerFill) ctx.DrawEllipse(b.Fill, null, default, (Diameter - 1) / 2, (Diameter - 1) / 2);
+        ctx.DrawEllipse(b.Outer, null, default, OuterGradientSize / 2, OuterGradientSize / 2);
+        ctx.DrawEllipse(b.Inner, null, default, InnerGradientSize / 2, InnerGradientSize / 2);
+        ctx.DrawEllipse(b.Fill, null, default, InnerFillSize / 2, InnerFillSize / 2);
+        if (number > 0)
+        {
+            if (ArgonPieces.HasDigits) ArgonPieces.DrawNumber(ctx, new Point(0, -2), 52, number);
+            else
+            {
+                if (!numbers.TryGetValue(number, out var text))
+                {
+                    if (numbers.Count > 400) numbers.Clear();
+                    numbers[number] = text = Paint.Format(number.ToString(System.Globalization.CultureInfo.InvariantCulture), 44, Avalonia.Media.Brushes.White, Paint.UiBold);
+                }
+
+                ctx.DrawText(text, new Point(-text.Width / 2, -2 - text.Height / 2));
+            }
+        }
+
+        Ring(ctx, Avalonia.Media.Brushes.White, Diameter, BorderThickness);
+    }
+
+    // A ring as lazer's masked border: the stroke lies inside the given diameter.
+    private static void Ring(DrawingContext ctx, IImmutableBrush brush, double diameter, double thickness) =>
+        ctx.DrawEllipse(null, new ImmutablePen(brush, thickness), default, (diameter - thickness) / 2, (diameter - thickness) / 2);
+
+    // A circle, or a slider's head. In lazer's editor an object past its time turns white and fades over 700 ms.
+    private void DrawHead(Frame f, PlayfieldObject o, bool outerFill)
+    {
+        bool passed = f.Time > o.Start;
+        double alpha = passed ? Math.Clamp(1 - (f.Time - o.Start) / EditorFadeOut, 0, 1) : f.FadeIn(o);
         if (alpha <= 0) return;
-        using (ctx.PushOpacity(alpha))
-            DrawCircle(ctx, centre, radius, Colour(o), o.Combo);
+        using (f.Ctx.PushOpacity(alpha))
+        using (f.Object(o, o.Position))
+            DrawArgonCircle(f.Ctx, passed ? Colors.White : Colour(o), o.Combo, outerFill);
     }
 
-    private void DrawCircle(DrawingContext ctx, Point centre, double radius, Color colour, int combo)
+    private void DrawCircle(Frame f, PlayfieldObject o)
     {
-        if (SkinTextures.Loaded)
-        {
-            SkinTextures.DrawCircle(ctx, centre, radius, colour, combo);
-            return;
-        }
+        DrawHead(f, o, outerFill: true);
+        if (f.Time < o.Start) return;
 
-        ctx.DrawEllipse(Paint.Brush(colour), new ImmutablePen(Brushes.White, Math.Max(1.5, radius * 0.11)), centre, radius * 0.94, radius * 0.94);
-        if (combo <= 0 || radius < 6) return;
-        var key = (combo, Math.Round(radius));
-        if (!numbers.TryGetValue(key, out var text))
-        {
-            if (numbers.Count > 400) numbers.Clear(); // sizes change while the window is resized
-            numbers[key] = text = Paint.Format(combo.ToString(System.Globalization.CultureInfo.InvariantCulture), radius * 0.95, Brushes.White, Paint.UiBold);
-        }
-
-        ctx.DrawText(text, new Point(centre.X - text.Width / 2, centre.Y - text.Height / 2));
+        // The editor's hit marker (HitCircleOverlapMarker): a ring in the combo colour that grows a little and fades.
+        double passed = (f.Time - o.Start) / EditorFadeOut;
+        double alpha = 0.9 * (1 - passed * passed);
+        if (alpha <= 0) return;
+        using (f.Ctx.PushOpacity(alpha))
+        using (f.Object(o, o.Position, size: 1 + 0.1 * OutQuint((f.Time - o.Start) / (EditorFadeOut / 2))))
+            Ring(f.Ctx, Paint.Brush(Colour(o)), Diameter, 4);
     }
 
-    private void DrawSlider(DrawingContext ctx, PlayfieldObject o, double time, double scale, Point origin)
+    private void DrawSlider(Frame f, PlayfieldObject o)
     {
-        double radius = field!.Radius;
+        var ctx = f.Ctx;
+        double time = f.Time;
         var colour = Colour(o);
-        if (!bodies.TryGetValue(o, out var body)) bodies[o] = body = BodyGeometry(o);
 
-        // The body in playfield units: a white border with the combo colour, darkened, inside it.
-        var toScreen = Matrix.CreateTranslation(-o.StackOffset, -o.StackOffset) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(origin.X, origin.Y);
-        using (ctx.PushOpacity(0.86))
-        using (ctx.PushTransform(toScreen))
+        // The body (ArgonSliderBody): the accent colour as its border, the darkened accent inside, snaking in over
+        // the first third of the approach time. After the slider's end only the body fades, over 240 ms.
+        double bodyAlpha = time > o.End ? Math.Clamp(1 - (time - o.End) / SliderFadeOut, 0, 1) : f.FadeIn(o);
+        double snaked = Math.Clamp((time - (o.Start - f.Field.Preempt)) / (f.Field.Preempt / 3), 0, 1);
+        if (bodyAlpha > 0 && snaked > 0)
         {
-            ctx.DrawGeometry(null, new ImmutablePen(Brushes.White, radius * 2 * 0.94, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), body);
-            ctx.DrawGeometry(null, new ImmutablePen(Paint.Brush(Darken(colour, 0.5)), radius * 2 * 0.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), body);
+            Geometry body;
+            if (snaked >= 1)
+            {
+                if (!bodies.TryGetValue(o, out body!)) bodies[o] = body = BodyGeometry(o.Path);
+            }
+            else body = BodyGeometry(o.PathTo(snaked));
+
+            double unit = f.Field.Radius / (Diameter / 2); // playfield units per object unit
+            double pathRadius = OuterGradientSize / 2 * unit;
+            var toScreen = Matrix.CreateTranslation(-o.StackOffset, -o.StackOffset) * Matrix.CreateScale(f.Scale, f.Scale) * Matrix.CreateTranslation(f.Origin.X, f.Origin.Y);
+            using (ctx.PushOpacity(bodyAlpha))
+            using (ctx.PushTransform(toScreen))
+            {
+                ctx.DrawGeometry(null, new ImmutablePen(Paint.Brush(colour), pathRadius * 2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), body);
+                ctx.DrawGeometry(null, new ImmutablePen(Paint.Brush(Darken(colour, 4), 0.98), (pathRadius - GradientThickness * unit) * 2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), body);
+            }
         }
 
-        Point Screen(PlayfieldPoint p) => ToScreen(p, o, scale, origin);
-        double r = radius * scale;
-
-        // Ticks still to come.
+        // Ticks still to come (ArgonSliderScorePoint): a 12-unit ring in the accent colour. Each appears partway
+        // through its span (SliderTick.TimePreempt) and pops in over 150 ms.
         foreach (double tick in o.TickTimes)
-            if (tick > time) ctx.DrawEllipse(TickBrush, null, Screen(o.BallAt(tick)), r * 0.13, r * 0.13);
-
-        // Reverse arrows at the ends the ball still turns round at: odd repeats at the far end, even ones at the head.
-        bool farArrow = false, headArrow = false;
-        for (int node = 1; node < o.Spans; node++)
         {
-            if (o.Start + node * o.SpanDuration <= time) continue;
-            if (node % 2 == 1) farArrow = true;
-            else headArrow = true;
+            if (tick <= time || o.SpanDuration <= 0) continue;
+            int span = Math.Clamp((int)((tick - o.Start) / o.SpanDuration), 0, o.Spans - 1);
+            double spanStart = o.Start + span * o.SpanDuration;
+            double appears = tick - ((tick - spanStart) / 2 + (span > 0 ? 200 : f.Field.Preempt * 0.66));
+            if (time < appears) continue;
+            using (ctx.PushOpacity(Math.Clamp((time - appears) / 150, 0, 1)))
+            using (f.Object(o, o.BallAt(tick), size: 0.5 + 0.5 * OutQuint((time - appears) / 600)))
+                Ring(ctx, Paint.Brush(colour), 12, 3);
         }
 
-        var path = o.Path;
-        if (farArrow && path.Count > 1) DrawArrow(ctx, Screen(path[^1]), Screen(path[^2]), r);
-        DrawHead(ctx, o, time, scale, Screen(o.Position));
-        if (headArrow && path.Count > 1 && time > o.Start) DrawArrow(ctx, Screen(path[0]), Screen(path[1]), r);
+        // Reverse arrows at the ends the ball still turns round at. The first waits for the body to snake in; later
+        // ones appear two spans ahead. Each is gone at its own time.
+        for (int node = o.Spans - 1; node >= 1; node--)
+        {
+            double nodeTime = o.Start + node * o.SpanDuration;
+            if (time >= nodeTime || o.Path.Count < 2) continue;
+            double appears = node == 1 ? o.Start - f.Field.Preempt + f.Field.Preempt / 3 : nodeTime - o.SpanDuration * 2;
+            if (time < appears) continue;
+            bool atEnd = node % 2 == 1;
+            var at = atEnd ? o.Path[^1] : o.Path[0];
+            var towards = at;
+            for (int i = atEnd ? o.Path.Count - 1 : 0; i >= 0 && i < o.Path.Count; i += atEnd ? -1 : 1)
+                if (o.Path[i].DistanceTo(at) > 1e-3) { towards = o.Path[i]; break; }
+            using (ctx.PushOpacity(Math.Clamp((time - appears) / 150, 0, 1)))
+            using (f.Object(o, at, rotation: Math.Atan2(towards.Y - at.Y, towards.X - at.X)))
+                DrawReverseArrow(ctx, colour, time - appears);
+        }
 
-        // The ball and its follow circle while the slider runs.
+        DrawHead(f, o, outerFill: false);
+
+        // The ball (ArgonSliderBall) while the slider runs.
         if (time >= o.Start && time <= o.End)
         {
-            var ball = Screen(o.BallAt(time));
-            ctx.DrawEllipse(null, new ImmutablePen(Paint.Brush(Colors.White, 0.55), Math.Max(1.5, r * 0.07)), ball, r * 2.4, r * 2.4); // lazer's follow area
-            ctx.DrawEllipse(Paint.Brush(colour), new ImmutablePen(BallFill, Math.Max(1.5, r * 0.12)), ball, r * 0.9, r * 0.9);
+            var ball = o.BallAt(time);
+            var ahead = o.BallAt(time + 1);
+            var behind = o.BallAt(time - 1);
+            double angle = Math.Atan2(ahead.Y - behind.Y, ahead.X - behind.X);
+            using (ctx.PushOpacity(Math.Clamp((time - o.Start) / 50, 0, 1)))
+            {
+                using (f.Object(o, ball))
+                {
+                    ctx.DrawEllipse(Brushes(colour).Ball, null, default, OuterGradientSize / 2, OuterGradientSize / 2);
+                    Ring(ctx, Avalonia.Media.Brushes.White, OuterGradientSize, GradientThickness);
+                }
+
+                // Font Awesome's angle-right, 48 units, squeezed to 0.6 × 0.8 and turned the way the ball travels.
+                using (f.Object(o, ball, rotation: angle))
+                using (ctx.PushTransform(Matrix.CreateScale(0.6, 0.8)))
+                    Chevron(ctx, Avalonia.Media.Brushes.White, 0, 48);
+            }
         }
     }
 
-    private static Geometry BodyGeometry(PlayfieldObject o)
+    private static Geometry BodyGeometry(IReadOnlyList<PlayfieldPoint> path)
     {
         var geometry = new StreamGeometry();
         using var g = geometry.Open();
-        g.BeginFigure(new Point(o.Path[0].X, o.Path[0].Y), false);
+        g.BeginFigure(new Point(path[0].X, path[0].Y), false);
         // A slider with no length is still drawn as a dot: a line needs two points.
-        if (o.Path.Count == 1) g.LineTo(new Point(o.Path[0].X + 0.01, o.Path[0].Y));
-        for (int i = 1; i < o.Path.Count; i++) g.LineTo(new Point(o.Path[i].X, o.Path[i].Y));
+        if (path.Count == 1) g.LineTo(new Point(path[0].X + 0.01, path[0].Y));
+        for (int i = 1; i < path.Count; i++) g.LineTo(new Point(path[i].X, path[i].Y));
         g.EndFigure(false);
         return geometry;
     }
 
-    // A chevron at an end of the slider, pointing back along its body.
-    private static void DrawArrow(DrawingContext ctx, Point at, Point towards, double radius)
+    /// <summary>
+    /// ArgonReverseArrow, pointing along +X in object units: a white 40 × 20 pill with a dark double chevron, and the
+    /// edge piece round the circle. Every 300 ms the pill jumps to 1.3× and the edge 12 units back, then both settle.
+    /// </summary>
+    private void DrawReverseArrow(DrawingContext ctx, Color accent, double sinceAppeared)
     {
-        double angle = Math.Atan2(towards.Y - at.Y, towards.X - at.X);
-        var pen = new ImmutablePen(Brushes.White, Math.Max(2, radius * 0.2), lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
-        using (ctx.PushTransform(Matrix.CreateRotation(angle) * Matrix.CreateTranslation(at.X, at.Y)))
+        const double moveOut = 35, moveIn = 250, total = 300;
+        double loop = sinceAppeared % total;
+        double pulse = loop < moveOut ? OutQuad(loop / moveOut) : 1 - OutQuad((loop - moveOut) / moveIn);
+
+        if (ArgonPieces.HasRepeatEdge) ArgonPieces.DrawRepeatEdge(ctx, new Point(-12 * pulse, 0), OuterGradientSize);
+        using (ctx.PushTransform(Matrix.CreateScale(1 + 0.3 * pulse, 1 + 0.3 * pulse)))
         {
-            ctx.DrawLine(pen, new Point(-radius * 0.28, -radius * 0.42), new Point(radius * 0.3, 0));
-            ctx.DrawLine(pen, new Point(radius * 0.3, 0), new Point(-radius * 0.28, radius * 0.42));
+            ctx.DrawRectangle(Avalonia.Media.Brushes.White, null, new Rect(-20, -10, 40, 20), 10, 10);
+            var dark = Brushes(accent).Fill;
+            Chevron(ctx, dark, -3.2, 16);
+            Chevron(ctx, dark, 3.2, 16);
         }
     }
 
-    // A spinner: its disc in the middle, with a ring that closes in as it runs out.
-    private static void DrawSpinner(DrawingContext ctx, PlayfieldObject o, double time, double scale, Point origin)
+    // One Font Awesome "angle" chevron pointing along +X, for an icon of the given size centred on the origin.
+    private static void Chevron(DrawingContext ctx, IImmutableBrush brush, double x, double size)
     {
-        var centre = new Point(origin.X + Playfield.Width / 2 * scale, origin.Y + Playfield.Height / 2 * scale);
-        double outer = 150 * scale;
-        ctx.DrawEllipse(SpinnerFill, new ImmutablePen(Paint.Brush(Colors.White, 0.8), Math.Max(2, 4 * scale)), centre, outer, outer);
-        ctx.DrawEllipse(Brushes.White, null, centre, 5 * scale, 5 * scale);
-        double left = o.End > o.Start ? Math.Clamp((o.End - time) / (o.End - o.Start), 0, 1) : 0;
-        double ring = (12 + (150 - 12) * left) * scale;
-        ctx.DrawEllipse(null, new ImmutablePen(Paint.Brush(Color.Parse("#7fd4ff"), 0.9), Math.Max(1.5, 2.5 * scale)), centre, ring, ring);
+        var pen = new ImmutablePen(brush, size * 0.13, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        double w = size * 0.14, h = size * 0.27;
+        ctx.DrawLine(pen, new Point(x - w, -h), new Point(x + w, 0));
+        ctx.DrawLine(pen, new Point(x + w, 0), new Point(x - w, h));
+    }
+
+    /// <summary>
+    /// A spinner as Argon's disc looks before anyone spins it (the editor never does): the small pink fill, the ring
+    /// of 25 ticks, the two thin ring arcs above and below, the two wide arcs at the sides and the white centre.
+    /// It grows in during the approach time and fades over 240 ms after its end.
+    /// </summary>
+    private static void DrawSpinner(Frame f, PlayfieldObject o)
+    {
+        var ctx = f.Ctx;
+        double alpha = f.Time > o.End ? Math.Clamp(1 - (f.Time - o.End) / SliderFadeOut, 0, 1) : f.FadeIn(o);
+        if (alpha <= 0) return;
+
+        // The disc opens to 0.2 in the first quarter of the approach time, then to full size over the next half.
+        double preempt = f.Field.Preempt, since = f.Time - (o.Start - preempt);
+        double grown = since < preempt / 4 ? 0.2 * OutQuint(since / (preempt / 4)) : 0.2 + 0.8 * OutQuint((since - preempt / 4) / (preempt / 2));
+        double radius = Playfield.Height * 0.5 * f.Scale * grown;
+        var centre = new Point(f.Origin.X + Playfield.Width / 2 * f.Scale, f.Origin.Y + Playfield.Height / 2 * f.Scale);
+        if (radius < 1) return;
+
+        using (ctx.PushOpacity(alpha))
+        using (ctx.PushTransform(Matrix.CreateTranslation(centre.X, centre.Y)))
+        {
+            ctx.DrawEllipse(Paint.Brush(SpinnerPink, 0.2), null, default, radius * 0.1, radius * 0.1);
+
+            var tick = Paint.Brush(Colors.White, 0.2);
+            double unit = radius / 192;
+            for (int i = 0; i < 25; i++)
+                using (ctx.PushTransform(Matrix.CreateRotation(-(i / 25.0 * 360 + 120) * Math.PI / 180)))
+                    ctx.DrawRectangle(tick, null, new Rect(radius - 34 * unit, -2.5 * unit, 30 * unit, 5 * unit), 2.5 * unit, 2.5 * unit);
+
+            // Thin ring arcs (31 % of the circle each, top and bottom) and wide ones (15 % each, left and right).
+            Arc(ctx, new ImmutablePen(Avalonia.Media.Brushes.White, radius * 0.02), radius * 0.99, -90, 0.31 * 360);
+            Arc(ctx, new ImmutablePen(Avalonia.Media.Brushes.White, radius * 0.02), radius * 0.99, 90, 0.31 * 360);
+            Arc(ctx, new ImmutablePen(Paint.Brush(Colors.White, 0.25), radius * 0.12), radius * 0.94, 0, 0.15 * 360);
+            Arc(ctx, new ImmutablePen(Paint.Brush(Colors.White, 0.25), radius * 0.12), radius * 0.94, 180, 0.15 * 360);
+
+            double middle = 40 * unit * 0.8;
+            ctx.DrawEllipse(null, new ImmutablePen(Avalonia.Media.Brushes.White, Math.Max(1.5, 4 * unit)), default, middle, middle);
+        }
+    }
+
+    // An arc centred on an angle (degrees, 0 = right, 90 = down), sweeping the given degrees.
+    private static void Arc(DrawingContext ctx, IPen pen, double radius, double centreAngle, double sweep)
+    {
+        double from = (centreAngle - sweep / 2) * Math.PI / 180, to = (centreAngle + sweep / 2) * Math.PI / 180;
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(radius * Math.Cos(from), radius * Math.Sin(from)), false);
+            g.ArcTo(new Point(radius * Math.Cos(to), radius * Math.Sin(to)), new Size(radius, radius), 0, sweep > 180, SweepDirection.Clockwise);
+            g.EndFigure(false);
+        }
+
+        ctx.DrawGeometry(null, pen, geometry);
     }
 
     private static void DrawMessage(DrawingContext ctx, Rect bounds, string message)
@@ -229,6 +408,4 @@ internal sealed class PlayfieldView : Control
         text.TextAlignment = TextAlignment.Center;
         ctx.DrawText(text, new Point(16, (bounds.Height - text.Height) / 2));
     }
-
-    private static Color Darken(Color c, double amount) => Color.FromRgb((byte)(c.R * amount), (byte)(c.G * amount), (byte)(c.B * amount));
 }

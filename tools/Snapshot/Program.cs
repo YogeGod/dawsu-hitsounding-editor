@@ -118,9 +118,14 @@ helpWindow.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "07-help.png"));
 if (model.Objects.Count > 0)
 {
     double firstObject = model.Objects[0].Start;
-    foreach (var (offset, n) in new[] { 0.0, 2500, 10200, 30450 }.Select((o, n) => (o, n)))
+    // lazer's pieces (approach circle, Torus digits) load in the background: give them a moment.
+    for (int i = 0; i < 60 && !ArgonPieces.HasDigits; i++) { Thread.Sleep(50); Pump(); }
+    double[] moments = args.Length > 4 ? [.. args[4].Split(',').Select(double.Parse)] : [0.0, 2500, 10200, 30450];
+    foreach (var (offset, n) in moments.Select((o, n) => (o, n)))
     {
         window.ShowMapPreviewForSnapshot(firstObject + offset);
+        var previewWindow = window.OwnedWindows.OfType<PlayfieldWindow>().First();
+        (previewWindow.Width, previewWindow.Height) = (960, 720);
         Pump();
         window.OwnedWindows.OfType<PlayfieldWindow>().First().CaptureRenderedFrame()?.Save(Path.Combine(outDir, $"13-map-preview-{n}.png"));
     }
