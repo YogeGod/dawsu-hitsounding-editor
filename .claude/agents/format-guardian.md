@@ -15,7 +15,7 @@ The main session gives you a base ref (default: the merge-base with `origin/main
 2. **Hitsound meaning.** Does the change alter which sample osu! would play? Use `docs/osu-hitsound-rules.md` (sample set and index inheritance, additions, green lines).
 3. **All-or-nothing writes.** Copy hitsounds and multi-target writes must plan every target first and roll back on failure.
 4. **Original maps.** No test, tool or code path may write into `F:\osu!\Songs`.
-5. **Tests.** Run `dotnet test tests/OsuHitsound.Format.Tests` and `dotnet test tests/OsuHitsound.Lanes.Tests`, plus `dotnet run --project tools/RoundTrip -- corpus` when `corpus/` has maps.
+5. **Tests.** Run `dotnet test tests/OsuHitsound.Format.Tests` and `dotnet test tests/OsuHitsound.Lanes.Tests`. If they report skipped corpus tests, `corpus/` is missing (common in worktrees); say so, because the change is then unproven on real maps.
 
 ## Report
 - A verdict: **safe**, **needs changes** or **can't tell**.

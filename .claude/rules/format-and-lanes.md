@@ -17,6 +17,6 @@ Mappers don't trust hitsound tools with their maps, so this code has the stricte
 - Never open or write maps in `F:\osu!\Songs` from tests or tools. Use copies, `testmaps/` or `corpus/`.
 
 ## Before you say it works
-1. `dotnet test tests/OsuHitsound.Format.Tests` and `dotnet test tests/OsuHitsound.Lanes.Tests`.
-2. `dotnet run --project tools/RoundTrip -- corpus` if `corpus/` has maps (it is git-ignored; `tools/build-corpus.ps1` fills it from the local lazer library). If it is empty, say the corpus round trip was not run.
-3. Report the pass and fail counts you actually saw.
+1. Make sure `corpus/` exists. The corpus tests inside the two test projects skip silently without it, and new worktrees don't have it. See step 0 of the `verify-dawsu` skill for the junction command.
+2. `dotnet test tests/OsuHitsound.Format.Tests` and `dotnet test tests/OsuHitsound.Lanes.Tests`.
+3. Report the pass, fail and **skipped** counts you actually saw. A skipped corpus test means the change is not proven on real maps.
