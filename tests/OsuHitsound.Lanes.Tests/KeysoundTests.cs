@@ -295,6 +295,33 @@ public class KeysoundStoreTests : IDisposable
     }
 
     [Fact]
+    public void Bookmarks_start_from_the_reference_and_are_kept_with_the_project_only()
+    {
+        var osu = MakeMap();
+        File.WriteAllText(osu, File.ReadAllText(osu).Replace("[Difficulty]", "[Editor]\nBookmarks: 1500,3500\n\n[Difficulty]"));
+        var project = KeysoundStore.Create(osu, Path.Combine(root, "Project"), []);
+        var doc = KeysoundStore.Open(project);
+        Assert.Equal([1500.0, 3500.0], doc.Session.State.Bookmarks.Select(b => b.Time));
+        Assert.False(doc.Session.IsEdited);
+
+        doc.Session.AddBookmark(2500, "Chorus");
+        doc.Session.AddBookmark(2500.4); // within a millisecond of one: nothing changes
+        doc.Session.RemoveBookmarkNear(1510, 20);
+        doc.Session.RenameBookmark(3500, "Outro");
+        Assert.Equal([(2500.0, "Chorus"), (3500.0, "Outro")], doc.Session.State.Bookmarks.Select(b => (b.Time, b.Label)));
+        doc.Session.Undo(); // each change is an undo step, as in the Hitsound editor
+        Assert.Equal("", doc.Session.State.Bookmarks[^1].Label);
+        doc.Session.Redo();
+        KeysoundStore.Save(doc);
+
+        var reopened = KeysoundStore.Open(project);
+        Assert.Equal([(2500.0, "Chorus"), (3500.0, "Outro")], reopened.Session.State.Bookmarks.Select(b => (b.Time, b.Label)));
+        // The project keeps them; the reference snapshot and the source map are never written.
+        Assert.Contains("Bookmarks: 1500,3500", File.ReadAllText(osu));
+        Assert.Contains("Bookmarks: 1500,3500", File.ReadAllText(Directory.GetFiles(Path.Combine(root, "Project", KeysoundStore.ReferenceFolder), "*.osu").Single()));
+    }
+
+    [Fact]
     public void Open_reads_timing_and_gameplay_objects_from_the_snapshot()
     {
         var doc = KeysoundStore.Open(KeysoundStore.Create(MakeMap(), Path.Combine(root, "Project"), []));

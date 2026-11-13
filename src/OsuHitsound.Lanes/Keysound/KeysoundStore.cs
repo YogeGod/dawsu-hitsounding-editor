@@ -28,6 +28,8 @@ public sealed record KeysoundProjectFile
     public double? LocatorLeft { get; init; }
     public double? LocatorRight { get; init; }
     public bool Cycle { get; init; }
+    /// <summary>The timeline bookmarks (ms); null in projects saved before they were kept, which start from the reference's.</summary>
+    public List<KeyBookmark>? Bookmarks { get; init; }
 }
 
 /// <summary>
@@ -205,7 +207,12 @@ public static class KeysoundStore
         var song = settings.AudioFilename.Length > 0 ? reference.Find(settings.AudioFilename) : null;
         if (song is null) warnings.Add("The reference's song audio is missing from the project. You can edit, but Generate needs the song.");
 
-        var session = new KeysoundSession(new KeysoundState(project.Tracks));
+        // Bookmarks: the project's own, or the reference's (in timeline ms) until the project keeps some.
+        var bookmarks = (project.Bookmarks?.Where(b => b is not null && double.IsFinite(b.Time) && b.Time is >= 0 and <= 86_400_000)
+                .Select(b => b with { Label = (b.Label ?? "").Length > 120 ? b.Label![..120] : b.Label ?? "" })
+            ?? file.Bookmarks.Select(b => new KeyBookmark(Math.Max(0, b + settings.TimeOffset))))
+            .GroupBy(b => Math.Round(b.Time)).Select(g => g.First()).OrderBy(b => b.Time);
+        var session = new KeysoundSession(new KeysoundState(project.Tracks) { Bookmarks = [.. bookmarks] });
         var ids = project.Tracks.Select(t => t.Id).ToHashSet();
         session.Muted.UnionWith(project.Muted.Where(ids.Contains));
         session.Soloed.UnionWith(project.Soloed.Where(ids.Contains));
@@ -249,6 +256,7 @@ public static class KeysoundStore
             LocatorLeft = document.LocatorLeft,
             LocatorRight = document.LocatorRight,
             Cycle = document.Cycle,
+            Bookmarks = [.. state.Bookmarks],
         });
         session.MarkSaved(state);
     }

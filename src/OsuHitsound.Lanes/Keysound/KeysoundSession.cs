@@ -139,6 +139,29 @@ public sealed class KeysoundSession
 
     // Track commands. Each is one undo step.
 
+    /// <summary>Adds a bookmark (an undo step); one already within a millisecond stays as it is.</summary>
+    public void AddBookmark(double time, string label = "")
+    {
+        if (!double.IsFinite(time) || State.Bookmarks.Any(b => Math.Abs(b.Time - time) < 1)) return;
+        Change("Add bookmark", s => s with { Bookmarks = [.. s.Bookmarks.Add(new KeyBookmark(Math.Max(0, time), label)).OrderBy(b => b.Time)] });
+    }
+
+    /// <summary>Removes the bookmark nearest <paramref name="time"/> within <paramref name="tolerance"/> ms, if any.</summary>
+    public void RemoveBookmarkNear(double time, double tolerance)
+    {
+        if (NearestBookmark(time, tolerance) is not { } b) return;
+        Change("Remove bookmark", s => s with { Bookmarks = s.Bookmarks.Remove(b) });
+    }
+
+    public void RenameBookmark(double time, string label)
+    {
+        if (NearestBookmark(time, 1) is not { } b || b.Label == label) return;
+        Change("Rename bookmark", s => s with { Bookmarks = s.Bookmarks.Replace(b, b with { Label = label }) });
+    }
+
+    public KeyBookmark? NearestBookmark(double time, double tolerance) =>
+        State.Bookmarks.Where(b => Math.Abs(b.Time - time) <= tolerance).MinBy(b => Math.Abs(b.Time - time));
+
     public KeyTrack AddTrack(string name)
     {
         var track = KeyTrack.Create(name);
