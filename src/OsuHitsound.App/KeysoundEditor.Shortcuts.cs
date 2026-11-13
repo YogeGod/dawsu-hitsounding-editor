@@ -31,6 +31,13 @@ internal static class KeysoundShortcuts
         ["navUp"] = Areas.KsNoteEditing, ["navDown"] = Areas.KsNoteEditing, ["navAddUp"] = Areas.KsNoteEditing, ["navAddDown"] = Areas.KsNoteEditing,
         ["selectPrevious"] = Areas.KsNoteEditing, ["selectNext"] = Areas.KsNoteEditing, ["addPrevious"] = Areas.KsNoteEditing, ["addNext"] = Areas.KsNoteEditing,
         ["rowsOut"] = Areas.KsNoteEditing, ["rowsIn"] = Areas.KsNoteEditing,
+        // The Hitsound editor's other editing and timeline commands, with the same keys.
+        ["jumpToSelection"] = Areas.KsPlayback, ["addBookmark"] = Areas.KsPlayback, ["removeBookmark"] = Areas.KsPlayback,
+        ["previousBookmark"] = Areas.KsPlayback, ["nextBookmark"] = Areas.KsPlayback,
+        ["toolMute"] = Areas.KsNoteEditing, ["toolRamp"] = Areas.KsNoteEditing, ["quantizeDialog"] = Areas.KsNoteEditing,
+        ["repeat"] = Areas.KsNoteEditing, ["gridLeft"] = Areas.KsNoteEditing, ["gridRight"] = Areas.KsNoteEditing,
+        ["laneUp"] = Areas.KsNoteEditing, ["laneDown"] = Areas.KsNoteEditing,
+        ["toolRange"] = Areas.KsNoteEditing, ["editRange"] = Areas.KsNoteEditing, ["scaleByVolume"] = Areas.KsNoteEditing,
     };
 
     /// <summary>The Keysound area of a shared command the key editor runs too, else null (the key editor's own "ks." ones included).</summary>
@@ -66,6 +73,13 @@ public partial class KeysoundEditor
             case "setRight": SetLocator(false, Roll.Playhead); return true;
             case "locatorsToSelection": LocatorsToSelection(); return true;
             case "playLocatorRange": PlayLocatorRange(); return true;
+            case "jumpToSelection":
+                // Alt+Space, as in the Hitsound editor: the playhead to the first selected note.
+                if (Roll.Selected.Count == 0) SetStatus("Select a note first: Alt+Space moves the playhead to it.");
+                else Seek(Math.Max(0, doc.Tempo.TimeAt(Roll.Selected.Min(n => n.Start))));
+                return true;
+            case "previousBookmark": JumpToBookmark(-1); return true;
+            case "nextBookmark": JumpToBookmark(1); return true;
             case "first": Seek(FirstOrLast(first: true)); return true;
             case "last": Seek(FirstOrLast(first: false)); return true;
 
@@ -73,16 +87,20 @@ public partial class KeysoundEditor
             case "toolGrab": SetTool(KeyTool.Grab); return true;
             case "toolDraw": SetTool(KeyTool.Draw); return true;
             case "toolErase": SetTool(KeyTool.Erase); return true;
+            case "toolMute": SetTool(KeyTool.Mute); return true;
+            case "toolRange": SetTool(KeyTool.Range); return true;
+            case "toolRamp": SetTool(KeyTool.Ramp); return true;
             case "ks.toolSplit": SetTool(KeyTool.Split); return true;
             case "ks.toolGlue": SetTool(KeyTool.Glue); return true;
             case "snap": SnapToggle.IsChecked = SnapToggle.IsChecked != true; return true;
             case var s when s.StartsWith("snap", StringComparison.Ordinal) && int.TryParse(s[4..], out int n):
-                int index = Array.FindIndex(Snaps, x => x.Divisions == n);
+                int index = n > 0 ? Array.IndexOf(MainWindow.SnapOptions, new SnapSpacing(1, n)) : -1;
                 if (index >= 0) SnapBox.SelectedIndex = index;
                 return true;
 
             case "undo": case "redo": case "cut": case "copy": case "paste": case "duplicate": case "delete":
-            case "selectAll": case "quantize": case "zoomIn": case "zoomOut":
+            case "selectAll": case "quantize": case "zoomIn": case "zoomOut": case "quantizeDialog": case "repeat":
+            case "addBookmark": case "removeBookmark": case "editRange": case "scaleByVolume":
                 _ = RunCommand(id);
                 return true;
             case "deselect": if (!Roll.CancelDrag()) Roll.Deselect(); return true;
@@ -92,6 +110,8 @@ public partial class KeysoundEditor
             case "volumeUpFine": Roll.SetSelectionVelocity(v => v + 1); return true;
             case "volumeDownFine": Roll.SetSelectionVelocity(v => v - 1); return true;
             case "nudgeRight": Roll.Nudge(1); return true;
+            case "gridLeft": Roll.NudgeToGrid(-1); return true;
+            case "gridRight": Roll.NudgeToGrid(1); return true;
 
             case "ks.record": ToggleRecord(); return true;
             case "ks.typing": ToggleTyping(); return true;
@@ -100,6 +120,9 @@ public partial class KeysoundEditor
             case "navDown": Roll.Transpose(-1); return true;
             case "navAddUp": Roll.Transpose(12); return true;
             case "navAddDown": Roll.Transpose(-12); return true;
+            // Ctrl+Alt+Up/Down move the selection a row, as Up/Down do: in the key editor, a semitone.
+            case "laneUp": Roll.Transpose(1); return true;
+            case "laneDown": Roll.Transpose(-1); return true;
             case "selectPrevious": Roll.SelectNeighbour(-1, extend: false); return true;
             case "selectNext": Roll.SelectNeighbour(1, extend: false); return true;
             case "addPrevious": Roll.SelectNeighbour(-1, extend: true); return true;
@@ -143,6 +166,13 @@ public partial class KeysoundEditor
     // P: the locators around the selected notes.
     private void LocatorsToSelection()
     {
+        if (Roll.Range is { } range)
+        {
+            (locatorLeft, locatorRight) = (range.Start, range.End);
+            ShowLocators();
+            return;
+        }
+
         var notes = Roll.Selected;
         if (doc is null || notes.Count == 0) return;
         locatorLeft = Math.Max(0, doc.Tempo.TimeAt(notes.Min(n => n.Start)));
@@ -154,10 +184,12 @@ public partial class KeysoundEditor
     public void RefreshShortcutTips()
     {
         static string Keys(string id) => EditorCommands.All.FirstOrDefault(c => c.Id == id)?.KeysText is { Length: > 0 } k ? $" ({k})" : "";
-        ToolTip.SetTip(SelectTool, $"Object Selection{Keys("toolSelect")}: click or box-select notes; drag to move (Ctrl: one direction, Alt: copy); drag either edge to resize; Ctrl+Shift+drag changes velocity; Shift+double-click selects the later notes of that pitch");
-        ToolTip.SetTip(GrabTool, $"Grab{Keys("toolGrab")}: drag to pan time and keys");
-        ToolTip.SetTip(DrawTool, $"Draw{Keys("toolDraw")}: click to add a note at the insert velocity, drag right to set its length; clicking a note deletes it");
+        ToolTip.SetTip(SelectTool, $"Select and move{Keys("toolSelect")}. Click, Ctrl/Shift+click, drag a box; drag notes to move them (Ctrl: one direction, Ctrl+Alt: copy); drag either edge to resize; Ctrl+Shift+drag changes velocity. Double-click empty space inserts a note; Shift+double-click selects the later notes of that pitch.");
+        ToolTip.SetTip(GrabTool, $"Grab{Keys("toolGrab")}. Drag the canvas to pan time and keys. Space plays or stops.");
+        ToolTip.SetTip(DrawTool, $"Draw{Keys("toolDraw")}, or hold Alt. Click to add a note at the insert velocity, drag right to set its length; clicking a note deletes it.");
         ToolTip.SetTip(EraseTool, $"Erase{Keys("toolErase")}: click or drag across notes to delete them");
+        ToolTip.SetTip(MuteTool, $"Mute{Keys("toolMute")}: click a note to silence it while listening. Preview only: never saved, and Generate still renders it.");
+        ToolTip.SetTip(RampTool, $"Ramp{Keys("toolRamp")}: drag in the velocity lane to draw a velocity ramp");
         ToolTip.SetTip(SplitTool, $"Split{Keys("ks.toolSplit")}: click a note to split it at the (snapped) pointer; on a selected note, every selected note splits there");
         ToolTip.SetTip(GlueTool, $"Glue{Keys("ks.toolGlue")}: click a note to join it with the next note of the same pitch");
         ToolTip.SetTip(RecordButton, $"Record{Keys("ks.record")}: from the playhead into the selected track, from your MIDI keyboard. Notes starting in the recorded range are replaced; Space or Record stops.");

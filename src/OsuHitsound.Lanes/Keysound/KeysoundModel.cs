@@ -137,6 +137,9 @@ public sealed record KeyTrack(Guid Id, string Name, KeyInstrument Instrument, Im
 /// <summary>Everything Undo restores: the tracks, in order, with their notes.</summary>
 public sealed record KeysoundState(ImmutableList<KeyTrack> Tracks)
 {
+    /// <summary>Bookmarks on the timeline (ms, sorted): the reference's at first, then the project's own edits.</summary>
+    public ImmutableList<KeyBookmark> Bookmarks { get; init; } = [];
+
     public KeyTrack? Track(Guid id) => Tracks.FirstOrDefault(t => t.Id == id);
 
     public KeysoundState WithTrack(Guid id, Func<KeyTrack, KeyTrack> change)
@@ -145,3 +148,6 @@ public sealed record KeysoundState(ImmutableList<KeyTrack> Tracks)
         return i < 0 ? this : this with { Tracks = Tracks.SetItem(i, change(Tracks[i])) };
     }
 }
+
+/// <summary>A timeline bookmark (ms) with an optional label, as the Hitsound editor's.</summary>
+public sealed record KeyBookmark(double Time, string Label = "");

@@ -1,7 +1,4 @@
-using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Layout;
 
 namespace OsuHitsound.App;
 
@@ -25,25 +22,6 @@ public partial class MainWindow
     /// <summary>The open (or last) picker; the headless checks read it.</summary>
     internal Flyout? ToolPicker { get; private set; }
 
-    private void ShowToolPicker()
-    {
-        var picker = new Flyout { Placement = PlacementMode.Pointer, ShowMode = FlyoutShowMode.Standard };
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        foreach (var (tool, glyph, name) in PickerTools)
-        {
-            var button = new ToggleButton
-            {
-                Content = new AppIcon { Glyph = glyph },
-                IsChecked = Lanes.Tool == tool,
-            };
-            button.Classes.Add("tool");
-            ToolTip.SetTip(button, name);
-            AutomationProperties.SetName(button, name);
-            button.Click += (_, _) => { SetTool(tool); picker.Hide(); };
-            row.Children.Add(button);
-        }
-        picker.Content = row;
-        ToolPicker = picker;
-        picker.ShowAt(Lanes, showAtPointer: true);
-    }
+    private void ShowToolPicker() =>
+        ToolPicker = global::OsuHitsound.App.ToolPicker.Show(Lanes, PickerTools.Select(t => (t.Glyph, t.Name, Lanes.Tool == t.Tool, (Action)(() => SetTool(t.Tool)))));
 }

@@ -160,7 +160,9 @@ public class PreferencesAndHelpTests : IDisposable
         Assert.Equal(Areas.KsPlayback, EditorCommands.Get("play").KeysoundGroup);
         Assert.Equal(Areas.KsNoteEditing, EditorCommands.Get("snap3").KeysoundGroup);
         Assert.Null(EditorCommands.Get("ks.sync").KeysoundGroup);
-        Assert.Null(EditorCommands.Get("gridLeft").KeysoundGroup); // the key editor has no grid move
+        Assert.Equal(Areas.KsNoteEditing, EditorCommands.Get("gridLeft").KeysoundGroup); // the key editor moves notes to grid lines too
+        Assert.Equal(Areas.KsNoteEditing, EditorCommands.Get("toolRange").KeysoundGroup); // and has the Range tool
+        Assert.Null(EditorCommands.Get("filter").KeysoundGroup); // it has no lanes to filter
         Assert.Null(EditorCommands.Get("save").KeysoundGroup);
     }
 }

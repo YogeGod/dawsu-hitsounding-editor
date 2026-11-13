@@ -1,7 +1,7 @@
 namespace OsuHitsound.App;
 
-/// <summary>Keysound mode's inspector: Hitsound mode's card pane with the Tracks, Instrument and MIDI input cards.</summary>
+/// <summary>Keysound mode's inspector: Hitsound mode's card pane with the Selection, Tracks, Instrument, MIDI input and Bookmarks cards.</summary>
 internal sealed class KeysoundInspector() : CardPanel("Inspector")
 {
-    public const string TracksCard = "tracks", InstrumentCard = "instrument", MidiCard = "midi";
+    public const string SelectionCard = "selection", TracksCard = "tracks", InstrumentCard = "instrument", MidiCard = "midi", BookmarksCard = "bookmarks";
 }

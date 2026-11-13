@@ -280,8 +280,6 @@ public partial class MainWindow : Window, IMapWriteHost
         };
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
         SaveButton.Click += (_, _) => SaveClicked();
-        KsSaveButton.Click += (_, _) => _ = SaveKeysound();
-        KsOpenButton.Click += async (_, _) => await PickMap();
         DrumDetectButton.Click += async (_, _) => await ShowDrumAutoFill();
         DrumVstButton.Click += (_, _) => ShowDrumVst();
         SelectionQuantizeButton.Click += (_, _) => Run("quantizeDialog");

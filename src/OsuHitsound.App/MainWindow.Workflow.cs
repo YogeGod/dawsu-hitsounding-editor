@@ -9,7 +9,9 @@ namespace OsuHitsound.App;
 public partial class MainWindow
 {
     private string? workflowWarning;
-    private string WorkflowFeedback => string.Join("\n\n", new[] { workflowWarning, audioError, workflowResult }.Where(s => !string.IsNullOrEmpty(s)));
+    // In Keysound mode the details icon shows the key editor's message, as Hitsound mode shows its own.
+    private string WorkflowFeedback => string.Join("\n\n", (Keys.Document is not null ? new[] { audioError, keysoundMessage } : new[] { workflowWarning, audioError, workflowResult })
+        .Where(s => !string.IsNullOrEmpty(s)));
 
     private void SetupWorkflowFeedback() => WorkflowStatusButton.Click += async (_, _) => await ShowWorkflowDetails();
 
@@ -37,15 +39,21 @@ public partial class MainWindow
         layout.Children.Add(actions);
         layout.Children.Add(new TextBox
         {
-            Text = string.Join("\n\n", new[] { doc?.Path, WorkflowFeedback }.Where(s => !string.IsNullOrEmpty(s))),
+            Text = string.Join("\n\n", new[] { Keys.Document?.ProjectPath ?? doc?.Path, WorkflowFeedback }.Where(s => !string.IsNullOrEmpty(s))),
             IsReadOnly = true, AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap,
         });
-        if (doc is not null) Action("Open map folder", OpenMapFolder);
+        if (Keys.Document is not null) Action("Open project folder", () => _ = Keys.RunCommand("projectFolder"));
+        else if (doc is not null) Action("Open map folder", OpenMapFolder);
         Action("Open backups", OpenBackups);
-        if (session?.Unanchored.Any() == true || lastCompile?.Result.Conflicts.Count > 0)
+        if (Keys.Document is null && (session?.Unanchored.Any() == true || lastCompile?.Result.Conflicts.Count > 0))
             Action("Next problem", () => { details.Close(); ShowNextOutputProblem(); });
         if (audioError is not null) Action("Preferences…", () => { details.Close(); _ = ShowPreferences(); });
-        if (workflowResult is not null) Action("Dismiss result", () =>
+        if (Keys.Document is not null && keysoundMessage is not null) Action("Dismiss", () =>
+        {
+            Keys.SetStatus("");
+            details.Close();
+        });
+        else if (workflowResult is not null) Action("Dismiss result", () =>
         {
             workflowResult = flashMessage = null;
             RefreshWorkflowFeedback();

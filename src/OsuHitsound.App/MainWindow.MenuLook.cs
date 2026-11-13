@@ -8,8 +8,8 @@ namespace OsuHitsound.App;
 
 /// <summary>
 /// The Hitsound menus' look (menu layout D, decided 2026-11-12): each menu name and item gets an icon, on/off settings
-/// show a switch instead of a checkmark, and choice rows behave as one-of-several buttons. Keysound's menus are left as
-/// they are.
+/// show a switch instead of a checkmark, and choice rows behave as one-of-several buttons. Keysound mode's menus get the
+/// same look.
 /// </summary>
 public partial class MainWindow
 {
@@ -39,34 +39,53 @@ public partial class MainWindow
         ["UsedLanesItem"] = "ListFilter", ["InspectorPanelItem"] = "PanelLeft", ["BrowserPanelItem"] = "PanelRight",
         ["HistoryPanelItem"] = "History", ["SoundSetsPanelItem"] = "Volume2", ["RangeToolItem"] = "UnfoldVertical",
         ["TimeSignaturesItem"] = "Metronome", ["InspectorItem"] = "Ghost", ["HelpItem"] = "CircleHelp",
+        // Keysound mode
+        ["KsFileMenu"] = "FolderOpen", ["KsEditMenu"] = "Pencil", ["KsPlaybackMenu"] = "Play", ["KsTrackMenu"] = "Piano", ["KsViewMenu"] = "Scan",
+        ["KsStartScreenItem"] = "House", ["KsOpenItem"] = "FolderOpen", ["KsSaveItem"] = "Save", ["KsCloseItem"] = "X",
+        ["KsImportMidiItem"] = "Download", ["KsGenerateItem"] = "AudioWaveform", ["KsProjectFolderItem"] = "FolderOpen",
+        ["KsPreferencesItem"] = "Settings", ["KsCheckUpdatesItem"] = "Download",
+        ["KsUndoItem"] = "Undo2", ["KsRedoItem"] = "Redo2", ["KsCutItem"] = "Scissors", ["KsCopyItem"] = "Copy", ["KsPasteItem"] = "Copy",
+        ["KsDuplicateItem"] = "Copy", ["KsDeleteItem"] = "X", ["KsSelectAllItem"] = "MousePointer2", ["KsQuantizeItem"] = "Magnet",
+        ["KsRepeatItem"] = "Repeat2", ["KsSyncItem"] = "Link2", ["KsEditRangeItem"] = "UnfoldVertical", ["KsScaleVelocityItem"] = "TrendingUp",
+        ["KsRangeToolItem"] = "UnfoldVertical",
+        ["KsStartFromRow"] = "Play", ["KsReturnOnStopItem"] = "Undo2", ["KsFollowItem"] = "LocateFixed",
+        ["KsAddTrackItem"] = "CirclePlus", ["KsRenameTrackItem"] = "Pencil", ["KsDeleteTrackItem"] = "X",
+        ["KsInstrumentItem"] = "Piano", ["KsInstrumentEditorItem"] = "SlidersHorizontal",
+        ["KsZoomInItem"] = "ZoomIn", ["KsZoomOutItem"] = "Minus", ["KsObjectLinesItem"] = "Columns3", ["KsGhostsItem"] = "Ghost",
+        ["KsInspectorPanelItem"] = "PanelLeft", ["KsControllerItem"] = "SlidersHorizontal", ["KsUiInspectorItem"] = "Ghost",
+        ["KsHelpItem"] = "CircleHelp",
     };
 
     private void SetupMenuLook()
     {
-        foreach (var item in HeaderMenu.GetLogicalDescendants().OfType<MenuItem>())
-        {
-            bool top = item.Parent == HeaderMenu;
-            if (item.Name is { } name && MenuIcons.TryGetValue(name, out var glyph) && !top)
-                item.Icon = new AppIcon { Glyph = glyph, Size = 14 };
-            if (top && item.Header is string menu)
-            {
-                AutomationProperties.SetName(item, menu);
-                item.Header = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal, Spacing = 5,
-                    Children =
-                    {
-                        new AppIcon { Glyph = MenuIcons[item.Name!], Size = 13 },
-                        new TextBlock { Text = menu, VerticalAlignment = VerticalAlignment.Center },
-                        new AppIcon { Glyph = "ChevronDown", Size = 9, Opacity = 0.6 },
-                    },
-                };
-            }
-            else if (item.ToggleType == MenuItemToggleType.CheckBox) AsSwitch(item);
-        }
+        foreach (var menu in new[] { HeaderMenu, KeysoundMenu })
+            foreach (var item in menu.GetLogicalDescendants().OfType<MenuItem>().ToList())
+                Look(item, item.Parent == menu);
 
         Choices(GreenLinesChoice, PerObjectChoice);
         Choices(StartCursorChoice, StartLeftChoice, StartSelectionChoice, StartSelectionOrLeftChoice);
+        Choices(KsStartCursorChoice, KsStartLeftChoice, KsStartSelectionChoice, KsStartSelectionOrLeftChoice);
+    }
+
+    private static void Look(MenuItem item, bool top)
+    {
+        if (item.Name is { } name && MenuIcons.TryGetValue(name, out var glyph) && !top)
+            item.Icon = new AppIcon { Glyph = glyph, Size = 14 };
+        if (top && item.Header is string menu)
+        {
+            AutomationProperties.SetName(item, menu);
+            item.Header = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 5,
+                Children =
+                {
+                    new AppIcon { Glyph = MenuIcons[item.Name!], Size = 13 },
+                    new TextBlock { Text = menu, VerticalAlignment = VerticalAlignment.Center },
+                    new AppIcon { Glyph = "ChevronDown", Size = 9, Opacity = 0.6 },
+                },
+            };
+        }
+        else if (item.ToggleType == MenuItemToggleType.CheckBox) AsSwitch(item);
     }
 
     /// <summary>Shows an on/off item's state as a switch on its right instead of a checkmark (the style hides that).</summary>

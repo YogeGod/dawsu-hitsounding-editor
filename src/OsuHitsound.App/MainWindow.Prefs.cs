@@ -74,6 +74,7 @@ public partial class MainWindow
                 KeysoundCards = [.. Keys.InspectorLayout.Order], KeysoundFolded = [.. Keys.InspectorLayout.Folded],
                 KeysoundInspectorOpen = Keys.InspectorLayout.Open,
             };
+            prefs = WithKeysoundView(prefs);
             SavePrefs();
         };
     }
@@ -116,7 +117,7 @@ public partial class MainWindow
             }
         }
 
-        foreach (var (item, id) in menuCommands)
+        foreach (var (item, id) in menuCommands.Concat(KeysoundMenuCommands()))
         {
             item.InputGesture = EditorCommands.Get(id).Keys.FirstOrDefault();
             item.Classes.Set("hasKey", item.InputGesture is not null); // only these draw the shortcut chip

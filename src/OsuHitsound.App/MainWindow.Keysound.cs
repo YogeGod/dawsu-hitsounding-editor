@@ -1,3 +1,4 @@
+using Avalonia.LogicalTree;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
@@ -23,6 +24,22 @@ public partial class MainWindow
         Keys.GlobalVolumeChanged += value => GlobalVolumeSlider.Value = value;
         Keys.SetInspectorLayout(prefs.KeysoundCards, prefs.KeysoundFolded, prefs.KeysoundInspectorOpen);
         Keys.Changed += UpdateKeysoundTitle;
+        // As in Hitsound mode: Open and Save in the ribbon, messages behind the title bar's details icon, and the settings
+        // kept for all projects.
+        Keys.OpenRequested += () => Run("open");
+        Keys.SaveRequested += () => _ = SaveKeysound();
+        Keys.StatusChanged += text =>
+        {
+            keysoundMessage = text.Length > 0 ? text : null;
+            RefreshWorkflowFeedback();
+        };
+        Keys.ViewSettings = (prefs.KeysoundInsertVelocity, prefs.KeysoundAudition, prefs.KeysoundSnapMode, prefs.KeysoundTriplets, prefs.KeysoundController);
+        Keys.QuantizeStrength = prefs.QuantizeStrength;
+        Keys.ViewSettingsChanged += () =>
+        {
+            prefs = WithKeysoundView(prefs);
+            SavePrefs();
+        };
         Start.KeysoundNewRequested += () => _ = NewKeysound();
         Start.KeysoundOpenRequested += () => _ = PickKeysound();
     }
@@ -187,14 +204,35 @@ public partial class MainWindow
         Title = mapPath is not null ? $"{Path.GetFileNameWithoutExtension(mapPath)} — dawsu! Hitsound" : "dawsu! Hitsound";
     }
 
-    /// <summary>
-    /// The title bar in Keysound mode: the key editor covers the ribbon, so Open and Save project show in the title bar,
-    /// with Keysound's menus instead of the hitsound ones.
-    /// </summary>
+    /// <summary>The latest Keysound message, shown behind the title bar's details icon while Keysound mode shows.</summary>
+    private string? keysoundMessage;
+
+    private Preferences WithKeysoundView(Preferences p)
+    {
+        var v = Keys.ViewSettings;
+        return p with
+        {
+            KeysoundInsertVelocity = v.InsertVelocity, KeysoundAudition = v.Audition, KeysoundSnapMode = v.SnapMode,
+            KeysoundTriplets = v.Triplets, KeysoundController = v.Controller,
+        };
+    }
+
+    /// <summary>The title bar in Keysound mode: Keysound's menus instead of the hitsound ones (the key editor has its own ribbon).</summary>
     private void ShowKeysoundChrome(bool on)
     {
-        KsFileButtons.IsVisible = KeysoundMenu.IsVisible = on;
+        KeysoundMenu.IsVisible = on;
         HeaderMenu.IsVisible = !on;
+        if (!on) keysoundMessage = null;
+        RefreshWorkflowFeedback();
+    }
+
+    /// <summary>The Keysound menu items whose Tag is a shared key-binding command, for their shortcut chips.</summary>
+    private IEnumerable<(MenuItem Item, string Id)> KeysoundMenuCommands()
+    {
+        foreach (var item in KeysoundMenu.GetLogicalDescendants().OfType<MenuItem>())
+            if (item.Tag is string tag && (tag.StartsWith("ks:", StringComparison.Ordinal) ? tag[3..] : tag) is var id
+                && EditorCommands.All.Any(c => c.Id == id))
+                yield return (item, id);
     }
 
     /// <summary>
@@ -216,15 +254,27 @@ public partial class MainWindow
                     }
                 };
 
-            // Greyed out when they can't run, and the view items show their state.
+            // Greyed out when they can't run, and the switches show their state.
             top.SubmenuOpened += (_, _) =>
             {
                 foreach (var item in top.Items.OfType<MenuItem>())
                     if (item.Tag is string tag && tag.StartsWith("ks:", StringComparison.Ordinal)) item.IsEnabled = Keys.CanRun(tag[3..]);
                 KsGhostsItem.IsChecked = Keys.GhostsShown;
                 KsObjectLinesItem.IsChecked = Keys.ObjectLinesShown;
+                KsInspectorPanelItem.IsChecked = Keys.InspectorLayout.Open;
+                KsControllerItem.IsChecked = Keys.ViewSettings.Controller;
+                KsReturnOnStopItem.IsChecked = Keys.ReturnOnStop;
+                KsFollowItem.IsChecked = Keys.FollowPlayback;
             };
         }
+
+        // Start playing from, as Hitsound mode's Playback menu.
+        foreach (var (choice, start) in new[]
+                 {
+                     (KsStartCursorChoice, PlayStart.Cursor), (KsStartLeftChoice, PlayStart.LeftLocator),
+                     (KsStartSelectionChoice, PlayStart.Selection), (KsStartSelectionOrLeftChoice, PlayStart.SelectionOrLeft),
+                 })
+            choice.IsCheckedChanged += (_, _) => { if (choice.IsChecked == true) Keys.StartFrom = start; };
     }
 
     private void UpdateKeysoundTitle()
@@ -286,7 +336,7 @@ public partial class MainWindow
         if (Keys.Document is null) return false;
         var command = EditorCommands.Match(e);
         if (command?.Id == "save") { _ = SaveKeysound(); return true; }
-        if (command?.Id is "help" or "preferences" or "inspector") return false;
+        if (command?.Id is "help" or "preferences" or "inspector" or "open") return false;
         var focused = FocusManager?.GetFocusedElement();
         bool ownKey = focused is TextBox
             || focused is Button or Avalonia.Controls.Primitives.ToggleButton && e.Key is Key.Space or Key.Enter
