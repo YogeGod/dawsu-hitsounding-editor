@@ -91,9 +91,26 @@ if ($shells -contains $tool) {
         if ($cmd -match '(^|[^2&>=\-])>{1,2}\s*(?!\$null|&|nul\b|/dev/null|\\dev\\null)\S') { Block "$agent is a read-only reviewer; don't redirect output into files." }
     }
 
-    # Rule 4: the UI tweak agent never commits or pushes.
-    if ($agent -eq 'dawsu-ui-tweak' -and $cmd -match 'git\s+(commit|push|merge|rebase|reset|tag)') {
-        Block "dawsu-ui-tweak doesn't commit or push. The main session does."
+    # Rule 4: the UI tweak agent never commits or pushes, and writes files only with Edit/Write (which are
+    # limited to its folders above). Its shell is for building, checking and launching. Commands that name the
+    # temp folder may write, delete and redirect there (map copies, screenshots, check output).
+    if ($agent -eq 'dawsu-ui-tweak') {
+        if ($cmd -match 'git\s+(commit|push|merge|rebase|reset|tag)') {
+            Block "dawsu-ui-tweak doesn't commit or push. The main session does."
+        }
+        if ($cmd -match '(set-content|add-content|clear-content|out-file|\btee\b|sed\s+-i|dotnet\s+(format|new|add|remove)|git\s+(checkout|switch|restore|add|rm|mv|clean|apply|cherry-pick|revert|am)|git\s+stash(?!\s+(list|show)))') {
+            Block "dawsu-ui-tweak changes files only with Edit and Write, inside its folders. Don't write files or change git state through the shell."
+        }
+        $temp = Norm $env:TEMP
+        $inTemp = $cmd -match '\$env:te?mp\b' -or ($temp -and $cmd.Contains($temp))
+        if (-not $inTemp) {
+            if ($cmd -match '(remove-item|move-item|rename-item|\brm\b|\bmv\b|\bdel\b|\bren\b)') {
+                Block "dawsu-ui-tweak may delete or move files only in the temp folder. Hand this back to the main session."
+            }
+            if ($cmd -match '(^|[^2&>=\-])>{1,2}\s*(?!\$null|&|nul\b|/dev/null|\\dev\\null)\S') {
+                Block "dawsu-ui-tweak may redirect output only into the temp folder."
+            }
+        }
     }
 }
 
