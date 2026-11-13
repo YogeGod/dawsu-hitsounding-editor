@@ -2,6 +2,11 @@
 
 Public releases of the C# dawsu! editor, newest first. Each version's notes are also in [docs/releases](docs/releases). Earlier same-day preview builds (`csharp-preview-2026.10.30` through `csharp-preview-2026.11.03.5`) stay on the [GitHub releases](https://github.com/YogeGod/dawsu-hitsounding-editor/releases) page. The Electron app's last release was dawsu! V6.39.
 
+## Unreleased
+
+- **Drum hit detection** now uses signal processing instead of the ADTOF neural model. It no longer needs a model file or ONNX Runtime, so the installer is about 8 MB smaller. Kicks are found about as well as before; fewer snares are found, especially snares played together with kicks, and dense full mixes can give extra hits, so listen before applying.
+- **Beat grid** setting for drum hit detection (1/4 by default; also 1/4 + 1/3, 1/8, 1/8 + 1/6 or Off). Hits off the map's beat divisions are dropped and the rest snap onto them. A steady offset between the song and the map's timing is measured and allowed for.
+
 ## 3.0
 
 A clearer Hitsound workspace, with controls on the ribbon, selection editing in the inspector, and colours you can customise.

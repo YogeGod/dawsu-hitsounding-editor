@@ -89,6 +89,5 @@ VST3 instruments in Keysound mode need `dawsu_vst3_host.exe` next to the app. Bu
 - The bundled piano is the FreePats Upright Piano KW (CC0). VST3 hosting uses the Steinberg VST 3 SDK (MIT).
 - Installing and updating by [Velopack](https://github.com/velopack/velopack) (MIT).
 - SoundFont playback by [MeltySynth](https://github.com/sinshu/meltysynth) (MIT).
-- Drum hit detection uses the [ADTOF](https://github.com/MZehren/ADTOF) drum model by Zehren, Alunno and Bientinesi ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)), converted to ONNX and run with [ONNX Runtime](https://github.com/microsoft/onnxruntime) (MIT). Its audio features and peak picking follow [madmom](https://github.com/CPJKU/madmom) (BSD).
 
 Full licence texts are in [THIRD-PARTY-NOTICES.txt](src/OsuHitsound.App/THIRD-PARTY-NOTICES.txt).
