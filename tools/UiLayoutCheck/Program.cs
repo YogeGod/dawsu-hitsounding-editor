@@ -53,7 +53,7 @@ while (!w.Loading.IsCompleted && DateTime.UtcNow < deadline) { Pump(); Thread.Sl
 Check(w.Loading.IsCompletedSuccessfully, "Map opened without audio output");
 Pump();
 var state = w.ArrangeArea.Model!.Session.State;
-foreach (var (width, height) in new[] { (1600, 900), (1040, 720), (900, 600) })
+foreach (var (width, height) in new[] { (1920, 1080), (1600, 900), (1040, 720), (900, 600) })
 {
     w.Width = width; w.Height = height; Pump();
     string[] controls = ["OpenButton", "HsModeButton", "UndoButton", "SelectTool", "MuteTool", "SnapToggle", "SnapModeBox", "SnapBox", "TripletSnapToggle", "AuditionPlacementButton", "DrumDetectButton", "DrumVstButton", "FitButton", "BrowserToggle", "InspectorToggle", "LaneDetailsToggle", "UsedLanesToggle", "ObjectLinesToggle", "VolumeToggle", "SaveButton", "ZoomSlider", "TimeZoomInButton", "TimeZoomOutButton", "RowHeightSlider", "RowZoomInButton", "RowZoomOutButton", "LocatorsButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "SongVolumeSlider", "SongMuteButton", "SongOffsetBox"];
@@ -69,8 +69,13 @@ foreach (var (width, height) in new[] { (1600, 900), (1040, 720), (900, 600) })
     var ribbon = Find<StackPanel>("RibbonGroups");
     ribbon.Measure(Size.Infinity);
     Check(ribbon.DesiredSize.Width <= ribbon.Bounds.Width + 1 && Find<Control>("ControlBar").Bounds.Height < 60, $"{width}: the ribbon fits in one row (height {Find<Control>("ControlBar").Bounds.Height:0}, {ribbon.DesiredSize.Width:0} of {ribbon.Bounds.Width:0}, classes {string.Join(" ", Find<Control>("ControlBar").Classes)})");
-    Check(Rect(Find<Control>("SaveButton")).Right <= width + 1 && Rect(Find<Control>("SaveButton")).Left >= Rect(ribbon).Right - 1, $"{width}: Save sits right of the ribbon groups");
-    Check(Rect(Find<Control>("SongControls")).Top >= Rect(Find<Control>("GlobalVolumePanel")).Bottom, $"{width}: song controls beneath global volume");
+    // UI refresh (2026-11-13): Save is in the title bar, left of the window buttons; the panel switches end the ribbon.
+    Check(Rect(Find<Control>("SaveButton")).Bottom <= Rect(Find<Control>("ControlBar")).Top + 1 && Rect(Find<Control>("SaveButton")).Right <= Rect(Find<Control>("WindowBar")).Left + 1, $"{width}: Save sits in the title bar, left of the window buttons");
+    Check(Rect(Find<Control>("WindowBar")).Right >= width - 1 && Rect(Find<Control>("WindowBar")).Top <= 1, $"{width}: the window buttons sit in the title bar's top right corner");
+    Check(Rect(Find<Control>("RibbonPanels")).Left >= Rect(ribbon).Right - 1 && Rect(Find<Control>("BrowserToggle")).Right <= Rect(Find<Control>("InspectorToggle")).Left + 1, $"{width}: Files and Inspector end the ribbon, in the panels' order");
+    // Wide windows (1500 px and up) put Global and Song on one line; narrower ones stack them (fidelity pass, 2026-11-13).
+    if (width >= 1500) Check(Rect(Find<Control>("SongControls")).Left >= Rect(Find<Control>("GlobalVolumePanel")).Right - 1 && Math.Abs(Rect(Find<Control>("SongControls")).Center.Y - Rect(Find<Control>("GlobalVolumePanel")).Center.Y) < 2, $"{width}: Global and Song share one line");
+    else Check(Rect(Find<Control>("SongControls")).Top >= Rect(Find<Control>("GlobalVolumePanel")).Bottom, $"{width}: song controls beneath global volume");
     Check(Find<Control>("PlayButton").Bounds.Width > Find<Control>("StopButton").Bounds.Width && Find<Control>("PlayButton").Bounds.Height > Find<Control>("StopButton").Bounds.Height, $"{width}: Play is slightly larger");
     Check(w.FindControl<Control>("WorkflowFooter") is null, $"{width}: persistent banner removed");
     foreach (var button in w.GetLogicalDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible && b.Content is AppIcon))
@@ -83,7 +88,7 @@ foreach (var (width, height) in new[] { (1600, 900), (1040, 720), (900, 600) })
         Check(AppIcon.HasStudioAsset(glyph), $"{width}: {glyph} has its embedded approved Studio icon");
     var global = Rect(Find<Control>("GlobalVolumeSlider"));
     var song = Rect(Find<Control>("SongVolumeSlider"));
-    Check(Math.Abs(global.X - song.X) < 1 && global.Width == 100 && song.Width == 100, $"{width}: volume sliders have equal widths and aligned tracks");
+    Check((width >= 1500 || Math.Abs(global.X - song.X) < 1) && global.Width == 100 && song.Width == 100, $"{width}: volume sliders have equal widths (and aligned tracks when stacked)");
     var bottom = Rect(Find<Control>("StatusBar"));
     foreach (var id in new[] { "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel" })
         Check(bottom.Contains(Rect(Find<Control>(id))), $"{width}: {id} remains in the bottom bar");
@@ -91,9 +96,9 @@ foreach (var (width, height) in new[] { (1600, 900), (1040, 720), (900, 600) })
     var positions = new[] { "StartButton", "StopButton", "PlayButton", "LoopButton", "LocatorsButton", "ReturnOnStopButton", "FollowPlaybackButton", "SpeedPanel", "Lcd", "MixControls" }.Select(Find<Control>).Where(c => c.IsVisible).Select(Rect).ToArray();
     for (var i = 1; i < positions.Length; i++) Check(positions[i - 1].Right <= positions[i].Left + 1, $"{width}: transport controls {i - 1} and {i} do not overlap ({positions[i - 1].Right:0} vs {positions[i].Left:0})");
     Save($"editor-dark-{width}x{height}.png");
-    // The four Default Color Schemes (Preferences, Colours) replace the old dark-mode button.
+    // The five Default Color Schemes (Preferences, Colours) replace the old dark-mode button.
     Check(w.FindControl<Control>("ThemeToggle") is null, $"{width}: the dark-mode button is gone (schemes are in Preferences, Colours)");
-    string[] schemeFiles = ["grey", "dark", "blue-grey", "teal"];
+    string[] schemeFiles = ["grey", "dark", "blue-grey", "teal", "slate"];
     for (int scheme = 0; scheme < UiTheme.SchemeCount; scheme++)
     {
         ThemeColors.Apply(UiTheme.Current, new UserColors { Scheme = scheme }, darkModeFallback: true); Pump();
@@ -130,7 +135,7 @@ Check(!Find<Control>("SaveBadge").IsVisible, "No problems: no badge on Save");
 var updateSaveCheck = typeof(MainWindow).GetMethod("UpdateSaveCheck", BindingFlags.Instance | BindingFlags.NonPublic)!;
 updateSaveCheck.Invoke(w, [Array.Empty<Conflict>(), 2]); Pump();
 Check(Find<Control>("SaveBadge").IsVisible && Find<TextBlock>("SaveBadgeText").Text == "2", "Two hits with no object: the badge on Save says 2");
-Check(Rect(Find<Control>("RibbonGroups")).Right <= Rect(Find<Control>("SaveButton")).Left + 1 && Rect(Find<Control>("SaveButton")).Right <= w.Bounds.Width + 1, "With the badge, Save and the ribbon still fit side by side");
+Check(Rect(Find<Control>("HelpButton")).Right <= Rect(Find<Control>("SaveButton")).Left + 1 && Rect(Find<Control>("SaveButton")).Right <= Rect(Find<Control>("WindowBar")).Left + 1, "With the badge, Save still fits in the title bar between Help and the window buttons");
 var savedBefore = File.ReadAllBytes(map);
 Click("SaveButton");
 Check(Find<Control>("SaveCheckPanel").IsEffectivelyVisible && Find<Control>("SaveContinueButton").IsEffectivelyVisible, "With problems, Save opens the check list");
@@ -171,9 +176,10 @@ Check(!Find<Control>("Inspector").IsVisible && !Find<MenuItem>("InspectorPanelIt
 Click("InspectorToggle");
 Check(Find<Control>("Inspector").IsVisible, "Inspector ribbon button restores the inspector");
 Click("VolumeToggle");
-Check(!Find<Control>("BottomPanel").IsVisible, "Controller can still be hidden");
+// UI refresh (2026-11-13): folded, the volume panel keeps its header, which carries the arrow that unfolds it.
+Check(!Find<Control>("VolumeBody").IsVisible && Find<Control>("VolumeToggle").IsEffectivelyVisible && Find<Control>("BottomPanel").Bounds.Height < 40, "The volume panel folds to its header");
 Click("VolumeToggle");
-Check(Find<Control>("BottomPanel").IsVisible, "Controller can still be restored");
+Check(Find<Control>("VolumeBody").IsVisible && Find<Control>("BottomPanel").Bounds.Height >= 80, "The volume panel unfolds again");
 Check(ReferenceEquals(state, lanes.Model!.Session.State), "Layout and view changes preserve map edits and undo state");
 typeof(MainWindow).GetField("workflowWarning", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(w, "Sample could not be read. Replace it before saving.");
 typeof(MainWindow).GetMethod("RefreshWorkflowFeedback", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null);
@@ -264,6 +270,8 @@ Window OpenColours()
 }
 T Named<T>(Window window, string name) where T : Control =>
     window.GetLogicalDescendants().OfType<T>().FirstOrDefault(c => AutomationProperties.GetName(c) == name) ?? throw new Exception("Missing " + name);
+// The window has no saved scheme, so Preferences opens on the default one (Slate): show that, as the app does at start-up.
+ThemeColors.Apply(UiTheme.Current, new UserColors(), darkModeFallback: true); Pump();
 string accentBefore = UiTheme.Current.Get("button.active"), barBefore = UiTheme.Current.Get("line.bar");
 var colourDialog = OpenColours();
 Check(Named<CheckBox>(colourDialog, "Grid Colors Grid Lines").IsEnabled == false, "Grid Lines stays greyed out until Grid Background is ticked");

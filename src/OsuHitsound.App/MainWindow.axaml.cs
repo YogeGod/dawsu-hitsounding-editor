@@ -143,6 +143,7 @@ public partial class MainWindow : Window, IMapWriteHost
         SkinTextures.LoadAsync(prefs.LazerResources, () => Lanes.InvalidateVisual()); // lazer's hit-circle textures for the strip
         UsedLanesToggle.IsCheckedChanged += (_, _) => { model?.SetUsedLanesOnly(UsedLanesToggle.IsChecked == true); SyncScrollBars(); };
         VolumeToggle.IsCheckedChanged += (_, _) => ApplyTheme();
+        WindowBar.Attach(TitleBar);
         VolumeTab.IsCheckedChanged += (_, _) =>
         {
             Volume.IsVisible = VolumeTab.IsChecked == true;
@@ -208,7 +209,8 @@ public partial class MainWindow : Window, IMapWriteHost
             var button = new Avalonia.Controls.Primitives.ToggleButton
             {
                 Name = $"Speed{speed * 100:0}Button", Content = $"{speed * 100:0}%", IsChecked = speed == 1,
-                Width = 40, Height = 28, MinHeight = 28, Padding = new Avalonia.Thickness(2, 0), FontSize = 11,
+                Width = 40, Height = 28, MinHeight = 28, Padding = new Avalonia.Thickness(0), FontSize = 11,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             };
             ToolTip.SetTip(button, $"Playback speed {speed * 100:0}%, pitch preserved");
             Avalonia.Automation.AutomationProperties.SetName(button, $"Playback speed {speed * 100:0} percent");
@@ -252,6 +254,20 @@ public partial class MainWindow : Window, IMapWriteHost
         // Volume panel.
         VolumeScopeBox.ItemsSource = new[] { "All lanes", "Selected lanes" };
         VolumeScopeBox.SelectedIndex = 0;
+        SegmentedChoice.Attach(VolumeScopeBox);
+        // The title chip shows FileTitle's text in parts: "name — Mode (unsaved)" becomes a dot, the name and a mode pill.
+        FileTitle.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != TextBlock.TextProperty) return;
+            string text = FileTitle.Text ?? "";
+            bool unsaved = text.EndsWith(" (unsaved)", StringComparison.Ordinal);
+            if (unsaved) text = text[..^" (unsaved)".Length];
+            int cut = text.LastIndexOf(" — ", StringComparison.Ordinal);
+            TitleName.Text = cut < 0 ? text : text[..cut];
+            TitleMode.Text = cut < 0 ? "" : text[(cut + 3)..];
+            TitleModePill.IsVisible = cut >= 0;
+            TitleDot.IsVisible = unsaved;
+        };
         VolumeScopeBox.SelectionChanged += (_, _) => { Volume.SelectedLanesOnly = VolumeScopeBox.SelectedIndex == 1; Volume.InvalidateVisual(); };
         Lanes.SampleDropped += AssignChannelFile;
         RampShapeBox.ItemsSource = new[] { "Linear", "Ease in", "Ease out", "S-curve" };
@@ -271,6 +287,7 @@ public partial class MainWindow : Window, IMapWriteHost
         StartBox.LostFocus += (_, _) => UpdateInfoBar();
         VolumeModeBox.ItemsSource = new[] { "Relative", "Set all" };
         VolumeModeBox.SelectedIndex = 0; // relative: several hits keep their differences
+        SegmentedChoice.Attach(VolumeModeBox);
         VolumeApplyButton.Click += (_, _) => ApplyVolumeValue();
         VolumeValueBox.KeyDown += (_, e) =>
         {
@@ -279,7 +296,7 @@ public partial class MainWindow : Window, IMapWriteHost
             e.Handled = true;
         };
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
-        SaveButton.Click += (_, _) => SaveClicked();
+        SaveButton.Click += (_, _) => { if (keysoundChrome) _ = SaveKeysound(); else SaveClicked(); };
         DrumDetectButton.Click += async (_, _) => await ShowDrumAutoFill();
         DrumVstButton.Click += (_, _) => ShowDrumVst();
         SelectionQuantizeButton.Click += (_, _) => Run("quantizeDialog");
@@ -476,7 +493,7 @@ public partial class MainWindow : Window, IMapWriteHost
             Overview.Attach(model, Lanes.Axis, Lanes.Axis.End);
             Volume.Attach(model, Lanes.Axis);
             FileTitle.Text = $"{Path.GetFileName(full)} — Hitsounds";
-            ToolTip.SetTip(FileTitle, full);
+            ToolTip.SetTip(TitleChip, full);
             Inspector.Browser.SetRoots(Path.GetDirectoryName(full), prefs.SongsFolder ?? (usePreferences ? Preferences.FindSongsFolder() : Path.GetDirectoryName(full)));
             Title = $"{Path.GetFileNameWithoutExtension(full)} — dawsu! Hitsound";
             flash = $"Opened {Path.GetFileName(full)}. Save .osu updates this difficulty." + (projectWarning is null ? "" : " " + projectWarning);
@@ -1066,9 +1083,9 @@ public partial class MainWindow : Window, IMapWriteHost
         inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
         void Show(bool open)
         {
-            if (!open && Root.ColumnDefinitions[0].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[0].ActualWidth;
-            Root.ColumnDefinitions[0].Width = new GridLength(open ? inspectorWidth : 0);
-            Root.ColumnDefinitions[1].Width = new GridLength(open ? 4 : 0);
+            if (!open && Root.ColumnDefinitions[InspectorColumn].ActualWidth > 0) inspectorWidth = Root.ColumnDefinitions[InspectorColumn].ActualWidth;
+            Root.ColumnDefinitions[InspectorColumn].Width = new GridLength(open ? inspectorWidth : 0);
+            Root.ColumnDefinitions[InspectorColumn + 1].Width = new GridLength(open ? 4 : 0);
             Inspector.IsVisible = InspectorSplitter.IsVisible = open;
         }
 
@@ -1120,7 +1137,7 @@ public partial class MainWindow : Window, IMapWriteHost
     private double inspectorWidth = 250;
 
     /// <summary>The width to save: the panel's when shown, else the one it had.</summary>
-    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[0].ActualWidth > 0 ? Root.ColumnDefinitions[0].ActualWidth : inspectorWidth;
+    internal double InspectorWidthToSave => InspectorToggle.IsChecked == true && Root.ColumnDefinitions[InspectorColumn].ActualWidth > 0 ? Root.ColumnDefinitions[InspectorColumn].ActualWidth : inspectorWidth;
 
     private void RefreshInspector()
     {
@@ -1449,8 +1466,30 @@ public partial class MainWindow : Window, IMapWriteHost
     private void AlignToLaneList()
     {
         HScrollRow.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
-        LaneFilterBox.Width = ArrangeView.GridLeft - 16;
-        DrumMapToggle.Margin = new Avalonia.Thickness(ArrangeView.GridLeft - 96, 0, 0, 0);
+        Overview.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0); // the overview starts where the grid does, not over the lane list
+        // The filter shares its row with the two lane switches: [filter][Used only][info].
+        // The header has two rows, as the design does: the view switch with the drawn + − ‹, then the filter row beside the ruler.
+        const double usedWidth = 66, infoWidth = 24, gap = 4;
+        double row1 = (ArrangeView.SectionsHeight - 28) / 2, row2 = ArrangeView.SectionsHeight + (ArrangeView.RulerHeight - 24) / 2;
+        // "Used only" sits inside the filter box, at its right end (the design's search bar); the info switch follows the box.
+        LaneFilterBox.Width = Math.Max(60, ArrangeView.GridLeft - 17 - infoWidth - gap);
+        LaneFilterBox.Margin = new Avalonia.Thickness(9, row2, 0, 0);
+        bool usedFits = LaneFilterBox.Width >= usedWidth + 90; // a collapsed list has no room for it beside the text
+        LaneFilterBox.Padding = new Avalonia.Thickness(9, 0, usedFits ? usedWidth + 6 : 9, 0);
+        UsedLanesToggle.IsVisible = usedFits;
+        UsedLanesToggle.Width = usedWidth;
+        UsedLanesToggle.Height = UsedLanesToggle.MinHeight = 18;
+        UsedLanesToggle.Margin = new Avalonia.Thickness(9 + LaneFilterBox.Width - usedWidth - 3, row2 + 3, 0, 0);
+        LaneDetailsToggle.Width = infoWidth;
+        LaneDetailsToggle.Margin = new Avalonia.Thickness(9 + LaneFilterBox.Width + gap, row2, 0, 0);
+        // The view switch: two equal halves in a dark holder, from the list's edge to the drawn + − ‹ buttons.
+        double holder = Math.Max(60, ArrangeView.GridLeft - 96 - 9), half = Math.Floor((holder - 8) / 2);
+        ViewSwitchBack.Width = holder;
+        ViewSwitchBack.Margin = new Avalonia.Thickness(9, row1, 0, 0);
+        SamplesViewButton.Width = DrumMapToggle.Width = half;
+        SamplesViewLabel.IsVisible = DrumMapLabel.IsVisible = half >= 84; // icons only in a collapsed list
+        SamplesViewButton.Margin = new Avalonia.Thickness(12, row1 + 3, 0, 0);
+        DrumMapToggle.Margin = new Avalonia.Thickness(12 + half + 2, row1 + 3, 0, 0);
         VolumeControlScroller.Width = ArrangeView.GridLeft;
         Volume.InvalidateVisual();
     }
@@ -1462,8 +1501,8 @@ public partial class MainWindow : Window, IMapWriteHost
         Avalonia.Media.IBrush B(string key) => Paint.Brush(t.Color(key));
 
         // Colours and control sizes come from the application resources (ThemeResources); this places the bars.
-        FileTitle.Foreground = B("title.text");
-        FileTitle.FontSize = t.Number("title.fontSize");
+        TitleName.Foreground = B("title.text");
+        TitleName.FontSize = t.Number("title.fontSize");
         StatusLeft.Foreground = StatusRight.Foreground = B("status.text");
         StatusLeft.FontSize = StatusRight.FontSize = t.Number("status.fontSize");
         var rows = Root.RowDefinitions;
@@ -1471,8 +1510,10 @@ public partial class MainWindow : Window, IMapWriteHost
         // Toolbar and selection details wrap; the transport keeps its original themed height.
         UpdateChromeHeights();
         rows[2].Height = new GridLength(t.Number("overview.height"));
+        // Folded, the volume panel keeps its header (with the arrow that unfolds it).
         bool showVolume = VolumeToggle.IsChecked == true;
-        BottomPanel.IsVisible = showVolume;
+        VolumeBody.IsVisible = showVolume;
+        if (VolumeToggle.Content is AppIcon fold) fold.Glyph = showVolume ? "ChevronDown" : "ChevronUp";
 
         AlignToLaneList();
         UpdateVolumePanelHeight();
@@ -1489,23 +1530,29 @@ public partial class MainWindow : Window, IMapWriteHost
         double width = Bounds.Width > 0 ? Bounds.Width : Width;
         var t = UiTheme.Current;
         UpdateCompactLayout(width);
-        TitleBarContent.Width = Math.Max(TitleBarContent.MinWidth, width - 24);
+        TitleBarContent.Width = Math.Max(TitleBarContent.MinWidth, width - 12); // the window buttons reach the right edge
         StatusBarContent.Width = Math.Max(StatusBarContent.MinWidth, width - 24);
         ControlBarContent.MinHeight = t.Number("control.height") - 8;
         StatusBarContent.Height = t.Number("status.height") - 1;
         Root.RowDefinitions[5].Height = new GridLength(t.Number("status.height"));
     }
 
+    /// <summary>The grid column of the inspector (the file browser is in column 0, at the far left).</summary>
+    private const int InspectorColumn = 2, BrowserColumn = 0;
+
+    /// <summary>The volume panel's height when folded: its header row.</summary>
+    private const double VolumeFoldedHeight = 33;
+
     private void UpdateVolumePanelHeight()
     {
         var rows = Root.RowDefinitions;
         double chrome = rows[0].Height.Value + ControlBar.Bounds.Height + rows[2].Height.Value + StatusBar.Bounds.Height;
         // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
-        double height = Root.Bounds.Height > 0 ? Root.Bounds.Height : Bounds.Height - WindowBar.Bounds.Height;
+        double height = Root.Bounds.Height > 0 ? Root.Bounds.Height : Bounds.Height;
         double available = Math.Max(0, height - chrome - Lanes.HeaderHeight - 80);
         double maximum = Math.Max(0, height - chrome - Lanes.HeaderHeight - 8);
         rows[4].Height = new GridLength(VolumeToggle.IsChecked == true
-            ? Math.Min(maximum, Math.Min(UiTheme.Current.Number("volume.height"), Math.Max(80, available))) : 0);
+            ? Math.Min(maximum, Math.Min(UiTheme.Current.Number("volume.height"), Math.Max(80, available))) : VolumeFoldedHeight);
     }
 
     // Where the current playback began, for "Return on stop".

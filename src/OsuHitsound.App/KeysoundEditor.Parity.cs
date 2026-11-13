@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Input;
 using OsuHitsound.Lanes;
 using OsuHitsound.Lanes.Keysound;
@@ -24,7 +25,7 @@ public partial class KeysoundEditor
     private bool narrowLayout, wideInspectorOpen = true, narrowInspectorOpen;
 
     /// <summary>Open (Ctrl+O) and Save project in the ribbon: the window runs them.</summary>
-    public event Action? OpenRequested, SaveRequested;
+    public event Action? OpenRequested;
     /// <summary>A setting the window remembers for all projects changed (insert velocity, audition, snap mode, triplets, controller).</summary>
     public event Action? ViewSettingsChanged;
 
@@ -75,7 +76,6 @@ public partial class KeysoundEditor
         Roll.ToolPickerRequested += ShowToolPicker;
 
         OpenButton.Click += (_, _) => OpenRequested?.Invoke();
-        SaveButton.Click += (_, _) => SaveRequested?.Invoke();
         ImportMidiButton.Click += async (_, _) => await RunCommand("importMidi");
         SelectionQuantizeButton.Click += async (_, _) => await RunCommand("quantizeDialog");
         SelectionDuplicateButton.Click += async (_, _) => await RunCommand("duplicate");
@@ -170,12 +170,13 @@ public partial class KeysoundEditor
         showingZoom = false;
     }
 
-    /// <summary>The velocity controller under the roll, shown or hidden (the ribbon's Controller).</summary>
+    /// <summary>The velocity controller under the roll, unfolded or folded to its title row (the arrow at the row's end).</summary>
     private void ShowController(bool on)
     {
         Roll.VelocityLaneHeight = on ? ControllerLane : 0;
-        Roll.BottomReserve = ScrollRow + (on ? ControllerTitle : 0);
-        ControllerHeader.IsVisible = on;
+        // Folded, the controller keeps its title row (with the arrow that unfolds it), as the Hitsound editor's Volumes.
+        Roll.BottomReserve = ScrollRow + ControllerTitle;
+        if (VelocityToggle.Content is AppIcon fold) fold.Glyph = on ? "ChevronDown" : "ChevronUp";
         VelocitySpace.Height = on ? ControllerLane : 0;
         TypingPanel.Margin = new Thickness(0, 0, 0, Roll.BottomReserve + Roll.VelocityLaneHeight);
         Roll.Axis.Width = Math.Max(0, Roll.Bounds.Width - PianoRollView.KeyboardWidth);
@@ -267,7 +268,7 @@ public partial class KeysoundEditor
     /// </summary>
     public void FitWidth(double width)
     {
-        (ribbonFit ??= new RibbonFit(ControlBar, ControlBarContent, RibbonGroups, SaveButton)).Update(width);
+        (ribbonFit ??= new RibbonFit(ControlBar, ControlBarContent, RibbonGroups, RibbonPanels)).Update(width);
         // Below 1100 px the inspector closes, as the Hitsound one does; each width keeps its own open or closed choice.
         bool narrow = width < 1100;
         if (narrow != narrowLayout)
@@ -278,8 +279,15 @@ public partial class KeysoundEditor
             InspectorToggle.IsChecked = narrow ? narrowInspectorOpen : wideInspectorOpen;
         }
 
-        MixControls.Width = width < 1000 ? 268 : 308;
+        // Wide windows put Global and Song on one line; narrower ones stack them as before.
+        bool mixRow = width >= 1500;
+        MixControls.Orientation = mixRow ? Orientation.Horizontal : Orientation.Vertical;
+        MixControls.Spacing = mixRow ? 14 : 2;
+        MixControls.Width = mixRow ? double.NaN : width < 1000 ? 268 : 308;
+        GlobalVolumePanel.Width = mixRow ? 190 : double.NaN;
+        SongControls.Width = mixRow ? 300 : double.NaN;
         bool tightTransport = width < 1100;
+        TransportLabels.Fit(width, (LoopButton, "Cycle", "OsuCycle"), (ReturnOnStopButton, "Return", "OsuReturn"), (FollowPlaybackButton, "Follow", "OsuFollow"));
         LocatorsButton.IsVisible = width >= MainWindow.LocatorsMinWidth;
         TransportLeft.Spacing = TransportButtons.Spacing = PlaybackOptionsPanel.Spacing = tightTransport ? 2 : 4;
         if (LcdColumns.ColumnDefinitions[0].Width.Value != (width < 1000 ? 84 : 96))

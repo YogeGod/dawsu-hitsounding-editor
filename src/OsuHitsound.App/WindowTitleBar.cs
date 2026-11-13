@@ -9,6 +9,80 @@ using Avalonia.Media;
 namespace OsuHitsound.App;
 
 /// <summary>
+/// Minimise, maximise and close for a window whose title bar is merged into its menu bar (the main window, UI refresh
+/// 2026-11-13). The bar itself handles dragging (see <see cref="Attach"/>).
+/// </summary>
+public sealed class WindowButtons : StackPanel
+{
+    private readonly AppIcon maximiseIcon = new() { Glyph = "Square", Size = 13 };
+    private readonly Button maximise;
+    private Window? window;
+
+    public WindowButtons()
+    {
+        Orientation = Orientation.Horizontal;
+        VerticalAlignment = VerticalAlignment.Stretch;
+        var minimise = Make("Minimise", new AppIcon { Glyph = "Minus", Size = 15 }, () => window!.WindowState = WindowState.Minimized);
+        maximise = Make("Maximise", maximiseIcon, ToggleMaximised);
+        var close = Make("Close", new AppIcon { Glyph = "X", Size = 15 }, () => window!.Close());
+        close.Classes.Add("close");
+        Children.AddRange([minimise, maximise, close]);
+        this.Bind(TextElement.ForegroundProperty, this.GetResourceObservable("HeaderText"));
+    }
+
+    private static Button Make(string name, Control icon, Action click)
+    {
+        // Fill the bar's height, whatever the old window bar's height token says.
+        var button = new Button { Content = icon, Focusable = false, Height = double.NaN, VerticalAlignment = VerticalAlignment.Stretch };
+        button.Classes.Add("windowButton");
+        AutomationProperties.SetName(button, name);
+        ToolTip.SetTip(button, name);
+        button.Click += (_, _) => click();
+        return button;
+    }
+
+    /// <summary>Makes a bar move the window when dragged and maximise it when double-clicked (its buttons and menus keep their clicks).</summary>
+    public void Attach(Control bar) => bar.PointerPressed += (_, e) =>
+    {
+        if (window is null || e.Handled || !e.GetCurrentPoint(bar).Properties.IsLeftButtonPressed) return;
+        if (e.ClickCount == 2) ToggleMaximised();
+        else window.BeginMoveDrag(e);
+        e.Handled = true;
+    };
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        window = TopLevel.GetTopLevel(this) as Window;
+        if (window is null) return;
+        window.PropertyChanged += OnWindowPropertyChanged;
+        ShowState();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (window is not null) window.PropertyChanged -= OnWindowPropertyChanged;
+        window = null;
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == Window.WindowStateProperty) ShowState();
+    }
+
+    private void ShowState()
+    {
+        bool maximised = window?.WindowState == WindowState.Maximized;
+        maximiseIcon.Glyph = maximised ? "Copy" : "Square";
+        ToolTip.SetTip(maximise, maximised ? "Restore" : "Maximise");
+    }
+
+    private void ToggleMaximised() =>
+        window!.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+}
+
+/// <summary>
 /// The window's own title bar (the design's light strip): the window title on the left, minimise, maximise and close
 /// on the right. Dragging it moves the window, double-clicking maximises; Windows still resizes from the edges.
 /// The window opts in with ExtendClientAreaToDecorationsHint and NoChrome, and keeps its content inside the screen

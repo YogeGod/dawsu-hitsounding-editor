@@ -49,7 +49,7 @@ public partial class KeysoundEditor
             var button = new ToggleButton
             {
                 Content = $"{speed * 100:0}%", IsChecked = speed == 1, Width = 40, Height = 28, MinHeight = 28,
-                Padding = new Avalonia.Thickness(2, 0), FontSize = 11,
+                Padding = new Avalonia.Thickness(0), FontSize = 11, HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             };
             Avalonia.Controls.ToolTip.SetTip(button, $"Playback speed {speed * 100:0}%, pitch preserved");
             button.Click += (_, _) => SetSpeed(speed);

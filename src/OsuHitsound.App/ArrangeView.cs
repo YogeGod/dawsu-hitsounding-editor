@@ -63,8 +63,8 @@ internal sealed class ArrangeView : Control
 
     private const double CollapsedListWidth = 150;
     public static double GridLeft => NumberWidth + ListWidth;
-    public static double SectionsHeight => Theme_.Number("header.sections");
-    public const double RulerHeight = 24;
+    public static double SectionsHeight => Math.Max(28, Theme_.Number("header.sections")); // room for the view switch
+    public const double RulerHeight = 30; // the header is two 30 px rows: view switch, then the filter beside the ruler
     public double HeaderHeight => RulerBottom + StripHeight;
 
     /// <summary>The song strip: the waveform with the gameplay objects drawn over it (at least tall enough for the objects).</summary>
@@ -366,7 +366,7 @@ internal sealed class ArrangeView : Control
     public double ContentHeight => Tops()[^1];
 
     /// <summary>Group rows ("Soft sampleset") are compact, as in V6.39; lane rows are <see cref="RowHeight"/>.</summary>
-    public const double GroupRowHeight = 18;
+    public const double GroupRowHeight = 22;
 
     private double HeightOf(Row row) => HeightOf(row, RowHeight);
 
@@ -553,10 +553,8 @@ internal sealed class ArrangeView : Control
     {
         ctx.FillRectangle(Paint.Chrome2, new Rect(0, 0, width, HeaderHeight));
         ctx.FillRectangle(TitleBand, new Rect(0, 0, GridLeft, RulerBottom));
-        string laneTitle = model.DrumMapMode ? "DRUM MAP · " + model.ActiveDrumMap?.Name : "SAMPLE LANES";
-        if (model.SelectedLanes.Count > 1) laneTitle += $" · {model.SelectedLanes.Count} SELECTED";
-        Paint.DrawText(ctx, laneTitle, new Point(10, 6), 8, Paint.Dim, Math.Max(20, GridLeft - 114), Paint.UiBold);
-        double headerY = -((RowHeight - 18) / 2) + 2;
+        // No drawn title: the window's Samples | Drum map switch fills this row and names the view (its tooltip names the drum map).
+        double headerY = SectionsHeight / 2 - RowHeight / 2; // centred in the first header row
         DrawToggle(ctx, "+", GridLeft - AddLaneFromRight, headerY, null);
         DrawToggle(ctx, "−", GridLeft - RemoveLaneFromRight, headerY, null);
         DrawToggle(ctx, NamesCollapsed ? "›" : "‹", GridLeft - CollapseFromRight, headerY, null);
@@ -658,6 +656,26 @@ internal sealed class ArrangeView : Control
                 double x = GridLeft + Axis.X(t);
                 ctx.DrawLine(Paint.SnapPen(fraction), new Point(x, top), new Point(x, bottom));
             }
+
+        // Every other bar slightly lighter (the Slate scheme; "line.barShade" is 0 elsewhere), so bars count at a glance.
+        double barShade = UiTheme.Current.Number("line.barShade");
+        if (barShade > 0)
+        {
+            var shade = UiTheme.Current.Cached("brush:line.barShade", () => (IBrush)Paint.Brush(Colors.White, barShade));
+            var bars = lines.Where(l => l.IsBar).ToList();
+            // The bar already under way at the left edge: one before the first bar line in view.
+            if (bars.Count > 0 && (bars[0].Bar - 1) % 2 == 0)
+            {
+                double edge = GridLeft + Axis.X(bars[0].Time);
+                if (edge > GridLeft) ctx.FillRectangle(shade, new Rect(GridLeft, top, edge - GridLeft, bottom - top));
+            }
+            for (int i = 0; i < bars.Count; i++)
+            {
+                if (bars[i].Bar % 2 != 0) continue;
+                double x0 = GridLeft + Axis.X(bars[i].Time), x1 = GridLeft + Axis.X(i + 1 < bars.Count ? bars[i + 1].Time : to);
+                if (x1 > x0) ctx.FillRectangle(shade, new Rect(x0, top, x1 - x0, bottom - top));
+            }
+        }
 
         foreach (var line in lines)
         {
@@ -986,10 +1004,14 @@ internal sealed class ArrangeView : Control
                 // V6.39: grip, fold arrow, "Soft sampleset", then the lane count, M and S at the right edge.
                 double gh = HeightOf(row), ty = y + (gh - 14) / 2;
                 ctx.FillRectangle(Paint.GroupHead, new Rect(0, y, NumberWidth + ListWidth, gh));
-                Paint.DrawText(ctx, "⠿", new Point(12, y + (gh - 16) / 2), 12, Paint.Text, 0);
+                var setColor = ArrangeModel.ShadeOf(group.Group, 0);
+                ctx.FillRectangle(UiTheme.Current.Cached("brush:strip:" + setColor, () => (IBrush)Paint.Brush(setColor)), new Rect(0, y, SetStripWidth, gh - 1));
+                Paint.DrawText(ctx, "⠿", new Point(12, y + (gh - 16) / 2), 12, Paint.Dim, 0);
                 Paint.DrawText(ctx, model.IsCollapsed(group.Group) ? "▸" : "▾", new Point(34, ty), 11, Paint.Dim, 0);
-                Paint.DrawText(ctx, ArrangeModel.GroupName(group.Group), new Point(GroupNameX, ty), 10, Paint.Text, ListWidth - 110, Paint.UiBold);
-                Paint.DrawText(ctx, group.LaneCount.ToString(), new Point(NumberWidth + ListWidth - MuteFromRight - 18, ty), 10, Paint.Dim, 0);
+                double dx = GroupNameX + 5, dy = y + gh / 2;
+                ctx.DrawGeometry(UiTheme.Current.Cached("brush:strip:" + setColor, () => (IBrush)Paint.Brush(setColor)), null,
+                    new PolylineGeometry([new Point(dx, dy - 5), new Point(dx + 5, dy), new Point(dx, dy + 5), new Point(dx - 5, dy)], true));
+                Paint.DrawText(ctx, ArrangeModel.GroupName(group.Group).ToUpperInvariant(), new Point(GroupNameX + 16, ty + 0.5), 9.5, Paint.Text, ListWidth - 126, Paint.UiBold);
                 DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsGroupMuted(group.Group) ? Paint.MuteOn : null, gh);
                 DrawToggle(ctx, "S", NumberWidth + ListWidth - SoloFromRight, y, model.IsGroupSoloed(group.Group) ? Paint.SoloOn : null, gh);
                 ctx.FillRectangle(GroupBand, new Rect(GridLeft, y, gridWidth, gh));
@@ -1006,22 +1028,25 @@ internal sealed class ArrangeView : Control
             {
                 bool greyed = !model.IsAudible(lane.Lane);
                 // V6.39: grip, tree line to the group's first lane, "• name", then the
-                // sound icon, + (add a lane), ● (hear it), M and S at the right edge.
+                // + (add a lane), M and S at the right edge; the sound icon sits before the name (2026-11-13).
                 ctx.FillRectangle(Paint.LaneHeadA, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 if (model.SelectedLanes.Contains(lane.Lane))
                     ctx.FillRectangle(LaneSelectionFill, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
                 if (lane.Lane == model.ActiveLane)
                 {
-                    // V6.39's active lane: a brighter row with a blue bar at its left edge.
+                    // V6.39's active lane: a brighter row with a blue bar at its left edge (now beside the set's strip).
                     ctx.FillRectangle(ActiveFill, new Rect(0, y, NumberWidth + ListWidth, RowHeight));
-                    ctx.FillRectangle(ActiveBar, new Rect(0, y, 3, RowHeight));
+                    ctx.FillRectangle(ActiveBar, new Rect(SetStripWidth, y, 3, RowHeight));
                 }
+                // The lane's sample-set colour as a thin strip at the row's left edge: the only place the set colours the row.
+                var laneColor = lane.Color;
+                ctx.FillRectangle(UiTheme.Current.Cached("brush:strip:" + laneColor, () => (IBrush)Paint.Brush(laneColor)), new Rect(0, y, SetStripWidth, RowHeight - 1));
                 // Positions measured on V6.39 (list's left edge = 0): the first lane of a group has its grip at 17, a faint
                 // disclosure dot at 36, the sample dot at 49 and the name at 55; the lanes under it shift 18 px right, with
                 // the tree line at 21 (down to the row's middle for the last one, then across to 31).
                 var rows = model.Rows;
                 bool last = index + 1 >= rows.Count || rows[index + 1] is not LaneRow;
-                double indent = (model.DepthOf(lane.Lane) - 1) * ChildIndent, cy = y + RowHeight / 2;
+                double indent = IndentOf(model, lane.Lane), cy = y + RowHeight / 2;
                 Paint.DrawText(ctx, "⠿", new Point(GripX + indent, y + (RowHeight - 16) / 2), 12, Paint.Dim, 0);
                 if (indent > 0)
                 {
@@ -1029,24 +1054,47 @@ internal sealed class ArrangeView : Control
                     ctx.DrawLine(TreePen, new Point(branch, y), new Point(branch, last ? cy : y + RowHeight));
                     ctx.DrawLine(TreePen, new Point(branch, cy), new Point(branch + 10, cy));
                 }
-                else if (!last && !model.DrumMapMode) ctx.DrawLine(TreePen, new Point(TreeX, y + RowHeight * 0.6), new Point(TreeX, y + RowHeight));
+                else if (!last && !model.DrumMapMode && rows[index + 1] is LaneRow below)
+                {
+                    double stub = TreeX + IndentOf(model, below.Lane) - ChildIndent; // where the row below branches
+                    ctx.DrawLine(TreePen, new Point(stub, y + RowHeight * 0.6), new Point(stub, y + RowHeight));
+                }
                 if (model.IsFamilyParent(lane.Lane))
                     Paint.DrawText(ctx, model.IsFamilyCollapsed(lane.Lane) ? "▸" : "▾", new Point(DisclosureX + indent - 4, cy - 8), 11, Paint.Text, 0);
-                else ctx.DrawEllipse(DisclosureDot, null, new Point(DisclosureX + indent, cy), 1.2, 1.2);
 
                 bool silent = lane.Lane.Missing || model.Silent.Contains(lane.Lane);
-                string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + model.DrumRowName(lane);
+                // Under its set's header a lane drops the set's prefix: "hitclap2", not "soft-hitclap2".
+                string shown = model.DrumRowName(lane);
+                if (!model.DrumMapMode && SetPrefix(lane.Group) is { } prefix && shown.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) shown = shown[prefix.Length..];
+                string name = (lane.Lane.Source == LaneSource.StoryboardFile ? "SB " : "") + shown;
                 if (silent) name += lane.Lane.Missing ? "  (missing)" : "  (no sound)";
-                if (!model.DrumMapMode && model.SlotOf(lane.Lane).Source == LaneSource.Skin) name += lane.Lane.Source == LaneSource.Skin ? " · skin" : " · slot 0";
+                // "· skin" is lane info (the ⓘ switch): always shown it cut the names short. "· slot 0" is unusual, so it stays.
+                if (!model.DrumMapMode && model.SlotOf(lane.Lane).Source == LaneSource.Skin)
+                {
+                    if (lane.Lane.Source != LaneSource.Skin) name += " · slot 0";
+                    else if (ShowIndexes) name += " · skin";
+                }
                 if (ShowIndexes && lane.Index is { } idx) name += $"  · idx {idx}";
-                ctx.DrawEllipse(silent ? MissingDot : LoadedDot, null, new Point(DotX + indent, cy), 2.5, 2.5);
-                double nameWidth = GridLeft - IconFromRight - 14 - NameX - indent;
+                if (silent) ctx.DrawEllipse(MissingDot, null, new Point(DotX + indent - 3, cy), 2.5, 2.5);
+                DrawSoundIcon(ctx, model.SlotOf(lane.Lane).Sample?.Sound, new Point(NameX + indent + 9, cy), IconTone);
+                double nameX = NameX + indent + IconRoom;
+                double nameWidth = GridLeft - IconFromRight - 14 - nameX;
+                // BASE on a set's hitnormal, ADD on its additions, when the list is wide enough to keep the name readable.
+                bool tagged = !model.DrumMapMode && model.DepthOf(lane.Lane) == 1 && SetPrefix(lane.Group) is not null
+                    && model.SlotOf(lane.Lane).Sample is not null && nameWidth - TagWidth - 4 >= 64;
+                if (tagged)
+                {
+                    nameWidth -= TagWidth + 4;
+                    bool isBase = !IsAddition(model, lane.Lane);
+                    var tag = new Rect(NumberWidth + ListWidth - IconFromRight - 16 - TagWidth, cy - 7, TagWidth, 14);
+                    var stripColor = lane.Color;
+                    if (isBase) ctx.DrawRectangle(UiTheme.Current.Cached("brush:strip:" + stripColor, () => (IBrush)Paint.Brush(stripColor)), null, tag, 4, 4);
+                    Paint.DrawText(ctx, isBase ? "BASE" : "ADD", new Point(tag.X + (isBase ? 4 : 6), tag.Y + 1), 8.5, isBase ? TagDark : Paint.Dim, 0, Paint.UiBold);
+                }
                 if (nameWidth > 12) // collapsed (‹): no room for names, the icon says which sound it is
-                    Paint.DrawText(ctx, name, new Point(NameX + indent, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, silent ? Paint.MissingText : Paint.Text,
-                        nameWidth, model.IsFamilyBase(lane.Lane) ? Paint.UiBold : Paint.Ui);
-                DrawSoundIcon(ctx, model.SlotOf(lane.Lane).Sample?.Sound, new Point(NumberWidth + ListWidth - IconFromRight, cy), IconTone);
+                    Paint.DrawText(ctx, name, new Point(nameX, y + (RowHeight - LaneFont * 1.4) / 2), LaneFont, silent ? Paint.MissingText : Paint.Text,
+                        nameWidth, model.IsFamilyBase(lane.Lane) && !IsAddition(model, lane.Lane) ? Paint.Ui : Paint.UiLight); // hitnormal semibold, the rest lighter
                 DrawToggle(ctx, "+", NumberWidth + ListWidth - AddFromRight, y, AddFill);
-                DrawToggle(ctx, "●", NumberWidth + ListWidth - PreviewFromRight, y, null);
                 DrawToggle(ctx, "M", NumberWidth + ListWidth - MuteFromRight, y, model.IsMuted(lane.Lane) ? Paint.MuteOn : null);
                 DrawToggle(ctx, "S", NumberWidth + ListWidth - SoloFromRight, y, model.IsSoloed(lane.Lane) ? Paint.SoloOn : null);
 
@@ -1058,10 +1106,28 @@ internal sealed class ArrangeView : Control
         ctx.DrawLine(Paint.DividerPen, new Point(0, bottom), new Point(GridLeft + gridWidth, bottom));
     }
 
+    private const double SetStripWidth = 3, TagWidth = 30, AdditionIndent = 10;
+    private static readonly IBrush TagDark = Paint.Brush("#0b0b0e");
+
+    private static string? SetPrefix(LaneGroup group) => group switch
+    {
+        LaneGroup.NormalSet => "normal-",
+        LaneGroup.SoftSet => "soft-",
+        LaneGroup.DrumSet => "drum-",
+        _ => null,
+    };
+
+    /// <summary>An addition (whistle, finish, clap, slider sounds) of a sample set: it sits indented under the set's hitnormal.</summary>
+    private static bool IsAddition(ArrangeModel model, Lane lane) =>
+        !model.DrumMapMode && SetPrefix(ArrangeModel.DisplayGroup(model.SlotOf(lane))) is not null && model.SlotOf(lane).Sample is { Sound: not "hitnormal" };
+
+    /// <summary>A lane's indent in the list: additions step in under hitnormal, a family's numbered layers under their parent.</summary>
+    private static double IndentOf(ArrangeModel model, Lane lane) =>
+        (model.DepthOf(lane) - 1) * ChildIndent + (IsAddition(model, lane) ? AdditionIndent : 0);
+
     // Lane row positions from the list's left edge, measured on V6.39.
     private const double GripX = 16, TreeX = 21, DisclosureX = 36, DotX = 49, NameX = 55, ChildIndent = 18;
 
-    private static readonly IBrush DisclosureDot = Paint.Brush("#6a6a7a");
 
     private static readonly IPen TreePen = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#5a5a68"), 1);
     private static readonly Color IconTone = Color.Parse("#c9c9d6");
@@ -1075,7 +1141,7 @@ internal sealed class ArrangeView : Control
     public event Action? SongMuteRequested;
 
     private static readonly IBrush TitleBand = Paint.Brush("#303038"), GroupBand = Paint.Brush(Color.Parse("#000000"), 0.18),
-        LoadedDot = Paint.Brush("#85b9a9"), MissingDot = Paint.Brush("#c6a772");
+        MissingDot = Paint.Brush("#c6a772");
 
 
 
@@ -1084,18 +1150,18 @@ internal sealed class ArrangeView : Control
     // Circles are (cx, cy, r, filled); paths are SVG path data, which Avalonia parses as is.
     private static readonly Dictionary<string, (string[] Paths, (double X, double Y, double R, bool Fill)[] Circles)> SoundIcons = new()
     {
-        ["hitnormal"] = (["M17 2v2m0 24v2M3 16h2m24 0h2"], [(17, 16, 10, false), (17, 16, 6, false), (17, 16, 1.5, true)]),
-        ["hitwhistle"] = (["M5 15.5 12 10l7 1.5a6 6 0 1 1-6 9l-5 1.8-3-3.8z", "m5 15.5 5 4 7-6M12 10v5l-4 3", "m19 6 1-3m3 5 3-1m-12 0-1-3"], [(19, 17, 2.5, false)]),
-        ["hitfinish"] = (["M5 15c4-5 15-7 23-3-4 5-15 7-23 3z", "m14 11 2-3 4-.5 2 3M17 15l-2 10m-5 2h10M24 5l2-3m1 5 3-1", "m5 6 8 5"], []),
-        ["hitclap"] = (["m8 18-2-6c-.8-2 1-3 2-1l4 6-3-10c-.5-2 1.6-2.7 2.3-.8L15 16 13.5 6c-.3-2 2-2.2 2.4-.3L18 16l.3-7c.1-2 2.3-2 2.4 0l.4 10 2-3c1.4-1.6 3 .1 1.8 1.6l-4 7c-2 3.5-6.7 4.8-10 1.8L5 20c-1.4-1.6.5-3.1 1.8-1.8l3 2.7", "m25 9 2-2m-3-1 1-3m3 10 3-1"], []),
+        // Redrawn 2026-11-13 as plain outlines that read at 24 px: a drum, a whistle, a cymbal on its stand, a hand with impact lines.
+        ["hitnormal"] = (["M6 11.5a11 4.5 0 1 0 22 0a11 4.5 0 1 0-22 0", "M6 11.5v9.5c0 2.5 4.9 4.5 11 4.5s11-2 11-4.5v-9.5"], []),
+        ["hitwhistle"] = (["M12.5 11.5h17v6h-9.4"], [(12.5, 19, 7.5, false), (12.5, 19, 2, true)]),
+        ["hitfinish"] = (["M4 12a13 3.6 0 1 0 26 0a13 3.6 0 1 0-26 0", "M14.5 8.6c.6-2 4.4-2 5 0", "M17 15.6V27M11.5 28h11"], []),
+        ["hitclap"] = (["M7 19v-7a1.6 1.6 0 0 1 3.2 0v4v-8.5a1.6 1.6 0 0 1 3.2 0v8.5v-10a1.6 1.6 0 0 1 3.2 0v10v-8a1.6 1.6 0 0 1 3.2 0v11l2-3.4c1-1.6 3.4-.4 2.6 1.4l-3.6 8c-1 2-3 3-5.4 3h-3c-3 0-5.4-2.5-5.4-5.5z", "M25 6.5l2-2.5M27.5 11l3-1M22.5 4l.5-2.5"], []),
     };
 
     private static readonly Dictionary<string, Geometry[]> IconGeometry = SoundIcons.ToDictionary(
         kv => kv.Key, kv => kv.Value.Paths.Select(p => (Geometry)StreamGeometry.Parse(p)).ToArray());
 
-    private static readonly IBrush IconStroke = Paint.Brush(Color.Parse("#b6c8c3"), 0.84), WhistleStroke = Paint.Brush(Color.Parse("#c9c0a4"), 0.84);
-    private static readonly IPen IconPen = new Pen(IconStroke, 1.45) { LineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round },
-        WhistlePen = new Pen(WhistleStroke, 1.45) { LineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+    private static readonly IBrush IconStroke = Paint.Brush(Color.Parse("#e3e9f0"), 0.92);
+    private static readonly IPen IconPen = new Pen(IconStroke, 1.7) { LineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
 
     private static void DrawSoundIcon(DrawingContext ctx, string? sound, Point c, Color tone)
     {
@@ -1106,8 +1172,8 @@ internal sealed class ArrangeView : Control
         }
 
         const double scale = 24.0 / 32;
-        var brush = sound == "hitwhistle" ? WhistleStroke : IconStroke; // V6.39 gives the whistle a light sepia
-        var pen = sound == "hitwhistle" ? WhistlePen : IconPen;
+        var brush = IconStroke;
+        var pen = IconPen;
         using (ctx.PushTransform(Matrix.CreateTranslation(-17, -16) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(c.X, c.Y)))
         {
             foreach (var geometry in IconGeometry[sound]) ctx.DrawGeometry(null, pen, geometry);
@@ -1120,10 +1186,16 @@ internal sealed class ArrangeView : Control
         // V6.39's row buttons: 18×17 px, 4 px corners, 9 px text; the + (add) is 17×17 with 12 px text. Smaller in short rows.
         bool add = letter == "+";
         double row = rowHeight ?? RowHeight;
-        double w = add ? 17 : ToggleWidth, h = Math.Min(17, row - 2), size = add ? 12 : 9;
+        double w = ToggleWidth, h = Math.Min(20, row - 2), size = add ? 13 : 9.5;
         var rect = new Rect(x, y + (row - h) / 2, w, h);
-        ctx.DrawRectangle(lit ?? Paint.Button, ToggleBorder, rect, add ? 3 : 4, add ? 3 : 4);
-        Paint.DrawText(ctx, letter, new Point(x + (w - size * 0.62) / 2, rect.Y + (h - size * 1.35) / 2), size, lit is null ? Paint.Dim : Paint.White, 0, Paint.UiBold);
+        // A set header's M and S are plain letters until they are on, so the header stays quieter than its lanes.
+        if (rowHeight is not null && lit is null)
+        {
+            Paint.DrawText(ctx, letter, new Point(x + (w - size * 0.62) / 2, rect.Y + (h - size * 1.35) / 2), size, Paint.Dim, 0, Paint.UiBold);
+            return;
+        }
+        ctx.DrawRectangle(lit ?? Paint.Button, ToggleBorder, rect, 6, 6);
+        Paint.DrawText(ctx, letter, new Point(x + (w - size * 0.62) / 2, rect.Y + (h - size * 1.35) / 2), size, lit is null ? Paint.Text : Paint.White, 0, Paint.UiBold);
     }
 
     private static readonly IPen ToggleBorder = new Avalonia.Media.Immutable.ImmutablePen(Paint.Brush("#55556a"), 1);
@@ -1145,7 +1217,7 @@ internal sealed class ArrangeView : Control
         IBrush muted = Paint.MutedFill, mutedSpan = MutedSpans; // once per row, not per note
         var session = Session;
         double cy = y + (height ?? RowHeight) / 2;
-        double noteSize = Math.Min(NoteSize, (height ?? RowHeight) * 0.5);
+        double noteSize = Math.Min(NoteSize, (height ?? RowHeight) * 0.6);
 
         // Notes are sorted by start; slider body spans can start before the view, so look back one visible width.
         for (int i = Sorted.LowerBound(notes, from - Axis.VisibleDuration, n => n.Time); i < notes.Count; i++)
@@ -1245,8 +1317,10 @@ internal sealed class ArrangeView : Control
     private const double ObjectLookBack = 60000;
 
     // The list's buttons, measured from its right edge (V6.39 keeps them there); names from the left.
-    private const double ToggleWidth = 18, SoloFromRight = 25, MuteFromRight = 48, PreviewFromRight = 71, AddFromRight = 93, IconFromRight = 111,
-        AddLaneFromRight = 70, RemoveLaneFromRight = 48, CollapseFromRight = 26, GroupNameX = 46;
+    private const double // 2026-11-13 (the design's lane list): 20 px buttons 8 px apart, no ● preview button; the sound icon sits before the
+        // name, so IconFromRight is now only the room kept clear right of the name and its BASE/ADD tag.
+        ToggleWidth = 20, SoloFromRight = 28, MuteFromRight = 56, AddFromRight = 84, IconFromRight = 78, IconRoom = 26,
+        AddLaneFromRight = 84, RemoveLaneFromRight = 56, CollapseFromRight = 28, GroupNameX = 46; // the header's + − ‹ sit above the rows' + M S
 
     private enum ListTarget
     {
@@ -1254,7 +1328,6 @@ internal sealed class ArrangeView : Control
         Mute,
         Solo,
         Add,
-        Preview,
         Name,
     }
 
@@ -1268,7 +1341,6 @@ internal sealed class ArrangeView : Control
             _ when In(SoloFromRight) => ListTarget.Solo,
             GroupRow when x < GroupNameX - NumberWidth + 2 => ListTarget.Collapse,
             LaneRow when In(AddFromRight) => ListTarget.Add,
-            LaneRow when In(PreviewFromRight) => ListTarget.Preview,
             _ => ListTarget.Name,
         };
     }
@@ -1276,7 +1348,7 @@ internal sealed class ArrangeView : Control
     private bool OnLaneGrip(Row row, Point p)
     {
         if (p.X >= GridLeft) return false;
-        double x = row is GroupRow ? 12 : GripX + (row is LaneRow lane ? (Model!.DepthOf(lane.Lane) - 1) * ChildIndent : 0);
+        double x = row is GroupRow ? 12 : GripX + (row is LaneRow lane ? IndentOf(Model!, lane.Lane) : 0);
         return p.X >= x - 4 && p.X < x + 14;
     }
 
@@ -1297,6 +1369,8 @@ internal sealed class ArrangeView : Control
         if (draggedRow is LaneRow lane)
         {
             if (target is not LaneRow other) return;
+            // Lanes sit under their own set's header, so a lane only moves among its set's lanes; drag a header to move a set.
+            if (!model.DrumMapMode && other.Group != lane.Group) return;
             string? family = model.FamilyKey(lane.Lane), targetFamily = model.FamilyKey(other.Lane);
             if (family == targetFamily && family is not null && (model.IsFamilyBase(lane.Lane) || model.IsFamilyBase(other.Lane))) return;
             if (family != targetFamily)
@@ -1451,7 +1525,7 @@ internal sealed class ArrangeView : Control
 
             if (!point.Properties.IsLeftButtonPressed) return;
             // The + − ‹ in the SAMPLE LANES title.
-            bool On(double fromRight) => p.X >= GridLeft - fromRight && p.X < GridLeft - fromRight + ToggleWidth && p.Y < 22;
+            bool On(double fromRight) => p.X >= GridLeft - fromRight && p.X < GridLeft - fromRight + ToggleWidth && p.Y < SectionsHeight;
             if (On(AddLaneFromRight))
             {
                 AddLaneRequested?.Invoke(null);
@@ -1544,7 +1618,7 @@ internal sealed class ArrangeView : Control
         {
             if (point.Properties.IsLeftButtonPressed && row is LaneRow family && model.IsFamilyParent(family.Lane))
             {
-                double disclosure = DisclosureX + (model.DepthOf(family.Lane) - 1) * ChildIndent;
+                double disclosure = DisclosureX + IndentOf(model, family.Lane);
                 if (Math.Abs(p.X - disclosure) <= 7)
                 {
                     model.ToggleFamily(family.Lane);
@@ -1582,7 +1656,6 @@ internal sealed class ArrangeView : Control
                 case (LaneRow l, ListTarget.Mute): model.ToggleMute(l.Lane); break;
                 case (LaneRow l, ListTarget.Solo): model.ToggleSolo(l.Lane); break;
                 case (LaneRow l, ListTarget.Add): AddLaneRequested?.Invoke(l.Lane); break;
-                case (LaneRow l, ListTarget.Preview): LaneListPreviewRequested?.Invoke(l.Lane); break;
                 case (LaneRow l, _):
                     model.SelectLane(l.Lane, e.KeyModifiers.HasFlag(KeyModifiers.Shift), e.KeyModifiers.HasFlag(KeyModifiers.Control));
                     if (!additive) LaneListPreviewRequested?.Invoke(l.Lane);

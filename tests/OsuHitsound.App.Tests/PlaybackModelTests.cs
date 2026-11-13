@@ -77,8 +77,9 @@ public class PlaybackModelTests
             ["drum-hitnormal2.wav", "drum-hitclap2.wav", "drum-hitclap3.ogg"]);
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
 
-        // The default sounds sit in their own set's group: no separate skin group.
-        Assert.Empty(model.Rows.OfType<GroupRow>());
+        // The default sounds sit in their own set's group: no separate skin group, one header row per set present.
+        Assert.Equal(model.LaneRows.Select(r => r.Group).Distinct(), model.Rows.OfType<GroupRow>().Select(g => g.Group));
+        Assert.DoesNotContain(model.Rows.OfType<GroupRow>(), g => g.Group == LaneGroup.Skin);
         Assert.Equal(Enumerable.Range(1, model.LaneRows.Count), model.LaneRows.Select(r => r.Number));
         Assert.Equal(3, model.LaneRows.Single(r => r.Lane.Name == "drum-hitclap3.ogg").Index);
         Assert.All(model.LaneRows.Where(r => r.Lane.Source == LaneSource.Skin), r => Assert.Equal(0, r.Index));
@@ -124,10 +125,15 @@ public class PlaybackModelTests
         var model = new ArrangeModel(Session(map, file), file, new HashSet<Lane>());
         int before = model.Rows.Count;
 
+        int softLanes = model.Rows.OfType<LaneRow>().Count(r => r.Group == LaneGroup.SoftSet);
         model.ToggleCollapsed(LaneGroup.SoftSet);
 
-        Assert.Empty(model.Rows.OfType<GroupRow>());
-        Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Group == LaneGroup.SoftSet);
+        // A folded set keeps its header row and hides its lanes (they stay reachable for the dim note preview).
+        Assert.Contains(model.Rows.OfType<GroupRow>(), g => g.Group == LaneGroup.SoftSet);
+        Assert.DoesNotContain(model.Rows.OfType<LaneRow>(), r => r.Group == LaneGroup.SoftSet);
+        Assert.Equal(before - softLanes, model.Rows.Count);
+        Assert.Equal(softLanes, model.FolderChildren(LaneGroup.SoftSet).Count);
+        model.ToggleCollapsed(LaneGroup.SoftSet);
         Assert.Equal(before, model.Rows.Count);
     }
 

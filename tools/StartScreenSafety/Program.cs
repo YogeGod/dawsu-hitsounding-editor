@@ -51,7 +51,7 @@ Check(inspector.GetLogicalDescendants().OfType<TextBlock>().Any(t=>t.Text==model
 Check(inspector.GetLogicalDescendants().OfType<Button>().Any(b=>Equals(b.Content,"Preview") && b.IsEnabled),"default lane audition available before a map");
 Check(inspector.GetLogicalDescendants().OfType<TextBlock>().Any(t=>t.Text?.Contains("Open a beatmap to change") == true),"sample assignment explains open-map requirement");
 Check(!inspector.GetLogicalDescendants().OfType<ComboBox>().First().IsEnabled,"no-map workspace cannot accidentally edit samples");
-Check(!model.Rows.OfType<GroupRow>().Any(),"sample-set folders absent");
+Check(model.Rows.OfType<GroupRow>().Any(),"sample-set folders present (UI refresh, 2026-11-13)");
 w.Close();Pump();
 
 string source=Directory.CreateDirectory(Path.Combine(artifacts,"source")).FullName;

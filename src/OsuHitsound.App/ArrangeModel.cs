@@ -392,9 +392,9 @@ internal sealed partial class ArrangeModel
 
     public static string GroupName(LaneGroup group) => group switch
     {
-        LaneGroup.SoftSet => "Soft sampleset",
-        LaneGroup.NormalSet => "Normal sampleset",
-        LaneGroup.DrumSet => "Drum sampleset",
+        LaneGroup.SoftSet => "Soft set",
+        LaneGroup.NormalSet => "Normal set",
+        LaneGroup.DrumSet => "Drum set",
         LaneGroup.OwnFiles => "Own files",
         _ => "Skin sounds (no file)",
     };
@@ -634,6 +634,9 @@ internal sealed partial class ArrangeModel
         var ordered = NormalizeFamilies(laneRows).ToList();
         int i = ordered.FindIndex(r => r.Lane == lane), j = i + direction;
         if (i < 0 || j < 0 || j >= ordered.Count) return;
+        // The list shows one folder per sample set, so a lane only moves among its own set's lanes: a move past
+        // another set's lane would change the order and show nothing.
+        if (!DrumMapMode && ordered[j].Group != ordered[i].Group) return;
         MoveLaneTo(lane, ordered[j].Lane, direction > 0);
     }
 

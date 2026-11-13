@@ -27,7 +27,6 @@ public partial class MainWindow
         // As in Hitsound mode: Open and Save in the ribbon, messages behind the title bar's details icon, and the settings
         // kept for all projects.
         Keys.OpenRequested += () => Run("open");
-        Keys.SaveRequested += () => _ = SaveKeysound();
         Keys.StatusChanged += text =>
         {
             keysoundMessage = text.Length > 0 ? text : null;
@@ -218,10 +217,22 @@ public partial class MainWindow
     }
 
     /// <summary>The title bar in Keysound mode: Keysound's menus instead of the hitsound ones (the key editor has its own ribbon).</summary>
+    private bool keysoundChrome;
+
     private void ShowKeysoundChrome(bool on)
     {
         KeysoundMenu.IsVisible = on;
         HeaderMenu.IsVisible = !on;
+        // The title bar's Save button serves the editor that shows: Save .osu, or the key editor's Save project.
+        keysoundChrome = on;
+        SaveLabel.Text = on ? "Save project" : "Save .osu";
+        Avalonia.Automation.AutomationProperties.SetName(SaveButton, on ? "Save project" : "Save .osu");
+        if (on)
+        {
+            ToolTip.SetTip(SaveButton, "Save the Keysound project (Ctrl+S): tracks, notes and instrument settings. The reference beatmap is never changed.");
+            SaveBadge.IsVisible = false;
+        }
+        else ShowSaveState(); // the .osu tooltip and the problem badge
         if (!on) keysoundMessage = null;
         RefreshWorkflowFeedback();
     }
@@ -282,7 +293,7 @@ public partial class MainWindow
         if (Keys.Document is not { } project) return;
         string name = Path.GetFileName(project.Folder);
         FileTitle.Text = $"{name} — Keysound{(project.Session.IsEdited ? " (unsaved)" : "")}";
-        ToolTip.SetTip(FileTitle, project.ProjectPath);
+        ToolTip.SetTip(TitleChip, project.ProjectPath);
         Title = $"{name} — dawsu! Keysound";
     }
 

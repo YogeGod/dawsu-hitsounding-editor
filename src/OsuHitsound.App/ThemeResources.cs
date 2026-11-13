@@ -57,6 +57,11 @@ internal static class ThemeResources
         r["ButtonActiveHover"] = Lighter("button.active", 0.12);
         r["ButtonActiveBorder"] = B("button.activeBorder");
         r["PanelActive"] = Lighter("button.bg", 0.08);
+        // A switch that is on (ribbon tiles): the accent as a tint behind, and lightened for the icon and label.
+        var accent = t.Color("button.active");
+        r["AccentTint"] = Paint.Brush(accent, 0.26);
+        r["AccentText"] = Paint.Brush(Color.FromRgb(Mix(accent.R), Mix(accent.G), Mix(accent.B)));
+        static byte Mix(byte c) => (byte)(c + (255 - c) * 0.45);
         r["ButtonFontSize"] = t.Number("button.fontSize");
         r["ControlHeight"] = t.Number("button.height");
         r["ControlRadius"] = new CornerRadius(t.Number("button.radius"));
@@ -96,5 +101,8 @@ internal static class ThemeResources
         r["MenuFlyoutItemBackgroundPointerOver"] = Lighter("panel.bg", 0.1);
         r["ComboBoxDropDownBackground"] = B("panel.bg");
         r["ComboBoxDropDownBorderBrush"] = B("chrome.border");
+        // UI refresh (2026-11-13): menus and pop-ups are rounded panels with a little room around their rows.
+        r["OverlayCornerRadius"] = new CornerRadius(10);
+        r["MenuFlyoutPresenterThemePadding"] = new Thickness(6);
     }
 }

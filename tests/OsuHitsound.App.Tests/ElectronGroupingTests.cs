@@ -58,9 +58,9 @@ public class ElectronGroupingTests
         var (model, _) = Setup(); var s = model.Session;
         var hit = s.HitAt(Two, 1000); s.Add([hit]); s.SetVolume([hit.Anchor!.Value], 35);
         var state = s.State;
-        model.ToggleFamily(Base); model.ToggleCollapsed(LaneGroup.SoftSet);
+        model.ToggleFamily(Base);
         var view = new ArrangeView(); view.SetModel(model); view.Axis.Left = 0; view.Axis.Zoom = 1;
-        Assert.Empty(model.Rows.OfType<GroupRow>());
+        Assert.Contains(model.Rows.OfType<GroupRow>(), g => g.Group == LaneGroup.SoftSet); // each sample set has its header row
         var parent = model.Rows.OfType<LaneRow>().Single(r => r.Lane == Base);
         Assert.Equal(Two, view.SummaryLaneUnder(parent, 1000));
         model.RevealLane(Two);
@@ -77,7 +77,7 @@ public class ElectronGroupingTests
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == Base);
         Assert.Contains(model.Rows.OfType<LaneRow>(), r => r.Lane == Two);
         Assert.Empty(model.CollapsedChildren(Base)); Assert.Empty(model.FolderChildren(LaneGroup.SoftSet));
-        model.SetFilter(""); Assert.NotEmpty(model.CollapsedChildren(Base)); Assert.Empty(model.Rows.OfType<GroupRow>());
+        model.SetFilter(""); Assert.NotEmpty(model.CollapsedChildren(Base)); Assert.NotEmpty(model.Rows.OfType<GroupRow>());
     }
 
     [Fact]

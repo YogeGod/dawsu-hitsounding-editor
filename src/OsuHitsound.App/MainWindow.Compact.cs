@@ -15,9 +15,10 @@ public partial class MainWindow
         // The ribbon's buttons carry their own icons and labels (MainWindow.axaml); these transport buttons become icons.
         Icon(SongMuteButton, "VolumeX", "Mute the song");
         SongMuteButton.Width = 22;
-        Icon(ReturnOnStopButton, "Undo2", "Return to playback start when stopping");
-        Icon(FollowPlaybackButton, "LocateFixed", "Follow the playhead during playback");
-        Icon(LoopButton, "Repeat2", "Cycle between the L and R locators (L)");
+        // Icons here; TransportLabels adds their names when the window is wide enough.
+        Icon(ReturnOnStopButton, "OsuReturn", "Return to playback start when stopping");
+        Icon(FollowPlaybackButton, "OsuFollow", "Follow the playhead during playback");
+        Icon(LoopButton, "OsuCycle", "Cycle between the L and R locators (L)");
         foreach (var (control, name) in new (Control, string)[]
         {
             (SnapModeBox, "Snap mode"), (SnapBox, "Beat division"), (ZoomSlider, "Timeline zoom"),
@@ -40,7 +41,7 @@ public partial class MainWindow
 
         static void Icon(Button button, string glyph, string name)
         {
-            button.Content = new AppIcon { Glyph = glyph };
+            button.Content = new AppIcon { Glyph = glyph, Size = glyph.StartsWith("Osu") ? 20 : 16 };
             button.Classes.Add("icon");
             button.Classes.Remove("wide");
             button.Width = 30;
@@ -70,7 +71,7 @@ public partial class MainWindow
             InspectorToggle.IsChecked = narrow ? compactInspectorOpen : wideInspectorOpen;
         }
         AppTitle.IsVisible = width >= 1100;
-        FileTitle.IsVisible = width >= 1250;
+        TitleChip.IsVisible = width >= 1250;
         TitleBarContent.MinWidth = StatusBarContent.MinWidth = 0;
         // No sideways scrolling: the bars fit the window, and the map name shortens with "…" instead of growing the bar.
         TitleBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
@@ -78,10 +79,17 @@ public partial class MainWindow
         Keys.FitWidth(width);
         Lcd.Margin = default;
         Lcd.Padding = new Thickness(12, 2);
-        MixControls.Width = width < 1000 ? 268 : 308;
+        // Wide windows put Global and Song on one line; narrower ones stack them as before.
+        bool mixRow = width >= 1500;
+        MixControls.Orientation = mixRow ? Orientation.Horizontal : Orientation.Vertical;
+        MixControls.Spacing = mixRow ? 14 : 2;
+        MixControls.Width = mixRow ? double.NaN : width < 1000 ? 268 : 308;
+        GlobalVolumePanel.Width = mixRow ? 190 : double.NaN;
+        SongControls.Width = mixRow ? 300 : double.NaN;
         // The transport's tight spacing and speed buttons start below 1100 px, which leaves room for the L/R locator
         // button beside Cycle. Below 1000 px even that is not enough: the ruler still sets L (Ctrl+click) and R (Alt+click).
         bool tightTransport = width < 1100;
+        TransportLabels.Fit(width, (LoopButton, "Cycle", "OsuCycle"), (ReturnOnStopButton, "Return", "OsuReturn"), (FollowPlaybackButton, "Follow", "OsuFollow"));
         LocatorsButton.IsVisible = width >= LocatorsMinWidth;
         TransportLeft.Spacing = tightTransport ? 2 : 4;
         TransportButtons.Spacing = tightTransport ? 2 : 4;
@@ -108,6 +116,6 @@ public partial class MainWindow
 
     private RibbonFit? ribbonFit;
 
-    /// <summary>Fits the ribbon in one row beside Save (<see cref="App.RibbonFit"/>).</summary>
-    private void UpdateRibbonFit(double width) => (ribbonFit ??= new RibbonFit(ControlBar, ControlBarContent, RibbonGroups, SaveButton)).Update(width);
+    /// <summary>Fits the ribbon in one row beside the panel switches (<see cref="App.RibbonFit"/>).</summary>
+    private void UpdateRibbonFit(double width) => (ribbonFit ??= new RibbonFit(ControlBar, ControlBarContent, RibbonGroups, RibbonPanels)).Update(width);
 }

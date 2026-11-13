@@ -64,7 +64,7 @@ public partial class MainWindow
         new("Place a hit", "Choose Draw (3), then click in that lane on the timeline. Snap keeps the hit on the beat grid. Select (1) moves hits; Ctrl+Z undoes your last edit.", () => On(DrawTool)),
         new("Listen", "Press Space to play, or use Play below. Audition previews newly drawn hits. Lane M/S and song volume affect listening only; they do not remove saved sounds.", () => On(PlayButton)),
         new("Choose your output", "Save .osu updates the open difficulty. Generate creates a separate [Hitsounds] difficulty, including circles for loose hits. Copy hitsounds applies a source difficulty to chosen difficulties. Use the operation-details icon beside the map title to review results.", () => On(SaveButton)),
-        new("Keep working", "The map title shows which difficulty is open. Hover it for its path. The operation-details icon beside it shows results and warnings; File → Open map folder shows your files. File → Full interface tour explains the remaining controls; F1 lists shortcuts. Finish closes this guide.", () => On(FileTitle)),
+        new("Keep working", "The map title shows which difficulty is open. Hover it for its path. The operation-details icon beside it shows results and warnings; File → Open map folder shows your files. File → Full interface tour explains the remaining controls; F1 lists shortcuts. Finish closes this guide.", () => On(TitleChip)),
     ];
 
     internal void ShowTutorialStepForSnapshot(int step)
@@ -108,7 +108,7 @@ public partial class MainWindow
             () => On(HeaderMenu)),
         new("Menus", "Every command lives here too: File (open, save, generate, export settings, help), Edit (quantize, repeat, range, scale by volume), Playback, Map (copy hitsounds into other difficulties) and View. Each item shows its icon and shortcut; on/off settings are switches, and choices such as Export style, Start playing from and Speed are rows of buttons right in the menu.",
             () => On(HeaderMenu)),
-        new("The open map", "The name of the .osu you are editing.", () => On(FileTitle)),
+        new("The open map", "The name of the .osu you are editing.", () => On(TitleChip)),
         new("Preferences", "Your Songs folder, audio output and buffer, and the key commands.",
             () => On(PreferencesButton)),
         new("Keys / F1", "A searchable list of every shortcut and mouse action. Press F1 at any time.", () => On(HelpButton)),

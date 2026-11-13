@@ -78,7 +78,7 @@ internal sealed class UiTheme
         new("arrange", "Grid", "Arrange background", [C("arrange.bg", "Background", "#383838")]),
         new("header", "Grid", "Header and ruler", [
             C("header.bg", "Background", "#2e2e2e"), C("ruler.bar", "Bar numbers", "#edf0f1"), C("ruler.beat", "Beat numbers", "#bdbdbd"),
-            N("ruler.fontSize", "Font size", 12, 8, 20), N("header.sections", "Sections row height", 18, 0, 40)]),
+            N("ruler.fontSize", "Font size", 12, 8, 20), N("header.sections", "Sections row height", 30, 0, 40)]),
         new("cycle", "Grid", "Cycle range", [
             C("cycle.active", "Ruler band, cycling", "#2f6fd0"), C("cycle.inactive", "Ruler band, cycle off", "#8e8e93"),
             C("cycle.reverse", "Ruler band, R before L (skips)", "#ff453a"),
@@ -88,7 +88,7 @@ internal sealed class UiTheme
             C("wave.base", "Loudness", "#8fb7e8"), C("wave.low", "Low: kicks, bass", "#4f8dff"), C("wave.mid", "Mid: snares, vocals", "#c27bff"),
             C("wave.high", "High: hi-hats, cymbals", "#ffd166"), N("wave.opacity", "Opacity", 0.85, 0, 1)]),
         new("lanelist", "Grid", "Lane list", [
-            N("list.width", "Width", 224, 160, 600), C("lane.text", "Name text", "#edf0f1"), C("lane.dim", "Index text", "#bdbdbd"),
+            N("list.width", "Width", 272, 160, 600), C("lane.text", "Name text", "#edf0f1"), C("lane.dim", "Index text", "#bdbdbd"),
             N("lane.fontSize", "Font size", 12, 8, 22), C("lane.missing", "Missing / no sound", "#ff9a92")]),
         new("lanerow", "Grid", "Lane rows", [
             N("row.height", "Height", 31, 16, 64), C("lane.headA", "List colour (odd)", "#515151"), C("lane.headB", "List colour (even)", "#4a4a4a"),
@@ -107,7 +107,8 @@ internal sealed class UiTheme
         new("note", "Grid", "Notes", [
             N("note.size", "Size", 15, 5, 30), C("note.ring", "Ring", "#111113"), C("note.selected", "Selected ring", "#73b7ff"),
             N("note.brighten", "Brighten lane colour", 0.3, 0, 1)]),
-        new("gridlines", "Grid", "Beat and bar lines", [C("line.beat", "Beat lines", "#4d4d4d"), C("line.bar", "Bar lines", "#5e5e5e"), C("line.snap", "Snap lines", "#424242")]),
+        new("gridlines", "Grid", "Beat and bar lines", [C("line.beat", "Beat lines", "#4d4d4d"), C("line.bar", "Bar lines", "#5e5e5e"), C("line.snap", "Snap lines", "#424242"),
+            N("line.barShade", "Shade every other bar (opacity)", 0, 0, 0.3)]),
         new("pianoroll", "Grid", "Key editor rows", [
             C("roll.white", "White-key rows", "#333333"), C("roll.black", "Black-key rows", "#2b2b2b")]),
         new("playhead", "Grid", "Playhead", [C("playhead.color", "Colour", "#ffffff"), N("playhead.width", "Width", 2, 1, 6)]),
@@ -149,10 +150,37 @@ internal sealed class UiTheme
         ["volume.bg"] = "#111113", ["volume.side"] = "#1b1b1e", ["roll.white"] = "#1b1b1e", ["roll.black"] = "#111113",
     };
 
-    /// <summary>The colour scheme (Preferences, Colours): 0 grey, 1 dark, 2 blue-grey dark, 3 teal dark.</summary>
+    // The Slate scheme (UI refresh, 2026-11-13): blue-slate surfaces that differ in shade by area (title bar darkest,
+    // toolbar and transport lightest, the grid near-black), a lighter blue accent, and dark text on coloured buttons.
+    private static readonly IReadOnlyDictionary<string, string> SlatePalette = new Dictionary<string, string>
+    {
+        ["window.bg"] = "#181b21", ["window.text"] = "#a9b4c2",
+        ["title.bg"] = "#181b21", ["title.text"] = "#d0d7e1", ["control.bg"] = "#2e343f",
+        ["edit.bg"] = "#1f232a", ["status.bg"] = "#2e343f", ["status.text"] = "#a9b4c2",
+        ["footer.bg"] = "#1f232a", ["chrome.border"] = "#363d48", ["line.divider"] = "#434c5a",
+        ["panel.bg"] = "#272c35", ["panel.raised"] = "#2c313b", ["button.text"] = "#f4f4f6",
+        ["text.secondary"] = "#a9b4c2", ["text.dim"] = "#a9b4c2", ["text.onAccent"] = "#06121f", ["button.bg"] = "#3c4553",
+        ["button.border"] = "#505b6a", ["button.active"] = "#3d9bff", ["button.activeBorder"] = "#3d9bff",
+        ["tool.active"] = "#3d9bff", ["tool.activeIcon"] = "#06121f", ["field.bg"] = "#13161b",
+        ["slider.track"] = "#46505e", ["slider.thumb"] = "#f4f4f6", ["play.bg"] = "#2fbf4a",
+        ["lcd.bg"] = "#13161b", ["lcd.text"] = "#f4f4f6", ["lcd.caption"] = "#a0abba",
+        ["arrange.bg"] = "#13161b", ["header.bg"] = "#232831", ["ruler.bar"] = "#f4f4f6",
+        ["ruler.beat"] = "#93a0b1", ["lane.text"] = "#f4f4f6", ["lane.dim"] = "#93a0b1",
+        ["lane.headA"] = "#1f232a", ["lane.headB"] = "#1c2027", ["group.head"] = "#2a3039",
+        ["toggle.bg"] = "#434c5a", ["line.beat"] = "#434c5a", ["line.bar"] = "#6f7b8c",
+        ["line.snap"] = "#1f232a", ["divider"] = "#363d48", ["overview.bg"] = "#1f232a",
+        ["volume.bg"] = "#13161b", ["volume.side"] = "#1f232a", ["roll.white"] = "#191c22", ["roll.black"] = "#13161b",
+        ["cycle.active"] = "#2fbf4a", ["line.barShade"] = "0.035", ["button.radius"] = "8", ["note.size"] = "18",
+    };
+
+    private static bool InAPalette(string key) => DarkPalette.ContainsKey(key) || SlatePalette.ContainsKey(key);
+
+    /// <summary>The colour scheme (Preferences, Colours): 0 grey, 1 dark, 2 blue-grey dark, 3 teal dark, 4 slate.</summary>
     public int Scheme { get; private set; }
 
-    public const int SchemeCount = 4;
+    public const int SchemeCount = 5;
+
+    public const int SlateScheme = 4;
 
     public bool DarkMode => Scheme != 0;
 
@@ -176,6 +204,7 @@ internal sealed class UiTheme
     {
         if (scheme == 0) return null;
         if (scheme == 1) return DarkPalette;
+        if (scheme == SlateScheme) return SlatePalette;
         lock (SchemePalettes)
         {
             if (SchemePalettes.TryGetValue(scheme, out var made)) return made;
@@ -212,7 +241,7 @@ internal sealed class UiTheme
     {
         var setting = ByKey[key];
         if (!IsValid(setting, value)) throw new FormatException($"\"{value}\" is not a valid {setting.Kind.ToString().ToLowerInvariant()} for {setting.Label}.");
-        if (value == setting.Default && !DarkPalette.ContainsKey(key)) values.Remove(key);
+        if (value == setting.Default && !InAPalette(key)) values.Remove(key);
         else values[key] = value;
         cache.Clear();
         Changed?.Invoke();
@@ -259,7 +288,7 @@ internal sealed class UiTheme
         foreach (var (key, element) in map)
             if (ByKey.TryGetValue(key, out var setting) && element.ValueKind is JsonValueKind.String or JsonValueKind.Number
                 && (element.ValueKind == JsonValueKind.String ? element.GetString()! : element.GetRawText()) is var value
-                && IsValid(setting, value) && (value != setting.Default || DarkPalette.ContainsKey(key)))
+                && IsValid(setting, value) && (value != setting.Default || InAPalette(key)))
                 theme.values[key] = value;
         return theme;
     }
