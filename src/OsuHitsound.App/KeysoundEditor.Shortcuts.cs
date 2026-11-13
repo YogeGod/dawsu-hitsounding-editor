@@ -9,6 +9,38 @@ namespace OsuHitsound.App;
 /// have keep their keys and meaning here, and the key editor's own ("ks.") appear in Preferences → Keys and F1 like the
 /// rest. A Cubase key file applies to both modes.
 /// </summary>
+/// <summary>
+/// The shared commands <see cref="KeysoundEditor.RunShortcut"/> runs, with the Keysound area F1 also lists them under.
+/// Kept next to the switch: a case added there belongs here too. "snapN" (1/N snap) is matched by <see cref="AreaOf"/>.
+/// </summary>
+internal static class KeysoundShortcuts
+{
+    private static readonly IReadOnlyDictionary<string, string> Shared = new Dictionary<string, string>
+    {
+        ["play"] = Areas.KsPlayback, ["start"] = Areas.KsPlayback, ["stop"] = Areas.KsPlayback, ["cycle"] = Areas.KsPlayback,
+        ["jumpLeft"] = Areas.KsPlayback, ["jumpRight"] = Areas.KsPlayback, ["setLeft"] = Areas.KsPlayback, ["setRight"] = Areas.KsPlayback,
+        ["seekBack"] = Areas.KsPlayback, ["seekForward"] = Areas.KsPlayback, ["seekBackFar"] = Areas.KsPlayback, ["seekForwardFar"] = Areas.KsPlayback,
+        ["first"] = Areas.KsPlayback, ["last"] = Areas.KsPlayback, ["locatorsToSelection"] = Areas.KsPlayback, ["playLocatorRange"] = Areas.KsPlayback,
+
+        ["toolSelect"] = Areas.KsNoteEditing, ["toolGrab"] = Areas.KsNoteEditing, ["toolDraw"] = Areas.KsNoteEditing, ["toolErase"] = Areas.KsNoteEditing,
+        ["snap"] = Areas.KsNoteEditing, ["undo"] = Areas.KsNoteEditing, ["redo"] = Areas.KsNoteEditing, ["cut"] = Areas.KsNoteEditing,
+        ["copy"] = Areas.KsNoteEditing, ["paste"] = Areas.KsNoteEditing, ["duplicate"] = Areas.KsNoteEditing, ["delete"] = Areas.KsNoteEditing,
+        ["selectAll"] = Areas.KsNoteEditing, ["deselect"] = Areas.KsNoteEditing, ["quantize"] = Areas.KsNoteEditing, ["zoomIn"] = Areas.KsNoteEditing,
+        ["zoomOut"] = Areas.KsNoteEditing, ["nudgeLeft"] = Areas.KsNoteEditing, ["nudgeRight"] = Areas.KsNoteEditing,
+        ["volumeUp"] = Areas.KsNoteEditing, ["volumeDown"] = Areas.KsNoteEditing, ["volumeUpFine"] = Areas.KsNoteEditing, ["volumeDownFine"] = Areas.KsNoteEditing,
+        ["navUp"] = Areas.KsNoteEditing, ["navDown"] = Areas.KsNoteEditing, ["navAddUp"] = Areas.KsNoteEditing, ["navAddDown"] = Areas.KsNoteEditing,
+        ["selectPrevious"] = Areas.KsNoteEditing, ["selectNext"] = Areas.KsNoteEditing, ["addPrevious"] = Areas.KsNoteEditing, ["addNext"] = Areas.KsNoteEditing,
+        ["rowsOut"] = Areas.KsNoteEditing, ["rowsIn"] = Areas.KsNoteEditing,
+    };
+
+    /// <summary>The Keysound area of a shared command the key editor runs too, else null (the key editor's own "ks." ones included).</summary>
+    public static string? AreaOf(string id) =>
+        Shared.GetValueOrDefault(id) ?? (IsSnapDivision(id) ? Areas.KsNoteEditing : null);
+
+    /// <summary>"snap1" … "snap9": snap to 1/N.</summary>
+    public static bool IsSnapDivision(string id) => id.StartsWith("snap", StringComparison.Ordinal) && int.TryParse(id[4..], out _);
+}
+
 public partial class KeysoundEditor
 {
     /// <summary>A key press in the key editor. False for keys this editor has no command for.</summary>
@@ -81,7 +113,10 @@ public partial class KeysoundEditor
             case "ks.endLeft": Roll.NudgeEdges(0, -1); return true;
             case "ks.sync": _ = RunCommand("sync"); return true;
             case "ks.generate": _ = RunCommand("generate"); return true;
-            default: return false;
+            default:
+                // F1 lists every shared command under a Keysound area too; one without a case here would be listed wrongly.
+                System.Diagnostics.Debug.Assert(KeysoundShortcuts.AreaOf(id) is null, $"KeysoundShortcuts lists \"{id}\" but RunShortcut has no case for it.");
+                return false;
         }
     }
 

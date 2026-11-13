@@ -1,6 +1,6 @@
 # DAW-style Drum Maps
 
-Confirmed concept, 2026-11-04. Implemented locally; see [verification](../feedback/2026-11-04-drum-maps-verification.md). Not committed or pushed.
+Confirmed concept, 2026-11-04. Shipped in 1.3.0 (Drum-map view and `.dawsudrum` presets); 2.2.2 added building drum maps from a drum VST's own mapping. See the [verification notes](../archive/feedback/2026-11-04-drum-maps-verification.md).
 
 ## Problem Statement
 

@@ -13,7 +13,14 @@ public readonly record struct MomentKey(int ObjectIndex, int Node);
 public sealed record WantedSound(IReadOnlyList<Lane> Lanes, int Volume);
 
 /// <summary>A moment that can't be saved as wanted. It keeps what it played before.</summary>
-public sealed record Conflict(double Time, MomentKey Moment, string Reason);
+public sealed record Conflict(double Time, MomentKey Moment, string Reason)
+{
+    /// <summary>
+    /// The compiled map plays something that wasn't wanted (the check by decompiling failed): unlike other conflicts, the
+    /// moment does not keep its old sounds, so the compiled map must not be written.
+    /// </summary>
+    public bool Unverified { get; init; }
+}
 
 /// <summary>
 /// The outcome of <see cref="Compiler.Apply"/>: conflicts, notes about side effects (slider bodies and ticks that
@@ -37,6 +44,18 @@ public sealed record CompileResult(IReadOnlyList<Conflict> Conflicts, IReadOnlyL
 /// </summary>
 public static partial class Compiler
 {
+    /// <summary>
+    /// A new green line at <paramref name="at"/> that sets these sounds and keeps the slider velocity, kiai and red-line
+    /// meter in force. Callers pass a resolved <paramref name="set"/>: a line with no set field plays the map default, so
+    /// writing it as 0 would play Soft. "Omit first bar line" (effects bit 8) is dropped: it belongs to red lines only.
+    /// </summary>
+    internal static string GreenLineLike(TimingPoint inForce, TimingPointIndex timing, double at, SampleSet set, int index, int volume) =>
+        TimingPoint.FormatLine(at,
+            beatLength: inForce.Uninherited ? "-100" : inForce.BeatLengthText,
+            meter: timing.RedLineAt(at)?.Meter ?? 4,
+            sampleSet: set, index, volume, uninherited: false,
+            effects: inForce.Effects & ~8);
+
     private static readonly (HitSound Flag, string Sound)[] Additions =
         [(HitSound.Whistle, "hitwhistle"), (HitSound.Finish, "hitfinish"), (HitSound.Clap, "hitclap")];
 
@@ -132,7 +151,7 @@ public static partial class Compiler
             {
                 var key = Key(m);
                 if (conflicted.Contains(key) || Same(m, wish[key])) continue;
-                conflicts.Add(new Conflict(m.Time, key, $"Came out as {Describe(m)} instead of what was wanted; please report this."));
+                conflicts.Add(new Conflict(m.Time, key, $"Came out as {Describe(m)} instead of what was wanted; please report this.") { Unverified = true });
             }
 
             var notes = new List<string>();
@@ -299,12 +318,7 @@ public static partial class Compiler
             }
             else
             {
-                file.InsertTimingPoint(TimingPoint.FormatLine(at,
-                    beatLength: inForce.Uninherited ? "-100" : inForce.BeatLengthText,
-                    meter: timing.RedLineAt(at)?.Meter ?? 4,
-                    // A line with no set field plays the map default; written as 0 it would play Soft.
-                    sampleSet: inForce.SampleSet ?? settings.DefaultSampleSet, index, volume, uninherited: false,
-                    effects: inForce.Effects & ~8)); // "omit first bar line" belongs to red lines only
+                file.InsertTimingPoint(GreenLineLike(inForce, timing, at, inForce.SampleSet ?? settings.DefaultSampleSet, index, volume));
                 added++;
             }
 

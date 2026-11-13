@@ -54,6 +54,24 @@ public class GenerateTests
     }
 
     [Fact]
+    public void The_generated_diff_keeps_the_source_s_green_lines_and_events_and_still_plays_the_same_sounds()
+    {
+        // The header's green line at 800 ms sets volume 40 (and SV). The diff keeps it (ADR 0002), and the circles still
+        // play each moment's own sounds and volume.
+        var (session, file, folder) = Load("256,192,500,1,2,0:0:0:0:\n256,192,1000,1,8,0:0:0:0:\n256,192,1500,1,0,0:0:0:70:");
+        var plan = HitsoundDiff.Plan(file, "map.osu", folder, session);
+
+        var text = Encoding.UTF8.GetString(plan.Diff.ToBytes());
+        Assert.Contains("800,-50,4,2,0,40,0,0\r\n", text);
+        Assert.Contains("0,0,\"bg.jpg\",0,0\r\n", text);
+        Assert.Empty(plan.Conflicts);
+        var generated = Decompiler.Decompile(plan.Diff, folder);
+        Assert.Equal(session.Map.Moments.Select(m => (m.Time, m.PlayedVolume)), generated.Moments.Select(m => (m.Time, m.PlayedVolume)));
+        Assert.Equal(session.Map.Moments.Select(m => string.Join('+', m.Hits.Select(h => h.Lane.Name).Order())),
+            generated.Moments.Select(m => string.Join('+', m.Hits.Select(h => h.Lane.Name).Order())));
+    }
+
+    [Fact]
     public void Default_generate_also_excludes_explicit_slider_audio_lanes_but_keeps_loose_hits()
     {
         var (session, file, folder) = Load("256,192,1000,1,0,0:0:0:0:");
@@ -147,7 +165,7 @@ public class GenerateTests
     }
 
     [Fact]
-    public void Every_sound_becomes_a_circle_in_a_hitsounds_diff_with_the_red_lines_only()
+    public void Every_sound_becomes_a_circle_in_a_hitsounds_diff_that_keeps_the_source_s_lines()
     {
         var (s, file, folder) = Load("256,192,1000,1,8,0:0:0:0:");
         s.Add([s.HitAt(Skin("soft-hitnormal"), 1500), s.HitAt(Skin("soft-hitwhistle"), 1500)]); // no object there
@@ -161,8 +179,8 @@ public class GenerateTests
         Assert.Empty(plan.Conflicts);
         Assert.Contains("Version:Hitsounds", text);
         Assert.Contains("BeatmapID:0", text);
-        Assert.DoesNotContain("bg.jpg", text);
-        Assert.DoesNotContain("800,-50", text); // green lines are not copied
+        Assert.Contains("bg.jpg", text);  // [Events] kept (ADR 0002)
+        Assert.Contains("800,-50", text); // green lines kept too
 
         var moments = Decompiler.Decompile(plan.Diff, folder).Moments;
         Assert.Equal([1000.0, 1500.0], moments.Select(m => m.Time));

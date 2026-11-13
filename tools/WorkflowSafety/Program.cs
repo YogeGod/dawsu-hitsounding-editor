@@ -1,6 +1,8 @@
 using System.Reflection;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -111,8 +113,9 @@ foreach (var size in new[] { (900, 500), (1366, 768), (1600, 900) })
     Check(Buttons(details).Any(b => Equals(b.Content, "Next problem")), $"Next problem available in details at {size}");
     details.Close(); Pump();
     Check(w.FindControl<Control>("WorkflowFooter") is null, $"persistent banner removed at {size}");
-    Check(w.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Volume · %" && t.IsEffectivelyVisible), $"shared volume scope visible at {size}");
-    foreach (string id in new[] { "SnapModeBox", "TripletSnapToggle", "ToolbarEnd", "SongControls", "PlaybackDetailsPanel" })
+    Check(w.FindControl<InspectorPanel>("Inspector")!.GetLogicalDescendants().Contains(w.FindControl<Control>("VolumeScopeBox")), $"shared volume scope in the inspector's Selection card at {size}");
+    // The L/R locator button needs 1000 px; narrower windows set the locators on the ruler.
+    foreach (string id in new[] { "SnapModeBox", "TripletSnapToggle", "InspectorToggle", "LaneDetailsToggle", "UsedLanesToggle", "ObjectLinesToggle", "VolumeToggle", "SongControls" }.Concat(size.Item1 >= MainWindow.LocatorsMinWidth ? ["LocatorsButton"] : []))
         Check(w.FindControl<Control>(id)!.IsEffectivelyVisible, $"{id} directly available at {size}");
     w.CaptureRenderedFrame()!.Save(Path.Combine(artifacts, $"safety-{size.Item1}x{size.Item2}.png"));
 }
@@ -151,7 +154,8 @@ var area = w.ArrangeArea; var scopedModel = area.Model!;
 Check(w.FindControl<ComboBox>("VolumeScopeBox")!.SelectedIndex == 0, "volume scope defaults to All lanes");
 Check(w.FindControl<Button>("GenerateButton") is null && w.FindControl<MenuItem>("GenerateItem") is not null, "Generate lives in menus");
 var inspector = w.GetLogicalDescendants().OfType<InspectorPanel>().Single();
-Check(!inspector.Order.Contains("selection") && !inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree browser stays outside the inspector");
+Check(!inspector.GetLogicalDescendants().Contains(inspector.Browser), "tree browser stays outside the inspector");
+Check(inspector.Order.FirstOrDefault() == InspectorPanel.SelectionCard, "the Selection card (D2) starts at the top of the inspector");
 Check(!w.FindControl<MenuItem>("HistoryPanelItem")!.IsChecked && !w.FindControl<MenuItem>("SoundSetsPanelItem")!.IsChecked, "optional panels default hidden");
 var browserHost = w.FindControl<Border>("BrowserHost")!;
 Check(Grid.GetColumn(browserHost) == 4 && browserHost.Bounds.Height > 400, "browser fills right sidebar");
@@ -175,8 +179,20 @@ w.FindControl<ComboBox>("VolumeModeBox")!.SelectedIndex = 1; // Set all; the edi
 w.FindControl<TextBox>("VolumeValueBox")!.Text = "25"; Call(w, "ApplyVolumeValue"); Pump();
 Check(s.VolumeOf(targetHit) == 25 && s.VolumeOf(untouchedHit) == 100, "numeric Selected lanes leaves simultaneous other layer unchanged");
 var volumeControl = w.FindControl<VolumeLane>("Volume")!;
+// The bars follow the selected hits' lanes: with only the target selected, a bar edit leaves the other layer alone.
+area.Edits.Select([targetHit]); Call(w, "UpdateStatus"); Pump();
+Check(volumeControl.ShownLanes is { Count: 1 } one && one.Contains(targetHit.Lane), "the volume bars show the selected hit's lane");
+Check(w.FindControl<TextBlock>("VolumeScopeHint")!.Text == scopedModel.NameOf(targetHit.Lane), "the label beside the bars names that lane");
 volumeControl.ApplyVolumes(new Dictionary<MomentKey, int> { [targetHit.Anchor!.Value] = 43 });
-Check(s.VolumeOf(targetHit) == 43 && s.VolumeOf(untouchedHit) == 100, "bar/paint/ramp shared path obeys Selected lanes");
+Check(s.VolumeOf(targetHit) == 43 && s.VolumeOf(untouchedHit) == 100, "bar/paint/ramp shared path changes only the shown lane");
+area.Edits.Select([untouchedHit]); Call(w, "UpdateStatus"); Pump();
+Check(volumeControl.ShownLanes is { Count: 1 } other && other.Contains(untouchedHit.Lane), "selecting a hit in another lane switches the bars to that lane");
+area.Edits.Select(at1500); Call(w, "UpdateStatus"); Pump();
+Check(volumeControl.ShownLanes is { Count: 2 } both && at1500.All(h => both.Contains(h.Lane)), "selecting hits in two lanes shows both lanes");
+Check(w.FindControl<TextBlock>("VolumeScopeHint")!.Text == "2 lanes", "the label says how many lanes");
+area.Edits.Select([]); scopedModel.SetActive(untouchedHit.Lane); Call(w, "UpdateStatus"); Pump();
+Check(volumeControl.ShownLanes is { Count: 1 } active && active.Contains(untouchedHit.Lane), "with nothing selected the bars show the active lane");
+area.Edits.Select(at1500); Call(w, "UpdateStatus"); Pump();
 w.FindControl<ComboBox>("VolumeModeBox")!.SelectedIndex = 0;
 w.FindControl<TextBox>("VolumeValueBox")!.Text = "7"; Call(w, "ApplyVolumeValue");
 Check(s.VolumeOf(targetHit) == 50 && s.VolumeOf(untouchedHit) == 100, "relative edit shifts each selected lane level independently");
@@ -213,7 +229,71 @@ confirmation.Close(); Pump();
 Wait(() => !(bool)typeof(MainWindow).GetProperty("WriteBusy", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!);
 Check(w.IsVisible && s.IsEdited && File.ReadAllBytes(path).SequenceEqual(bytes), "cancelled Save keeps editor and file unchanged");
 w.Close(); Pump(); Choose(Prompt(w), "Discard");
+// Select tool: a double-click on empty grid space inserts one hit, like Draw; a single click and an occupied point do not.
+w = Open(); s = w.ArrangeArea.Model!.Session; area = w.ArrangeArea;
+Press(w, Key.D1); Check(area.Tool == Tool.Select, "1 activates Select");
+area.Axis.Zoom = 0.5; area.Axis.Left = 1000; area.ScrollY = 0; Pump(); // 1000 to 2000 ms fits in 500 px
+var clapRow = area.Model!.Rows.OfType<LaneRow>().Single(r => r.Lane.Name.EndsWith("hitclap") && s.State.Hits.Any(h => h.Lane == r.Lane && h.Time == 2000));
+int hitCount = s.State.Hits.Count, stepsBefore = s.StepCount;
+var single = GridPoint(clapRow, 1250);
+w.MouseDown(single, MouseButton.Left); w.MouseUp(single, MouseButton.Left); Pump();
+Check(s.State.Hits.Count == hitCount && s.StepCount == stepsBefore, "Select single click on empty space inserts nothing");
+DoubleClick(GridPoint(clapRow, 1750));
+var inserted = s.State.Hits.Where(h => h.Lane == clapRow.Lane && h.Time == 1750).ToList();
+Check(inserted.Count == 1 && s.State.Hits.Count == hitCount + 1, "Select double-click on empty space inserts exactly one hit");
+Check(s.StepCount == stepsBefore + 1, "double-click insertion is one undo step");
+DoubleClick(GridPoint(clapRow, 2055)); // off the diamond (15 px = 30 ms here), but it snaps to 2000, where the clap is
+Check(s.State.Hits.Count == hitCount + 1 && s.StepCount == stepsBefore + 1, "double-click on an occupied snap point adds nothing");
+Check(area.Edits.Selected.Count == 0, "that double-click missed the hit itself, so it tested the empty-space path");
+var onClap = GridPoint(clapRow, 2000);
+w.MouseDown(onClap, MouseButton.Right); w.MouseUp(onClap, MouseButton.Right); Pump();
+Check(s.State.Hits.Any(h => h.Lane == clapRow.Lane && h.Time == 2000) && s.StepCount == stepsBefore + 1, "right-click on a hit does not delete it");
+Check(w.ToolPicker is { IsOpen: true }, "right-click in the grid opens the tool picker");
+var pickerButtons = ((StackPanel)w.ToolPicker!.Content!).Children.OfType<ToggleButton>().ToList();
+Check(pickerButtons.Count == 7 && pickerButtons[0].IsChecked == true, "the picker shows every tool, the current one checked");
+var drawButton = pickerButtons.Single(b => AutomationProperties.GetName(b) == "Draw");
+drawButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+Check(area.Tool == Tool.Draw && !w.ToolPicker.IsOpen && s.StepCount == stepsBefore + 1, "picking Draw switches tool, closes the picker and edits nothing");
+Press(w, Key.D1);
+// Arrow keys as in Cubase's Drum Editor: Up/Down move the selected hit a lane, Left/Right select across lanes.
+var movedHit = s.State.Hits.Single(h => h.Lane == clapRow.Lane && h.Time == 1750);
+area.Edits.Select([movedHit]); Pump();
+var laneAbove = HitEditor.ShiftLane(area.Model!, clapRow.Lane, -1);
+var beforeLaneMoves = s.State;
+Press(w, Key.Up);
+Check(s.State.Hits.Any(h => h.Lane == laneAbove && h.Time == 1750) && !s.State.Hits.Any(h => h.Lane == clapRow.Lane && h.Time == 1750)
+    && s.StepCount == stepsBefore + 2, "Up moves the selected hit to the lane above, keeping its time");
+Press(w, Key.Down);
+Check(s.State.Hits.Any(h => h.Lane == clapRow.Lane && h.Time == 1750), "Down moves it back");
+s.Undo(); Pump(); s.Undo(); Pump();
+Check(ReferenceEquals(s.State, beforeLaneMoves), "each lane move is one undo step");
+area.Edits.Select([s.State.Hits.Single(h => h.Lane == clapRow.Lane && h.Time == 1750)]); Pump();
+Press(w, Key.Right);
+var afterRight = Assert1(area.Edits.Selected);
+Check(afterRight.Time == 2000 && afterRight.Lane == area.Model!.Rows.OfType<LaneRow>().First(r => s.State.Hits.Any(h => h.Lane == r.Lane && h.Time == 2000)).Lane,
+    "Right selects the next hit in any lane (top lane first at the same moment)");
+s.Undo(); Pump();
+Check(s.State.Hits.Count == hitCount && !s.State.Hits.Any(h => h.Time == 1750), "one Undo removes the double-click insertion");
+w.Close(); Pump(); Check(!w.IsVisible, "editor closes cleanly once the insertion is undone");
 Console.WriteLine($"PASS: {checks} safety checks");
+
+Point GridPoint(LaneRow row, double time)
+{
+    int index = w.ArrangeArea.Model!.Rows.ToList().IndexOf(row);
+    double top = (double)typeof(ArrangeView).GetMethod("RowTop", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w.ArrangeArea, [index])!;
+    var local = new Point(ArrangeView.GridLeft + w.ArrangeArea.Axis.X(time), w.ArrangeArea.HeaderHeight + top - w.ArrangeArea.ScrollY + w.ArrangeArea.RowHeight / 2);
+    if (local.X <= ArrangeView.GridLeft || local.X >= w.ArrangeArea.Bounds.Width || local.Y <= w.ArrangeArea.HeaderHeight || local.Y >= w.ArrangeArea.Bounds.Height)
+        throw new Exception($"FAIL: {time} ms is outside the visible grid ({local})");
+    return w.ArrangeArea.TranslatePoint(local, w)!.Value;
+}
+
+EditHit Assert1(IReadOnlyCollection<EditHit> hits) { if (hits.Count != 1) throw new Exception($"FAIL: expected one selected hit, got {hits.Count}"); return hits.First(); }
+
+void DoubleClick(Point point)
+{
+    w.MouseDown(point, MouseButton.Left); w.MouseUp(point, MouseButton.Left);
+    w.MouseDown(point, MouseButton.Left); w.MouseUp(point, MouseButton.Left); Pump();
+}
 
 MainWindow Open(string? path = null)
 {

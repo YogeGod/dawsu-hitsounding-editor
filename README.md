@@ -1,27 +1,44 @@
 # dawsu! hitsounding editor
 
+# DISCLAIMER: 100% VIBECODED, I AM NOT A PROGRAMMER, ANY FEEDBACK FROM REAL PROGRAMMERS WHO KNOW WHAT THEY'RE DOING IS APPRECIATED!!
+
 A Windows editor for osu! hitsounds. Each sample in a mapset becomes a lane you draw hits on, over the song's waveform, and the editor writes them back into the map.
 
-Current release: **2.2.7**. Changes for every version are in [CHANGELOG.md](CHANGELOG.md). A written tour of the current screen is in [docs/TUTORIAL.md](docs/TUTORIAL.md).
+Current release: **3.0.0**. Changes for every version are in [CHANGELOG.md](CHANGELOG.md). A written tour of the current screen is in [docs/TUTORIAL.md](docs/TUTORIAL.md).
 
 ## What it does
 
-**Hitsound mode**
-- Open a `.osu` or `.osz` (or drop one on the window) and draw, move and erase hits on sample lanes, snapped to the beat grid.
-- Set volumes per object in the controller, with ramps.
-- **Save .osu** writes the hitsounds into the difficulty (a backup is kept outside the mapset). It uses osu!'s native sound combinations where it can and mixes samples only where it must.
-- **Generate…** makes a separate hitsound difficulty, and **Map → Copy hitsounds…** copies it into the other difficulties, like Mapping Tools' Hitsound Copier.
-- Drum maps, reusable sound sets, and a drum instrument (a VST3 or a SoundFont kit) for playback and WAV export.
-- **Objects** in the snap menu aligns hits with circles, slider nodes and spinner ends, including ones off the beat grid. **Insert volume** sets the volume of hits you draw next; clear it to follow the map volume.
-- **Edit → Protect hitnormals from deletion** keeps base hitnormal sounds when you delete, cut, erase or clear a range. It is off until you turn it on.
-- **File → Open map from osu!** opens the map osu! has open and reloads it when that editor saves. After you save here, osu!'s editor can reload the same map (**File → Reload osu!'s editor after Save**).
+Features are grouped into **feature areas**, the same groups the F1 help uses. Hitsound and Keysound areas are named after their mode.
 
-**Keysound mode** (start screen → Keysounding)
-- A project made from a reference beatmap, with instrument tracks in a piano roll (DAW-style editing).
-- Draw notes, import MIDI, or play and record from a MIDI keyboard, or from your computer keyboard with **musical typing** (Alt+K).
-- Each track plays the bundled piano, a VST3 instrument or a SoundFont (.sf2) preset, with the SoundFont's reverb and chorus on or off. Every plug-in runs in its own process, so a crash only silences its track.
-- **Sync…** moves notes onto the map's circles, slider ends and spinner ends.
-- **Generate…** renders every synced note to its own WAV and writes a playable `[Keysounds]` copy of the map. You can then export it as a `.osz`.
+### Hitsound mode
+
+- **Hitsound – Map files:** open a `.osu` or `.osz` (or drop one on the window), recent maps, **Import .osz…**, a new hitsound diff, and revert to the last save.
+- **Hitsound – osu! connection:** **File → Open map from osu!** opens the map osu! has open and reloads it when that editor saves. After you save here, osu!'s editor can reload the same map (**File → Reload osu!'s editor after Save**).
+- **Hitsound – Lanes:** each sample in the mapset is a lane, with numbered layers, filtering, and mute, solo and audition.
+- **Hitsound – Hit editing:** draw, move and erase hits, plus quantize, repeat, edit range and scale by volume. **Insert volume** sets the volume of hits you draw next; clear it to follow the map volume. **Edit → Protect hitnormals from deletion** keeps base hitnormal sounds when you delete, cut, erase or clear a range. It is off until you turn it on.
+- **Hitsound – Timeline navigation:** snap to the beat grid, or with **Objects** in the snap menu, to circles, slider nodes and spinner ends, including ones off the beat grid. Also zoom, bookmarks and the L/R locators.
+- **Hitsound – Volume control:** set volumes per object in the controller, with ramps.
+- **Hitsound – Map output:**
+  - **Save .osu** writes the hitsounds into the difficulty, and a backup is kept outside the mapset. It uses osu!'s native sound combinations where it can and mixes samples only where it must.
+  - **Generate hitsound diff…** makes a separate hitsound difficulty.
+  - **Map → Copy hitsounds…** copies it into the other difficulties, like Mapping Tools' Hitsound Copier.
+- **Hitsound – Sound sets:** reusable sound sets.
+- **Hitsound – Drums:** drum maps, and a drum instrument (a VST3 or a SoundFont kit) for playback and WAV export.
+- **Hitsound – Playback:** play at 25–150 % speed without changing pitch, with song volume and offset.
+
+### Keysound mode (start screen → Keysounding)
+
+- **Keysound – Project:** a project made from a reference beatmap, with instrument tracks.
+- **Keysound – Note editing:** a piano roll with DAW-style editing.
+- **Keysound – Note input:** draw notes, import MIDI, or play and record from a MIDI keyboard. You can also use your computer keyboard with **musical typing** (Alt+K).
+- **Keysound – Instruments:** each track plays the bundled piano, a VST3 instrument or a SoundFont (.sf2) preset. The SoundFont's reverb and chorus can be on or off. Every plug-in runs in its own process, so a crash only silences its track.
+- **Keysound – Gameplay sync:** **Sync to gameplay objects…** moves notes onto the map's circles, slider ends and spinner ends.
+- **Keysound – Output:** **Generate keysounds…** renders every synced note to its own WAV and writes a playable `[Keysounds]` copy of the map. You can then export it as a `.osz`.
+- **Keysound – Playback:** the same transport and cycle as Hitsound mode.
+
+### Both modes
+
+- **Start screen**, **Shortcuts** (DAW-like or osu! keys, each customisable), **Preferences**, and **Help and updates** (F1, Quick start, the interface tour, in-app updates).
 
 ## Getting started
 

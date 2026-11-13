@@ -23,8 +23,8 @@ internal enum Tool
 /// The arrange area, drawn in one pass so maps with thousands of notes stay smooth: a header row (lane count, song
 /// sections, ruler), then per row a number strip, the lane list (group rows with collapse and M/S; lane rows with M, S,
 /// file name and index) and the tinted grid with diamond notes. Editing: Select (click, Ctrl/Shift+click, marquee,
-/// drag to move), Draw (click or drag to paint; starting on a hit erases instead), Erase (drag across hits), right-click
-/// deletes a hit, Alt draws temporarily. Hits that won't be saved are drawn white with a red ring on red stripes.
+/// drag to move; double-click empty space to insert a hit), Draw (click or drag to paint; starting on a hit erases
+/// instead), Erase (drag across hits), Alt draws temporarily. Right-click opens the tool picker and never deletes. Hits that won't be saved are drawn white with a red ring on red stripes.
 /// </summary>
 internal sealed class ArrangeView : Control
 {
@@ -296,10 +296,11 @@ internal sealed class ArrangeView : Control
     private Lane? dragPreviewLane;
     public event Action? LaneLayoutChanged;
 
-    internal void PlaceHit(Lane lane, double time)
+    /// <summary>Adds a hit in this lane at this time; a Draw stroke (<paramref name="soundSet"/>) places the chosen sound set instead.</summary>
+    internal void PlaceHit(Lane lane, double time, bool soundSet = true)
     {
         if (Session is not { } session) return;
-        if (DrawSoundSetRequested?.Invoke(time) == true) return;
+        if (soundSet && DrawSoundSetRequested?.Invoke(time) == true) return;
         var before = session.State;
         var hit = session.HitAt(lane, time);
         session.Add([hit], volume: InsertVolume);
@@ -311,6 +312,9 @@ internal sealed class ArrangeView : Control
     public event Action? SoundSetStrokeFinished;
 
     public event Action<double>? SeekRequested;
+
+    /// <summary>Right-click in the grid: the window shows the tool picker at the pointer.</summary>
+    public event Action? ToolPickerRequested;
 
     /// <summary>Right-click on a lane name: the window shows the lane menu (rename, move, delete, add).</summary>
     public event Action<LaneRow>? LaneMenuRequested;
@@ -486,6 +490,9 @@ internal sealed class ArrangeView : Control
 
             using (ctx.PushClip(new Rect(GridLeft, HeaderHeight, gridWidth, size.Height - HeaderHeight)))
             {
+                // Grid Colors, Cycle Region: the grid between L and R shaded while cycling (none unless the user sets it).
+                if (Cycle && Paint.GridCycle is { } cycleShade && LocatorLeft is { } cl && LocatorRight is { } cr && cr > cl)
+                    ctx.FillRectangle(cycleShade, new Rect(GridLeft + Axis.X(cl), HeaderHeight, Axis.X(cr) - Axis.X(cl), size.Height - HeaderHeight));
                 DrawGridLines(ctx, model, lines, from, to, HeaderHeight, size.Height);
                 if (ShowObjectLines) DrawObjectLines(ctx, model, from, to, HeaderHeight, size.Height);
 
@@ -681,8 +688,10 @@ internal sealed class ArrangeView : Control
         }
     }
 
-    private static readonly IBrush CycleOn = Paint.Brush(Color.Parse("#2f6fd0"), 0.55), CycleOff = Paint.Brush(Color.Parse("#8e8e93"), 0.35),
-        SkipOn = Paint.Brush(Color.Parse("#ff453a"), 0.45);
+    // The cycle band's colours come from the theme (Preferences, Colours, Ruler Colors), each at its own opacity.
+    private static IBrush CycleOn => Paint.TokenAt("cycle.active", 0.55);
+    private static IBrush CycleOff => Paint.TokenAt("cycle.inactive", 0.35);
+    private static IBrush SkipOn => Paint.TokenAt("cycle.reverse", 0.45);
 
     private static readonly IBrush StripBg = Paint.Brush("#1f1f21"),
         SpinnerFill = Paint.Brush(Color.Parse("#c9a42a"), 0.75), BookmarkFill = Paint.Brush("#4cc3d1");
@@ -1600,15 +1609,11 @@ internal sealed class ArrangeView : Control
             return;
         }
 
-        // Right-click deletes a hit, whatever the tool.
+        // Right-click in the grid opens the tool picker at the pointer, as in Cubase, and edits nothing (it used to
+        // delete a hit; the user ruled that out, 2026-11-12).
         if (point.Properties.IsRightButtonPressed)
         {
-            if (under is not null)
-            {
-                EraseHit(under);
-                NotifySelection();
-            }
-
+            ToolPickerRequested?.Invoke();
             return;
         }
 
@@ -1682,6 +1687,16 @@ internal sealed class ArrangeView : Control
                 }
 
                 SelectionChanged?.Invoke();
+                break;
+
+            case Tool.Select when row is LaneRow emptyLane && e.ClickCount == 2 && e.KeyModifiers == KeyModifiers.None:
+                // Double-click on empty space inserts a hit in that lane, snapped and at the insert volume as Draw places
+                // it (Cubase's Drum Editor does the same with its Select tool). It never places a sound set: the click
+                // names one lane. The first click of the pair already moved the playhead; a hit already on the snapped
+                // point stays as it is.
+                session.BeginGesture("Draw");
+                drag = Drag.None;
+                PlaceHit(emptyLane.Lane, SnapTime(Axis.Time(gridX)), soundSet: false);
                 break;
 
             case Tool.Select or Tool.Ramp:

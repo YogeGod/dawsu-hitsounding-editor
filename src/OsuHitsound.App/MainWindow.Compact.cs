@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.VisualTree;
 
 namespace OsuHitsound.App;
 
@@ -11,25 +13,12 @@ public partial class MainWindow
 
     private void SetupCompactLayout()
     {
-        // Keep the real controls in the layout, preserving their bindings and handlers.
-        Icon(OpenButton, "FolderOpen", "Open a map (Ctrl+O)");
-        Icon(SaveButton, "Save", "Save .osu (Ctrl+S)");
-        Icon(HsModeButton, "CirclePlus", "HS mode: create circles when placing sounds");
-        Icon(SnapToggle, "Magnet", "Snap to grid or objects (J)");
-        Icon(AuditionPlacementButton, "Headphones", "Audition drawn hits and lane moves");
-        Icon(InspectorToggle, "PanelLeft", "Show inspector");
-        Icon(LaneDetailsToggle, "Info", "Show sample indexes");
-        Icon(UsedLanesToggle, "ListFilter", "Show only lanes with hits");
-        Icon(ObjectLinesToggle, "Columns3", "Show gameplay-object lines");
-        Icon(VolumeToggle, "SlidersHorizontal", "Show volume controller");
-        Icon(FitButton, "Scan", "Fit the whole map");
-        Icon(VolumeApplyButton, "Check", "Apply selection volume");
+        // The ribbon's buttons carry their own icons and labels (MainWindow.axaml); these transport buttons become icons.
         Icon(SongMuteButton, "VolumeX", "Mute the song");
         SongMuteButton.Width = 22;
         Icon(ReturnOnStopButton, "Undo2", "Return to playback start when stopping");
         Icon(FollowPlaybackButton, "LocateFixed", "Follow the playhead during playback");
         Icon(LoopButton, "Repeat2", "Cycle between the L and R locators (L)");
-        Icon(TripletSnapToggle, "Triplet", "Triplet snap cycling");
         foreach (var (control, name) in new (Control, string)[]
         {
             (SnapModeBox, "Snap mode"), (SnapBox, "Beat division"), (ZoomSlider, "Timeline zoom"),
@@ -38,20 +27,11 @@ public partial class MainWindow
             (RightLocatorBox, "Right loop locator in milliseconds"),
         }) AutomationProperties.SetName(control, name);
 
-        ThemeToggle.IsChecked = prefs.DarkMode;
-        UiTheme.Current.SetDarkMode(prefs.DarkMode);
-        UpdateThemeToggle();
-        ThemeToggle.IsCheckedChanged += (_, _) =>
-        {
-            prefs = prefs with { DarkMode = ThemeToggle.IsChecked == true };
-            UiTheme.Current.SetDarkMode(prefs.DarkMode);
-            UpdateThemeToggle();
-            SavePrefs();
-        };
-        SelectionDisclosure.Click += (_, _) => SetSelectionCollapsed(!SelectionBarCollapsed);
+        // The colour scheme and the user's colours (Preferences, Colours); the old dark-mode switch picks the scheme until then.
+        ThemeColors.Apply(UiTheme.Current, prefs.Colors, prefs.DarkMode);
+        // Only Keysound mode retains a collapsible selection bar.
         Keys.SelectionCollapsed = SelectionBarCollapsed;
         Keys.SelectionCollapseRequested += SetSelectionCollapsed;
-        ShowSelectionDetails();
         Lanes.LaneListResizing += AlignToLaneList;
         Lanes.LaneListResized += () =>
         {
@@ -60,7 +40,6 @@ public partial class MainWindow
             SavePrefs();
         };
         ControlBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();
-        EditBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();
         StatusBar.SizeChanged += (_, _) => UpdateVolumePanelHeight();
 
         static void Icon(Button button, string glyph, string name)
@@ -76,31 +55,12 @@ public partial class MainWindow
         }
     }
 
-    // One choice for both editors' selection bars.
+    // Keysound mode's selection bar remembers whether it is collapsed.
     private void SetSelectionCollapsed(bool collapsed)
     {
         prefs = prefs with { SelectionBarCollapsed = collapsed };
-        ShowSelectionDetails();
         Keys.SelectionCollapsed = collapsed;
         SavePrefs();
-    }
-
-    private void UpdateThemeToggle()
-    {
-        ThemeIcon.Glyph = prefs.DarkMode ? "Moon" : "Sun";
-        var name = prefs.DarkMode ? "Dark mode · switch to Not-as-dark" : "Not-as-dark mode · switch to Dark";
-        ToolTip.SetTip(ThemeToggle, name);
-        AutomationProperties.SetName(ThemeToggle, name);
-    }
-
-    private void ShowSelectionDetails()
-    {
-        InfoBarLeft.IsVisible = !SelectionBarCollapsed;
-        SelectionDisclosureIcon.Glyph = SelectionBarCollapsed ? "ChevronDown" : "ChevronUp";
-        var label = SelectionBarCollapsed ? "Expand selection details" : "Collapse selection details";
-        ToolTip.SetTip(SelectionDisclosure, label);
-        AutomationProperties.SetName(SelectionDisclosure, label);
-        UpdateChromeHeights();
     }
 
     private void UpdateCompactLayout(double width)
@@ -123,27 +83,26 @@ public partial class MainWindow
         }
         AppTitle.IsVisible = width >= 1100;
         FileTitle.IsVisible = width >= 1250;
-        TitleBarContent.MinWidth = ControlBarContent.MinWidth = EditBarContent.MinWidth = StatusBarContent.MinWidth = 0;
+        TitleBarContent.MinWidth = StatusBarContent.MinWidth = 0;
         // No sideways scrolling: the bars fit the window, and the map name shortens with "…" instead of growing the bar.
-        TitleBarScroller.HorizontalScrollBarVisibility = ControlBarScroller.HorizontalScrollBarVisibility =
-            EditBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        SelectionField.MinWidth = narrow ? 100 : 130;
-        StartField.MinWidth = narrow ? 140 : 150;
-        ObjectField.MinWidth = narrow ? 150 : 200;
-        StartField.Width = narrow ? 140 : double.NaN;
-        ObjectField.Width = narrow ? 150 : double.NaN;
+        TitleBarScroller.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        UpdateRibbonFit(width);
         Lcd.Margin = default;
         Lcd.Padding = new Thickness(12, 2);
         MixControls.Width = width < 1000 ? 268 : 308;
-        TransportLeft.Spacing = width < 1000 ? 2 : 4;
-        TransportButtons.Spacing = width < 1000 ? 2 : 4;
-        PlaybackOptionsPanel.Spacing = width < 1000 ? 2 : 4;
+        // The transport's tight spacing and speed buttons start below 1100 px, which leaves room for the L/R locator
+        // button beside Cycle. Below 1000 px even that is not enough: the ruler still sets L (Ctrl+click) and R (Alt+click).
+        bool tightTransport = width < 1100;
+        LocatorsButton.IsVisible = width >= LocatorsMinWidth;
+        TransportLeft.Spacing = tightTransport ? 2 : 4;
+        TransportButtons.Spacing = tightTransport ? 2 : 4;
+        PlaybackOptionsPanel.Spacing = tightTransport ? 2 : 4;
         if (LcdColumns.ColumnDefinitions[0].Width.Value != (width < 1000 ? 84 : 96))
             LcdColumns.ColumnDefinitions = new ColumnDefinitions(width < 1000 ? "84,66,44,46" : "96,80,48,70");
         SongControls.ColumnDefinitions[4].Width = new GridLength(width < 1000 ? 0 : 32);
         // Six direct speed choices stay in the transport. Compact widths use two rows inside its existing height.
         bool compactSpeed = width < 1400;
-        SpeedPanel.ItemWidth = width < 1000 ? 30 : compactSpeed ? 38 : 42;
+        SpeedPanel.ItemWidth = tightTransport ? 30 : compactSpeed ? 38 : 42;
         SpeedPanel.ItemHeight = compactSpeed ? 24 : 28;
         SpeedPanel.Width = SpeedPanel.ItemWidth * (compactSpeed ? 3 : 6);
         SpeedPanel.Height = compactSpeed ? 48 : 28;
@@ -151,22 +110,41 @@ public partial class MainWindow
         {
             button.Width = SpeedPanel.ItemWidth - 2;
             button.Height = button.MinHeight = compactSpeed ? 22 : 28;
-            button.FontSize = width < 1000 ? 9 : 11;
+            button.FontSize = tightTransport ? 9 : 11;
         }
-        // Compact windows use a second toolbar row; playback behavior never leaves the bottom bar.
-        bool twoRows = width < 1400;
-        ControlBarContent.RowDefinitions[1].Height = new GridLength(twoRows ? 44 : 0);
-        Grid.SetColumn(PlaybackDetailsPanel, twoRows ? 0 : 1);
-        Grid.SetRow(PlaybackDetailsPanel, twoRows ? 1 : 0);
-        PlaybackDetailsPanel.Margin = new Thickness(twoRows ? 0 : 12, 0, 0, 0);
-        Panel zoomParent = twoRows ? ControlBarContent : ToolbarEnd;
-        if (ZoomPanel.Parent != zoomParent)
+    }
+
+    /// <summary>The narrowest window that shows the L/R locator button beside Cycle.</summary>
+    public const double LocatorsMinWidth = 1000;
+
+    private static readonly string[] RibbonSteps = ["", "narrow", "compact", "iconsOnly"];
+    private double ribbonFitWidth = double.NaN;
+
+    /// <summary>
+    /// Fits the ribbon in one row: the first step whose groups fit beside Save, from everything labelled to icons only
+    /// (Save keeps its label). Each step hides more: group captions, then secondary labels, then all labels.
+    /// </summary>
+    private void UpdateRibbonFit(double width)
+    {
+        // Resizes and theme changes call this often and the fit only depends on width. Before the window is shown its
+        // styles aren't applied yet, so that fit is redone.
+        if (width == ribbonFitWidth) return;
+        if (RibbonGroups.GetVisualRoot() is not null) ribbonFitWidth = width;
+        var margin = ControlBarContent.Margin;
+        double available = width - margin.Left - margin.Right - Remeasure(SaveButton).Width - SaveButton.Margin.Left;
+        foreach (var step in RibbonSteps)
         {
-            if (ZoomPanel.Parent is Panel previous) previous.Children.Remove(ZoomPanel);
-            zoomParent.Children.Add(ZoomPanel);
+            foreach (var other in RibbonSteps.Where(s => s.Length > 0)) ControlBar.Classes.Set(other, other == step);
+            if (Remeasure(RibbonGroups).Width <= available) break;
         }
-        Grid.SetColumn(ZoomPanel, 2);
-        Grid.SetRow(ZoomPanel, 1);
-        ZoomPanel.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+    }
+
+    // A label or badge shown or hidden inside leaves the button's measure cached, so measure every part afresh.
+    private static Size Remeasure(Layoutable control)
+    {
+        foreach (var part in control.GetVisualDescendants().OfType<Layoutable>()) part.InvalidateMeasure();
+        control.InvalidateMeasure();
+        control.Measure(Size.Infinity);
+        return control.DesiredSize;
     }
 }

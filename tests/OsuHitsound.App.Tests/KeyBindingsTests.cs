@@ -117,6 +117,20 @@ public class KeyBindingsTests : IDisposable
     }
 
     [Fact]
+    public void Alt_space_jumps_to_the_selection_in_both_presets()
+    {
+        Assert.Equal("Alt+Space", Keys(Keymap.Build(KeyPreset.Osu, null, NoOverrides), "jumpToSelection"));
+        Assert.Equal("Alt+Space", Keys(Keymap.Build(KeyPreset.Cubase, SampleKeys(), NoOverrides), "jumpToSelection"));
+    }
+
+    [Fact]
+    public void The_jump_goes_to_the_earliest_selected_hit_or_nowhere()
+    {
+        Assert.Equal(1500, MainWindow.SelectionStart([2000, 1500, 3000]));
+        Assert.Null(MainWindow.SelectionStart([]));
+    }
+
+    [Fact]
     public void Every_preset_gives_each_key_to_one_command_only()
     {
         foreach (var map in new[] { Keymap.Build(KeyPreset.Osu, null, NoOverrides), Keymap.Build(KeyPreset.Cubase, SampleKeys(), NoOverrides) })
@@ -194,6 +208,84 @@ public class KeyBindingsTests : IDisposable
         Assert.NotNull(problem);
         Assert.Equal("3", Keys(map, "toolDraw"));
     }
+
+    [Fact]
+    public void A_command_that_lost_a_key_to_another_is_customized()
+    {
+        var preset = Keymap.Build(KeyPreset.Osu, null, NoOverrides);
+        var overrides = Keymap.AddKey(new Dictionary<string, List<string>>(), preset, "copy", new KeyGesture(Key.Z, KeyModifiers.Control));
+        var map = Keymap.Build(KeyPreset.Osu, null, Keymap.ParseOverrides(overrides));
+        Assert.True(Keymap.IsCustomized(map, preset, "copy"));
+        Assert.True(Keymap.IsCustomized(map, preset, "undo"));
+        Assert.False(Keymap.IsCustomized(map, preset, "paste"));
+    }
+
+    [Fact]
+    public void A_key_change_that_puts_back_the_preset_keys_is_not_customized()
+    {
+        var preset = Keymap.Build(KeyPreset.Osu, null, NoOverrides);
+        var overrides = new Dictionary<string, List<string>> { ["undo"] = [.. preset["undo"].Select(Keymap.Format)] };
+        var map = Keymap.Build(KeyPreset.Osu, null, Keymap.ParseOverrides(overrides));
+        Assert.False(Keymap.IsCustomized(map, preset, "undo"));
+    }
+
+    /// <summary>Applies a read key file to a preset, the way Preferences does.</summary>
+    private static Dictionary<string, IReadOnlyList<KeyGesture>> Import(string json, KeyPreset preset, IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>>? cubase, out KeyFile.ImportResult result)
+    {
+        result = KeyFile.Read(json, Keymap.Build(preset, cubase, NoOverrides));
+        return Keymap.Build(preset, cubase, Keymap.ParseOverrides(result.Changes));
+    }
+
+    [Fact]
+    public void A_written_key_file_reads_back_to_the_same_keys_on_either_preset()
+    {
+        var overrides = Keymap.AddKey(new Dictionary<string, List<string>>(), Keymap.Build(KeyPreset.Osu, null, NoOverrides), "copy", new KeyGesture(Key.Z, KeyModifiers.Control));
+        var source = Keymap.Build(KeyPreset.Osu, null, Keymap.ParseOverrides(overrides));
+        string json = KeyFile.Write("Osu", source);
+
+        foreach (var (preset, cubase) in new[] { (KeyPreset.Osu, (IReadOnlyDictionary<string, IReadOnlyList<KeyGesture>>?)null), (KeyPreset.Cubase, SampleKeys()) })
+        {
+            var map = Import(json, preset, cubase, out var result);
+            foreach (var c in EditorCommands.Defaults)
+                Assert.Equal(Keys(source, c.Id), Keys(map, c.Id));
+            Assert.Equal(EditorCommands.Defaults.Count, result.Imported);
+            Assert.Equal((0, 0, 0), (result.UnknownCommands, result.DuplicateKeys, result.UnreadableKeys));
+        }
+    }
+
+    [Fact]
+    public void Importing_skips_unknown_commands_duplicate_and_unreadable_keys()
+    {
+        const string json = """
+            { "version": 1, "preset": "Osu", "keys": {
+                "copy": ["Control+Q"],
+                "noSuchCommand": ["Control+W"],
+                "paste": ["Control+Q", "nonsense", "Control+J"]
+            } }
+            """;
+        var map = Import(json, KeyPreset.Osu, null, out var result);
+        Assert.Equal("Ctrl+Q", Keys(map, "copy"));
+        Assert.Equal("Ctrl+J", Keys(map, "paste"));
+        Assert.Equal((2, 1, 1, 1), (result.Imported, result.UnknownCommands, result.DuplicateKeys, result.UnreadableKeys));
+    }
+
+    [Fact]
+    public void Commands_a_key_file_leaves_out_keep_their_preset_keys_unless_the_file_uses_them()
+    {
+        var preset = Keymap.Build(KeyPreset.Osu, null, NoOverrides);
+        string ctrlZ = Keymap.Format(new KeyGesture(Key.Z, KeyModifiers.Control));
+        var map = Import($$"""{ "version": 1, "keys": { "copy": ["{{ctrlZ}}"] } }""", KeyPreset.Osu, null, out _);
+        Assert.Equal("Ctrl+Z", Keys(map, "copy"));
+        Assert.Equal("", Keys(map, "undo"));
+        Assert.Equal(Keys(preset, "paste"), Keys(map, "paste"));
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("""{ "version": 2, "keys": {} }""")]
+    [InlineData("""{ "version": 1 }""")]
+    public void Files_that_are_not_key_files_are_refused(string json) =>
+        Assert.Throws<FormatException>(() => KeyFile.Read(json, Keymap.Build(KeyPreset.Osu, null, NoOverrides)));
 
     /// <summary>The user's real file, when this machine has one: every mapped Cubase command name must exist in it.</summary>
     [Fact]

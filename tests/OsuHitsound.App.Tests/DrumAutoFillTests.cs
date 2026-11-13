@@ -29,13 +29,26 @@ public class DrumAutoFillTests
     }
 
     [Fact]
+    public void Review_times_use_a_decimal_point_under_a_comma_locale()
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            Assert.Equal("0.543 s", Dialogs.DrumHitLabel(543));
+            Assert.Equal("Selected range: 1.50–12.25 seconds", Dialogs.DrumRangeLabel(new TimeRange(1500, 12250, new HashSet<Lane>())));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = saved; }
+    }
+
+    [Fact]
     public void Applying_both_drums_is_one_undo_step_and_keeps_existing_hits_and_volume()
     {
         var session = Session();
         var before = session.State;
         var plan = DrumAutoFillPlan.Create(session, [new("kick", 1010, .9), new("snare", 1490, .8)], Options());
         Assert.Equal(2, plan.Hits.Count);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         Assert.Equal(before.Hits.Count + 2, session.State.Hits.Count);
         Assert.All(before.Hits, h => Assert.Contains(h, session.State.Hits));
         Assert.Same(before.Volumes, session.State.Volumes);
@@ -54,11 +67,11 @@ public class DrumAutoFillTests
         var plan = DrumAutoFillPlan.Create(session, candidates, Options());
         Assert.Equal(2, plan.Hits.Count);
         Assert.Equal(1, plan.Duplicates);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         int steps = session.StepCount;
         plan = DrumAutoFillPlan.Create(session, candidates, Options());
         Assert.Empty(plan.Hits);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         Assert.Equal(steps, session.StepCount);
     }
 
@@ -113,7 +126,7 @@ public class DrumAutoFillTests
         var plan = DrumAutoFillPlan.Create(session, candidates, Options(unmatched: true));
         Assert.Single(plan.Hits);
         Assert.Same(before, session.State);
-        session.Add(plan.Hits, "Drum Hits auto-fill");
+        session.Add(plan.Hits, "Drum hit detection");
         Assert.Single(session.State.HsCircles);
         session.Undo();
         Assert.Same(before, session.State);

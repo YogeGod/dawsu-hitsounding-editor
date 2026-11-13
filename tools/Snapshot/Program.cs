@@ -127,6 +127,23 @@ if (window.OwnedWindows.OfType<Window>().LastOrDefault(w => w.Title == "Copy hit
     copyDialog.Close();
 }
 
+// The change summary that follows it: the map copied into its other difficulties, planned only (nothing is written).
+var others = difficulties.Select(d => d.Item1).Where(p => !string.Equals(p, Path.GetFullPath(args[0]), StringComparison.OrdinalIgnoreCase)).ToList();
+if (others.Count > 0)
+{
+    var batch = OsuHitsound.Lanes.HitsoundCopier.PlanCopy(OsuHitsound.Format.OsuFile.Read(args[0]), OsuHitsound.Lanes.MapFolder.FromDirectory(mapDir),
+        others, new OsuHitsound.Lanes.HitsoundCopyOptions(), canRender: true);
+    _ = Dialogs.CopySummary(window, batch);
+    Pump();
+    if (window.OwnedWindows.OfType<Window>().LastOrDefault(w => w.Title == "Copy hitsounds: what will change") is { } summaryDialog)
+    {
+        Pump();
+        summaryDialog.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "12-copy-summary.png"));
+        Console.WriteLine("saved 12-copy-summary.png");
+        summaryDialog.Close();
+    }
+}
+
 // The lane list with its names hidden (the header's collapse button), then back.
 window.ToggleLaneNamesForSnapshot();
 Pump();

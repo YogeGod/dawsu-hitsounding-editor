@@ -116,7 +116,11 @@ public partial class MainWindow
             }
         }
 
-        foreach (var (item, id) in menuCommands) item.InputGesture = EditorCommands.Get(id).Keys.FirstOrDefault();
+        foreach (var (item, id) in menuCommands)
+        {
+            item.InputGesture = EditorCommands.Get(id).Keys.FirstOrDefault();
+            item.Classes.Set("hasKey", item.InputGesture is not null); // only these draw the shortcut chip
+        }
         help?.Close();
     }
 
@@ -136,9 +140,15 @@ public partial class MainWindow
 
     private async Task ShowPreferences()
     {
+        // Colours show live while the dialog is open; Apply keeps them at once; Cancel goes back to the last kept ones.
         if (await Dialogs.EditPreferences(this, prefs with { SongsFolder = prefs.SongsFolder ?? Preferences.FindSongsFolder() }, AudioEngine.Devices,
-                () => audio?.ShowAsioControlPanel() == true) is not { } edited)
+                () => audio?.ShowAsioControlPanel() == true,
+                previewColours: colours => ThemeColors.Apply(UiTheme.Current, colours, prefs.DarkMode),
+                applyColours: colours => { prefs = prefs with { Colors = colours }; SavePrefs(); }) is not { } edited)
+        {
+            ThemeColors.Apply(UiTheme.Current, prefs.Colors, prefs.DarkMode);
             return;
+        }
 
         bool audioChanged = edited.AudioOutput != prefs.AudioOutput || edited.OutputDevice != prefs.OutputDevice || edited.BufferMs != prefs.BufferMs;
         bool skinChanged = edited.LazerResources != prefs.LazerResources;

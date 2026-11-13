@@ -1,4 +1,5 @@
 using System.Text;
+using OsuHitsound.Format;
 using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App.Tests;
@@ -67,6 +68,47 @@ public sealed class MapWritesTests : IDisposable
     }
 
     [Fact]
+    public async Task A_save_that_only_changes_hitsounds_asks_nothing_and_reports_the_counts()
+    {
+        var doc = Map();
+        doc.Session.Add([doc.Session.HitAt(Clap, 1000)]);
+        var host = new Host();
+
+        var outcome = await Writes(doc).SaveAsync(host, Pairing, NoSkin);
+
+        Assert.True(outcome.Done);
+        Assert.Empty(host.Asked);
+        Assert.Contains("(1 object)", outcome.Status);
+    }
+
+    private static WriteSummary Changes(string before, string after) =>
+        WriteSummary.Compare(Encoding.UTF8.GetBytes(before), Encoding.UTF8.GetBytes(after));
+
+    [Fact]
+    public void Only_lines_outside_hitsounds_and_bookmarks_make_a_save_ask()
+    {
+        string map = MapText("Insane", "256,192,1000,1,0,0:0:0:0:\r\n");
+        Assert.False(MapWrites.NeedsReview(Changes(map, map.Replace("1000,1,0,", "1000,1,8,"))));
+        Assert.False(MapWrites.NeedsReview(Changes(map, map.Replace("[TimingPoints]\r\n0,500,4,2,0,100,1,0\r\n", "[TimingPoints]\r\n0,500,4,2,0,100,1,0\r\n500,-100,4,2,1,60,0,0\r\n"))));
+        // Bookmarks are edited in dawsu! itself, so changing them is expected.
+        var withEditor = map.Replace("[Metadata]", "[Editor]\r\nBookmarks: 1000\r\n\r\n[Metadata]");
+        Assert.False(MapWrites.NeedsReview(Changes(withEditor, withEditor.Replace("Bookmarks: 1000", "Bookmarks: 1000,2000"))));
+        Assert.True(MapWrites.NeedsReview(Changes(map, map.Replace("Title:Song", "Title:Song2"))));
+        Assert.True(MapWrites.NeedsReview(Changes(map, map.Replace("Title:Song\r\n", "Title:Song\n"))));
+    }
+
+    [Fact]
+    public void The_review_text_gives_the_counts_and_every_line_outside_hitsounds()
+    {
+        string map = MapText("Insane", "256,192,1000,1,0,0:0:0:0:\r\n");
+        var text = MapWrites.DescribeChanges(Changes(map, map.Replace("1000,1,0,", "1000,1,8,").Replace("Title:Song", "Title:Song2")));
+
+        Assert.Contains("1 object, 1 other line", text);
+        Assert.Contains("[Metadata] Title:Song → Title:Song2", text);
+        Assert.DoesNotContain("256,192,1000", text); // hitsound lines are counted, not listed
+    }
+
+    [Fact]
     public async Task A_cancelled_save_writes_nothing()
     {
         var doc = Map();
@@ -108,6 +150,22 @@ public sealed class MapWritesTests : IDisposable
         Assert.False(outcome.Done);
         Assert.StartsWith("Save stopped: The editor project could not be written", outcome.Status);
         Assert.Equal(before, File.ReadAllBytes(doc.Path));
+    }
+
+    [Fact]
+    public async Task Generating_again_shows_what_changes_in_the_existing_hitsounds_diff()
+    {
+        var doc = Map();
+        doc.Session.Add([doc.Session.HitAt(Clap, 1000)]);
+        var first = new Host();
+        Assert.True((await Writes(doc).GenerateAsync(first, Pairing, NoSkin)).Done);
+        Assert.DoesNotContain("Changes to the .osu", Assert.Single(first.Asked)); // a new file: nothing to compare
+
+        doc.Session.Add([doc.Session.HitAt(Clap, 2000)]);
+        var second = new Host();
+        await Writes(doc).GenerateAsync(second, Pairing, NoSkin);
+
+        Assert.Contains("Changes to the .osu: 1 object.", Assert.Single(second.Asked));
     }
 
     [Fact]

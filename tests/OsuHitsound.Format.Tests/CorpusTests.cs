@@ -7,11 +7,10 @@ namespace OsuHitsound.Format.Tests;
 /// </summary>
 public class CorpusTests
 {
-    [Fact]
+    [CorpusFact]
     public void Every_corpus_file_round_trips()
     {
-        var corpus = Path.Combine(RepoRoot(), "corpus");
-        Assert.True(Directory.Exists(corpus), "corpus/ is missing. Run tools/build-corpus.ps1 to copy maps from your osu!lazer library.");
+        var corpus = CorpusFactAttribute.Folder;
 
         var files = RoundTripCheck.FindFiles(corpus).ToList();
         Assert.NotEmpty(files);
@@ -23,12 +22,5 @@ public class CorpusTests
             .ToList();
 
         Assert.True(failures.Count == 0, $"{failures.Count} of {files.Count} files failed:\n" + string.Join('\n', failures.Take(20)));
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !dir.EnumerateFiles("*.slnx").Any()) dir = dir.Parent;
-        return dir?.FullName ?? throw new DirectoryNotFoundException("Repo root (*.slnx) not found.");
     }
 }

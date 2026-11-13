@@ -133,6 +133,9 @@ internal sealed class InspectorPanel : CardPanel
         AddCard(RecentCard, "History", Stack(recentList, new TextBlock { Text = "Click an edit to go back (or forward) to just after it.", TextWrapping = TextWrapping.Wrap, Opacity = 0.85, FontSize = 11 }));
     }
 
+    /// <summary>Adds the Selection card: the window's selection fields (built in MainWindow.axaml, wired there).</summary>
+    public void AddSelectionCard(Control editor) => AddCard(SelectionCard, "Selection", editor);
+
     public void SetOptionalPanels(bool history, bool soundSets)
     {
         Show(RecentCard, history);

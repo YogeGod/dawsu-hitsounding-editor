@@ -8,11 +8,16 @@ namespace OsuHitsound.App;
 /// <summary>F1: every keyboard shortcut and mouse action from <see cref="EditorCommands"/>, grouped and searchable.</summary>
 internal sealed class HelpWindow : Window
 {
-    /// <summary>Help rows (group, keys, what it does) matching the search in any column; all of them for a blank search.</summary>
+    /// <summary>
+    /// Help rows (group, keys, what it does) matching the search in any column; all of them for a blank search. Ordered by
+    /// feature area; a command both editors run is listed under its Hitsound and its Keysound area.
+    /// </summary>
     public static IEnumerable<(string Group, string Keys, string Description)> Rows(string search) =>
-        EditorCommands.All.Select(c => (c.Group, c.KeysText, c.Description))
+        EditorCommands.All
+            .SelectMany(c => new[] { c.Group, c.KeysoundGroup }.OfType<string>().Select(g => (g, c.KeysText, c.Description)))
             .Concat(EditorCommands.Mouse)
-            .Where(r => string.IsNullOrWhiteSpace(search) || $"{r.Item1} {r.Item2} {r.Item3}".Contains(search.Trim(), StringComparison.OrdinalIgnoreCase));
+            .Where(r => string.IsNullOrWhiteSpace(search) || $"{r.Item1} {r.Item2} {r.Item3}".Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => Areas.Order(r.Item1));
 
     public HelpWindow()
     {

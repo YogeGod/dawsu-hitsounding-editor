@@ -41,16 +41,40 @@ public sealed class OsuFile
             header = lines.Count;
             InsertLine(header, "[HitObjects]", "HitObjects", newline);
         }
-        // Unreadable lines count as earlier, so the circle goes after them.
-        int objectIndex = hitObjects.FindIndex(o => OsuNumber.TryParseDouble(o.Line.Text.Split(',') is { Length: > 2 } f ? f[2] : "", out double t) && t > time);
+        // The first object (in file order) later than the circle; unreadable lines count as earlier, so the circle goes
+        // after them. When no object is later (circles added in time order, as Generate does) it is appended without a scan.
+        int objectIndex = LatestObjectTime() <= time ? -1 : hitObjects.FindIndex(o => ObjectTime(o) is { } t && t > time);
         if (objectIndex < 0) objectIndex = hitObjects.Count;
         int lineIndex = objectIndex < hitObjects.Count ? lines.IndexOf(hitObjects[objectIndex].Line)
-            : hitObjects.Count > 0 ? lines.IndexOf(hitObjects[^1].Line) + 1 : header + 1;
+            : hitObjects.Count > 0 ? lines.LastIndexOf(hitObjects[^1].Line) + 1 : header + 1; // the last object is near the end
         EnsureNewlineBefore(lineIndex, newline);
         var line = InsertLine(lineIndex, $"256,192,{time.ToString(System.Globalization.CultureInfo.InvariantCulture)},1,0,0:0:0:0:", "HitObjects", newline);
         var circle = new HitObject(line);
         hitObjects.Insert(objectIndex, circle);
+        if (latestObjectTime is { } latest) latestObjectTime = Math.Max(latest, time);
         return circle;
+    }
+
+    // The latest readable object time, or -∞ when there is none; computed once, kept up to date by inserts (object times
+    // are never edited) and forgotten when an object is removed.
+    private double? latestObjectTime;
+
+    private double LatestObjectTime() =>
+        latestObjectTime ??= hitObjects.Select(ObjectTime).OfType<double>().DefaultIfEmpty(double.NegativeInfinity).Max();
+
+    // An object's time field (the third), or null when it can't be read. Reads it without splitting the whole line.
+    private static double? ObjectTime(HitObject o)
+    {
+        var text = o.Line.Text.AsSpan();
+        for (int field = 0; field < 2; field++)
+        {
+            int comma = text.IndexOf(',');
+            if (comma < 0) return null;
+            text = text[(comma + 1)..];
+        }
+        int end = text.IndexOf(',');
+        if (end >= 0) text = text[..end]; // "x,y,time" with nothing after it still has a time
+        return double.TryParse(text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double t) ? t : null;
     }
 
     /// <summary>Removes exactly this object, preserving other lines and their original bytes.</summary>
@@ -59,17 +83,57 @@ public sealed class OsuFile
         if (!hitObjects.Remove(obj)) return;
         lines.Remove(obj.Line);
         removedLines = true;
+        latestObjectTime = null; // it may have been the latest
     }
 
     public bool IsEdited => removedLines || Lines.Any(l => l.IsEdited);
 
     private bool removedLines;
 
+    /// <summary>
+    /// Removes a green (inherited) timing point, preserving every other line and its bytes. Only a line whose inherited
+    /// field says 0 can go: red lines, and old short lines that don't say, are refused.
+    /// </summary>
+    public void RemoveGreenLine(TimingPoint point)
+    {
+        if (point.Uninherited) throw new InvalidOperationException($"Only green (inherited) lines can be removed: {point.Line.Text}");
+        if (!timingPoints.Remove(point)) return;
+        lines.Remove(point.Line);
+        removedLines = true;
+    }
+
     /// <summary>Removes a line (e.g. a storyboard Sample line). Timing points and hit objects can't be removed this way.</summary>
     public void RemoveLine(OsuLine line)
     {
         if (line.Section is "TimingPoints" or "HitObjects") throw new InvalidOperationException("Timing points and hit objects aren't removed line by line.");
         if (lines.Remove(line)) removedLines = true;
+    }
+
+    /// <summary>
+    /// Adds a line right after a section's header, using the header's line ending. When the map has no such section, adds
+    /// it (header, the line and a blank line) before the <paramref name="beforeSection"/> header, or at the end.
+    /// </summary>
+    public OsuLine InsertAfterHeader(string section, string text, string beforeSection)
+    {
+        var newline = Newline();
+        int header = lines.FindIndex(l => l.Section == section && l.Text.Trim() == $"[{section}]");
+        if (header >= 0)
+        {
+            EnsureNewlineBefore(header + 1, newline);
+            return InsertLine(header + 1, text, section, lines[header].Terminator);
+        }
+
+        int at = lines.FindIndex(l => l.Text.Trim() == $"[{beforeSection}]");
+        if (at < 0)
+        {
+            EnsureNewlineBefore(lines.Count, newline);
+            at = lines.Count;
+        }
+
+        InsertLine(at, $"[{section}]", section, newline);
+        var line = InsertLine(at + 1, text, section, newline);
+        InsertLine(at + 2, "", section, newline);
+        return line;
     }
 
     /// <summary>

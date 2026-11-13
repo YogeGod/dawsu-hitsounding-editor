@@ -364,4 +364,138 @@
   <Style Selector="TextBlock.mono">
     <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
   </Style>
+
+  <!-- Ribbon (the editor's toolbar): groups of icon + label buttons. Last in the file so it overrides the square
+       tool and icon sizes above. The window sets narrow, compact or iconsOnly on the bar as it shrinks. -->
+  <Style Selector="StackPanel.ribbonGroup">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="3" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="5,0" />
+  </Style>
+  <Style Selector="TextBlock.ribbonCaption">
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="FontSize" Value="9" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,3,0" />
+  </Style>
+  <Style Selector="Border.ribbonSep">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Background" Value="{DynamicResource ChromeBorder}" />
+  </Style>
+  <Style Selector="Button.ribbon, ToggleButton.ribbon">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="MinWidth" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="7,0" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.ribbon > StackPanel, ToggleButton.ribbon > StackPanel">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="5" />
+  </Style>
+  <Style Selector="Button.ribbon TextBlock, ToggleButton.ribbon TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.narrow TextBlock.ribbonCaption, Border.compact TextBlock.ribbonCaption, Border.iconsOnly TextBlock.ribbonCaption">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Border.compact TextBlock.ribbonText.secondary, Border.iconsOnly TextBlock.ribbonText">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Border.iconsOnly TextBlock.ribbonText.keep">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="Border.iconsOnly StackPanel.ribbonGroup">
+    <Setter Property="Margin" Value="1,0" />
+    <Setter Property="Spacing" Value="2" />
+  </Style>
+  <Style Selector="Border.iconsOnly Button.ribbon, Border.iconsOnly ToggleButton.ribbon">
+    <Setter Property="MinWidth" Value="26" />
+    <Setter Property="Padding" Value="3,0" />
+  </Style>
+  <!-- Menus (layout D): shortcut chips, switches instead of checkmarks, rows of choice buttons. Part names are the
+       Fluent MenuItem template's (Avalonia.Themes.Fluent 11.3). -->
+  <Style Selector="MenuItem.hasKey /template/ TextBlock#PART_InputGestureText">
+    <Setter Property="Background" Value="{DynamicResource LcdBg}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+    <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Padding" Value="5,1" />
+    <Setter Property="Margin" Value="16,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="MenuItem.switch /template/ ContentControl#PART_ToggleIconPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="MenuItem.switch Border.switchTrack">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Margin" Value="16,0,0,0" />
+    <Setter Property="Background" Value="{DynamicResource ChromeBorder}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="MenuItem.switch Border.switchKnob">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Margin" Value="2,0" />
+    <Setter Property="Background" Value="#dddddd" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="MenuItem.switch:checked Border.switchTrack">
+    <Setter Property="Background" Value="{DynamicResource Brand}" />
+  </Style>
+  <Style Selector="MenuItem.switch:checked Border.switchKnob">
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="Background" Value="#ffffff" />
+  </Style>
+  <Style Selector="StackPanel.segment">
+    <Setter Property="Orientation" Value="Horizontal" />
+  </Style>
+  <Style Selector="StackPanel.segment > ToggleButton">
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Margin" Value="0,0,-1,0" />
+  </Style>
+  <Style Selector="StackPanel.segment > ToggleButton:nth-child(1)">
+    <Setter Property="CornerRadius" Value="4,0,0,4" />
+  </Style>
+  <Style Selector="StackPanel.segment > ToggleButton:nth-last-child(1)">
+    <Setter Property="CornerRadius" Value="0,4,4,0" />
+  </Style>
+  <Style Selector="StackPanel.zoomEnd">
+    <Setter Property="Spacing" Value="2" />
+    <Setter Property="Margin" Value="2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.zoomStep">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="MinHeight" Value="18" />
+    <Setter Property="MinWidth" Value="18" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.saveBadge">
+    <Setter Property="Background" Value="#33000000" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="6,1" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
 </Styles>

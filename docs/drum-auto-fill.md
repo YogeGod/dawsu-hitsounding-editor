@@ -1,10 +1,10 @@
-# Drum Hits auto-fill
+# Drum hit detection
 
-Status: local **kick-and-snare-only** editor feature, built into the app. Toms are excluded. No public release has been made.
+Status: built in. **Edit → Drum hit detection…** finds kicks and snares on the user's PC and adds them as hits. Toms, hi-hats and cymbals are ignored. It now uses signal processing with no trained model; versions 2.2.11–3.0 used the ADTOF neural model (see the end of this page).
 
 ## Try it in the editor
 
-1. Open a map, then **Edit → Drum Hits auto-fill…**.
+1. Open a map, then **Edit → Drum hit detection…** (called Drum Hits auto-fill up to 2.2.8).
 2. Choose the kick and snare destination lanes, or Skip either category. Start with Conservative sensitivity and 30 ms object tolerance.
 3. Analyse the whole song, or use the Range tool first and leave Selected range checked. An aligned drum stem is optional and gives much cleaner results than a full mix.
 4. Review the proposed hits. Uncheck any to exclude them; the Listen button plays the source on the left and synthesised cues on the right.
@@ -76,6 +76,8 @@ Set `DSP_DIAG=1` to see which reference instrument each false detection lands on
 
 Detection quality on arbitrary songs still needs listening; passing these checks does not establish it.
 
-## Earlier prototype (ADTOF, no longer used by the app)
+## Earlier detectors (ADTOF, no longer used by the app)
 
-`tools/DrumAutoFill/prototype.py` ran [ADTOF-pytorch](https://github.com/xavriley/ADTOF-pytorch) (commit `85c192e7`) in a separate Python environment, and the app called it through a `drum-autofill.json` configuration. The app no longer does this. The script and its tests remain only for comparison runs. Original ADTOF is CC BY-NC-SA 4.0, and its weights were never bundled.
+**2.2.11–3.0: ADTOF in the app.** `DrumDetection.cs` ran the official ADTOF Frame_RNN weights (CC BY-NC-SA 4.0), converted to ONNX, through ONNX Runtime, with madmom-style features and peak picking. It matched ADTOF's own pipeline exactly. On Roselia - MIIRO 30–50 s it found 28 kicks and 15 snares. This change removes the model, `DrumDetection.cs`, its tests and fixture, the ONNX Runtime package and their third-party notices. They remain in git history at release 3.0 (`284044b`).
+
+**2.2.8–2.2.10: Python prototype.** `tools/DrumAutoFill/prototype.py` ran [ADTOF-pytorch](https://github.com/xavriley/ADTOF-pytorch) (commit `85c192e7`) in a separate Python environment. The app called it through a `drum-autofill.json` configuration. The script and its tests remain only for comparison runs against annotated MIDI.

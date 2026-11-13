@@ -45,11 +45,11 @@ Check(options.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "
 Check(options.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "AutoFillSnare").SelectedIndex > 0, "snare destination defaults to a sample lane");
 options.CaptureRenderedFrame()!.Save(Path.Combine(root, "options.png"));
 Click(options, "Analyse");
-Wait(() => w.OwnedWindows.Any(p => p.Title == "Review Drum Hits auto-fill" || p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")) || task.IsCompleted);
+Wait(() => w.OwnedWindows.Any(p => p.Title == "Review Drum hit detection" || p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")) || task.IsCompleted);
 if (w.OwnedWindows.Any(p => p.GetLogicalDescendants().OfType<Button>().Any(b => b.Content?.ToString() == "OK")))
     throw new Exception(string.Join(" ", w.OwnedWindows.Last().GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text)));
 Check(!task.IsCompleted, "built-in detector reaches preview");
-var preview = w.OwnedWindows.Last(p => p.Title == "Review Drum Hits auto-fill");
+var preview = w.OwnedWindows.Last(p => p.Title == "Review Drum hit detection");
 preview.CaptureRenderedFrame()!.Save(Path.Combine(root, "preview.png"));
 Check(preview.GetLogicalDescendants().OfType<CheckBox>().Any(), "preview contains selectable proposed hits");
 var proposed = preview.GetLogicalDescendants().OfType<CheckBox>().ToArray();
@@ -71,7 +71,7 @@ task = (Task)typeof(MainWindow).GetMethod("ShowDrumAutoFill", BindingFlags.Insta
 Wait(() => w.OwnedWindows.Any());
 Click(w.OwnedWindows.Last(), "Analyse");
 // Analysis is fast, so cancel from whichever window is showing: the progress window or the review.
-Wait(() => w.OwnedWindows.Any(p => p.Title is "Drum Hits auto-fill" or "Review Drum Hits auto-fill"));
+Wait(() => w.OwnedWindows.Any(p => p.Title is "Drum hit detection" or "Review Drum hit detection"));
 Click(w.OwnedWindows.Last(), "Cancel");
 Wait(() => task.IsCompleted);
 Check(ReferenceEquals(session.State, before), "cancelling detection leaves edits intact");
@@ -79,7 +79,7 @@ task = (Task)typeof(MainWindow).GetMethod("ShowDrumAutoFill", BindingFlags.Insta
 Wait(() => w.OwnedWindows.Any());
 w.OwnedWindows.Last().GetLogicalDescendants().OfType<CheckBox>().Single(c => c.Name == "AutoFillUnmatched").IsChecked = true;
 Click(w.OwnedWindows.Last(), "Analyse");
-Wait(() => w.OwnedWindows.Any(p => p.Title == "Review Drum Hits auto-fill"));
+Wait(() => w.OwnedWindows.Any(p => p.Title == "Review Drum hit detection"));
 session.SetVolume([session.Moments.First().Key], 62);
 var changed = session.State;
 Click(w.OwnedWindows.Last(), "Apply selected hits");

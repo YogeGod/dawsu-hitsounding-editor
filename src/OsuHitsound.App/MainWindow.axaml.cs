@@ -67,6 +67,7 @@ public partial class MainWindow : Window, IMapWriteHost
     public MainWindow(string? path, bool startAudio = true, bool showInspector = false, bool usePreferences = true)
     {
         InitializeComponent();
+        KeepAltSpaceForCommands();
         SetupDrumVst();
         SetupHsMode();
 
@@ -190,19 +191,20 @@ public partial class MainWindow : Window, IMapWriteHost
         RampTool.Click += (_, _) => SetTool(Tool.Ramp);
 
         // Playback options.
-        // Separate visible speed buttons and Playback menu choices share the same action.
+        // The transport's speed buttons and the Playback menu's speed row share the same action.
         var speedButtons = new List<(Avalonia.Controls.Primitives.ToggleButton Button, double Speed)>();
-        var speedItems = new[] { (Speed25Item, 0.25), (Speed50Item, 0.5), (Speed75Item, 0.75), (Speed100Item, 1.0), (Speed125Item, 1.25), (Speed150Item, 1.5) };
         void SetSpeed(double speed)
         {
             if (audio is not null) audio.Speed = speed;
-            foreach (var (item, s) in speedItems) item.IsChecked = s == speed;
             foreach (var (button, s) in speedButtons) button.IsChecked = s == speed;
             UpdateStatus();
         }
-        foreach (var (item, speed) in speedItems)
+        foreach (var speed in new[] { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5 })
         {
-            item.Click += (_, _) => SetSpeed(speed);
+            var menuButton = new Avalonia.Controls.Primitives.ToggleButton { Name = $"Speed{speed * 100:0}Choice", Content = $"{speed * 100:0}%", IsChecked = speed == 1 };
+            menuButton.Click += (_, _) => SetSpeed(speed);
+            speedButtons.Add((menuButton, speed));
+            SpeedMenuPanel.Children.Add(menuButton);
             var button = new Avalonia.Controls.Primitives.ToggleButton
             {
                 Name = $"Speed{speed * 100:0}Button", Content = $"{speed * 100:0}%", IsChecked = speed == 1,
@@ -250,7 +252,7 @@ public partial class MainWindow : Window, IMapWriteHost
         // Volume panel.
         VolumeScopeBox.ItemsSource = new[] { "All lanes", "Selected lanes" };
         VolumeScopeBox.SelectedIndex = 0;
-        VolumeScopeBox.SelectionChanged += (_, _) => { Volume.SelectedLanesOnly = VolumeScopeBox.SelectedIndex == 1; VolumeScopeHint.Text = Volume.SelectedLanesOnly ? "Selected lanes" : "All lanes"; Volume.InvalidateVisual(); };
+        VolumeScopeBox.SelectionChanged += (_, _) => { Volume.SelectedLanesOnly = VolumeScopeBox.SelectedIndex == 1; Volume.InvalidateVisual(); };
         Lanes.SampleDropped += AssignChannelFile;
         RampShapeBox.ItemsSource = new[] { "Linear", "Ease in", "Ease out", "S-curve" };
         RampShapeBox.SelectedIndex = 0;
@@ -277,7 +279,24 @@ public partial class MainWindow : Window, IMapWriteHost
             e.Handled = true;
         };
         VolumeSelectButton.Click += (_, _) => SelectByVolume();
-        SaveButton.Click += (_, _) => { if (Keys.Document is not null) _ = SaveKeysound(); else _ = Save(); };
+        SaveButton.Click += (_, _) => SaveClicked();
+        KsSaveButton.Click += (_, _) => _ = SaveKeysound();
+        KsOpenButton.Click += async (_, _) => await PickMap();
+        DrumDetectButton.Click += async (_, _) => await ShowDrumAutoFill();
+        DrumVstButton.Click += (_, _) => ShowDrumVst();
+        SelectionQuantizeButton.Click += (_, _) => Run("quantizeDialog");
+        SelectionDuplicateButton.Click += (_, _) => Run("duplicate");
+        SelectionDeleteButton.Click += (_, _) => Run("delete");
+        SetupSaveCheck();
+        SetupMenuLook();
+        TimeZoomInButton.Click += (_, _) => Run("zoomIn");
+        TimeZoomOutButton.Click += (_, _) => Run("zoomOut");
+        RowZoomInButton.Click += (_, _) => { Lanes.ZoomRows(1.15); SyncScrollBars(); };
+        RowZoomOutButton.Click += (_, _) => { Lanes.ZoomRows(1 / 1.15); SyncScrollBars(); };
+        RowHeightSlider.Minimum = ArrangeView.MinRowHeight;
+        RowHeightSlider.Maximum = ArrangeView.MaxRowHeight;
+        RowHeightSlider.Value = Lanes.RowHeight;
+        RowHeightSlider.ValueChanged += (_, e) => { if (!syncingScroll && Math.Abs(e.NewValue - Lanes.RowHeight) >= 0.5) { Lanes.RowHeight = Math.Round(e.NewValue); SyncScrollBars(); } };
         menuCommands =
         [
             (OpenItem, "open"), (OpenFromOsuItem, "openFromOsu"), (ImportOszItem, "importOsz"), (OpenFolderItem, "openFolder"), (OpenHitsoundFolderItem, "openHitsoundFolder"), (ReviewOutputItem, "reviewOutput"), (NewDiffItem, "newDiff"), (SaveItem, "save"), (RevertItem, "revert"), (PreferencesItem, "preferences"), (HelpItem, "help"), (InspectorItem, "inspector"),
@@ -441,9 +460,11 @@ public partial class MainWindow : Window, IMapWriteHost
             mapSongOffset = 0; // a map without a project has none of its own
             ApplyOffsets();
             string? projectWarning = RestoreProject(restoreUnanchored, hsOverride);
+            model.HideGenerated(GeneratedMixFiles(opened));
             model.PreviewMutesChanged += UpdateCues;
             model.Changed += UpdateActiveLaneText;
             model.Changed += Volume.InvalidateVisual;
+            model.Changed += UpdateVolumeLanesHint; // the active lane decides the bars when nothing is selected
             UpdateActiveLaneText();
             UpdateCues(); // project restoration may have changed layers and preview mutes
             model.PreviewMutesChanged += ScheduleProjectSave;
@@ -721,6 +742,10 @@ public partial class MainWindow : Window, IMapWriteHost
             case "cycle": ToggleCycle(); break;
             case "locatorsToSelection": LocatorsToSelection(); break;
             case "playLocatorRange": PlayLocatorRange(); break;
+            case "jumpToSelection":
+                if (SelectionStart(Lanes.Selection.Select(h => h.Time)) is { } start) Seek(start);
+                else { flash = "Select a note first: Alt+Space moves the playhead to it."; UpdateStatus(); }
+                break;
             case "jumpLeft": if (Lanes.LocatorLeft is { } l) Seek(l); break;
             case "seekBack": SeekGridSteps(-1); break;
             case "seekForward": SeekGridSteps(1); break;
@@ -760,8 +785,8 @@ public partial class MainWindow : Window, IMapWriteHost
             case "selectNext": Lanes.Edits.SelectNeighbour(1, extend: false, Lanes.Playhead); break;
             case "addPrevious": Lanes.Edits.SelectNeighbour(-1, extend: true, Lanes.Playhead); break;
             case "addNext": Lanes.Edits.SelectNeighbour(1, extend: true, Lanes.Playhead); break;
-            case "navUp": Lanes.Edits.SelectAcross(-1, extend: false, Lanes.Axis.VisibleDuration / 2); break;
-            case "navDown": Lanes.Edits.SelectAcross(1, extend: false, Lanes.Axis.VisibleDuration / 2); break;
+            case "navUp": Lanes.Edits.ShiftLanes(-1); break; // Cubase's Drum Editor moves the event a row
+            case "navDown": Lanes.Edits.ShiftLanes(1); break;
             case "navAddUp": Lanes.Edits.SelectAcross(-1, extend: true, Lanes.Axis.VisibleDuration / 2); break;
             case "navAddDown": Lanes.Edits.SelectAcross(1, extend: true, Lanes.Axis.VisibleDuration / 2); break;
             case "rowsOut": Lanes.ZoomRows(1 / 1.15); break;
@@ -802,6 +827,21 @@ public partial class MainWindow : Window, IMapWriteHost
             var times = session.Moments.Select(m => m.Moment.Time).Concat(session.State.Hits.Select(h => h.Time)).ToList();
             Seek(times.Count == 0 ? first ? 0 : Lanes.Axis.End : first ? times.Min() : times.Max());
         }
+    }
+
+    /// <summary>The label beside the volume bars: which lanes they show (the selected hits' lanes, or the active lane).</summary>
+    private void UpdateVolumeLanesHint()
+    {
+        var model = Lanes.Model;
+        var shown = Volume.ShownLanes;
+        VolumeScopeHint.Text = shown switch
+        {
+            null => "All lanes",
+            { Count: 1 } when model is not null => model.NameOf(shown.First()),
+            _ => $"{shown.Count} lanes",
+        };
+        ToolTip.SetTip(VolumeScopeHint, shown is null || model is null ? "The bars show every lane." :
+            "The bars show and change only these lanes: " + string.Join(", ", shown.Select(model.NameOf)));
     }
 
     private void SetTool(Tool tool)
@@ -1016,8 +1056,14 @@ public partial class MainWindow : Window, IMapWriteHost
             ScheduleProjectSave();
             Lanes.InvalidateVisual();
         };
-        Inspector.SetLayout(prefs.InspectorCards, prefs.InspectorFolded);
+        InspectorParts.Children.Remove(SelectionEditor);
+        Inspector.AddSelectionCard(SelectionEditor);
+        // The Selection card replaced the selection bar: it starts at the top unless a saved layout already placed it.
+        var cardOrder = prefs.InspectorCards.Contains(InspectorPanel.SelectionCard) ? prefs.InspectorCards : [InspectorPanel.SelectionCard, .. prefs.InspectorCards];
+        Inspector.SetLayout(cardOrder, prefs.InspectorFolded);
         InspectorToggle.IsChecked = prefs.InspectorOpen;
+        // The inspector holds the selection fields, so narrow windows start from the saved choice too (open by default).
+        compactInspectorOpen = prefs.InspectorOpen;
         inspectorWidth = Math.Clamp(prefs.InspectorWidth, 160, 600);
         void Show(bool open)
         {
@@ -1044,18 +1090,21 @@ public partial class MainWindow : Window, IMapWriteHost
         Inspector.GoToStepRequested += p => session?.GoTo(p);
     }
 
-    /// <summary>The V6.39 selection bar: how many hits, where the selection starts, and the object under it.</summary>
+    /// <summary>The inspector's Selection card: how many hits, where the selection starts, and the object under it.</summary>
     private void UpdateInfoBar()
     {
         var selected = Lanes.Selection;
+        bool any = session is not null && selected.Count > 0;
+        SelectionFields.IsVisible = any;
+        SelectionHelp.IsVisible = !any;
         if (session is null || selected.Count == 0)
         {
-            (InfoSelection.Text, InfoStart.Text, InfoObject.Text) = ("No events", "", "—");
+            (InfoSelection.Text, InfoStart.Text, InfoObject.Text) = ("Nothing selected", "", "—");
             if (!StartBox.IsFocused) StartBox.Text = "";
             return;
         }
 
-        InfoSelection.Text = selected.Count == 1 ? "1 event" : $"{selected.Count} events";
+        InfoSelection.Text = selected.Count == 1 ? "1 hit" : $"{selected.Count} hits";
         double start = selected.Min(h => h.Time);
         if (!StartBox.IsFocused) StartBox.Text = Math.Round(start).ToString(System.Globalization.CultureInfo.InvariantCulture);
         InfoStart.Text = $"({FormatTime(start)})";
@@ -1152,6 +1201,30 @@ public partial class MainWindow : Window, IMapWriteHost
     /// P: the locators span the range marked with the Range tool, else the selection (its first to last hit), else the
     /// visible range.
     /// </summary>
+    /// <summary>
+    /// Windows opens the window menu on Alt+Space after the key has been handled. While a command has Alt+Space (by
+    /// default Playhead to the selection), that menu request is dropped so only the command runs.
+    /// </summary>
+    private void KeepAltSpaceForCommands()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const uint WmSysCommand = 0x0112, WmSysChar = 0x0106;
+        const int ScKeyMenu = 0xF100;
+        var altSpace = new KeyGesture(Key.Space, KeyModifiers.Alt);
+        bool Bound() => EditorCommands.All.Any(c => c.Keys.Contains(altSpace));
+        Win32Properties.AddWndProcHookCallback(this, (IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+        {
+            bool menuForSpace = (msg == WmSysChar && wParam == 0x20)
+                                || (msg == WmSysCommand && (wParam.ToInt64() & 0xFFF0) == ScKeyMenu && lParam == 0x20);
+            if (menuForSpace && Bound()) handled = true;
+            return IntPtr.Zero;
+        });
+    }
+
+    /// <summary>Where Alt+Space moves the playhead: the selected note, or the earliest of a selection; null when none is.</summary>
+    internal static double? SelectionStart(IEnumerable<double> selectedTimes) =>
+        selectedTimes.Select(t => (double?)t).DefaultIfEmpty(null).Min();
+
     private void LocatorsToSelection()
     {
         if (Lanes.Edits.Range is { } range)
@@ -1293,9 +1366,12 @@ public partial class MainWindow : Window, IMapWriteHost
             return await WhileWriting(async () =>
             {
                 var outcome = await writes.SaveAsync(this, exportSettings, skin);
+                var edited = document.Session; // its undo history goes on in the reloaded map (issue #39)
                 // osu! is told about a written .osu even if reopening it here fails.
                 if (outcome.Reopen && !await ReopenKeepingView(document.Path, document.HsProject)) return (false, outcome.MapWritten);
-                if (outcome.Status is { } status) ShowStatus(status);
+                int dropped = outcome.Reopen && session is { } reloaded && !ReferenceEquals(reloaded, edited) ? reloaded.AdoptHistory(edited) : 0;
+                if (outcome.Status is { } status)
+                    ShowStatus(dropped > 0 ? status + $" Undo history stops at this save for {dropped} older step(s): their notes' objects aren't in the saved map." : status);
                 return (outcome.Done, outcome.MapWritten);
             });
         }
@@ -1342,7 +1418,6 @@ public partial class MainWindow : Window, IMapWriteHost
             if (ReferenceEquals(v, WindowBar)) return "window";
             if (ReferenceEquals(v, TitleBar)) return "titlebar";
             if (ReferenceEquals(v, ControlBar)) return "controlbar";
-            if (ReferenceEquals(v, EditBar)) return "editbar";
             if (ReferenceEquals(v, StatusBar)) return "statusbar";
             if (ReferenceEquals(v, Overview)) return "overview";
             if (ReferenceEquals(v, BottomPanel)) return "volume";
@@ -1374,7 +1449,7 @@ public partial class MainWindow : Window, IMapWriteHost
     /// <summary>The controls lined up with the lane list's right edge: the scrollbar, filter, drum toggle and volume panel.</summary>
     private void AlignToLaneList()
     {
-        HScroll.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
+        HScrollRow.Margin = new Avalonia.Thickness(ArrangeView.GridLeft, 0, 0, 0);
         LaneFilterBox.Width = ArrangeView.GridLeft - 16;
         DrumMapToggle.Margin = new Avalonia.Thickness(ArrangeView.GridLeft - 96, 0, 0, 0);
         VolumeControlScroller.Width = ArrangeView.GridLeft;
@@ -1396,7 +1471,7 @@ public partial class MainWindow : Window, IMapWriteHost
         rows[0].Height = new GridLength(t.Number("title.height"));
         // Toolbar and selection details wrap; the transport keeps its original themed height.
         UpdateChromeHeights();
-        rows[3].Height = new GridLength(t.Number("overview.height"));
+        rows[2].Height = new GridLength(t.Number("overview.height"));
         bool showVolume = VolumeToggle.IsChecked == true;
         BottomPanel.IsVisible = showVolume;
 
@@ -1416,27 +1491,21 @@ public partial class MainWindow : Window, IMapWriteHost
         var t = UiTheme.Current;
         UpdateCompactLayout(width);
         TitleBarContent.Width = Math.Max(TitleBarContent.MinWidth, width - 24);
-        ControlBarContent.Width = Math.Max(ControlBarContent.MinWidth, width - 24);
-        EditBarContent.Width = Math.Max(EditBarContent.MinWidth, width - 24);
         StatusBarContent.Width = Math.Max(StatusBarContent.MinWidth, width - 24);
         ControlBarContent.MinHeight = t.Number("control.height") - 8;
-        SelectionBarLayout.Apply(EditBarContent, SelectionDisclosure, SelectionBarCollapsed, t.Number("edit.height") - 4);
         StatusBarContent.Height = t.Number("status.height") - 1;
-        Root.RowDefinitions[1].Height = GridLength.Auto;
-        Root.RowDefinitions[2].Height = GridLength.Auto;
-        Root.RowDefinitions[6].Height = new GridLength(t.Number("status.height"));
+        Root.RowDefinitions[5].Height = new GridLength(t.Number("status.height"));
     }
 
     private void UpdateVolumePanelHeight()
     {
         var rows = Root.RowDefinitions;
-        double chrome = rows[0].Height.Value + ControlBar.Bounds.Height + EditBar.Bounds.Height
-                        + rows[3].Height.Value + StatusBar.Bounds.Height;
+        double chrome = rows[0].Height.Value + ControlBar.Bounds.Height + rows[2].Height.Value + StatusBar.Bounds.Height;
         // Keep room for the ruler, waveform and lane rows in shorter windows. The controls scroll if needed.
         double height = Root.Bounds.Height > 0 ? Root.Bounds.Height : Bounds.Height - WindowBar.Bounds.Height;
         double available = Math.Max(0, height - chrome - Lanes.HeaderHeight - 80);
         double maximum = Math.Max(0, height - chrome - Lanes.HeaderHeight - 8);
-        rows[5].Height = new GridLength(VolumeToggle.IsChecked == true
+        rows[4].Height = new GridLength(VolumeToggle.IsChecked == true
             ? Math.Min(maximum, Math.Min(UiTheme.Current.Number("volume.height"), Math.Max(80, available))) : 0);
     }
 
@@ -1451,9 +1520,9 @@ public partial class MainWindow : Window, IMapWriteHost
         {
             // "Start from": the cursor, the left locator, the selection, or the selection falling back to the locator.
             double? selectionStart = Lanes.Selection.Count > 0 ? Lanes.Selection.Min(h => h.Time) : null;
-            double? start = StartLeftItem.IsChecked ? Lanes.LocatorLeft
-                : StartSelectionItem.IsChecked ? selectionStart
-                : StartSelectionOrLeftItem.IsChecked ? selectionStart ?? Lanes.LocatorLeft
+            double? start = StartLeftChoice.IsChecked == true ? Lanes.LocatorLeft
+                : StartSelectionChoice.IsChecked == true ? selectionStart
+                : StartSelectionOrLeftChoice.IsChecked == true ? selectionStart ?? Lanes.LocatorLeft
                 : null;
             if (start is { } s) audio.Seek(s);
             playStartedAt = audio.Position;
@@ -1551,6 +1620,7 @@ public partial class MainWindow : Window, IMapWriteHost
         VScroll.ViewportSize = visibleRows;
         VScroll.Value = Lanes.ScrollY;
         ZoomSlider.Value = SliderFromZoom(axis.Zoom);
+        RowHeightSlider.Value = Lanes.RowHeight;
         syncingScroll = false;
     }
 
@@ -1590,6 +1660,7 @@ public partial class MainWindow : Window, IMapWriteHost
             StatusLeft.Text = flash ?? (audioError is null ? $"Open a .osu file ({(open.Keys.Count > 0 ? open.KeysText : "File menu")})." : $"No sound: {audioError}");
             StatusRight.Text = "";
             workflowWarning = null;
+            UpdateSaveCheck([], 0);
             RefreshWorkflowFeedback();
             return;
         }
@@ -1598,21 +1669,23 @@ public partial class MainWindow : Window, IMapWriteHost
         var notes = new List<string>();
         var conflicts = lastCompile?.Result.Conflicts ?? [];
         int unanchored = model.Session.Unanchored.Count();
-        if (conflicts.Count > 0)
-            notes.Add($"{conflicts.Count} moment{(conflicts.Count == 1 ? "" : "s")} can't be saved as drawn (first at {FormatTime(conflicts[0].Time)}: {conflicts[0].Reason})");
-        if (unanchored > 0) notes.Add($"{unanchored} hit{(unanchored == 1 ? " has" : "s have")} no gameplay object and won't be included by Save .osu. Use HS mode or Generate to include them.");
+        if (conflicts.Count > 0) notes.Add(ConflictNote(conflicts));
+        if (unanchored > 0) notes.Add(UnanchoredNote(unanchored));
         if (audioError is not null) notes.Add($"No sound: {audioError}");
         else if (audio is { HasSong: false }) notes.Add($"Song file \"{map.Settings.AudioFilename}\" not found; hitsounds play on their own.");
         int silent = model.Silent.Count(model.Notes.ContainsKey);
         if (silent > 0) notes.Add($"{silent} used lane{(silent == 1 ? "" : "s")} with no sound");
         if (map.Warnings.Count > 0) notes.Add($"{map.Warnings.Count} warning{(map.Warnings.Count == 1 ? "" : "s")}: {map.Warnings[0]}");
         workflowWarning = notes.Count > 0 ? string.Join("  ·  ", notes) : null;
+        UpdateSaveCheck(conflicts, unanchored);
         if (notes.Count == 0) notes.Add(model.Session.IsEdited ? "Edited: Ctrl+S saves." : "Everything here can be saved.");
         StatusLeft.Text = flash ?? string.Join("  ·  ", notes);
         ToolTip.SetTip(StatusLeft, string.Join("\n", conflicts.Take(20).Select(c => $"{FormatTime(c.Time)}: {c.Reason}").Concat(map.Warnings.Take(20))));
         RefreshWorkflowFeedback();
 
         Volume.SelectedMoments = Lanes.SelectedMoments;
+        Volume.SelectedHits = Lanes.Edits.Selected;
+        UpdateVolumeLanesHint();
         Volume.InvalidateVisual();
         string snap = Lanes.Edits.SnapMode == SnapMode.Objects ? "objects" : $"{Lanes.Spacing}{(Lanes.Edits.SnapMode == SnapMode.GridRelative ? " relative" : "")}";
         string tool = $"{Lanes.Tool}{(Lanes.SnapOn ? $", snap {snap}" : ", snap off")}";

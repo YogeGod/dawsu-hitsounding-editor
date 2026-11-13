@@ -1,4 +1,6 @@
+using System.Text;
 using OsuHitsound.Audio;
+using OsuHitsound.Format;
 using OsuHitsound.Lanes;
 
 namespace OsuHitsound.App;
@@ -64,14 +66,17 @@ internal sealed class MapWrites(MapDocument document, string backupRoot, string 
                 return new(false, $"{loose} hitsound(s) have no hit object and cannot be saved into this difficulty. Use HS mode or Generate. Their editor project is kept.");
             var (plan, audio) = await Task.Run(() => document.PlanHsSave(manifestRoot, skin.Value, settings));
             if (plan.Storage.Conflicts.Count > 0) throw new IOException(plan.Storage.Conflicts[0].Reason);
-            if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0 || loose > 0)
-                && !await host.ConfirmSave(hs ? "Save HS difficulty" : "Save difficulty", SaveQuestion(plan, loose)))
+            // What the write changes in the .osu (ADR 0002): asked about only when it touches lines outside hitsounds.
+            var changes = WriteSummary.Compare(OsuFile.Parse(document.Opened), plan.Storage.Diff);
+            bool review = NeedsReview(changes);
+            if ((plan.Storage.Mixes.Count > 0 || plan.Storage.Removes.Count > 0 || plan.Notes.Count > 0 || loose > 0 || review)
+                && !await host.ConfirmSave(hs ? "Save HS difficulty" : "Save difficulty", SaveQuestion(plan, loose, review ? changes : null)))
                 return new(false, null);
             if (closed) return new(false, null);
             var written = await Task.Run(() => document.WriteHsSave(plan, new LaneMixer(audio).Mix, backupRoot, manifestRoot));
             bool projectSaved = host.SaveProject();
             // Reopened even if the editor project failed, to keep the editable layers in this window.
-            return new(projectSaved, $"Saved this difficulty. Backup: {written.Backup ?? "no map changes"}"
+            return new(projectSaved, $"Saved this difficulty ({changes.Counts()}). Backup: {written.Backup ?? "no map changes"}"
                 + (loose > 0 ? $" {loose} loose hitsound(s) remain in the editor project only." : "")
                 + (plan.Notes.Count > 0 ? " " + string.Join(" ", plan.Notes) : "")
                 + (projectSaved ? "" : " Editor state could not be persisted. Keep this window open and retry Save before closing."))
@@ -86,13 +91,47 @@ internal sealed class MapWrites(MapDocument document, string backupRoot, string 
         }
     });
 
-    private static string SaveQuestion(HsSavePlan plan, int loose)
+    /// <summary>
+    /// A write changes lines outside hitsounds (objects and green lines), so the mapper should see them first. Bookmarks
+    /// don't count: they are edited in dawsu! itself.
+    /// </summary>
+    internal static bool NeedsReview(WriteSummary changes) => Surprising(changes).Any();
+
+    private static IEnumerable<LineChange> Surprising(WriteSummary changes) =>
+        changes.Changes.Where(c => c.Kind == LineKind.Other && !IsBookmarks(c));
+
+    private static bool IsBookmarks(LineChange c) =>
+        c.Section == "Editor" && (c.Before ?? c.After ?? "").TrimStart().StartsWith("Bookmarks:", StringComparison.Ordinal)
+                              && (c.After ?? c.Before ?? "").TrimStart().StartsWith("Bookmarks:", StringComparison.Ordinal);
+
+    /// <summary>The counts, then every changed line outside hitsounds as "[Section] before → after" (at most 20).</summary>
+    internal static string DescribeChanges(WriteSummary changes)
+    {
+        var lines = Surprising(changes).ToList();
+        var text = new StringBuilder($"Changes to the .osu: {changes.Counts()}.");
+        if (lines.Count > 0)
+        {
+            text.Append("\n\nLines outside hitsounds that will change:");
+            foreach (var c in lines.Take(20))
+                text.Append($"\n[{c.Section}] {c.Before ?? "(new line)"} → {c.After ?? "(removed)"}");
+            if (lines.Count > 20) text.Append($"\n… and {lines.Count - 20} more.");
+        }
+
+        return text.ToString();
+    }
+
+    private static string SaveQuestion(HsSavePlan plan, int loose, WriteSummary? changes)
     {
         var mixes = plan.Storage.Mixes;
-        return (mixes.Count == 0 ? "Save this difficulty?"
+        return (changes is not null ? DescribeChanges(changes) + "\n\n" : "")
+            + (mixes.Count == 0 ? "Save this difficulty?"
                 : $"Save this difficulty? Some objects keep sounds osu! can't play together from the map's files (different indexes, sets or volumes), so Save writes {mixes.Count} new sample file(s) that combine them: "
                   + string.Join(", ", mixes.Take(6).Select(m => m.FileName)) + (mixes.Count > 6 ? ", …" : "")
                   + ". Your lanes stay as they are; existing samples are not changed.")
+            + (plan.Storage.Removes is { Count: > 0 } removes
+                ? $"\n\nSave also deletes {removes.Count} sample file(s) dawsu! made in an earlier save that nothing in the mapset uses any more: "
+                  + string.Join(", ", removes.Take(8)) + (removes.Count > 8 ? ", …" : "") + ". A file you changed, or that another difficulty uses, is kept."
+                : "")
             + (loose > 0 ? $"\n\n{loose} hitsound(s) have no hit object and will remain in the editor project only. Use HS mode or Generate to write them." : "")
             + (plan.Notes.Count > 0 ? "\n\n" + string.Join("\n", plan.Notes) : "");
     }
@@ -175,5 +214,21 @@ internal sealed class MapWrites(MapDocument document, string backupRoot, string 
             ? $"{plan.Removes.Count} mix(es) from the last Generate that nothing uses any more will be removed ({string.Join(", ", plan.Removes.Take(4))}{(plan.Removes.Count > 4 ? ", …" : "")}).\n\n"
             : "") +
         (plan.Conflicts.Count > 0 ? $"{plan.Conflicts.Count} moment(s) still can't be written: {plan.Conflicts[0].Reason}\n\n" : "") +
+        ExistingDiffChanges(plan) +
         "Your opened map is not changed.";
+
+    // When the [Hitsounds] diff exists, what replacing it changes (ADR 0002); unreadable means it isn't compared.
+    private static string ExistingDiffChanges(GeneratePlan plan)
+    {
+        try
+        {
+            return File.Exists(plan.OsuPath)
+                ? DescribeChanges(WriteSummary.Compare(OsuFile.Parse(File.ReadAllBytes(plan.OsuPath)), plan.Diff)) + "\n\n"
+                : "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
+    }
 }

@@ -137,7 +137,7 @@ internal static class DrumAutoFillDetector
             var onsets = DrumOnsets.Detect(mono, SampleMixer.Rate, thresholdScale, token);
             File.WriteAllBytes(audition, AuditionWav(mono, SampleMixer.Rate, onsets));
             double start = a * 1000.0 / SampleMixer.Rate + offset;
-            return onsets.Select(o => new DrumHitCandidate(o.Drum, o.TimeMs + start, o.Score)).ToArray();
+            return onsets.Select(o => new DrumHitCandidate(o.Drum, Math.Round(o.TimeMs + start, 4), o.Score)).ToArray();
         }, token);
         return new(events, audition);
     }

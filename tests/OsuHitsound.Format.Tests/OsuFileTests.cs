@@ -139,6 +139,25 @@ public class OsuFileTests
         Assert.Equal("[HitObjects]\r\n64,192,1000,2,0,B|200:100,2,140,0|0|0,0:0|0:0|0:0,2:0:2:0:\r\n", Text(file));
     }
 
+    // A slider without edge fields plays its own hitSound on every node; filling the fields in must keep that.
+    [Fact]
+    public void Setting_a_node_set_on_a_whistle_slider_without_edge_fields_keeps_every_node_whistling()
+    {
+        var file = OsuFile.Parse(Bytes("[HitObjects]\r\n64,64,1000,2,2,B|100:100,1,100\r\n"));
+        var slider = file.HitObjects.Single();
+        slider.SetNodeSet(0, SampleSet.Soft, SampleSet.None);
+        Assert.Equal("[HitObjects]\r\n64,64,1000,2,2,B|100:100,1,100,2|2,2:0|0:0,0:0:0:0:\r\n", Text(file));
+        Assert.All(OsuFile.Parse(file.ToBytes()).HitObjects.Single().NodeSounds, s => Assert.Equal(HitSound.Whistle, s));
+    }
+
+    [Fact]
+    public void Setting_hit_sample_on_a_clap_slider_without_edge_fields_keeps_the_nodes_clap()
+    {
+        var file = OsuFile.Parse(Bytes("[HitObjects]\r\n64,192,1000,2,8,B|200:100,2,140\r\n"));
+        file.HitObjects.Single().HitSample = new HitSample(SampleSet.Soft, SampleSet.None, 2, 0, null);
+        Assert.Equal("[HitObjects]\r\n64,192,1000,2,8,B|200:100,2,140,8|8|8,0:0|0:0|0:0,2:0:2:0:\r\n", Text(file));
+    }
+
     [Fact]
     public void Editing_a_line_that_is_not_utf8_is_refused()
     {
@@ -161,5 +180,26 @@ public class OsuFileTests
     {
         var file = OsuFile.Parse(Bytes("[TimingPoints]\r\n// note, with comma\r\n\r\n0,500,4,1,0,100,1,0\r\n"));
         Assert.Single(file.TimingPoints);
+    }
+
+    [Fact]
+    public void A_green_line_can_be_removed_and_every_other_line_keeps_its_bytes()
+    {
+        var file = OsuFile.Parse(Bytes("[TimingPoints]\r\n0,500,4,1,0,100,1,0\r\n500,-100,4,1,0,100,0,0\n1000,-50,4,1,0,100,0,0\r\n"));
+
+        file.RemoveGreenLine(file.TimingPoints[1]);
+
+        Assert.Equal("[TimingPoints]\r\n0,500,4,1,0,100,1,0\r\n1000,-50,4,1,0,100,0,0\r\n", Text(file));
+        Assert.Equal(2, file.TimingPoints.Count);
+        Assert.True(file.IsEdited);
+    }
+
+    [Theory]
+    [InlineData("0,500,4,1,0,100,1,0")] // a red line
+    [InlineData("500,-100")]            // an old short line: no inherited flag, so it isn't known to be green
+    public void Only_lines_marked_inherited_can_be_removed(string line)
+    {
+        var file = OsuFile.Parse(Bytes($"[TimingPoints]\r\n{line}\r\n"));
+        Assert.Throws<InvalidOperationException>(() => file.RemoveGreenLine(file.TimingPoints[0]));
     }
 }

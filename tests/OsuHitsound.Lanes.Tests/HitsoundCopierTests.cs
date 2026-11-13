@@ -429,6 +429,192 @@ public class HitsoundCopierTests
         }
     }
 
+    // ---- Plan every target, then write all or nothing (issue #28) ----
+
+    private static readonly byte[] Slide = [1, 2, 3];
+
+    // Two slider difficulties in one mapset; copying a circle onto their slides makes one new slide sample.
+    private static (string Dir, string A, string B) TwoSliderTargets()
+    {
+        var dir = Directory.CreateTempSubdirectory("hse-copy-").FullName;
+        var a = Path.Combine(dir, "Band - Song (Me) [Insane].osu");
+        var b = Path.Combine(dir, "Band - Song (Me) [Hard].osu");
+        File.WriteAllBytes(a, Sliders("256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:").ToBytes());
+        File.WriteAllBytes(b, Sliders("256,192,0,2,0,L|396:192,1,140,0|0,0:0|0:0,0:0:0:0:", "256,192,2000,1,0,0:0:0:0:").ToBytes());
+        return (dir, a, b);
+    }
+
+    private static CopyBatch PlanOntoSlides(string a, string b) =>
+        HitsoundCopier.PlanCopy(Circles((500, 0)), NoFiles, [a, b], OntoSliders with { CopyToSliderTicks = false }, canRender: true);
+
+    [Fact]
+    public void Planning_a_copy_writes_nothing_and_summarises_each_target()
+    {
+        var (dir, a, b) = TwoSliderTargets();
+        try
+        {
+            var beforeA = File.ReadAllBytes(a);
+            var batch = PlanOntoSlides(a, b);
+
+            Assert.Equal(beforeA, File.ReadAllBytes(a));
+            Assert.False(File.Exists(Path.Combine(dir, "normal-sliderslide100.wav")));
+            Assert.False(Directory.Exists(Path.Combine(dir, "backups")));
+            Assert.All(batch.Targets, t => Assert.True(t.Clean));
+            Assert.All(batch.Targets, t => Assert.Contains("green line", t.Changes!.Counts()));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_failed_write_puts_back_the_targets_already_written_and_removes_the_new_samples()
+    {
+        var (dir, a, b) = TwoSliderTargets();
+        try
+        {
+            var beforeA = File.ReadAllBytes(a);
+            var batch = PlanOntoSlides(a, b);
+            File.AppendAllText(b, "// edited in osu! meanwhile\r\n"); // B can't be written now
+
+            var results = HitsoundCopier.WriteCopy(batch, [a, b], Path.Combine(dir, "backups"), _ => Slide);
+
+            Assert.Equal(beforeA, File.ReadAllBytes(a));                                  // A was written, then put back
+            Assert.False(File.Exists(Path.Combine(dir, "normal-sliderslide100.wav")));    // its new sample removed
+            Assert.Contains("Put back", results[0].Error);
+            Assert.Contains("changed on disk", results[1].Error);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Ticked_targets_share_one_new_sample_and_unticked_ones_are_left_alone()
+    {
+        var (dir, a, b) = TwoSliderTargets();
+        try
+        {
+            var beforeB = File.ReadAllBytes(b);
+            var batch = PlanOntoSlides(a, b);
+
+            var only = HitsoundCopier.WriteCopy(batch, [a], Path.Combine(dir, "backups"), _ => Slide);
+            Assert.Null(only[0].Error);
+            Assert.Equal("Skipped (not ticked).", only[1].Error);
+            Assert.Equal(beforeB, File.ReadAllBytes(b));
+            Assert.Equal(Slide, File.ReadAllBytes(Path.Combine(dir, "normal-sliderslide100.wav")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Both_targets_written_share_the_sample_one_of_them_made()
+    {
+        var (dir, a, b) = TwoSliderTargets();
+        try
+        {
+            var results = HitsoundCopier.WriteCopy(PlanOntoSlides(a, b), [a, b], Path.Combine(dir, "backups"), _ => Slide);
+
+            Assert.All(results, r => Assert.Null(r.Error));
+            Assert.Equal([1, 0], results.Select(r => r.Generated));
+            Assert.All([a, b], p => Assert.Contains(OsuFile.Read(p).TimingPoints, t => t.Time == 500 && t.SampleIndex == 100));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // A tick switch at 1005 ms (index 101, drum, 80 %) that reverts 1 ms later, as Plan makes for slider ticks.
+    private static OsuFile TickSwitchOnto(string timing)
+    {
+        var file = Map(timing, "256,192,0,1,0,0:0:0:0:");
+        var plan = new HitsoundCopyPlan(new Dictionary<MomentKey, WantedSound>(), 0, 0)
+        {
+            GreenLines = [(1005, SampleSet.Drum, 101, 80, true)],
+        };
+        plan.ApplyExtras(file);
+        return file;
+    }
+
+    [Fact]
+    public void A_tick_switch_after_a_line_with_no_sample_set_restores_the_map_default_not_soft()
+    {
+        // An old-format red line with no sampleSet field plays the map default (Normal here). Restored as 0 it would play Soft.
+        var file = TickSwitchOnto("0,500,4");
+
+        var restore = file.TimingPoints.Single(p => p.Time == 1006);
+        Assert.Equal(SampleSet.Normal, restore.SampleSet);
+    }
+
+    [Fact]
+    public void Tick_switch_green_lines_drop_omit_first_bar_line_but_keep_kiai()
+    {
+        // Effects 9 = kiai (1) + omit first bar line (8). Only red lines may carry the 8.
+        var file = TickSwitchOnto("0,500,4,1,0,100,1,9");
+
+        var added = file.TimingPoints.Where(p => p.Time is 1005 or 1006).ToList();
+        Assert.Equal(2, added.Count);
+        Assert.All(added, p => Assert.Equal(1, p.Effects));
+    }
+
+    // ---- Never create silent hitnormals (issue #28) ----
+
+    // A mapset where custom index 101's hitnormal is silent (the check comes from the app, which can decode audio).
+    private static readonly MapFolder SilentHitnormal = new(["normal-hitnormal101.wav"]);
+    private static bool IsSilent(Lane lane) => lane.Name == "normal-hitnormal101.wav";
+
+    private static HitsoundCopyPlan PlanSilent(OsuFile source, OsuFile target, bool never) =>
+        HitsoundCopier.Plan(source, SilentHitnormal, target, SilentHitnormal,
+            new HitsoundCopyOptions { NeverSilentHitnormals = never, IsSilent = IsSilent }, new CustomSampleIndexes(SilentHitnormal, 100));
+
+    [Fact]
+    public void A_matched_hit_never_takes_a_silent_custom_hitnormal_when_asked()
+    {
+        // The source plays its silent index-101 hitnormal at 1000; the target's circle there is a plain hitnormal.
+        var source = Map("0,500,4,1,101,100,1,0", "256,192,1000,1,0,0:0:0:0:");
+        var target = Circles((1000, 0));
+
+        Assert.Single(PlanSilent(source, target, never: false).Wanted); // today: the silent sample is copied
+
+        var plan = PlanSilent(source, target, never: true);
+        Assert.Empty(plan.Wanted);           // the target keeps its own sound
+        Assert.Equal(1, plan.KeptFromSilent);
+    }
+
+    [Fact]
+    public void An_unmatched_hit_keeps_its_own_sound_instead_of_a_silent_hitnormal()
+    {
+        // Overwrite everything: the target's 2000 has no source hit, so it would get the source's hitnormal there,
+        // which is the silent index 101.
+        var source = Map("0,500,4,1,101,100,1,0", "256,192,1000,1,2,0:0:0:0:");
+        var target = Circles((1000, 2), (2000, 8));
+
+        var before = PlanSilent(source, target, never: false);
+        Assert.Contains(before.Wanted.Values, w => w.Lanes.Any(IsSilent));
+
+        var plan = PlanSilent(source, target, never: true);
+        Assert.DoesNotContain(plan.Wanted.Values, w => w.Lanes.Any(IsSilent));
+        Assert.True(plan.KeptFromSilent >= 1);
+    }
+
+    [Fact]
+    public void Audible_custom_samples_are_still_copied_with_the_option_on()
+    {
+        var folder = new MapFolder(["normal-hitnormal102.wav"]);
+        var source = Map("0,500,4,1,102,100,1,0", "256,192,1000,1,0,0:0:0:0:");
+        var plan = HitsoundCopier.Plan(source, folder, Circles((1000, 0)), folder,
+            new HitsoundCopyOptions { NeverSilentHitnormals = true, IsSilent = IsSilent }, new CustomSampleIndexes(folder, 100));
+
+        Assert.Single(plan.Wanted);
+        Assert.Equal(0, plan.KeptFromSilent);
+    }
+
     [Fact]
     public void A_negative_or_endless_leniency_is_refused()
     {

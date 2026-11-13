@@ -38,6 +38,17 @@ public class CompilerTests
         Assert.False(file.IsEdited);
     }
 
+    // Old maps end slider lines after the length; the other nodes play the slider's own whistle and must keep it.
+    [Fact]
+    public void Changing_one_node_of_a_slider_without_edge_fields_keeps_the_other_nodes()
+    {
+        var file = Map("0,500,4,1,0,100,1,0", "64,64,1000,2,2,B|100:100,1,100", defaultSet: "Normal");
+        var (result, after, _) = Apply(file, new MapFolder([]), (0, [Skin("soft-hitnormal"), Skin("soft-hitwhistle")], 100));
+        Assert.Empty(result.Conflicts);
+        Assert.Equal(["soft-hitnormal", "soft-hitwhistle"], Names(after.Moments[0]));
+        Assert.Equal(["normal-hitnormal", "normal-hitwhistle"], Names(after.Moments[1]));
+    }
+
     [Fact]
     public void Adding_an_addition_sets_only_the_sound_flag()
     {
@@ -230,11 +241,10 @@ public class CompilerTests
         Assert.Equal(["soft-hitclap", "soft-hitnormal"], Names(after.Moments[0]));
     }
 
-    [Fact]
+    [CorpusFact]
     public void Every_corpus_map_compiles_unchanged_and_survives_an_edit_on_every_tenth_moment()
     {
-        var corpus = Path.Combine(RealMapTests.RepoRoot(), "corpus");
-        Assert.True(Directory.Exists(corpus), "corpus/ is missing. Run tools/build-corpus.ps1.");
+        var corpus = CorpusFactAttribute.Folder;
 
         var failures = new List<string>();
         foreach (var path in Directory.EnumerateFiles(corpus, "*.osu"))
