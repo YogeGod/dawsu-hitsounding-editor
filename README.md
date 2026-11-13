@@ -16,7 +16,7 @@ Features are grouped into **feature areas**, the same groups the F1 help uses. H
 - **Hitsound – osu! connection:** **File → Open map from osu!** opens the map osu! has open and reloads it when that editor saves. After you save here, osu!'s editor can reload the same map (**File → Reload osu!'s editor after Save**).
 - **Hitsound – Lanes:** each sample in the mapset is a lane, with numbered layers, filtering, and mute, solo and audition.
 - **Hitsound – Hit editing:** draw, move and erase hits, plus quantize, repeat, edit range and scale by volume. **Insert volume** sets the volume of hits you draw next; clear it to follow the map volume. **Edit → Protect hitnormals from deletion** keeps base hitnormal sounds when you delete, cut, erase or clear a range. It is off until you turn it on.
-- **Hitsound – Timeline navigation:** snap to the beat grid, or with **Objects** in the snap menu, to circles, slider nodes and spinner ends, including ones off the beat grid. Also zoom, bookmarks and the L/R locators.
+- **Hitsound – Timeline navigation:** snap to the beat grid, or with **Objects** in the snap menu, to circles, slider nodes and spinner ends, including ones off the beat grid. Also zoom, bookmarks and the L/R locators. **Map preview** opens a window with the map's circles, sliders and spinners at the playhead, as osu!'s editor shows them.
 - **Hitsound – Volume control:** set volumes per object in the controller, with ramps.
 - **Hitsound – Map output:**
   - **Save .osu** writes the hitsounds into the difficulty, and a backup is kept outside the mapset. It uses osu!'s native sound combinations where it can and mixes samples only where it must.

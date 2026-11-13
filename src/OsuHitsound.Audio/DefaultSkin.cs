@@ -51,7 +51,24 @@ public static class DefaultSkin
     /// <summary>The classic skin's images, name without extension (e.g. "hitcircle@2x") → PNG bytes; read as data only.</summary>
     public static Dictionary<string, byte[]> LoadTextures(string resourcesDll) => Load(resourcesDll, ".png");
 
-    private static Dictionary<string, byte[]> Load(string resourcesDll, params string[] extensions)
+    /// <summary>
+    /// lazer's own (Argon) gameplay pieces that aren't drawn in code: the approach circle and reverse-arrow edge
+    /// images and the Torus Bold font's glyph sheet, by file name (e.g. "approachcircle.png", "Torus-Bold.bin").
+    /// Read as data only, like the sounds.
+    /// </summary>
+    public static Dictionary<string, byte[]> LoadArgonPieces(string resourcesDll)
+    {
+        var pieces = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prefix in new[] { "osu.Game.Resources.Textures.Gameplay.osu.", "osu.Game.Resources.Fonts.Torus." })
+            foreach (var (name, data) in Load(resourcesDll, prefix, keepExtension: true, ".png", ".bin"))
+                if (name.StartsWith("approachcircle", StringComparison.Ordinal) || name.StartsWith("repeat-edge-piece", StringComparison.Ordinal) || name.StartsWith("Torus-Bold", StringComparison.Ordinal))
+                    pieces[name] = data;
+        return pieces;
+    }
+
+    private static Dictionary<string, byte[]> Load(string resourcesDll, params string[] extensions) => Load(resourcesDll, Prefix, keepExtension: false, extensions);
+
+    private static Dictionary<string, byte[]> Load(string resourcesDll, string prefix, bool keepExtension, params string[] extensions)
     {
         var samples = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         using var stream = File.OpenRead(resourcesDll);
@@ -66,7 +83,7 @@ public static class DefaultSkin
             var resource = metadata.GetManifestResource(handle);
             var name = metadata.GetString(resource.Name);
             var ext = Path.GetExtension(name);
-            if (!resource.Implementation.IsNil || !name.StartsWith(Prefix, StringComparison.Ordinal) || !extensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
+            if (!resource.Implementation.IsNil || !name.StartsWith(prefix, StringComparison.Ordinal) || !extensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
                 continue;
             if (resource.Offset < 0 || resource.Offset + 4 > directory.Size) continue;
 
@@ -74,7 +91,7 @@ public static class DefaultSkin
             var reader = block.GetReader((int)resource.Offset, directory.Size - (int)resource.Offset);
             int length = reader.ReadInt32();
             if (length < 0 || length > reader.RemainingBytes) continue;
-            samples[name[Prefix.Length..^ext.Length]] = reader.ReadBytes(length);
+            samples[keepExtension ? name[prefix.Length..] : name[prefix.Length..^ext.Length]] = reader.ReadBytes(length);
         }
 
         return samples;
