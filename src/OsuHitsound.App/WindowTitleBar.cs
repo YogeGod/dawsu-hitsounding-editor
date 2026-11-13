@@ -5,6 +5,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 
 namespace OsuHitsound.App;
 
@@ -44,11 +45,21 @@ public sealed class WindowButtons : StackPanel
     /// <summary>Makes a bar move the window when dragged and maximise it when double-clicked (its buttons and menus keep their clicks).</summary>
     public void Attach(Control bar) => bar.PointerPressed += (_, e) =>
     {
-        if (window is null || e.Handled || !e.GetCurrentPoint(bar).Properties.IsLeftButtonPressed) return;
+        if (window is null || !StartsWindowDrag(window, e) || !e.GetCurrentPoint(bar).Properties.IsLeftButtonPressed) return;
         if (e.ClickCount == 2) ToggleMaximised();
         else window.BeginMoveDrag(e);
         e.Handled = true;
     };
+
+    /// <summary>
+    /// Whether a press that reached the bar should move (or maximise) the window. Presses inside an open menu's pop-up
+    /// also bubble up to the bar, since the pop-up belongs to a menu in it. Dragging the window then would swallow
+    /// the item's click, so an item would need two clicks. Only presses on the window itself count: not ones in a
+    /// pop-up window (Windows) or in a pop-up drawn inside the window (overlay pop-ups).
+    /// </summary>
+    internal static bool StartsWindowDrag(Window window, PointerPressedEventArgs e) =>
+        !e.Handled && e.Source is Visual source && ReferenceEquals(TopLevel.GetTopLevel(source), window)
+        && !source.GetSelfAndVisualAncestors().Any(v => v is Avalonia.Controls.Primitives.OverlayPopupHost);
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {

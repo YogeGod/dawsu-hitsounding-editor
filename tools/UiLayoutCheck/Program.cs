@@ -223,6 +223,15 @@ Find<ToggleButton>("StartLeftChoice").IsChecked = false; Pump();
 Check(Find<ToggleButton>("StartLeftChoice").IsChecked == true, "Start playing from: a choice can't be switched off to leave none");
 Find<ToggleButton>("StartCursorChoice").IsChecked = true; Pump();
 var fileMenu = Find<MenuItem>("FileMenu");
+// The menus sit in the window's title bar: one click on a menu name must open it (not start a window drag).
+foreach (var name in new[] { "FileMenu", "EditMenu", "PlaybackMenu", "MapMenu", "ViewMenu" })
+{
+    if (w.FindControl<MenuItem>(name) is not { } top) continue;
+    ClickControl(top);
+    Check(top.IsSubMenuOpen, $"One click opens the {name} menu");
+    top.Close(); Pump();
+    w.MouseMove(new Point(5, 300)); Pump(); // away from the bar, so the next click isn't a double-click
+}
 fileMenu.Open(); Pump();
 Click("PerObjectChoice");
 Check(fileMenu.IsSubMenuOpen && Find<ToggleButton>("PerObjectChoice").IsChecked == true, "Pointer click chooses Per-object and keeps File open");
@@ -231,8 +240,25 @@ Check(fileMenu.IsSubMenuOpen && Find<ToggleButton>("GreenLinesChoice").IsChecked
 Save("menu-file-open.png");
 var missingWarnings = Find<MenuItem>("MissingWarningsItem");
 bool warningsBefore = missingWarnings.IsChecked;
+// A press on an open menu's item bubbles up to the title bar; it must not start a window drag, which would swallow the click.
+bool? itemPressDrags = null;
+EventHandler<PointerPressedEventArgs> watchBar = (_, e) => itemPressDrags ??= WindowButtons.StartsWindowDrag(w, e);
+Find<Control>("TitleBar").AddHandler(InputElement.PointerPressedEvent, watchBar, RoutingStrategies.Tunnel, handledEventsToo: true);
 ClickControl(missingWarnings);
+Find<Control>("TitleBar").RemoveHandler(InputElement.PointerPressedEvent, watchBar);
 Check(missingWarnings.IsChecked != warningsBefore, "Pointer click toggles a styled menu switch");
+Check(itemPressDrags != true, $"A press on a menu item doesn't start a window drag (reached the title bar: {itemPressDrags is not null})");
+// And a press on the bar's empty space still does.
+bool? barPressDrags = null;
+EventHandler<PointerPressedEventArgs> watchEmpty = (_, e) => barPressDrags ??= WindowButtons.StartsWindowDrag(w, e);
+Find<Control>("TitleBar").AddHandler(InputElement.PointerPressedEvent, watchEmpty, RoutingStrategies.Tunnel, handledEventsToo: true);
+fileMenu.Close(); Pump();
+var chipLeft = Rect(Find<Control>("TitleChip"));
+var emptyBar = new Point(chipLeft.Left - 6, chipLeft.Center.Y);
+w.MouseDown(emptyBar, MouseButton.Left); w.MouseUp(emptyBar, MouseButton.Left); Pump();
+Find<Control>("TitleBar").RemoveHandler(InputElement.PointerPressedEvent, watchEmpty);
+Check(barPressDrags == true, $"A press on the title bar's empty space still moves the window ({barPressDrags})");
+fileMenu.Open(); Pump();
 fileMenu.Close(); Pump();
 Find<MenuItem>("PlaybackMenu").Open(); Pump();
 Click("StartLeftChoice");
