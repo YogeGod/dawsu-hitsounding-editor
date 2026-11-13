@@ -15,7 +15,7 @@ namespace OsuHitsound.App;
 internal sealed class PlayfieldView : Control
 {
     /// <summary>How long an object stays, fading, after its time (the editor keeps hit objects visible a moment).</summary>
-    private const double FadeOut = 600;
+    private const double FadeOut = 700; // lazer's editor: HitCircleOverlapMarker.FADE_OUT_EXTENSION
 
     // osu!'s 4:3 screen around the 512 × 384 playfield: objects near the edge still fit.
     private const double ScreenWidth = 640, ScreenHeight = 480;
@@ -181,7 +181,7 @@ internal sealed class PlayfieldView : Control
         if (time >= o.Start && time <= o.End)
         {
             var ball = Screen(o.BallAt(time));
-            ctx.DrawEllipse(null, new ImmutablePen(Paint.Brush(Colors.White, 0.55), Math.Max(1.5, r * 0.07)), ball, r * 1.9, r * 1.9);
+            ctx.DrawEllipse(null, new ImmutablePen(Paint.Brush(Colors.White, 0.55), Math.Max(1.5, r * 0.07)), ball, r * 2.4, r * 2.4); // lazer's follow area
             ctx.DrawEllipse(Paint.Brush(colour), new ImmutablePen(BallFill, Math.Max(1.5, r * 0.12)), ball, r * 0.9, r * 0.9);
         }
     }

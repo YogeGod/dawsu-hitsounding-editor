@@ -17,7 +17,7 @@ public class PlayfieldTests
     {
         var field = Build("100,100,1000,5,0,0:0:0:0:\n");
 
-        Assert.Equal(54.4 - 4.48 * 4, field.Radius, 6);
+        Assert.Equal((54.4 - 4.48 * 4) * 1.00041, field.Radius, 6); // lazer's radius, with stable's rounding allowance
         Assert.Equal(600, field.Preempt, 6); // AR 9
         Assert.Equal(new PlayfieldPoint(100, 100), field.Objects[0].Position);
         Assert.Single(field.Between(400, 400 + field.Preempt));   // appearing at 400
@@ -61,11 +61,11 @@ public class PlayfieldTests
         // A half circle of radius 50 around (150,100): its length is 50π.
         var slider = Build("100,100,1000,6,0,P|150:50|200:100,1,157.0796326795\n").Objects[0];
 
-        Assert.All(slider.Path, p => Assert.Equal(50, p.DistanceTo(new PlayfieldPoint(150, 100)), 2));
+        Assert.All(slider.Path, p => Assert.Equal(50, p.DistanceTo(new PlayfieldPoint(150, 100)), 1)); // the last piece runs on straight to make up the length
         var middle = slider.PointAt(0.5);
-        Assert.Equal(150, middle.X, 1);
-        Assert.Equal(50, middle.Y, 1);
-        Assert.Equal(200, slider.Path[^1].X, 1);
+        Assert.InRange(middle.X, 149.8, 150.2);
+        Assert.InRange(middle.Y, 49.8, 50.2);
+        Assert.InRange(slider.Path[^1].X, 199.8, 200.2);
     }
 
     [Fact]
@@ -113,5 +113,33 @@ public class PlayfieldTests
         var field = Build("100,100,1000,5,0,0:0:0:0:\nnot,an,object\n200,100,2000,6,0\n");
 
         Assert.Single(field.Objects);
+    }
+
+    [Fact]
+    public void Files_before_v6_stack_forwards_and_put_notes_on_a_slider_end_down_and_right()
+    {
+        // Two circles on one spot, then a slider with a circle on its end.
+        var field = Build("100,100,1000,5,0,0:0:0:0:\n100,100,1100,1,0,0:0:0:0:\n300,100,3000,2,0,L|400:100,1,100\n400,100,3600,1,0,0:0:0:0:\n", version: "5");
+
+        Assert.Equal([1, 0, 0, -1], field.Objects.Select(o => o.StackHeight));
+    }
+
+    [Fact]
+    public void A_perfect_curve_with_its_points_on_one_line_is_a_straight_line_and_four_points_are_a_bezier()
+    {
+        var straight = Build("100,100,1000,6,0,P|150:100|200:100,1,100\n").Objects[0];
+        var bezier = Build("100,100,1000,6,0,P|150:50|200:100|250:50,1,100\n").Objects[0];
+
+        Assert.Equal([new(100, 100), new(150, 100), new(200, 100)], straight.Path);
+        Assert.True(bezier.Path.Count > 4);
+        Assert.Equal(100, Enumerable.Range(1, bezier.Path.Count - 1).Sum(i => bezier.Path[i - 1].DistanceTo(bezier.Path[i])), 6);
+    }
+
+    [Fact]
+    public void A_path_that_ends_in_the_same_point_twice_is_not_extended()
+    {
+        var slider = Build("100,100,1000,6,0,L|150:100|150:100,1,100\n").Objects[0];
+
+        Assert.Equal(150, slider.Path[^1].X, 6);
     }
 }

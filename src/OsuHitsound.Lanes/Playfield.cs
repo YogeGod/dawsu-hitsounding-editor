@@ -107,8 +107,10 @@ public sealed class Playfield
     {
         var settings = MapSettings.Read(file);
         var (circleSize, approachRate, stackLeniency) = Difficulty(file);
-        double radius = 54.4 - 4.48 * circleSize;
-        double preempt = approachRate < 5 ? 1200 + 600 * (5 - approachRate) / 5 : 1200 - 750 * (approachRate - 5) / 5;
+        // lazer's OsuHitObject: a 64-unit circle scaled by the circle size (with stable's 1.00041 rounding allowance),
+        // and the approach time from 1800 ms (AR 0) through 1200 (AR 5) to 450 (AR 10), in whole ms.
+        double radius = 64 * (1 - 0.7 * (circleSize - 5) / 5) / 2 * 1.00041;
+        double preempt = (int)(approachRate < 5 ? 1200 + 600 * (5 - approachRate) / 5 : 1200 - 750 * (approachRate - 5) / 5);
 
         var timing = new TimingPointIndex(file.TimingPoints);
         var combos = Combos(file);
@@ -128,7 +130,7 @@ public sealed class Playfield
                     case HitObjectKind.Slider:
                         int spans = o.NodeCount - 1;
                         var slider = SliderTiming.Compute(o, start, spans, settings, timing, warnings);
-                        var path = SliderPath.Compute(position, CurveType(o), [.. o.CurvePoints.Select(p => new PlayfieldPoint(p.X, p.Y))], SliderLength(o));
+                        var path = SliderPath.Compute(position, CurveType(o), [.. o.CurvePoints.Select(p => new PlayfieldPoint(Math.Truncate(p.X), Math.Truncate(p.Y)))], SliderLength(o)); // whole units, as stable reads them
                         built = new(o.Kind, start, start + slider.SpanDuration * spans, path, spans, [.. slider.TickTimes.Select(t => t + settings.TimeOffset)], combo, colour);
                         break;
                     case HitObjectKind.Spinner:
@@ -149,8 +151,13 @@ public sealed class Playfield
         }
 
         objects = [.. objects.OrderBy(o => o.Start)];
-        if (settings.Mode == 0 && settings.FormatVersion >= 6) Stack(objects, preempt * stackLeniency);
-        foreach (var o in objects) o.StackOffset = o.StackHeight * radius / 10;
+        if (settings.Mode == 0)
+        {
+            if (settings.FormatVersion >= 6) Stack(objects, preempt * stackLeniency);
+            else StackOld(objects, preempt * stackLeniency);
+        }
+
+        foreach (var o in objects) o.StackOffset = o.StackHeight * radius / 10; // lazer: StackHeight × Scale × 6.4
         return new Playfield(objects, radius, preempt, settings.Mode);
     }
 
@@ -200,7 +207,37 @@ public sealed class Playfield
         return fields.Length > 5 && fields[5].Length > 0 ? char.ToUpperInvariant(fields[5][0]) : 'B';
     }
 
-    /// <summary>lazer's stacking (OsuBeatmapProcessor.applyNewStacking): notes on the same spot within the stack time step up and left.</summary>
+    /// <summary>Stacking for files before v6 (OsuBeatmapProcessor.applyStackingOld): counted forwards from each object.</summary>
+    private static void StackOld(List<PlayfieldObject> objects, double threshold)
+    {
+        for (int i = 0; i < objects.Count; i++)
+        {
+            var current = objects[i];
+            if (current.StackHeight != 0 && current.Kind != HitObjectKind.Slider) continue;
+
+            double startTime = current.End;
+            int sliderStack = 0;
+            var pathEnd = current.Kind == HitObjectKind.Slider ? current.Path[^1] : current.Position;
+            for (int j = i + 1; j < objects.Count; j++)
+            {
+                if (objects[j].Start - threshold > startTime) break;
+                if (objects[j].Position.DistanceTo(current.Position) < StackDistance)
+                {
+                    current.StackHeight++;
+                    startTime = objects[j].Start;
+                }
+                else if (objects[j].Position.DistanceTo(pathEnd) < StackDistance)
+                {
+                    // Notes on a slider's end go down and right instead.
+                    sliderStack++;
+                    objects[j].StackHeight -= sliderStack;
+                    startTime = objects[j].Start;
+                }
+            }
+        }
+    }
+
+    /// <summary>lazer's stacking (OsuBeatmapProcessor.applyStacking, v6 and later): notes on the same spot within the stack time step up and left.</summary>
     private static void Stack(List<PlayfieldObject> objects, double threshold)
     {
         for (int i = objects.Count - 1; i > 0; i--)
@@ -229,7 +266,7 @@ public sealed class Playfield
             {
                 var earlier = objects[n];
                 if (earlier.Kind == HitObjectKind.Spinner) continue;
-                if (current.Start - earlier.End > threshold) break;
+                if ((int)current.Start - (int)earlier.End > threshold) break; // whole ms, as stable compares them
 
                 // A note on a slider's end: the slider stays, and the notes stacked after it move down and right instead.
                 if (earlier.Kind == HitObjectKind.Slider && earlier.EndPosition.DistanceTo(current.Position) < StackDistance)
@@ -250,144 +287,3 @@ public sealed class Playfield
     }
 }
 
-/// <summary>
-/// A slider's body as points, from its curve field as osu! reads it: L is straight lines, P a circular arc through
-/// three points, C a Catmull-Rom spline, B (and anything else) Bézier curves; a control point written twice starts a
-/// new segment. The result is cut, or its last straight piece extended, to the slider's length.
-/// </summary>
-public static class SliderPath
-{
-    private const int MaxPoints = 20000; // a crafted slider can't ask for more
-
-    public static IReadOnlyList<PlayfieldPoint> Compute(PlayfieldPoint start, char type, IReadOnlyList<PlayfieldPoint> controlPoints, double length)
-    {
-        List<PlayfieldPoint> all = [start, .. controlPoints];
-        var points = new List<PlayfieldPoint> { start };
-        int segmentStart = 0;
-        for (int i = 0; i < all.Count; i++)
-        {
-            // A segment ends at the last point, or at a point that is written twice (the second one starts the next).
-            if (i < all.Count - 1 && all[i + 1] != all[i]) continue;
-            Append(points, Segment(type, all.GetRange(segmentStart, i + 1 - segmentStart)));
-            segmentStart = i + 1;
-        }
-
-        return Fit(points, length);
-    }
-
-    private static IReadOnlyList<PlayfieldPoint> Segment(char type, List<PlayfieldPoint> points)
-    {
-        if (points.Count < 2) return points;
-        return type switch
-        {
-            'L' => points,
-            'P' when points.Count == 3 => Arc(points[0], points[1], points[2]) ?? Bezier(points),
-            'C' => Catmull(points),
-            _ => points.Count == 2 ? points : Bezier(points),
-        };
-    }
-
-    private static void Append(List<PlayfieldPoint> to, IReadOnlyList<PlayfieldPoint> from)
-    {
-        foreach (var p in from)
-            if (to.Count < MaxPoints && to[^1] != p) to.Add(p);
-    }
-
-    // Evenly spaced curve parameters, about one point every 4 playfield units of the control polygon.
-    private static List<PlayfieldPoint> Bezier(List<PlayfieldPoint> control)
-    {
-        double polygon = 0;
-        for (int i = 1; i < control.Count; i++) polygon += control[i - 1].DistanceTo(control[i]);
-        int steps = (int)Math.Clamp(Math.Ceiling(polygon / 4), 8, 400);
-        var result = new List<PlayfieldPoint>(steps + 1);
-        var work = new PlayfieldPoint[control.Count];
-        for (int s = 0; s <= steps; s++)
-        {
-            double t = (double)s / steps;
-            control.CopyTo(work);
-            for (int level = control.Count - 1; level > 0; level--)
-                for (int i = 0; i < level; i++)
-                    work[i] = PlayfieldPoint.Lerp(work[i], work[i + 1], t);
-            result.Add(work[0]);
-        }
-
-        return result;
-    }
-
-    private static List<PlayfieldPoint> Catmull(List<PlayfieldPoint> p)
-    {
-        const int detail = 20;
-        var result = new List<PlayfieldPoint>();
-        for (int i = 0; i < p.Count - 1; i++)
-        {
-            var v1 = i > 0 ? p[i - 1] : p[i];
-            var (v2, v3) = (p[i], p[i + 1]);
-            var v4 = i < p.Count - 2 ? p[i + 2] : new PlayfieldPoint(v3.X * 2 - v2.X, v3.Y * 2 - v2.Y);
-            for (int s = 0; s <= detail; s++)
-            {
-                double t = (double)s / detail;
-                result.Add(new(Spline(v1.X, v2.X, v3.X, v4.X, t), Spline(v1.Y, v2.Y, v3.Y, v4.Y, t)));
-            }
-        }
-
-        return result;
-
-        static double Spline(double a, double b, double c, double d, double t) =>
-            0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
-    }
-
-    // The arc from a through b to c; null when the points are on one line (osu! then draws a Bézier).
-    private static List<PlayfieldPoint>? Arc(PlayfieldPoint a, PlayfieldPoint b, PlayfieldPoint c)
-    {
-        double d = 2 * (a.X * (b.Y - c.Y) + b.X * (c.Y - a.Y) + c.X * (a.Y - b.Y));
-        if (Math.Abs(d) < 1e-6) return null;
-        double aSq = a.X * a.X + a.Y * a.Y, bSq = b.X * b.X + b.Y * b.Y, cSq = c.X * c.X + c.Y * c.Y;
-        var centre = new PlayfieldPoint(
-            (aSq * (b.Y - c.Y) + bSq * (c.Y - a.Y) + cSq * (a.Y - b.Y)) / d,
-            (aSq * (c.X - b.X) + bSq * (a.X - c.X) + cSq * (b.X - a.X)) / d);
-        double radius = centre.DistanceTo(a);
-        if (!double.IsFinite(radius) || radius > 1e6) return null;
-
-        double from = Math.Atan2(a.Y - centre.Y, a.X - centre.X), to = Math.Atan2(c.Y - centre.Y, c.X - centre.X);
-        // Which way round: the side of a→c that b is on.
-        bool clockwise = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X) > 0;
-        if (clockwise) { while (to < from) to += 2 * Math.PI; }
-        else { while (to > from) to -= 2 * Math.PI; }
-
-        double sweep = to - from;
-        int steps = (int)Math.Clamp(Math.Ceiling(Math.Abs(sweep) * radius / 4), 8, 400);
-        var result = new List<PlayfieldPoint>(steps + 1);
-        for (int s = 0; s <= steps; s++)
-        {
-            double angle = from + sweep * s / steps;
-            result.Add(new(centre.X + radius * Math.Cos(angle), centre.Y + radius * Math.Sin(angle)));
-        }
-
-        return result;
-    }
-
-    // Cuts the path at the slider's length, or runs its last piece on in a straight line to reach it.
-    private static List<PlayfieldPoint> Fit(List<PlayfieldPoint> points, double length)
-    {
-        if (points.Count < 2 || !(length > 0) || !double.IsFinite(length)) return points;
-        double travelled = 0;
-        for (int i = 1; i < points.Count; i++)
-        {
-            double step = points[i - 1].DistanceTo(points[i]);
-            if (travelled + step >= length)
-            {
-                var cut = PlayfieldPoint.Lerp(points[i - 1], points[i], step <= 0 ? 0 : (length - travelled) / step);
-                points.RemoveRange(i, points.Count - i);
-                if (points[^1] != cut) points.Add(cut);
-                return points;
-            }
-
-            travelled += step;
-        }
-
-        double lastStep = points[^2].DistanceTo(points[^1]);
-        if (lastStep > 0)
-            points[^1] = PlayfieldPoint.Lerp(points[^2], points[^1], (lastStep + length - travelled) / lastStep);
-        return points;
-    }
-}
