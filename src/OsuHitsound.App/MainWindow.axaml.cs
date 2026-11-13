@@ -319,6 +319,7 @@ public partial class MainWindow : Window, IMapWriteHost
         SetupKeysound();
         SetupOutput();
         SetupSoundSets();
+        SetupPlayfield();
         Deactivated += (_, _) =>
         {
             UpdateToolCursors(KeyModifiers.None);
@@ -1588,6 +1589,8 @@ public partial class MainWindow : Window, IMapWriteHost
                     axis.Left = Lanes.Playhead - axis.VisibleDuration * 0.02;
             }
         }
+
+        UpdatePlayfield();
 
         // The scene (notes, names, bars, overview hits) stays cached. Only the playhead layer moves.
         if (Lanes.Playhead == lastDrawnPlayhead) return;

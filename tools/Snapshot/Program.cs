@@ -114,6 +114,21 @@ Pump();
 var helpWindow = window.OwnedWindows.OfType<HelpWindow>().First();
 helpWindow.CaptureRenderedFrame()?.Save(Path.Combine(outDir, "07-help.png"));
 
+// The map preview at the playhead: a few moments from the first object on, so circles, sliders and approach circles show.
+if (model.Objects.Count > 0)
+{
+    double firstObject = model.Objects[0].Start;
+    foreach (var (offset, n) in new[] { 0.0, 2500, 10200, 30450 }.Select((o, n) => (o, n)))
+    {
+        window.ShowMapPreviewForSnapshot(firstObject + offset);
+        Pump();
+        window.OwnedWindows.OfType<PlayfieldWindow>().First().CaptureRenderedFrame()?.Save(Path.Combine(outDir, $"13-map-preview-{n}.png"));
+    }
+
+    Console.WriteLine("saved 13-map-preview-*.png");
+    window.OwnedWindows.OfType<PlayfieldWindow>().First().Close();
+}
+
 // Map → Copy hitsounds…, on the map's own mapset (for the README).
 var mapDir = Path.GetDirectoryName(Path.GetFullPath(args[0]))!;
 var difficulties = Directory.GetFiles(mapDir, "*.osu").Select(p => (p, OsuHitsound.Lanes.HitsoundDiff.VersionOf(p) ?? Path.GetFileNameWithoutExtension(p))).OrderBy(d => d.Item2).ToList();

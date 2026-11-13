@@ -4,6 +4,7 @@ Public releases of the C# dawsu! editor, newest first. Each version's notes are 
 
 ## Unreleased
 
+- **Map preview** (ribbon → View → Map preview, or View → Map preview): a window that shows the map's circles, sliders and spinners at the playhead, as osu!'s editor shows them, with approach circles, slider balls, ticks, reverse arrows and stacking. It follows playback and every move of the playhead, can be resized or moved to another screen, and opens again where you left it. osu!standard maps only; circles created in HS mode are not shown.
 - **Drum hit detection** now uses signal processing instead of the ADTOF neural model. It no longer needs a model file or ONNX Runtime, so the installer is about 8 MB smaller. Kicks are found about as well as before; fewer snares are found, especially snares played together with kicks, and dense full mixes can give extra hits, so listen before applying.
 - **Beat grid** setting for drum hit detection (1/4 by default; also 1/4 + 1/3, 1/8, 1/8 + 1/6 or Off). Hits off the map's beat divisions are dropped and the rest snap onto them. A steady offset between the song and the map's timing is measured and allowed for.
 

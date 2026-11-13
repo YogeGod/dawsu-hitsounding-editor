@@ -59,6 +59,7 @@
   <StreamGeometry x:Key="IconMoon">M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z</StreamGeometry>
   <StreamGeometry x:Key="IconSun">M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8 M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1.5 1.5 M17.5 17.5L19 19 M5 19l1.5-1.5 M17.5 6.5L19 5</StreamGeometry>
   <StreamGeometry x:Key="IconPanelRight">M3 4h18v16H3Z M15 4v16</StreamGeometry>
+  <StreamGeometry x:Key="IconCircleDot">M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0Z M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0Z</StreamGeometry>
   <!-- Drawn here in the same 24x24 outline style (not from the Lucide set): ghost notes, home, count-in, click. -->
   <StreamGeometry x:Key="IconGhost">M9 10h.01 M15 10h.01 M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8Z</StreamGeometry>
   <StreamGeometry x:Key="IconHouse">M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8 M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z</StreamGeometry>

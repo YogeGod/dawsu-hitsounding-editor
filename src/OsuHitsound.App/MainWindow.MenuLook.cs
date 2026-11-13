@@ -36,7 +36,7 @@ public partial class MainWindow
         ["CleanGreenLinesItem"] = "Eraser", ["OpenBackupsItem"] = "FolderOpen",
         // View
         ["ZoomInItem"] = "ZoomIn", ["ZoomOutItem"] = "Minus", ["CollapseAllItem"] = "FoldVertical", ["ObjectLinesItem"] = "Columns3",
-        ["UsedLanesItem"] = "ListFilter", ["InspectorPanelItem"] = "PanelLeft", ["BrowserPanelItem"] = "PanelRight",
+        ["UsedLanesItem"] = "ListFilter", ["PlayfieldItem"] = "CircleDot",["InspectorPanelItem"] = "PanelLeft", ["BrowserPanelItem"] = "PanelRight",
         ["HistoryPanelItem"] = "History", ["SoundSetsPanelItem"] = "Volume2", ["RangeToolItem"] = "UnfoldVertical",
         ["TimeSignaturesItem"] = "Metronome", ["InspectorItem"] = "Ghost", ["HelpItem"] = "CircleHelp",
     };
