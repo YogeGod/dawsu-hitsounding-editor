@@ -128,6 +128,8 @@
               <Separator />
               <MenuItem Name="ObjectLinesItem" Header="Object lines" ToggleType="CheckBox" IsChecked="{Binding #ObjectLinesToggle.IsChecked, Mode=TwoWay}" />
               <MenuItem Name="UsedLanesItem" Header="Only lanes with hits" ToggleType="CheckBox" IsChecked="{Binding #UsedLanesToggle.IsChecked, Mode=TwoWay}" />
+              <MenuItem Name="PlayfieldItem" Header="Map preview" ToggleType="CheckBox"
+                        ToolTip.Tip="A window showing the map's objects at the playhead, as osu!'s editor shows them" />
               <MenuItem Name="InspectorPanelItem" Header="Inspector panel" ToggleType="CheckBox" />
               <MenuItem Name="BrowserPanelItem" Header="File browser" ToggleType="CheckBox" />
               <MenuItem Name="HistoryPanelItem" Header="History" ToggleType="CheckBox" />
@@ -333,6 +335,13 @@
             <Button Name="DrumVstButton" Classes="ribbon" AutomationProperties.Name="Drums VST" ToolTip.Tip="Play the drum lanes through a VST instrument">
               <StackPanel><app:AppIcon Glyph="OsuVst" /><TextBlock Classes="ribbonText secondary" Text="VST" /></StackPanel>
             </Button>
+          </StackPanel>
+          <Border Classes="ribbonSep" />
+          <StackPanel Classes="ribbonGroup">
+            <ToggleButton Name="PlayfieldToggle" Classes="ribbon" IsChecked="{Binding #PlayfieldItem.IsChecked, Mode=TwoWay}" AutomationProperties.Name="Map preview"
+                          ToolTip.Tip="Map preview: a window showing the map's circles, sliders and spinners at the playhead, as osu!'s editor shows them. It follows playback.">
+              <StackPanel><app:AppIcon Glyph="CircleDot" /><TextBlock Classes="ribbonText" Text="Map preview" /></StackPanel>
+            </ToggleButton>
           </StackPanel>
         </StackPanel>
         <!-- The side panels' switches sit alone at the far right, in the panels' own left-to-right order. -->
