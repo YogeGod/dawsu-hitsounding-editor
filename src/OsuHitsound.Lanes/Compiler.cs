@@ -62,6 +62,12 @@ public static partial class Compiler
     /// <summary>The key of a moment of <paramref name="file"/> (a linear search: for one-off lookups, not loops).</summary>
     public static MomentKey KeyOf(OsuFile file, Moment moment) => new(IndexOf(file, moment.Object), moment.Node);
 
+    /// <summary>
+    /// The lowest volume a save writes. Moments the save changes are raised to it; moments it leaves alone keep what the
+    /// map already has, so their lines stay byte-identical (ADR 0002).
+    /// </summary>
+    public const int MinimumSavedVolume = 5;
+
     /// <summary>The moment's sounds as they are, as a wish (lanes and volume).</summary>
     public static WantedSound AsWanted(Moment moment) => new([.. moment.Hits.Select(h => h.Lane)], moment.Volume);
 
@@ -117,7 +123,7 @@ public static partial class Compiler
         {
             var original = Decompiler.Decompile(file, folder);
             passive = original.Passive;
-            var wish = original.Moments.ToDictionary(Key, m => wanted.GetValueOrDefault(Key(m)) ?? AsWanted(m));
+            var wish = original.Moments.ToDictionary(Key, m => wanted.GetValueOrDefault(Key(m)) is { } w ? Floored(m, w) : AsWanted(m));
 
             double previousLookup = double.NegativeInfinity;
             foreach (var before in original.Moments)
@@ -328,6 +334,10 @@ public static partial class Compiler
 
         private static bool Same(Moment moment, WantedSound want) =>
             moment.Volume == want.Volume && moment.Hits.Select(h => h.Lane).ToHashSet().SetEquals(want.Lanes);
+
+        /// <summary>A changed wish below <see cref="MinimumSavedVolume"/> is raised to it; a wish that matches the map is kept as is.</summary>
+        private static WantedSound Floored(Moment original, WantedSound want) =>
+            want.Volume < MinimumSavedVolume && !Same(original, want) ? want with { Volume = MinimumSavedVolume } : want;
 
         private static string Describe(Moment m) => $"{string.Join(" + ", m.Hits.Select(h => h.Lane.Name))} at volume {m.Volume}";
 

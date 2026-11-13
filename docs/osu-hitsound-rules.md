@@ -321,6 +321,7 @@ for each "hit event" e of O:
 - **Constraints the compiler must respect:**
   - The lanes playable at one instant are limited to: one hitnormal file, plus up to three addition files that share *one* addition set and *one* index (they share index and volume with the hitnormal). So at most 4 distinct files per event, sharing one volume and one index.
   - Lane combinations needing different indices or volumes at the same instant cannot be encoded without a filename override or a second object. Generate mode can stack objects at the same time, but this conflicts with ranking criteria for a real difficulty. That is fine for a hitsound diff, which is not uploaded.
+- **Volume floor on save:** a moment the save changes is written at 5 % or more (`Compiler.MinimumSavedVolume`), on the object or on a green line. Lower values, including 0, would only play at the 5 %/8 % floor anyway (§7). A moment the save leaves alone keeps its volume, even below 5 %.
 - **Sample-file safety:** before writing or overwriting `<set>-hit<sound><N>.<ext>`, build a usage index across **all** `.osu` files and the `.osb` in the folder. Only allocate an index N whose files are unused by other difficulties, or whose contents are byte-identical.
 - **Minimal diff:** patch only the changed tokens of changed lines. Keep the original form of untouched lines, timing-point lines and hitSample strings.
 

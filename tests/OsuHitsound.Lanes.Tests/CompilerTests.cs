@@ -38,6 +38,32 @@ public class CompilerTests
         Assert.False(file.IsEdited);
     }
 
+    [Fact]
+    public void Changed_volumes_below_5_are_saved_as_5()
+    {
+        var file = Map(Red, "256,192,1000,1,0,0:0:0:0:\n256,192,1500,1,0,0:0:0:0:\n100,100,2000,2,0,L|240:100,1,140,0|0,0:0|0:0,0:0:0:0:");
+        var (result, after, _) = Apply(file, new MapFolder([]),
+            (0, [Skin("soft-hitnormal")], 2),
+            (1, [Skin("soft-hitnormal")], 0),
+            (2, [Skin("soft-hitnormal")], 4));
+
+        Assert.Empty(result.Conflicts);
+        Assert.Contains("256,192,1000,1,0,0:0:0:5:", Text(file));
+        Assert.Contains("256,192,1500,1,0,0:0:0:5:", Text(file));
+        Assert.Equal([5, 5, 5], after.Moments.Take(3).Select(m => m.Volume));
+    }
+
+    [Fact]
+    public void An_unchanged_moment_below_5_keeps_its_volume()
+    {
+        var file = Map(Red, "256,192,1000,1,0,0:0:0:3:");
+        var before = Decompiler.Decompile(file, new MapFolder([]));
+        var (result, _, _) = Apply(file, new MapFolder([]), (0, [Skin("soft-hitnormal")], before.Moments[0].Volume));
+
+        Assert.Empty(result.Conflicts);
+        Assert.False(file.IsEdited);
+    }
+
     // Old maps end slider lines after the length; the other nodes play the slider's own whistle and must keep it.
     [Fact]
     public void Changing_one_node_of_a_slider_without_edge_fields_keeps_the_other_nodes()
