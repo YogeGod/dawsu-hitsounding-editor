@@ -1,0 +1,59 @@
+# Automatic Claude review on every pull request.
+# Runs on the ANTHROPIC_API_KEY repo secret, so it draws from the monthly
+# Console API credits (not the Max plan limits).
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip drafts and PRs from forks (forks can't read the secret anyway).
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request for dawsu!, an osu! hitsound editor
+            (C# / Avalonia / NAudio). Read CLAUDE.md, CONTEXT.md and the
+            files in .claude/rules/ first and hold the change to them.
+
+            Focus on, in order:
+            1. Bugs that could corrupt or lose a user's osu! map or hitsound
+               files (save/fuse/generate paths, file writes, .osu format).
+            2. Audio and threading problems (NAudio buffers, playback timing,
+               UI-thread work).
+            3. Missing or weak tests for the behaviour that changed.
+            4. UI changes that break the rules in .claude/rules/app-ui.md.
+
+            Only report real problems, each with file and line, why it is
+            wrong and a suggested fix. Skip style nitpicks. Post findings as
+            inline comments where possible and one short summary comment.
+            If there is nothing important, say so in one line.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 15
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
